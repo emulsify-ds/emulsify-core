@@ -34,5 +34,5 @@ export default create({
   brandTitle: 'Emulsify',
   brandUrl: 'https://emulsify.info',
   brandImage:
-    'https://raw.githubusercontent.com/emulsify-ds/emulsify-design-system/release-base-theme/assets/images/emulsify-logo-sb.svg',
+    'https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/emulsify-logo-sb.svg',
 });
