@@ -14,7 +14,7 @@
   }
 
   .sidebar-container {
-    background: url('https://raw.githubusercontent.com/emulsify-ds/emulsify-ui-kit/theming-storybook/images/corner-bkg.png') no-repeat top left;
+    background: url('https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/corner-bkg.png?token=GHSAT0AAAAAACIEXLVDMX56QK3ZIZWHWHTEZNYFYIA') no-repeat top left;
   }
 
   .sidebar-container .sidebar-subheading {
@@ -86,6 +86,11 @@
 
   #shortcuts {
     border-bottom-color: var(--colors-emulsify-blue-900) !important;
+  }
+
+  [role="main"]:not(:nth-child(3)) {
+    top: 1rem !important;
+    height: calc(100vh - 2rem) !important;
   }
 
   [role="main"] .os-host .os-content button:hover {
