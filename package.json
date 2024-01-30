@@ -1,5 +1,5 @@
 {
-  "name": "emulsify-drupal",
+  "name": "emulsify-core",
   "version": "1.0.0",
   "description": "Storybook development + Webpack Build",
   "keywords": [
