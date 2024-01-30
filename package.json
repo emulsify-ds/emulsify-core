@@ -14,7 +14,7 @@
   "license": "ISC",
   "scripts": {
     "a11y": "npm run storybook-build && ./scripts/a11y.js -r",
-    "build": "webpack --config ./webpack/webpack.prod.js",
+    "build": "webpack --config ./config/webpack/webpack.prod.js",
     "commit": "git-cz",
     "coverage": "npm run test && open-cli .coverage/lcov-report/index.html",
     "develop": "concurrently --raw \"npm run webpack\" \"npm run storybook\"",
@@ -36,7 +36,7 @@
     "storybook-deploy": "storybook-to-ghpages -o .out",
     "test": "jest --coverage",
     "twatch": "jest --no-coverage --watch --verbose",
-    "webpack": "webpack --watch --config ./webpack/webpack.dev.js"
+    "webpack": "webpack --watch --config ./config/webpack/webpack.dev.js"
   },
   "dependencies": {
     "add-attributes-twig-extension": "^0.1.0",

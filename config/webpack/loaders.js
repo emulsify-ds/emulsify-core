@@ -5,6 +5,9 @@ const JSLoader = {
   test: /^(?!.*\.(stories|component)\.js$).*\.js$/,
   exclude: /node_modules/,
   loader: 'babel-loader',
+  options: {
+    configFile: './config/babel.config.js',
+  },
 };
 
 const ImageLoader = {
@@ -30,6 +33,7 @@ const CSSLoader = {
       options: {
         sourceMap: true,
         postcssOptions: {
+          config: 'config/postcss.config.js',
           plugins: [['autoprefixer']],
         },
       },
