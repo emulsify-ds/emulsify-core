@@ -20,7 +20,7 @@ const isObjectLiteral = (obj) =>
  */
 const getEmulsifyConfig = () => {
   try {
-    return require('../project.emulsify.json');
+    return require('../config/project.emulsify.json');
   } catch (e) {
     throw new Error(
       `Unable to load an Emulsify project config file (project.emulsify.json): ${String(
