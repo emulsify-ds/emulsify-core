@@ -1,3 +1,6 @@
+> [!WARNING]  
+> Work in progress.
+
 ![Emulsify Core Design System](https://github.com/emulsify-ds/.github/blob/6bd435be881bd820bddfa05d88905efe29176a0a/assets/images/header.png)
 
 # Emulsify Core
