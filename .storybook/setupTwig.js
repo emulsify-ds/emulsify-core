@@ -11,28 +11,28 @@ const twigAddAttributes = require('add-attributes-twig-extension');
  */
 const fetchVariantConfig = () => {
   try {
-    return require('../project.emulsify.json').variant.structureImplementations;
+    return require('../../../project.emulsify.json').variant.structureImplementations;
   } catch (e) {
     return [
       {
         name: 'base',
-        directory: 'components/00-base',
+        directory: '../../../components/00-base',
       },
       {
         name: 'atoms',
-        directory: 'components/01-atoms',
+        directory: '../../../components/01-atoms',
       },
       {
         name: 'molecules',
-        directory: 'components/02-molecules',
+        directory: '../../../components/02-molecules',
       },
       {
         name: 'organisms',
-        directory: 'components/03-organisms',
+        directory: '../../../components/03-organisms',
       },
       {
         name: 'templates',
-        directory: 'components/04-templates',
+        directory: '../../../components/04-templates',
       },
     ];
   }
