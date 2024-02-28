@@ -33,7 +33,7 @@ const CSSLoader = {
       options: {
         sourceMap: true,
         postcssOptions: {
-          config: '../../../../config/postcss.config.js',
+          config: './node_modules/emulsify-core/config/postcss.config.js',
           plugins: [['autoprefixer']],
         },
       },
