@@ -6,7 +6,7 @@ const JSLoader = {
   exclude: /node_modules/,
   loader: 'babel-loader',
   options: {
-    configFile: './config/babel.config.js',
+    configFile: '../../../../config/babel.config.js',
   },
 };
 
@@ -33,7 +33,7 @@ const CSSLoader = {
       options: {
         sourceMap: true,
         postcssOptions: {
-          config: 'config/postcss.config.js',
+          config: '../../../../config/postcss.config.js',
           plugins: [['autoprefixer']],
         },
       },
@@ -57,7 +57,7 @@ const SVGSpriteLoader = {
   options: {
     extract: true,
     runtimeCompat: true,
-    spriteFilename: '../dist/icons.svg',
+    spriteFilename: '../../../../dist/icons.svg',
   },
 };
 
