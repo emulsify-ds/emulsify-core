@@ -1,6 +1,6 @@
 {
   "name": "emulsify-core",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Storybook development + Webpack Build",
   "keywords": [
     "component library",
@@ -26,7 +26,6 @@
     "lint-js": "eslint --no-error-on-unmatched-pattern ./components",
     "lint-staged": "lint-staged",
     "lint-styles": "stylelint '../../components/**/*.scss'",
-    "postinstall": "npx patch-package",
     "prepare": "[ -d '.git' ] && (husky install) || true",
     "prettier": "prettier --ignore-unknown \"../../components/**/*.{js,yml,scss,md}\"",
     "prettier-fix": "prettier --write --ignore-unknown \"../../components**/*.{js,yml,scss,md}\"",
