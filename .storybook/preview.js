@@ -5,8 +5,13 @@ import { setupTwig } from './setupTwig';
 // GLOBAL CSS
 import '../../../dist/css/style.css';
 
-// Include custom theme preview config.
-import '../../../config/storybook/preview';
+// Include custom theme preview config if it exists.
+let preview;
+try {
+  preview = await import('../../../config/storybook/preview');
+} catch (e) {
+  console.log("config/storybook/preview.js not found");
+}
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
 import './_drupal.js';
