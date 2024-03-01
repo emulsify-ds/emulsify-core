@@ -6,7 +6,7 @@ const JSLoader = {
   exclude: /node_modules/,
   loader: 'babel-loader',
   options: {
-    configFile: '../config/babel.config.js',
+    configFile: './node_modules/emulsify-core/config/babel.config.js',
   },
 };
 
