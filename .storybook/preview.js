@@ -5,6 +5,9 @@ import { setupTwig } from './setupTwig';
 // GLOBAL CSS
 import '../../../dist/css/style.css';
 
+// Include custom theme preview config.
+import '../../../config/storybook/preview';
+
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
 import './_drupal.js';
 
