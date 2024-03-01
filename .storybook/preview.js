@@ -16,6 +16,7 @@ export const decorators = [
     useEffect(() => {
       Drupal.attachBehaviors();
     }, [args]);
+    return Story();
   },
 ];
 
