@@ -9,11 +9,9 @@ import '../../../dist/css/style.css';
 (async () => {
   let preview;
   try {
-    preview = await import('../../../config/storybook/preview');
-  } catch (e) {
-    console.log("config/storybook/preview.js not found");
-  }
-})()
+    preview = await import('../../../config/emulsify-core/storybook/preview');
+  } catch (e) {}
+})();
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
 import './_drupal.js';
