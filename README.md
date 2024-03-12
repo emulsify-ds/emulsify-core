@@ -5,11 +5,11 @@
 
 # Emulsify Core
 
-## Emulsify is an open-source toolset for creating and implementing design systems on your website
+An open-source toolset for creating and implementing design systems.
 
-### Storybook development, Webpack build, and Drupal 8 theme
+### Storybook development and Webpack build
 
-**Emulsify Drupal** provides a [Storybook](https://storybook.js.org/) component library, a [Webpack](https://webpack.js.org/) development environment, and a Drupal 8 starter kit theme. It can be used as a standalone prototyping tool or inside a Drupal installation.
+**Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Webpack](https://webpack.js.org/) development environment. It is meant to make project setup and on going development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone component library.
 
 ## Documentation
 
@@ -48,7 +48,7 @@ To facilitate automatic semantic release versioning, we utilize the [Conventiona
 
 ## Author
 
-Emulsify&reg; is a product of [Four Kitchens &mdash; We make BIG websites](https://fourkitchens.com).
+Emulsify&reg; is a product of [Four Kitchens](https://fourkitchens.com).
 
 ### Contributors
 
