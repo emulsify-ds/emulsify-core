@@ -9,7 +9,7 @@ An open-source toolset for creating and implementing design systems.
 
 ### Storybook development and Webpack build
 
-**Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Webpack](https://webpack.js.org/) development environment. It is meant to make project setup and on going development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone component library.
+**Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Webpack](https://webpack.js.org/) development environment. It is meant to make project setup and ongoing development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone project.
 
 ## Documentation
 
@@ -36,7 +36,7 @@ Please also follow the issue template and pull request templates provided. See b
 
 1. [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/issues)
 2. [Emulsify Twig Extensions](https://github.com/emulsify-ds/emulsify-twig-extensions/issues)
-3. [Emulsify Twig Drupal Module](https://www.drupal.org/project/issues/emulsify_twig)
+3. [Emulsify Tools (Drupal module)](https://www.drupal.org/project/issues/emulsify_tools)
 
 ### Committing Changes
 

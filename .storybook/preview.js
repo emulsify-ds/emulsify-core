@@ -3,9 +3,14 @@ import Twig from 'twig';
 import { setupTwig } from './setupTwig';
 
 // GLOBAL CSS
-import '../../../dist/css/style.css';
+(async () => {
+  let compiled;
+  try {
+    compiled = await import('../../../dist/css/style.css');
+  } catch (e) {}
+})();
 
-// Include custom theme preview config if it exists.
+// Custom theme preview config if it exists.
 (async () => {
   let preview;
   try {
