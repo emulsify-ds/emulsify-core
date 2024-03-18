@@ -1,6 +1,7 @@
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const globImporter = require('node-sass-glob-importer');
 const fs = require('fs-extra');
+
 let babelConfig;
 let postcssConfig;
 

@@ -16,18 +16,18 @@ const jsPattern = path.resolve(
 );
 
 // Prepare list of scss and js file for "entry".
-function getEntries(scssPattern, jsPattern) {
+function getEntries(scssMatcher, jsMatcher) {
   const entries = {};
 
   // SCSS entries
-  glob.sync(scssPattern).forEach((file) => {
+  glob.sync(scssMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
     const newfilePath = `css/${filePath.replace('.scss', '')}`;
     entries[newfilePath] = file;
   });
 
   // JS entries
-  glob.sync(jsPattern).forEach((file) => {
+  glob.sync(jsMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
     const newfilePath = `js/${filePath.replace('.js', '')}`;
     entries[newfilePath] = file;
