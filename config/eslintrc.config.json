@@ -29,7 +29,7 @@
     "no-underscore-dangle": ["off"],
     "max-nested-callbacks": ["warn", 3],
     "import/extensions": ["off"],
-    "import/no-unresolved": ["warn"],
+    "import/no-unresolved": ["off"],
     "import/no-extraneous-dependencies": ["warn"],
     "import/no-mutable-exports": ["warn"],
     "no-plusplus": ["warn", {
