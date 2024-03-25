@@ -40,7 +40,7 @@ const fetchVariantConfig = () => {
 
 module.exports.namespaces = {};
 for (const { name, directory } of fetchVariantConfig()) {
-  module.exports.namespaces[name] = resolve(__dirname, '../', directory);
+  module.exports.namespaces[name] = resolve(__dirname, '../../../', directory);
 }
 
 /**
