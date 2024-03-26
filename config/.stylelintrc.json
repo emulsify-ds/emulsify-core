@@ -34,6 +34,7 @@
           "content",
           "each",
           "else",
+          "error",
           "extend",
           "forward",
           "function",
@@ -54,6 +55,6 @@
     "selector-class-pattern": null,
     "selector-not-notation": null,
     "value-keyword-case": null,
-    "at-extend-no-missing-placeholder": null,
+    "scss/at-extend-no-missing-placeholder": null
   }
 }
