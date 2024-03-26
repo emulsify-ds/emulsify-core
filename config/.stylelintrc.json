@@ -53,6 +53,7 @@
     "property-no-vendor-prefix": null,
     "selector-class-pattern": null,
     "selector-not-notation": null,
-    "value-keyword-case": null
+    "value-keyword-case": null,
+    "at-extend-no-missing-placeholder": null,
   }
 }
