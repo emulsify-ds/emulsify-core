@@ -75,7 +75,7 @@ const SVGSpriteLoader = {
   options: {
     extract: true,
     runtimeCompat: true,
-    spriteFilename: '../../../../dist/icons.svg',
+    spriteFilename: './dist/icons.svg',
   },
 };
 

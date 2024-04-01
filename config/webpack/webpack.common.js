@@ -5,8 +5,8 @@ const plugins = require('./plugins');
 
 const webpackDir = path.resolve(__dirname);
 const rootDir = path.resolve(__dirname, '../../../..');
-const distDir = path.resolve(__dirname, 'dist');
-
+const distDir = path.resolve(__dirname, '../../../../dist');
+console.log(webpackDir);
 // Glob pattern for scss files that ignore file names prefixed with underscore.
 const scssPattern = path.resolve(rootDir, 'components/**/!(_*).scss');
 // Glob pattern for JS files.
