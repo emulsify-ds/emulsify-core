@@ -1,7 +1,7 @@
 {
-  "name": "emulsify-core",
-  "version": "1.0.0",
-  "description": "Storybook development + Webpack Build",
+  "name": "@emulsify/core",
+  "version": "0.0.0-development",
+  "description": "Bundled tooling for Storybook development + Webpack Build",
   "keywords": [
     "component library",
     "design system",
@@ -11,7 +11,13 @@
     "styleguide"
   ],
   "author": "Four Kitchens <shout@fourkitchens.com>",
-  "license": "ISC",
+  "license": "GPL-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "coverage": "npm run test && open-cli .coverage/lcov-report/index.html",
     "format": "npm run lint-fix; npm run prettier-fix",
