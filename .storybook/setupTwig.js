@@ -5,34 +5,18 @@ const twigAddAttributes = require('add-attributes-twig-extension');
 
 /**
  * Fetches project-based variant configuration. If no such configuration
- * exists, returns default values.
+ * exists, returns default values as a flat component structure.
  *
  * @returns project-based variant configuration, or default config.
  */
 const fetchVariantConfig = () => {
   try {
-    return require('../../../project.emulsify.json').variant.structureImplementations;
+    return require('../../../../project.emulsify.json').variant.structureImplementations;
   } catch (e) {
     return [
       {
-        name: 'base',
-        directory: '../../components/00-base',
-      },
-      {
-        name: 'atoms',
-        directory: '../../components/01-atoms',
-      },
-      {
-        name: 'molecules',
-        directory: '../../components/02-molecules',
-      },
-      {
-        name: 'organisms',
-        directory: '../../components/03-organisms',
-      },
-      {
-        name: 'templates',
-        directory: '../../components/04-templates',
+        name: 'components',
+        directory: '../../../../components',
       },
     ];
   }
@@ -40,7 +24,7 @@ const fetchVariantConfig = () => {
 
 module.exports.namespaces = {};
 for (const { name, directory } of fetchVariantConfig()) {
-  module.exports.namespaces[name] = resolve(__dirname, '../../../', directory);
+  module.exports.namespaces[name] = resolve(__dirname, '../../../../', directory);
 }
 
 /**

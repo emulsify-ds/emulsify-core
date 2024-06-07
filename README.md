@@ -1,24 +1,46 @@
-> [!WARNING]  
-> Work in progress.
-
 ![Emulsify Core Design System](https://github.com/emulsify-ds/.github/blob/6bd435be881bd820bddfa05d88905efe29176a0a/assets/images/header.png)
 
 # Emulsify Core
 
 An open-source toolset for creating and implementing design systems.
 
-### Storybook development and Webpack build
-
 **Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Webpack](https://webpack.js.org/) development environment. It is meant to make project setup and ongoing development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone project.
 
-## Documentation
+## Installation and usage
+Installation and configuration is setup by the provided base theme project(s). As of this writing, Emulsify Drupal is the only base theme project [with this integration](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L36).
 
-[docs.emulsify.info](https://emulsify.info/docs)
+### Manual installation
+- `npm install @emulsify/core` within your repository or project theme.
+- Copy the provided `npm run` scripts from [Emulsify Drupal's package.json](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L15)
+- Copy the contents of `whisk/config/emulsify-core/` from [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/tree/main/whisk/config/emulsify-core) into your project so `config/` exists at the root of your repository or project theme. The files within `config/` allow you to extend or overwrite configuration provided by Emulsify Core.
+
+### Common Scripts
+
+Run `nvm use` prior to running any of the following commands to verify you are using Node 20.
+(Each is prefixed with `npm run `)
+
+**develop**
+Starts and instance of storybook, watches for any files changes, recompiles CSS/JS, and live reloads storybook assets.
+
+**lint**
+Lints all JS/SCSS within your components and reports any violations.
+
+**lint-fix**
+Automatically fixes any simple violations.
+
+**prettier**
+Outputs any code formatting violations.
+
+**prettier-fix**
+Automatically fixes any simple code formatting violations.
+
+**storybook-build**
+Builds a static output of the storybook instance.
+
 
 ### Quick Links
 
-1. [Installation](https://www.emulsify.info/docs/emulsify-drupal)
-2. [Usage](https://www.emulsify.info/docs/emulsify-drupal/basic-usage/commands)
+- [Emulsify Homepage](https://www.emulsify.info/)
 
 ## Demo
 
