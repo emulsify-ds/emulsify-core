@@ -1,16 +1,19 @@
-**What:**
+**This PR does the following:**
+- Adds functionality bullet item
+- Fixes this or that bullet item
+  
+### Related Issue(s)
+- [Title of the issue](https://github.com/emulsify-ds/emulsify-core/issues/1)
 
-_brief description of change_
+### Notes:
+- (optional) Document any intentionally unfinished parts or known issues within this PR
 
-**Why:**
+### Functional Testing:
+- [ ] Document steps that allow someone to fully test your code changes. Include screenshot and links when appropriate.
 
-_why this change improves emulsify_
+### Security
+_Security checks that should be reviewed_
 
-**How:**
+### Accessibility
+_Should this be checked for this feature?_
 
-_more details of changes made_
-
-**To Test:**
-
-- [ ] Step 1
-- [ ] Step 2
