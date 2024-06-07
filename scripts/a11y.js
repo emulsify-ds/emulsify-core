@@ -4,17 +4,20 @@
  * Contains a script that, when executed, will execute a11y linting tools
  * against the storybook build.
  */
+const chalk = import("chalk").then(m => m.default);
 
 const R = require('ramda');
 const path = require('path');
 const pa11y = require('pa11y');
-const chalk = require('chalk');
 const {
   storybookBuildDir,
   pa11y: pa11yConfig,
+} = require('../config/a11y.config.js');
+// project specific configuration.
+const {
   ignore,
   components,
-} = require('../config/a11y.config.js');
+} = require('../../../config/emulsify-core/a11y.config.js');
 
 const STORYBOOK_BUILD_DIR = path.resolve(__dirname, '../', storybookBuildDir);
 const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
