@@ -6,7 +6,7 @@ import { setupTwig } from './setupTwig';
 (async () => {
   let compiled;
   try {
-    compiled = await import('../../../dist/css/style.css');
+    compiled = await import('../../../../dist/css/style.css');
   } catch (e) {}
 })();
 
@@ -14,7 +14,7 @@ import { setupTwig } from './setupTwig';
 (async () => {
   let preview;
   try {
-    preview = await import('../../../config/emulsify-core/storybook/preview');
+    preview = await import('../../../../config/emulsify-core/storybook/preview');
   } catch (e) {}
 })();
 
