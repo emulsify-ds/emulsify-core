@@ -9,14 +9,14 @@ let postcssConfig;
 if (fs.existsSync('./config/babel.config.js')) {
   babelConfig = './config/babel.config.js';
 } else {
-  babelConfig = './node_modules/emulsify-core/config/babel.config.js';
+  babelConfig = './node_modules/@emulsify/core/config/babel.config.js';
 }
 
 // Check if custom postcss config is available.
 if (fs.existsSync('./config/postcss.config.js')) {
   postcssConfig = './config/postcss.config.js';
 } else {
-  postcssConfig = './node_modules/emulsify-core/config/postcss.config.js';
+  postcssConfig = './node_modules/@emulsify/core/config/postcss.config.js';
 }
 
 const JSLoader = {

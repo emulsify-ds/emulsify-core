@@ -3,20 +3,10 @@ import Twig from 'twig';
 import { setupTwig } from './setupTwig';
 
 // GLOBAL CSS
-(async () => {
-  let compiled;
-  try {
-    compiled = await import('../../../../dist/css/style.css');
-  } catch (e) {}
-})();
+import('../../../../dist/css/style.css');
 
 // Custom theme preview config if it exists.
-(async () => {
-  let preview;
-  try {
-    preview = await import('../../../../config/emulsify-core/storybook/preview');
-  } catch (e) {}
-})();
+import('../../../../config/emulsify-core/storybook/preview');
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
 import './_drupal.js';
