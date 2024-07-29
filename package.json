@@ -100,7 +100,7 @@
     "react-dom": "^18.2.0",
     "regenerator-runtime": "^0.14.1",
     "sass": "^1.75.0",
-    "sass-loader": "^14.2.1",
+    "sass-loader": "^16.0.0",
     "storybook": "^7.6.17",
     "style-dictionary": "^3.9.2",
     "stylelint": "^16.8.0",
