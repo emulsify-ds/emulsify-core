@@ -59,6 +59,7 @@ const CSSLoader = {
     {
       loader: 'sass-loader',
       options: {
+        api: 'legacy',
         sourceMap: true,
         sassOptions: {
           importer: globImporter(),
