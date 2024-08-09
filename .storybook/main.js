@@ -19,7 +19,7 @@ const defaultConfig = {
     options: {},
   },
   docs: {
-    autodocs: true,
+    autodocs: false,
   },
   managerHead: (head) => `
     ${head}
