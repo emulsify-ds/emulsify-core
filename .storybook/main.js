@@ -1,6 +1,8 @@
 const { configOverrides } = require('../../../../config/emulsify-core/storybook/main');
 
-const defaultConfig = {
+const safeConfigOverrides = configOverrides || {};
+
+const config = {
   stories: [
     '../../../../components/**/*.stories.@(js|jsx|ts|tsx)',
   ],
@@ -19,7 +21,7 @@ const defaultConfig = {
     options: {},
   },
   docs: {
-    autodocs: true,
+    autodocs: false,
   },
   managerHead: (head) => `
     ${head}
@@ -146,8 +148,7 @@ const defaultConfig = {
       }
     </style>
   `,
+  ...safeConfigOverrides,
 };
-
-const config = Object.keys(configOverrides).length ? configOverrides : defaultConfig;
 
 module.exports = config;
