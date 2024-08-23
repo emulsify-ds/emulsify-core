@@ -76,7 +76,15 @@ const SVGSpriteLoader = {
   options: {
     extract: true,
     runtimeCompat: true,
+    outputPath: 'dist/',
     spriteFilename: './icons.svg',
+  },
+};
+
+const TwigLoader = {
+  test: /\.twig$/,
+  use: {
+    loader: 'twigjs-loader',
   },
 };
 
@@ -85,4 +93,5 @@ module.exports = {
   CSSLoader,
   SVGSpriteLoader,
   ImageLoader,
+  TwigLoader,
 };

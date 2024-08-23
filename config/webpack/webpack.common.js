@@ -2,51 +2,63 @@ const path = require('path');
 const glob = require('glob');
 const loaders = require('./loaders');
 const plugins = require('./plugins');
+const resolves = require('./resolves');
+const emulsifyConfig = require('../../../../../project.emulsify.json');
 
 // Get directories for file contexts.
 const webpackDir = path.resolve(__dirname);
-const rootDir = path.resolve(__dirname, '../../../../..');
+const projectDir = path.resolve(__dirname, '../../../../..');
 
 // Glob pattern for scss files that ignore file names prefixed with underscore.
 const BaseScssPattern = path.resolve(
-  rootDir,
-  '{tokens,foundation,layout}/**/!(_*).scss',
+  projectDir,
+  'src/{tokens,foundation,layout}/**/!(_*).scss',
 );
-const ComponentScssPattern = path.resolve(rootDir, 'components/**/!(_*).scss');
+const ComponentScssPattern = path.resolve(
+  projectDir,
+  'src/components/**/!(_*).scss',
+);
+
 // Glob pattern for JS files.
 const jsPattern = path.resolve(
-  rootDir,
-  'components/**/!(*.stories|*.component|*.min|*.test).js',
+  projectDir,
+  'src/components/**/!(*.stories|*.component|*.min|*.test).js',
 );
 
 // Prepare list of scss and js file for "entry".
 function getEntries(BaseScssMatcher, ComponentScssMatcher, jsMatcher) {
   const entries = {};
 
-  // Token/Foundation/Layout SCSS entries
+  // Token/Foundation/Layout SCSS entries.
   glob.sync(BaseScssMatcher).forEach((file) => {
     const filePath = file.split(/(tokens\/|foundation\/|layout\/)/)[2];
     const filePathDist = filePath.split('/')[1]
       ? filePath.split('/')[1]
       : filePath.split('/')[0];
-    const newfilePath = `dist/${filePathDist.replace('.scss', '')}`;
+    const newfilePath = `dist/global/${filePathDist.replace('.scss', '')}`;
     entries[newfilePath] = file;
   });
 
-  // Component SCSS entries
+  // Component SCSS entries.
   glob.sync(ComponentScssMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
-    const filePathDist = filePath.replace('/', '/dist/css/');
-    const newfilePath = `components/${filePathDist.replace('.scss', '')}`;
+    const filePathDist = filePath.replace('/', '/css/');
+    const newfilePath =
+      emulsifyConfig.project.platform === 'drupal'
+        ? `components/${filePathDist.replace('.scss', '')}`
+        : `dist/components/${filePathDist.replace('.scss', '')}`;
     entries[newfilePath] = file;
   });
 
-  // JS entries
+  // JS entries.
   glob.sync(jsMatcher).forEach((file) => {
     if (!file.includes('dist/')) {
       const filePath = file.split('components/')[1];
-      const filePathDist = filePath.replace('/', '/dist/js/');
-      const newfilePath = `components/${filePathDist.replace('.js', '')}`;
+      const filePathDist = filePath.replace('/', '/js/');
+      const newfilePath =
+        emulsifyConfig.project.platform === 'drupal'
+          ? `components/${filePathDist.replace('.js', '')}`
+          : `dist/components/${filePathDist.replace('.js', '')}`;
       entries[newfilePath] = file;
     }
   });
@@ -67,6 +79,7 @@ module.exports = {
       loaders.SVGSpriteLoader,
       loaders.ImageLoader,
       loaders.JSLoader,
+      loaders.TwigLoader,
     ],
   },
   plugins: [
@@ -74,10 +87,12 @@ module.exports = {
     plugins.ImageminPlugin,
     plugins.SpriteLoaderPlugin,
     plugins.ProgressPlugin,
+    plugins.CopyTwigPlugin,
     plugins.CleanWebpackPlugin,
   ],
   output: {
-    path: `${rootDir}`,
+    path: `${projectDir}`,
     filename: '[name].js',
   },
+  resolve: resolves.TwigResolve,
 };
