@@ -41,19 +41,23 @@ const SpriteLoaderPlugin = new _SpriteLoaderPlugin({
 const ProgressPlugin = new webpack.ProgressPlugin();
 
 // Glob pattern for markup files.
-const twigPattern = path.resolve(srcDir, '**/*.{twig,yml}');
+const componentFilesPattern = path.resolve(srcDir, '**/*.{twig,yml}');
 
-// Prepare list of twig files to copy to "compiled" directories.
-function getPatterns(twigMatcher) {
+// Prepare list of yml/twig files to copy to "compiled" directories.
+function getPatterns(filesMatcher) {
   const patterns = [];
-  glob.sync(twigMatcher).forEach((file) => {
+  glob.sync(filesMatcher).forEach((file) => {
     const projectPath = file.split('/src/')[0];
     const srcStructure = file.split(`${srcDir}/`)[1];
     const parentDir = srcStructure.split('/')[0];
-    const filePath = file.split(/(components\/|layout\/)/)[2];
+    const filePath = file.split(/(foundation\/|components\/|layout\/)/)[2];
+    const consolidateDirs =
+      parentDir === 'layout' || parentDir === 'foundation'
+        ? '/components/'
+        : '/';
     const newfilePath =
       emulsifyConfig.project.platform === 'drupal'
-        ? `${projectPath}/${parentDir}/${filePath}`
+        ? `${projectPath}${consolidateDirs}${parentDir}/${filePath}`
         : `${projectPath}/dist/${parentDir}/${filePath}`;
     patterns.push({
       from: file,
@@ -66,9 +70,10 @@ function getPatterns(twigMatcher) {
 
 // Copy twig files from src directory.
 const CopyTwigPlugin = new CopyPlugin({
-  patterns: getPatterns(twigPattern),
+  patterns: getPatterns(componentFilesPattern),
 });
 
+// Export plugin configuration.
 module.exports = {
   ProgressPlugin,
   MiniCssExtractPlugin,

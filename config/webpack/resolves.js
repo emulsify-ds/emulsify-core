@@ -21,7 +21,14 @@ function getAliases(aliasMatcher) {
     const fileName = path.basename(filePath);
 
     if (emulsifyConfig.project.platform === 'drupal') {
-      aliases[`${projectName}:${fileName.replace('.twig', '')}`] = filePath;
+      const srcStructure = file.split(`${srcDir}/`)[1];
+      const parentDir = srcStructure.split('/')[0];
+      const consolidateDirs =
+        parentDir === 'layout' || parentDir === 'foundation'
+          ? `components/${parentDir}`
+          : 'components';
+      aliases[`${projectName}:${fileName.replace('.twig', '')}`] =
+        filePath.replace(parentDir, consolidateDirs);
     }
   });
 
