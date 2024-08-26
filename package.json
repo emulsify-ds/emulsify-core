@@ -103,7 +103,7 @@
     "sass": "^1.75.0",
     "sass-loader": "^16.0.1",
     "storybook": "^7.6.17",
-    "style-dictionary": "^3.9.2",
+    "style-dictionary": "^4.0.1",
     "stylelint": "^16.8.1",
     "stylelint-config-standard-scss": "^13.1.0",
     "stylelint-prettier": "^5.0.0",
