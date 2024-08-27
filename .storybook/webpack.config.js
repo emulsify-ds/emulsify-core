@@ -59,7 +59,7 @@ class ProjectNameResolverPlugin {
 module.exports = async ({ config }) => {
   // Alias
   Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
-  // config.resolve.plugins = [new ProjectNameResolverPlugin];
+  config.resolve.plugins = [new ProjectNameResolverPlugin];
   // console.log(config.resolve);
   // Twig
   config.module.rules.push({
