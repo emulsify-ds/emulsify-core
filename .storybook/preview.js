@@ -3,7 +3,11 @@ import Twig from 'twig';
 import { setupTwig } from './setupTwig';
 
 // GLOBAL CSS
-// import('../../../../dist/css/style.css');
+import('../../../../dist/global/tokens.css');
+import('../../../../dist/global/foundation.css');
+import('../../../../dist/global/layout.css');
+
+// Copy css files from dist/components||components.
 
 // Custom theme preview config if it exists.
 import('../../../../config/emulsify-core/storybook/preview');

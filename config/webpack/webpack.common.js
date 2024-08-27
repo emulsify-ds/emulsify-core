@@ -12,11 +12,15 @@ const projectDir = path.resolve(__dirname, '../../../../..');
 // Glob pattern for scss files that ignore file names prefixed with underscore.
 const BaseScssPattern = path.resolve(
   projectDir,
-  'src/{tokens,foundation,layout}/**/!(_*).scss',
+  'src/{tokens,foundation,layout}/**/!(_*|cl-*|sb-*).scss',
 );
 const ComponentScssPattern = path.resolve(
   projectDir,
-  'src/components/**/!(_*).scss',
+  'src/components/**/!(_*|cl-*|sb-*).scss',
+);
+const ComponentLibraryScssPattern = path.resolve(
+  projectDir,
+  'src/{tokens,foundation,layout}/**/{cl-*,sb-*}.scss',
 );
 
 // Glob pattern for JS files.
@@ -26,7 +30,12 @@ const jsPattern = path.resolve(
 );
 
 // Prepare list of scss and js file for "entry".
-function getEntries(BaseScssMatcher, ComponentScssMatcher, jsMatcher) {
+function getEntries(
+  BaseScssMatcher,
+  ComponentScssMatcher,
+  ComponentLibraryScssMatcher,
+  jsMatcher,
+) {
   const entries = {};
 
   // Token/Foundation/Layout SCSS entries.
@@ -47,6 +56,15 @@ function getEntries(BaseScssMatcher, ComponentScssMatcher, jsMatcher) {
       emulsifyConfig.project.platform === 'drupal'
         ? `components/${filePathDist.replace('.scss', '')}`
         : `dist/components/${filePathDist.replace('.scss', '')}`;
+    entries[newfilePath] = file;
+  });
+
+  // Component Library SCSS entries.
+  glob.sync(ComponentLibraryScssMatcher).forEach((file) => {
+    const filePath = file.split(
+      /(tokens\/|foundation\/|layout\/|components\/)/,
+    )[2];
+    const newfilePath = `dist/component-library/${filePath.replace('.scss', '')}`;
     entries[newfilePath] = file;
   });
 
@@ -72,7 +90,12 @@ module.exports = {
   stats: {
     errorDetails: true,
   },
-  entry: getEntries(BaseScssPattern, ComponentScssPattern, jsPattern),
+  entry: getEntries(
+    BaseScssPattern,
+    ComponentScssPattern,
+    ComponentLibraryScssPattern,
+    jsPattern,
+  ),
   module: {
     rules: [
       loaders.CSSLoader,
