@@ -1,5 +1,4 @@
 const path = require('path');
-const nodeExternals = require('webpack-node-externals');
 const globImporter = require('node-sass-glob-importer');
 
 const _StyleLintPlugin = require('stylelint-webpack-plugin');
@@ -40,6 +39,8 @@ class ProjectNameResolverPlugin {
           //   request: resolves.TwigResolve.alias[request.request],
           // };
 
+          // console.log(newRequest);
+
           return resolver.doResolve(
             target,
             newRequest,
@@ -56,13 +57,9 @@ class ProjectNameResolverPlugin {
 }
 
 module.exports = async ({ config }) => {
-  // Externals
-  config.externals = [
-    nodeExternals(),
-  ];
   // Alias
   Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
-  config.resolve.plugins = [new ProjectNameResolverPlugin];
+  // config.resolve.plugins = [new ProjectNameResolverPlugin];
   // console.log(config.resolve);
   // Twig
   config.module.rules.push({
@@ -99,13 +96,13 @@ module.exports = async ({ config }) => {
   config.plugins.push(
     new _StyleLintPlugin({
       configFile: path.resolve(__dirname, '../', '.stylelintrc.json'),
-      context: path.resolve(__dirname, '../', 'components'),
+      context: path.resolve(__dirname, '../', 'src'),
       files: '**/*.scss',
       failOnError: false,
       quiet: false,
     }),
     new ESLintPlugin({
-      context: path.resolve(__dirname, '../', 'components'),
+      context: path.resolve(__dirname, '../', 'src'),
       extensions: ['js'],
     }),
   );
