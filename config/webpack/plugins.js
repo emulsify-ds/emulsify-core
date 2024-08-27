@@ -43,7 +43,7 @@ const ProgressPlugin = new webpack.ProgressPlugin();
 // Glob pattern for markup files.
 const componentFilesPattern = path.resolve(srcDir, '**/*.{twig,yml}');
 
-// Prepare list of yml/twig files to copy to "compiled" directories.
+// Prepare list of twig files to copy to "compiled" directories.
 function getPatterns(filesMatcher) {
   const patterns = [];
   glob.sync(filesMatcher).forEach((file) => {

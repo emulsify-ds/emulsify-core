@@ -1,25 +1,78 @@
 const path = require('path');
+const nodeExternals = require('webpack-node-externals');
 const globImporter = require('node-sass-glob-importer');
+
 const _StyleLintPlugin = require('stylelint-webpack-plugin');
-const { namespaces } = require('./setupTwig');
 const ESLintPlugin = require('eslint-webpack-plugin');
+const resolves = require('../config/webpack/resolves');
+
+// Emulsify project configuration.
+const emulsifyConfig = require('../../../../project.emulsify.json');
+
+/**
+ * Transforms namespace:component to @namespace/template/path
+ */
+class ProjectNameResolverPlugin {
+  constructor(options = {}) {
+    this.prefix = `${emulsifyConfig.project.name}:`; // Project name prefix.
+  }
+  apply(resolver) {
+    const target = resolver.ensureHook('resolved');
+    resolver
+      .getHook('resolve')
+      .tapAsync('ProjectNameResolverPlugin', (request, resolveContext, callback) => {
+        if (request.request.startsWith(this.prefix)) {
+
+          // Start - map request to @ aliases.
+          const file = resolves.TwigResolve.alias[request.request];
+          const srcStructure = file.split(`${emulsifyConfig.project.name}/src/`)[1];
+          const parentDir = srcStructure.split(`/`)[0];
+          const filePath = file.split(`/src/${parentDir}`)[1];
+          const newRequest = {
+            ...request,
+            request: `@${parentDir}${filePath}`,
+          };
+          // End - map request to @ aliases.
+
+          // Change request to full file path.
+          // const newRequest = {
+          //   ...request,
+          //   request: resolves.TwigResolve.alias[request.request],
+          // };
+
+          return resolver.doResolve(
+            target,
+            newRequest,
+            `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[request.request]}`,
+            resolveContext,
+            callback
+          );
+        } else {
+          // Proceed with default resolution if the custom prefix is not matched
+          callback();
+        }
+      });
+  }
+}
 
 module.exports = async ({ config }) => {
+  // Externals
+  config.externals = [
+    nodeExternals(),
+  ];
+  // Alias
+  Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
+  config.resolve.plugins = [new ProjectNameResolverPlugin];
+  // console.log(config.resolve);
   // Twig
   config.module.rules.push({
     test: /\.twig$/,
     use: [
       {
-        loader: 'twig-loader',
-        options: {
-          twigOptions: {
-            namespaces,
-          },
-        },
+        loader: 'twigjs-loader',
       },
     ],
   });
-
   // SCSS
   config.module.rules.push({
     test: /\.s[ac]ss$/i,

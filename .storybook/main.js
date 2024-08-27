@@ -4,7 +4,7 @@ const safeConfigOverrides = configOverrides || {};
 
 const config = {
   stories: [
-    '../../../../components/**/*.stories.@(js|jsx|ts|tsx)',
+    '../../../../src/**/*.stories.@(js|jsx|ts|tsx)',
   ],
   addons: [
     '../../../@storybook/addon-a11y',

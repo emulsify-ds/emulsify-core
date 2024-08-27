@@ -21,23 +21,23 @@ function getAliases(aliasMatcher) {
     const fileName = path.basename(filePath);
 
     if (emulsifyConfig.project.platform === 'drupal') {
-      const srcStructure = file.split(`${srcDir}/`)[1];
-      const parentDir = srcStructure.split('/')[0];
-      const consolidateDirs =
-        parentDir === 'layout' || parentDir === 'foundation'
-          ? `components/${parentDir}`
-          : 'components';
-      aliases[`${projectName}:${fileName.replace('.twig', '')}`] =
-        filePath.replace(parentDir, consolidateDirs);
+      aliases[`${projectName}:${fileName.replace('.twig', '')}`] = file;
     }
   });
 
-  if (emulsifyConfig.project.platform !== 'drupal') {
+  if (emulsifyConfig.project.platform === 'drupal') {
+    Object.assign(aliases, {
+      '@tokens': `${projectDir}/src/tokens`,
+      '@foundation': `${projectDir}/src/foundation`,
+      '@components': `${projectDir}/src/components`,
+      '@layout': `${projectDir}/src/layout`,
+    });
+  } else {
     aliases = {
-      '@tokens': 'dist/tokens',
-      '@foundation': 'dist/foundation',
-      '@components': 'dist/components',
-      '@layouts': 'dist/layouts',
+      '@tokens': `${projectDir}/src/tokens`,
+      '@foundation': `${projectDir}/src/foundation`,
+      '@components': `${projectDir}/src/components`,
+      '@layout': `${projectDir}/src/layout`,
     };
   }
 
