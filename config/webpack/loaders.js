@@ -29,9 +29,8 @@ const JSLoader = {
 };
 
 const ImageLoader = {
-  test: /\.(png|svg|jpg|gif)$/i,
-  exclude: /icons\/.*\.svg$/,
-  loader: 'file-loader',
+  test: /\.(png|jpe?g|gif)$/i,
+  type: 'asset',
 };
 
 const CSSLoader = {

@@ -3,14 +3,12 @@ const path = require('path');
 const webpack = require('webpack');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const _MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const _ImageminPlugin = require('imagemin-webpack-plugin').default;
 const _SpriteLoaderPlugin = require('svg-sprite-loader/plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const glob = require('glob');
 
 // Get directories for file contexts.
 const projectDir = path.resolve(__dirname, '../../../../..');
-const imagePath = path.resolve(projectDir, 'assets/images');
 const srcDir = path.resolve(projectDir, 'src');
 
 // Emulsify project configuration.
@@ -20,16 +18,6 @@ const emulsifyConfig = require('../../../../../project.emulsify.json');
 const MiniCssExtractPlugin = new _MiniCssExtractPlugin({
   filename: '[name].css',
   chunkFilename: '[id].css',
-});
-
-// Minify CSS plugin.
-const ImageminPlugin = new _ImageminPlugin({
-  disable: process.env.NODE_ENV !== 'production',
-  externalImages: {
-    context: imagePath,
-    sources: glob.sync(path.resolve(imagePath, '**/*.{png,jpg,gif,svg}')),
-    destination: imagePath,
-  },
 });
 
 // Create SVG sprite.
@@ -77,7 +65,6 @@ const CopyTwigPlugin = new CopyPlugin({
 module.exports = {
   ProgressPlugin,
   MiniCssExtractPlugin,
-  ImageminPlugin,
   SpriteLoaderPlugin,
   CopyTwigPlugin,
   CleanWebpackPlugin: new CleanWebpackPlugin({

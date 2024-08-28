@@ -3,6 +3,7 @@ const glob = require('glob');
 const loaders = require('./loaders');
 const plugins = require('./plugins');
 const resolves = require('./resolves');
+const optimizers = require('./optimizers');
 const emulsifyConfig = require('../../../../../project.emulsify.json');
 
 // Get directories for file contexts.
@@ -125,4 +126,5 @@ module.exports = {
     filename: '[name].js',
   },
   resolve: resolves.TwigResolve,
+  optimization: optimizers,
 };
