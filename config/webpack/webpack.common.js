@@ -29,12 +29,16 @@ const jsPattern = path.resolve(
   'src/components/**/!(*.stories|*.component|*.min|*.test).js',
 );
 
+// Glob pattern for svgSprite config.
+const spritePattern = path.resolve(webpackDir, 'svgSprite.js');
+
 // Prepare list of scss and js file for "entry".
 function getEntries(
   BaseScssMatcher,
   ComponentScssMatcher,
   ComponentLibraryScssMatcher,
   jsMatcher,
+  spriteMatcher,
 ) {
   const entries = {};
 
@@ -79,7 +83,11 @@ function getEntries(
     }
   });
 
-  entries.svgSprite = path.resolve(webpackDir, 'svgSprite.js');
+  glob.sync(spriteMatcher).forEach((file) => {
+    const filePath = file.split('/webpack/')[1];
+    const newfilePath = `dist/${filePath.replace('.js', '')}`;
+    entries[newfilePath] = file;
+  });
 
   return entries;
 }
@@ -93,6 +101,7 @@ module.exports = {
     ComponentScssPattern,
     ComponentLibraryScssPattern,
     jsPattern,
+    spritePattern,
   ),
   module: {
     rules: [
