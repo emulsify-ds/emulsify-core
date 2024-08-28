@@ -20,7 +20,7 @@ const ComponentScssPattern = path.resolve(
 );
 const ComponentLibraryScssPattern = path.resolve(
   projectDir,
-  'src/{tokens,foundation,layout}/**/{cl-*,sb-*}.scss',
+  'src/util/**/!(_).scss',
 );
 
 // Glob pattern for JS files.
@@ -61,10 +61,8 @@ function getEntries(
 
   // Component Library SCSS entries.
   glob.sync(ComponentLibraryScssMatcher).forEach((file) => {
-    const filePath = file.split(
-      /(tokens\/|foundation\/|layout\/|components\/)/,
-    )[2];
-    const newfilePath = `dist/component-library/${filePath.replace('.scss', '')}`;
+    const filePath = file.split(/util/)[1];
+    const newfilePath = `dist/storybook/${filePath.replace('.scss', '')}`;
     entries[newfilePath] = file;
   });
 
