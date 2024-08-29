@@ -4,10 +4,9 @@ const safeConfigOverrides = configOverrides || {};
 
 const config = {
   stories: [
-    '../../../../src/**/*.stories.@(js|jsx|ts|tsx)',
+    '../../../../(src|components)/**/*.stories.@(js|jsx|ts|tsx)',
   ],
   staticDirs: [
-    '../../../../dist',
     '../../../../assets/images',
     '../../../../assets/icons',
   ],

@@ -6,6 +6,7 @@ const _MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const _SpriteLoaderPlugin = require('svg-sprite-loader/plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const glob = require('glob');
+const fs = require('fs-extra');
 
 // Get directories for file contexts.
 const projectDir = path.resolve(__dirname, '../../../../..');
@@ -57,9 +58,11 @@ function getPatterns(filesMatcher) {
 }
 
 // Copy twig files from src directory.
-const CopyTwigPlugin = new CopyPlugin({
-  patterns: getPatterns(componentFilesPattern),
-});
+const CopyTwigPlugin = fs.existsSync(path.resolve(projectDir, 'src'))
+  ? new CopyPlugin({
+      patterns: getPatterns(componentFilesPattern),
+    })
+  : '';
 
 // Export plugin configuration.
 module.exports = {

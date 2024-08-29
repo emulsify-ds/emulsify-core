@@ -5,29 +5,33 @@ const plugins = require('./plugins');
 const resolves = require('./resolves');
 const optimizers = require('./optimizers');
 const emulsifyConfig = require('../../../../../project.emulsify.json');
+const fs = require('fs-extra');
 
 // Get directories for file contexts.
 const webpackDir = path.resolve(__dirname);
 const projectDir = path.resolve(__dirname, '../../../../..');
+const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
+  ? path.resolve(projectDir, 'src')
+  : path.resolve(projectDir, 'components');
+
+console.log(projectDir);
+console.log(srcDir);
 
 // Glob pattern for scss files that ignore file names prefixed with underscore.
 const BaseScssPattern = path.resolve(
-  projectDir,
-  'src/{tokens,foundation,layout}/**/!(_*|cl-*|sb-*).scss',
+  srcDir,
+  '{tokens,foundation,layout}/**/!(_*|cl-*|sb-*).scss',
 );
 const ComponentScssPattern = path.resolve(
-  projectDir,
-  'src/components/**/!(_*|cl-*|sb-*).scss',
+  srcDir,
+  'components/**/!(_*|cl-*|sb-*).scss',
 );
-const ComponentLibraryScssPattern = path.resolve(
-  projectDir,
-  'src/util/**/!(_).scss',
-);
+const ComponentLibraryScssPattern = path.resolve(srcDir, 'util/**/!(_).scss');
 
 // Glob pattern for JS files.
 const jsPattern = path.resolve(
-  projectDir,
-  'src/components/**/!(*.stories|*.component|*.min|*.test).js',
+  srcDir,
+  'components/**/!(*.stories|*.component|*.min|*.test).js',
 );
 
 // Glob pattern for svgSprite config.
