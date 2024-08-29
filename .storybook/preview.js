@@ -1,4 +1,4 @@
-import { useEffect } from '@storybook/client-api';
+import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
 import { setupTwig } from './setupTwig';
 
