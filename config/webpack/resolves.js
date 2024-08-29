@@ -56,8 +56,6 @@ function getAliases(aliasMatcher) {
   return aliases;
 }
 
-// console.log(getAliases(aliasPattern));
-
 // Alias twig namespaces.
 const TwigResolve = {
   extensions: ['.twig'],

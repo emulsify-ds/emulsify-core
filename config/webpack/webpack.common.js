@@ -14,9 +14,6 @@ const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
   ? path.resolve(projectDir, 'src')
   : path.resolve(projectDir, 'components');
 
-console.log(projectDir);
-console.log(srcDir);
-
 // Glob pattern for scss files that ignore file names prefixed with underscore.
 const BaseScssPattern = path.resolve(
   srcDir,
