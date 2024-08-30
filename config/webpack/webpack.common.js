@@ -34,6 +34,20 @@ const jsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
 // Glob pattern for svgSprite config.
 const spritePattern = path.resolve(webpackDir, 'svgSprite.js');
 
+// Helper function to replace the last instance of / in a path.
+function replaceLastSlash(str, replacement) {
+  // Find the last occurrence of '/'
+  const lastSlashIndex = str.lastIndexOf('/');
+  // If there is no '/' in the string, return the original string
+  if (lastSlashIndex === -1) {
+    return str;
+  }
+  // Replace the last '/' with the specified replacement
+  return (
+    str.slice(0, lastSlashIndex) + replacement + str.slice(lastSlashIndex + 1)
+  );
+}
+
 // Prepare list of scss and js file for "entry".
 function getEntries(
   BaseScssMatcher,
@@ -59,7 +73,7 @@ function getEntries(
   // Component SCSS entries.
   glob.sync(ComponentScssMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
-    const filePathDist = filePath.replace('/', '/css/');
+    const filePathDist = replaceLastSlash(filePath, '/css/');
     const distStructure = fs.existsSync(path.resolve(projectDir, 'src'))
       ? 'components'
       : 'css';
@@ -82,7 +96,7 @@ function getEntries(
   glob.sync(jsMatcher).forEach((file) => {
     if (!file.includes('dist/')) {
       const filePath = file.split('components/')[1];
-      const filePathDist = filePath.replace('/', '/js/');
+      const filePathDist = replaceLastSlash(filePath, '/js/');
       const distStructure = fs.existsSync(path.resolve(projectDir, 'src'))
         ? 'components'
         : 'js';
