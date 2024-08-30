@@ -1,6 +1,5 @@
 {
   "extends": [
-    "airbnb-base",
     "eslint:recommended",
     "plugin:import/recommended",
     "plugin:security/recommended-legacy",
