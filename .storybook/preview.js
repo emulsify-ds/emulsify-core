@@ -2,10 +2,7 @@ import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
 import { setupTwig } from './setupTwig';
 
-// GLOBAL CSS
-import('../../../../dist/storybook/storybook-base.css');
-import('../../../../dist/storybook/storybook-components.css');
-// Custom theme preview config if it exists.
+// Project config to import stylesheets.
 import('../../../../config/emulsify-core/storybook/preview');
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.

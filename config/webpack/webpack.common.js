@@ -15,10 +15,9 @@ const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
   : path.resolve(projectDir, 'components');
 
 // Glob pattern for scss files that ignore file names prefixed with underscore.
-const BaseScssPattern = path.resolve(
-  srcDir,
-  '!(components|util)/**/!(_*|cl-*|sb-*).scss',
-);
+const BaseScssPattern = fs.existsSync(path.resolve(projectDir, 'src'))
+  ? path.resolve(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
+  : '';
 const ComponentScssPattern = fs.existsSync(path.resolve(projectDir, 'src'))
   ? path.resolve(srcDir, 'components/**/!(_*|cl-*|sb-*).scss')
   : path.resolve(srcDir, '**/!(_*|cl-*|sb-*).scss');
@@ -88,7 +87,8 @@ function getEntries(
         ? 'components'
         : 'js';
       const newfilePath =
-        emulsifyConfig.project.platform === 'drupal'
+        emulsifyConfig.project.platform === 'drupal' &&
+        fs.existsSync(path.resolve(projectDir, 'src'))
           ? `components/${filePathDist.replace('.js', '')}`
           : `dist/${distStructure}/${filePathDist.replace('.js', '')}`;
       entries[newfilePath] = file;
