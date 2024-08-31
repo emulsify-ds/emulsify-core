@@ -42,7 +42,7 @@ function getAliases(aliasMatcher) {
     const fileName = path.basename(filePath);
 
     if (emulsifyConfig.project.platform === 'drupal') {
-      aliases[`${projectName}:${fileName.replace('.twig', '')}`] = file;
+      aliases[`${projectName}/${fileName.replace('.twig', '')}`] = file;
     }
   });
   // Add typical @namespace (path to directory) aliases for twig partials.
