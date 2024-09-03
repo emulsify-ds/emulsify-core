@@ -53,7 +53,7 @@ module.exports = async ({ config }) => {
     test: /\.twig$/,
     use: [
       {
-        loader: path.resolve(__dirname, 'custom-loader.js'),
+        loader: path.resolve(__dirname, '../config/webpack/sdc-loader.js'),
         options: {
           projectName: emulsifyConfig.project.name,
         },
