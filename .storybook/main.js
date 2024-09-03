@@ -9,6 +9,7 @@ const config = {
   staticDirs: [
     '../../../../assets/images',
     '../../../../assets/icons',
+    '../../../../dist',
   ],
   addons: [
     '../../../@storybook/addon-a11y',
