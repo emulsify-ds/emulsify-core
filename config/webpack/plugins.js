@@ -3,37 +3,77 @@ const path = require('path');
 const webpack = require('webpack');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const _MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const _ImageminPlugin = require('imagemin-webpack-plugin').default;
 const _SpriteLoaderPlugin = require('svg-sprite-loader/plugin');
+const CopyPlugin = require('copy-webpack-plugin');
 const glob = require('glob');
+const fs = require('fs-extra');
 
-const imagePath = path.resolve(__dirname, '../../../../../assets/images');
+// Get directories for file contexts.
+const projectDir = path.resolve(__dirname, '../../../../..');
+const srcDir = path.resolve(projectDir, 'src');
 
+// Emulsify project configuration.
+const emulsifyConfig = require('../../../../../project.emulsify.json');
+
+// Compress images plugin.
 const MiniCssExtractPlugin = new _MiniCssExtractPlugin({
   filename: '[name].css',
   chunkFilename: '[id].css',
 });
 
-const ImageminPlugin = new _ImageminPlugin({
-  disable: process.env.NODE_ENV !== 'production',
-  externalImages: {
-    context: imagePath,
-    sources: glob.sync(path.resolve(imagePath, '**/*.{png,jpg,gif,svg}')),
-    destination: imagePath,
-  },
-});
-
+// Create SVG sprite.
 const SpriteLoaderPlugin = new _SpriteLoaderPlugin({
   plainSprite: true,
 });
 
+// Enable Webpack progress plugin.
 const ProgressPlugin = new webpack.ProgressPlugin();
 
+// Glob pattern for markup files.
+const componentFilesPattern = path.resolve(srcDir, '**/*.{twig,yml}');
+
+/**
+ * Prepare list of twig files to copy to "compiled" directories.
+ * @constructor
+ * @param {string} filesMatcher - Glob pattern.
+ */
+function getPatterns(filesMatcher) {
+  const patterns = [];
+  glob.sync(filesMatcher).forEach((file) => {
+    const projectPath = file.split('/src/')[0];
+    const srcStructure = file.split(`${srcDir}/`)[1];
+    const parentDir = srcStructure.split('/')[0];
+    const filePath = file.split(/(foundation\/|components\/|layout\/)/)[2];
+    const consolidateDirs =
+      parentDir === 'layout' || parentDir === 'foundation'
+        ? '/components/'
+        : '/';
+    const newfilePath =
+      emulsifyConfig.project.platform === 'drupal'
+        ? `${projectPath}${consolidateDirs}${parentDir}/${filePath}`
+        : `${projectPath}/dist/${parentDir}/${filePath}`;
+    patterns.push({
+      from: file,
+      to: newfilePath,
+    });
+  });
+
+  return patterns;
+}
+
+// Copy twig files from src directory.
+const CopyTwigPlugin = fs.existsSync(path.resolve(projectDir, 'src'))
+  ? new CopyPlugin({
+      patterns: getPatterns(componentFilesPattern),
+    })
+  : '';
+
+// Export plugin configuration.
 module.exports = {
   ProgressPlugin,
   MiniCssExtractPlugin,
-  ImageminPlugin,
   SpriteLoaderPlugin,
+  CopyTwigPlugin,
   CleanWebpackPlugin: new CleanWebpackPlugin({
     protectWebpackAssets: false, // Required for removal of extra, unwanted dist/css/*.js files.
     cleanOnceBeforeBuildPatterns: ['!*.{png,jpg,gif,svg}'],
