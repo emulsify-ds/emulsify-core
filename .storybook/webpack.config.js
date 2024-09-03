@@ -13,43 +13,31 @@ const emulsifyConfig = require('../../../../project.emulsify.json');
  */
 class ProjectNameResolverPlugin {
   constructor(options = {}) {
-    this.prefix = `${emulsifyConfig.project.name}:`; // Project name prefix.
+    this.prefix = options.projectName;
   }
-  apply(resolver) {
-    const target = resolver.ensureHook('resolved');
-    resolver
-      .getHook('resolve')
-      .tapAsync('ProjectNameResolverPlugin', (request, resolveContext, callback) => {
-        if (request.request.startsWith(this.prefix)) {
 
-          // Start - map request to @ aliases.
-          const file = resolves.TwigResolve.alias[request.request];
-          const srcStructure = file.split(`${emulsifyConfig.project.name}/src/`)[1];
-          const parentDir = srcStructure.split(`/`)[0];
-          const filePath = file.split(`/src/${parentDir}`)[1];
+  apply(resolver) {
+    const target = resolver.ensureHook('resolve');
+    resolver
+      .getHook('before-resolve')
+      .tapAsync('ProjectNameResolverPlugin', (request, resolveContext, callback) => {
+        const requestPath = request.request;
+
+        if (requestPath && requestPath.startsWith(`${this.prefix}:`)) {
+          const newRequestPath = requestPath.replace(`${this.prefix}:`, `${this.prefix}/`);
           const newRequest = {
             ...request,
-            request: `@${parentDir}${filePath}`,
+            request: newRequestPath,
           };
-          // End - map request to @ aliases.
 
-          // Change request to full file path.
-          // const newRequest = {
-          //   ...request,
-          //   request: resolves.TwigResolve.alias[request.request],
-          // };
-
-          // console.log(newRequest);
-
-          return resolver.doResolve(
+          resolver.doResolve(
             target,
             newRequest,
-            `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[request.request]}`,
+            `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[requestPath]}`,
             resolveContext,
             callback
           );
         } else {
-          // Proceed with default resolution if the custom prefix is not matched
           callback();
         }
       });
@@ -59,17 +47,23 @@ class ProjectNameResolverPlugin {
 module.exports = async ({ config }) => {
   // Alias
   Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
-  config.resolve.plugins = [new ProjectNameResolverPlugin];
-  // console.log(config.resolve);
+
   // Twig
   config.module.rules.push({
     test: /\.twig$/,
     use: [
       {
+        loader: path.resolve(__dirname, '../config/webpack/sdc-loader.js'),
+        options: {
+          projectName: emulsifyConfig.project.name,
+        },
+      },
+      {
         loader: 'twigjs-loader',
       },
     ],
   });
+
   // SCSS
   config.module.rules.push({
     test: /\.s[ac]ss$/i,
@@ -93,6 +87,13 @@ module.exports = async ({ config }) => {
     ],
   });
 
+  // YAML
+  config.module.rules.push({
+    test: /\.ya?ml$/,
+    loader: 'js-yaml-loader',
+  });
+
+  // Plugins
   config.plugins.push(
     new _StyleLintPlugin({
       configFile: path.resolve(__dirname, '../', '.stylelintrc.json'),
@@ -107,11 +108,12 @@ module.exports = async ({ config }) => {
     }),
   );
 
-  // YAML
-  config.module.rules.push({
-    test: /\.ya?ml$/,
-    loader: 'js-yaml-loader',
-  });
+  // Resolver Plugins
+  config.resolve.plugins = [
+    new ProjectNameResolverPlugin({
+      projectName: emulsifyConfig.project.name,
+    }),
+  ];
 
   return config;
 };
