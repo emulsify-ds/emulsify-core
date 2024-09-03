@@ -34,7 +34,12 @@ const jsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
 // Glob pattern for svgSprite config.
 const spritePattern = path.resolve(webpackDir, 'svgSprite.js');
 
-// Helper function to replace the last instance of / in a path.
+/**
+ * Return all scss/js/svg files that Webpack needs to compile.
+ * @constructor
+ * @param {string} str - Path to file.
+ * @param {string} replacement - string to replace str.
+ */
 function replaceLastSlash(str, replacement) {
   // Find the last occurrence of '/'
   const lastSlashIndex = str.lastIndexOf('/');
@@ -48,7 +53,15 @@ function replaceLastSlash(str, replacement) {
   );
 }
 
-// Prepare list of scss and js file for "entry".
+/**
+ * Return all scss/js/svg files that Webpack needs to compile.
+ * @constructor
+ * @param {string} BaseScssMatcher - Glob pattern.
+ * @param {string} ComponentScssMatcher - Glob pattern.
+ * @param {string} ComponentLibraryScssMatcher - Glob pattern.
+ * @param {string} jsMatcher - Glob pattern.
+ * @param {string} spriteMatcher - Glob pattern.
+ */
 function getEntries(
   BaseScssMatcher,
   ComponentScssMatcher,

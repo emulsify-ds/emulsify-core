@@ -15,7 +15,11 @@ const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
 // Glob pattern for twig aliases.
 const aliasPattern = path.resolve(srcDir, '**/!(_*).twig');
 
-// Get all directories from a specified directory.
+/**
+ * Return all top-level directories from the projects source directory.
+ * @constructor
+ * @param {string} source - Path to source directory.
+ */
 function getDirectories(source) {
   const dirs = fs
     .readdirSync(source, { withFileTypes: true }) // Read contents of the directory
@@ -24,7 +28,11 @@ function getDirectories(source) {
   return dirs;
 }
 
-// Clean up directory names for namespacing purposes.
+/**
+ * Return clean directory names if numbering is used for sorting.
+ * @constructor
+ * @param {string} dir - Given directory name.
+ */
 function cleanDirectoryName(dir) {
   if (/^\d{2}/.test(dir)) {
     return dir.slice(3);
@@ -32,7 +40,11 @@ function cleanDirectoryName(dir) {
   return dir;
 }
 
-// Prepare list of twig files to copy to "compiled" directories.
+/**
+ * Return a list of twig file file paths from the project source directory.
+ * @constructor
+ * @param {string} aliasMatcher - Glob pattern.
+ */
 function getAliases(aliasMatcher) {
   // Create default aliases
   let aliases = {};
