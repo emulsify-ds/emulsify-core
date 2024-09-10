@@ -52,7 +52,8 @@
       "requireReturn": false
     }],
     "no-unused-vars": ["warn"],
-    "operator-linebreak": ["error", "after", { "overrides": { "?": "ignore", ":": "ignore" } }]
+    "operator-linebreak": ["error", "after", { "overrides": { "?": "ignore", ":": "ignore" } }],
+    "quotes": ["error", "single"]
   },
   "settings": {
     "import/ignore": [
