@@ -21,9 +21,16 @@
     "it": true,
     "describe": true
   },
+  "parser": "@babel/eslint-parser",
+  "parserOptions": {
+    "requireConfigFile": false,
+    "babelOptions": {
+      "babelrc": false,
+      "configFile": false
+    }
+  },
   "rules": {
     "strict": 0,
-    "prettier/prettier": "error",
     "consistent-return": ["off"],
     "no-underscore-dangle": ["off"],
     "max-nested-callbacks": ["warn", 3],
@@ -36,6 +43,7 @@
     }],
     "no-param-reassign": ["off"],
     "no-prototype-builtins": ["off"],
+    "prettier/prettier": ["error", { "singleQuote": true }],
     "valid-jsdoc": ["warn", {
       "prefer": {
         "returns": "return",
@@ -44,7 +52,8 @@
       "requireReturn": false
     }],
     "no-unused-vars": ["warn"],
-    "operator-linebreak": ["error", "after", { "overrides": { "?": "ignore", ":": "ignore" } }]
+    "operator-linebreak": ["error", "after", { "overrides": { "?": "ignore", ":": "ignore" } }],
+    "quotes": ["error", "single"]
   },
   "settings": {
     "import/ignore": [
