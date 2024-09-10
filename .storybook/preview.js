@@ -2,8 +2,15 @@ import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
 import { setupTwig } from './setupTwig';
 
-// Project config to import stylesheets.
-import('../../../../config/emulsify-core/storybook/preview');
+try {
+  // Dynamically importing CSS files from the dist folder for Storybook preview.js.
+  const requireCSS = require.context("../../../../dist", true, /\.css$/);
+  requireCSS.keys().forEach(requireCSS);
+} catch (error) {
+  console.warn(
+    'Warning: CSS files could not be loaded. The "dist" folder might be missing.',
+  );
+}
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
 import './_drupal.js';
