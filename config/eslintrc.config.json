@@ -31,7 +31,6 @@
   },
   "rules": {
     "strict": 0,
-    "prettier/prettier": "error",
     "consistent-return": ["off"],
     "no-underscore-dangle": ["off"],
     "max-nested-callbacks": ["warn", 3],
@@ -44,6 +43,7 @@
     }],
     "no-param-reassign": ["off"],
     "no-prototype-builtins": ["off"],
+    "prettier/prettier": ["error", { "singleQuote": true }],
     "valid-jsdoc": ["warn", {
       "prefer": {
         "returns": "return",
