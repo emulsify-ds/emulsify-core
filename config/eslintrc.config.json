@@ -21,6 +21,14 @@
     "it": true,
     "describe": true
   },
+  "parser": "@babel/eslint-parser",
+  "parserOptions": {
+    "requireConfigFile": false,
+    "babelOptions": {
+      "babelrc": false,
+      "configFile": false
+    }
+  },
   "rules": {
     "strict": 0,
     "prettier/prettier": "error",

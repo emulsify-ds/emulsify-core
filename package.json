@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.25.2",
+    "@babel/eslint-parser": "^7.25.1",
     "@emulsify/cli": "^1.11.0",
     "@storybook/addon-a11y": "^8.2.9",
     "@storybook/addon-actions": "^8.2.9",
