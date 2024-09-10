@@ -50,7 +50,13 @@
     "function-no-unknown": null,
     "import-notation": null,
     "media-feature-range-notation": null,
-    "prettier/prettier": true,
+    "prettier/prettier": [
+      true,
+      {
+        "singleQuote": true,
+        "tabWidth": 2
+      }
+    ],
     "property-no-vendor-prefix": null,
     "selector-class-pattern": null,
     "selector-not-notation": null,
