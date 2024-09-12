@@ -19,6 +19,7 @@ export const decorators = [
 ];
 
 setupTwig(Twig);
+fetchCSSFiles();
 
 const safeParamOverrides = overrideParams || {};
 
