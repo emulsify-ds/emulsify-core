@@ -1,6 +1,6 @@
 import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
-import { setupTwig, fetchCSSFiles } from './setupTwig';
+import { setupTwig, fetchCSSFiles } from './utils.js';
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
 import './_drupal.js';
