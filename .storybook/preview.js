@@ -1,6 +1,6 @@
 import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
-import { setupTwig } from './setupTwig';
+import { setupTwig, fetchCSSFiles } from './utils.js';
 import { overrideParams } from '../../../../config/emulsify-core/storybook/preview';
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
