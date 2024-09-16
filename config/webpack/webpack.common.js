@@ -21,7 +21,10 @@ const BaseScssPattern = fs.existsSync(path.resolve(projectDir, 'src'))
 const ComponentScssPattern = fs.existsSync(path.resolve(projectDir, 'src'))
   ? path.resolve(srcDir, 'components/**/!(_*|cl-*|sb-*).scss')
   : path.resolve(srcDir, '**/!(_*|cl-*|sb-*).scss');
-const ComponentLibraryScssPattern = path.resolve(srcDir, 'util/**/!(_).scss');
+const ComponentLibraryScssPattern = path.resolve(
+  srcDir,
+  '**/*{cl-*,sb-*}.scss',
+);
 
 // Glob pattern for JS files.
 const jsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
@@ -83,7 +86,7 @@ function getEntries(
     entries[newfilePath] = file;
   });
 
-  // Component SCSS entries.
+  // Component SCSS entries.-
   glob.sync(ComponentScssMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
     const filePathDist = replaceLastSlash(filePath, '/css/');
@@ -100,7 +103,7 @@ function getEntries(
 
   // Component Library SCSS entries.
   glob.sync(ComponentLibraryScssMatcher).forEach((file) => {
-    const filePath = file.split(/util/)[1];
+    const filePath = file.split(`${srcDir}/`)[1];
     const newfilePath = `dist/storybook/${filePath.replace('.scss', '')}`;
     entries[newfilePath] = file;
   });
