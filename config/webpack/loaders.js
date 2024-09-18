@@ -63,6 +63,7 @@ const CSSLoader = {
         sassOptions: {
           importer: globImporter(),
           outputStyle: 'compressed',
+          silenceDeprecations: ['legacy-js-api'],
         },
       },
     },
