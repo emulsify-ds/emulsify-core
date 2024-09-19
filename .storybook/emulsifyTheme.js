@@ -7,8 +7,8 @@ export default create({
 
   // UI
   appBg: '#00405B',
-  appContentBg: '#e6f5fc',
-  appBorderColor: '#99D9F4',
+  appContentBg: '#00202E',
+  appBorderColor: '#00405B',
   appBorderRadius: 4,
 
   // Typography
@@ -26,9 +26,9 @@ export default create({
   barBg: '#CCECFA',
 
   // Form colors
-  inputBg: 'red',
-  inputBorder: 'silver',
-  inputTextColor: '#00202E',
+  inputBg: '#00202E',
+  inputBorder: '#00405B',
+  inputTextColor: 'white',
   inputBorderRadius: 4,
   // Branding
   brandTitle: 'Emulsify',
