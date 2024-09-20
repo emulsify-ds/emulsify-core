@@ -1,10 +1,9 @@
-import { useEffect } from '@storybook/preview-api';
-import Twig from 'twig';
-import { setupTwig } from './setupTwig';
-import { overrideParams } from '../../../../config/emulsify-core/storybook/preview';
+import { useEffect } from "@storybook/preview-api";
+import Twig from "twig";
+import { setupTwig, fetchCSSFiles } from "./utils.js";
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
-import './_drupal.js';
+import "./_drupal.js";
 
 export const decorators = [
   (Story, { args }) => {
@@ -19,10 +18,11 @@ export const decorators = [
 ];
 
 setupTwig(Twig);
+fetchCSSFiles();
 
 const safeParamOverrides = overrideParams || {};
 
 export const parameters = {
-  actions: { argTypesRegex: '^on[A-Z].*' },
+  actions: { argTypesRegex: "^on[A-Z].*" },
   ...safeParamOverrides,
 };

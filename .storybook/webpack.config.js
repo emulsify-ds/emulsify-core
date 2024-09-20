@@ -115,5 +115,10 @@ module.exports = async ({ config }) => {
     }),
   ];
 
+  // Configure fallback for optional modules that may not be present
+  config.resolve.fallback = {
+    '../../../../components': false,
+  };
+
   return config;
 };

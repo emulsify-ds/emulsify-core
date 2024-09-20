@@ -30,7 +30,7 @@ const SpriteLoaderPlugin = new _SpriteLoaderPlugin({
 const ProgressPlugin = new webpack.ProgressPlugin();
 
 // Glob pattern for markup files.
-const componentFilesPattern = path.resolve(srcDir, '**/*.{twig,yml}');
+const componentFilesPattern = path.resolve(srcDir, '**/*.{twig,component.yml}');
 
 /**
  * Prepare list of twig files to copy to "compiled" directories.
