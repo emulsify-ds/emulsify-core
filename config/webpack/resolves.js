@@ -65,6 +65,7 @@ function getAliases(aliasMatcher) {
       [`@${name}`]: `${projectDir}/${path.basename(srcDir)}/${dir}`,
     });
   });
+
   return aliases;
 }
 
