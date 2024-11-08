@@ -135,7 +135,7 @@ const config = {
 
       #panel-tab-content,
       #panel-tab-content>* {
-        color: var(--colors-emulsify-blue-1000) !important;
+        color: var(--colors-emulsify-blue-100) !important;
       }
 
       #panel-tab-content a,
