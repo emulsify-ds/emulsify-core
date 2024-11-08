@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Bundled tooling for Storybook development + Webpack Build",
   "keywords": [
     "component library",
@@ -46,9 +46,9 @@
     "twatch": "jest --no-coverage --watch --verbose"
   },
   "dependencies": {
-    "@babel/core": "^7.26.0",
+    "@babel/core": "^7.25.9",
     "@babel/eslint-parser": "^7.25.9",
-    "@babel/preset-env": "^7.26.0",
+    "@babel/preset-env": "^7.25.9",
     "@emulsify/cli": "^1.11.3",
     "@storybook/addon-a11y": "^8.4.2",
     "@storybook/addon-actions": "^8.4.2",
