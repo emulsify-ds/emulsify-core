@@ -120,6 +120,7 @@
     "twig-drupal-filters": "^3.2.0",
     "twig-testing-library": "^1.2.0",
     "twigjs-loader": "^1.0.3",
+    "unique-id-twig-extension": "github:codechefmarc/unique-id-twig-extension",
     "webpack": "^5.96.1",
     "webpack-cli": "^5.1.4",
     "webpack-merge": "^6.0.1",
