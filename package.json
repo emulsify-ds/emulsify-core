@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "description": "Bundled tooling for Storybook development + Webpack Build",
   "keywords": [
     "component library",
