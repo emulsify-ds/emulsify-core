@@ -77,9 +77,14 @@ function getEntries(
   // Non-component or global SCSS entries.
   glob.sync(BaseScssMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
-    const filePathDist = filePath.split('/')[1]
-      ? filePath.split('/')[1]
-      : filePath.split('/')[0];
+    // Support multi-level folder structures.
+    let filePathDist = filePath.split('/')[0];
+    if (filePath.split('/')[1] && !filePath.split('/')[1].endsWith('.scss')) {
+      filePathDist = filePath.split('/')[1];
+    }
+    if (filePath.split('/')[2]) {
+      filePathDist = `${filePath.split('/')[1]}/${filePath.split('/')[2]}`;
+    }
     const newfilePath = fs.existsSync(path.resolve(projectDir, 'src'))
       ? `dist/global/${filePathDist.replace('.scss', '')}`
       : `dist/css/${filePathDist.replace('.scss', '')}`;
