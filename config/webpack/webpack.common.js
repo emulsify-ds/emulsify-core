@@ -7,6 +7,9 @@ const optimizers = require('./optimizers');
 const emulsifyConfig = require('../../../../../project.emulsify.json');
 const fs = require('fs-extra');
 
+// Utility to sanitize file paths (to prevent unwanted characters).
+const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
+
 // Get directories for file contexts.
 const webpackDir = path.resolve(__dirname);
 const projectDir = path.resolve(__dirname, '../../../../..');
@@ -27,7 +30,13 @@ const ComponentLibraryScssPattern = path.resolve(
 );
 
 // Glob pattern for JS files.
-const jsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
+const BaseJsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
+  ? path.resolve(
+      srcDir,
+      '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
+    )
+  : '';
+const ComponentJsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
   ? path.resolve(
       srcDir,
       'components/**/!(*.stories|*.component|*.min|*.test).js',
@@ -59,36 +68,79 @@ function replaceLastSlash(str, replacement) {
 /**
  * Return all scss/js/svg files that Webpack needs to compile.
  * @constructor
+ * @param {string} BaseJsMatcher - Glob pattern.
+ * @param {string} jsMatcher - Glob pattern.
  * @param {string} BaseScssMatcher - Glob pattern.
  * @param {string} ComponentScssMatcher - Glob pattern.
  * @param {string} ComponentLibraryScssMatcher - Glob pattern.
- * @param {string} jsMatcher - Glob pattern.
  * @param {string} spriteMatcher - Glob pattern.
  */
 function getEntries(
+  BaseJsMatcher,
+  jsMatcher,
   BaseScssMatcher,
   ComponentScssMatcher,
   ComponentLibraryScssMatcher,
-  jsMatcher,
   spriteMatcher,
 ) {
   const entries = {};
 
+  const addEntry = (key, file) => {
+    const sanitizedKey = sanitizePath(key);
+    if (
+      sanitizedKey &&
+      !Object.prototype.hasOwnProperty.call(entries, sanitizedKey)
+    ) {
+      entries[sanitizedKey] = file;
+    }
+  };
+
+  // Non-component or global JS entries.
+  glob.sync(BaseJsMatcher).forEach((file) => {
+    const filePath = file.split(`${srcDir}/`)[1];
+    const pathParts = filePath.split('/');
+    // Construct the output path by joining all path parts except the last, with "/js/" prefix.
+    const filePathDist = `${pathParts.slice(0, -1).join('/')}/js/${pathParts.at(-1).replace('.js', '')}`;
+    // Determine if the src directory exists and construct the appropriate path.
+    const newFilePath = fs.existsSync(path.resolve(projectDir, 'src'))
+      ? `dist/global/${filePathDist}`
+      : `dist/js/${filePathDist}`;
+    // Add the file to the entries.
+    addEntry(newFilePath, file);
+  });
+
+  // Component JS entries.
+  glob.sync(jsMatcher).forEach((file) => {
+    if (!file.includes('dist/')) {
+      const filePath = file.split('components/')[1];
+      const filePathDist = replaceLastSlash(filePath, '/js/');
+      const distStructure = fs.existsSync(path.resolve(projectDir, 'src'))
+        ? 'components'
+        : 'js';
+      const newFilePath =
+        emulsifyConfig.project.platform === 'drupal' &&
+        fs.existsSync(path.resolve(projectDir, 'src'))
+          ? `components/${filePathDist.replace('.js', '')}`
+          : `dist/${distStructure}/${filePathDist.replace('.js', '')}`;
+      addEntry(newFilePath, file);
+    }
+  });
+
   // Non-component or global SCSS entries.
   glob.sync(BaseScssMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
-    // Support multi-level folder structures.
-    let filePathDist = filePath.split('/')[0];
-    if (filePath.split('/')[1] && !filePath.split('/')[1].endsWith('.scss')) {
-      filePathDist = filePath.split('/')[1];
-    }
-    if (filePath.split('/')[2]) {
-      filePathDist = `${filePath.split('/')[1]}/${filePath.split('/')[2]}`;
-    }
-    const newfilePath = fs.existsSync(path.resolve(projectDir, 'src'))
-      ? `dist/global/${filePathDist.replace('.scss', '')}`
-      : `dist/css/${filePathDist.replace('.scss', '')}`;
-    entries[newfilePath] = file;
+    const pathParts = filePath.split('/');
+
+    // Construct the output path by joining all path parts except the last, with "/css/" prefix.
+    const filePathDist = `${pathParts.slice(0, -1).join('/')}/css/${pathParts.at(-1).replace('.scss', '')}`;
+
+    // Determine if the src directory exists and construct the appropriate path.
+    const newFilePath = fs.existsSync(path.resolve(projectDir, 'src'))
+      ? `dist/global/${filePathDist}`
+      : `dist/css/${filePathDist}`;
+
+    // Add the file to the entries.
+    addEntry(newFilePath, file);
   });
 
   // Component SCSS entries.-
@@ -98,42 +150,25 @@ function getEntries(
     const distStructure = fs.existsSync(path.resolve(projectDir, 'src'))
       ? 'components'
       : 'css';
-    const newfilePath =
+    const newFilePath =
       emulsifyConfig.project.platform === 'drupal' &&
       fs.existsSync(path.resolve(projectDir, 'src'))
         ? `components/${filePathDist.replace('.scss', '')}`
         : `dist/${distStructure}/${filePathDist.replace('.scss', '')}`;
-    entries[newfilePath] = file;
+    addEntry(newFilePath, file);
   });
 
   // Component Library SCSS entries.
   glob.sync(ComponentLibraryScssMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
-    const newfilePath = `dist/storybook/${filePath.replace('.scss', '')}`;
-    entries[newfilePath] = file;
-  });
-
-  // JS entries.
-  glob.sync(jsMatcher).forEach((file) => {
-    if (!file.includes('dist/')) {
-      const filePath = file.split('components/')[1];
-      const filePathDist = replaceLastSlash(filePath, '/js/');
-      const distStructure = fs.existsSync(path.resolve(projectDir, 'src'))
-        ? 'components'
-        : 'js';
-      const newfilePath =
-        emulsifyConfig.project.platform === 'drupal' &&
-        fs.existsSync(path.resolve(projectDir, 'src'))
-          ? `components/${filePathDist.replace('.js', '')}`
-          : `dist/${distStructure}/${filePathDist.replace('.js', '')}`;
-      entries[newfilePath] = file;
-    }
+    const newFilePath = `dist/storybook/${filePath.replace('.scss', '')}`;
+    addEntry(newFilePath, file);
   });
 
   glob.sync(spriteMatcher).forEach((file) => {
     const filePath = file.split('/webpack/')[1];
-    const newfilePath = `dist/${filePath.replace('.js', '')}`;
-    entries[newfilePath] = file;
+    const newFilePath = `dist/${filePath.replace('.js', '')}`;
+    addEntry(newFilePath, file);
   });
 
   return entries;
@@ -144,10 +179,11 @@ module.exports = {
     errorDetails: true,
   },
   entry: getEntries(
+    BaseJsPattern,
+    ComponentJsPattern,
     BaseScssPattern,
     ComponentScssPattern,
     ComponentLibraryScssPattern,
-    jsPattern,
     spritePattern,
   ),
   module: {
