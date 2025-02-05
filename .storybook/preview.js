@@ -1,10 +1,27 @@
-import Twig from "twig";
-import { useEffect } from "@storybook/preview-api";
-import { setupTwig, fetchCSSFiles } from "./utils.js";
-import { overrideParams } from "../../../../config/emulsify-core/storybook/preview";
+import { useEffect } from '@storybook/preview-api';
+import Twig from 'twig';
+import { setupTwig, fetchCSSFiles } from './utils.js';
+import { getRules } from 'axe-core';
+import { overrideParams } from '../../../../config/emulsify-core/storybook/preview';
 
 // If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
-import "./_drupal.js";
+import './_drupal.js=';
+
+function enableRulesByTag(tags = []) {
+  const allRules = getRules();
+  return allRules.map(rule =>
+    tags.some(t => rule.tags.includes(t)) ? { id: rule.ruleId, enabled: true } : { id: rule.ruleId, enabled: false }
+  );
+}
+
+const AxeRules = enableRulesByTag([
+  "wcag2a",
+  "wcag2aa",
+  "wcag21a",
+  "wcag21aa",
+  "wcag22aa",
+  "best-practice",
+]);
 
 export const decorators = [
   (Story, { args }) => {
@@ -24,6 +41,15 @@ fetchCSSFiles();
 const safeParamOverrides = overrideParams || {};
 
 export const parameters = {
-  actions: { argTypesRegex: "^on[A-Z].*" },
+  actions: { argTypesRegex: '^on[A-Z].*' },
+  a11y: {
+    config: {
+      detailedReport: true,
+      detailedReportOptions: {
+        html: true,
+      },
+      rules: AxeRules,
+    },
+  },
   ...safeParamOverrides,
 };
