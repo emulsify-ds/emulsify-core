@@ -13,9 +13,10 @@ const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
 // Get directories for file contexts.
 const webpackDir = path.resolve(__dirname);
 const projectDir = path.resolve(__dirname, '../../../../..');
-const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
-  ? path.resolve(projectDir, 'src')
-  : path.resolve(projectDir, 'components');
+
+const srcPath = path.resolve(projectDir, 'src');
+const isSrcExists = fs.existsSync(srcPath);
+const srcDir = isSrcExists ? srcPath : path.resolve(projectDir, 'components');
 
 // Glob pattern for scss files that ignore file names prefixed with underscore.
 const BaseScssPattern = fs.existsSync(path.resolve(projectDir, 'src'))

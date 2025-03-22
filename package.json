@@ -15,6 +15,7 @@
   "engines": {
     "node": ">=20"
   },
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/emulsify-ds/emulsify-core.git"
@@ -33,7 +34,7 @@
     "husky:pre-commit": "npm run lint",
     "lint": "npm run lint-js",
     "lint-fix": "npm run lint-js -- --fix",
-    "lint-js": "eslint --config config/eslintrc.config.json --no-error-on-unmatched-pattern ./config ./storybook",
+    "lint-js": "eslint --config config/eslint.config.js --no-error-on-unmatched-pattern ./config ./storybook",
     "lint-staged": "lint-staged",
     "prepare": "[ -d '.git' ] && (husky install) || true",
     "prettier": "prettier --config config/prettierrc.json --ignore-unknown \"**/*.{js,yml,scss,md}\"",
@@ -47,9 +48,9 @@
   },
   "dependencies": {
     "@babel/core": "^7.26.10",
-    "@babel/eslint-parser": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
     "@emulsify/cli": "^1.11.4",
+    "@eslint/js": "^9.23.0",
     "@storybook/addon-a11y": "^8.6.8",
     "@storybook/addon-actions": "^8.6.8",
     "@storybook/addon-essentials": "^8.6.8",
@@ -72,12 +73,9 @@
     "concurrently": "^9.1.2",
     "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^7.1.1",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.31.0",
+    "eslint": "^9.23.0",
+    "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-jest": "^28.11.0",
-    "eslint-plugin-prettier": "^5.2.3",
-    "eslint-plugin-security": "^3.0.1",
     "eslint-plugin-storybook": "^0.11.6",
     "eslint-webpack-plugin": "^5.0.0",
     "file-loader": "^6.2.0",
@@ -126,6 +124,7 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
+    "@babel/eslint-parser": "^7.26.10",
     "@commitlint/cli": "^19.8.0",
     "@commitlint/config-conventional": "^19.8.0",
     "@semantic-release/changelog": "^6.0.2",
@@ -133,6 +132,9 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^11.0.1",
     "@semantic-release/release-notes-generator": "^14.0.3",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.2.3",
+    "eslint-plugin-security": "^3.0.1",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.0",
     "semantic-release": "^24.2.3"
