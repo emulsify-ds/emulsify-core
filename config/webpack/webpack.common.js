@@ -1,13 +1,27 @@
-const path = require('path');
-const glob = require('glob');
-const loaders = require('./loaders');
-const plugins = require('./plugins');
-const resolves = require('./resolves');
-const optimizers = require('./optimizers');
-const emulsifyConfig = require('../../../../../project.emulsify.json');
-const fs = require('fs-extra');
+/**
+ * @fileoverview Webpack configuration entry file.
+ * This file generates Webpack entries for JS, SCSS, and SVG assets.
+ */
 
-// Utility to sanitize file paths (to prevent unwanted characters).
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { sync as globSync } from 'glob';
+import fs from 'fs-extra';
+import loaders from './loaders.js';
+import plugins from './plugins.js';
+import resolves from './resolves.js';
+import optimizers from './optimizers.js';
+import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Sanitize a file path by removing unwanted characters.
+ *
+ * @param {string} inputPath - The file path to sanitize.
+ * @returns {string} The sanitized file path.
+ */
 const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
 
 // Get directories for file contexts.
@@ -18,7 +32,7 @@ const srcPath = path.resolve(projectDir, 'src');
 const isSrcExists = fs.existsSync(srcPath);
 const srcDir = isSrcExists ? srcPath : path.resolve(projectDir, 'components');
 
-// Glob pattern for scss files that ignore file names prefixed with underscore.
+// Glob pattern for SCSS files that ignore file names prefixed with underscore.
 const BaseScssPattern = fs.existsSync(path.resolve(projectDir, 'src'))
   ? path.resolve(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
   : '';
@@ -44,37 +58,36 @@ const ComponentJsPattern = fs.existsSync(path.resolve(projectDir, 'src'))
     )
   : path.resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
-// Glob pattern for svgSprite config.
+// Glob pattern for SVG sprite config.
 const spritePattern = path.resolve(webpackDir, 'svgSprite.js');
 
 /**
- * Return all scss/js/svg files that Webpack needs to compile.
- * @constructor
- * @param {string} str - Path to file.
- * @param {string} replacement - string to replace str.
+ * Replace the last occurrence of a slash in a string with a replacement.
+ *
+ * @param {string} str - The original string.
+ * @param {string} replacement - The string to replace the last slash with.
+ * @returns {string} The modified string.
  */
 function replaceLastSlash(str, replacement) {
-  // Find the last occurrence of '/'
   const lastSlashIndex = str.lastIndexOf('/');
-  // If there is no '/' in the string, return the original string
   if (lastSlashIndex === -1) {
     return str;
   }
-  // Replace the last '/' with the specified replacement
   return (
     str.slice(0, lastSlashIndex) + replacement + str.slice(lastSlashIndex + 1)
   );
 }
 
 /**
- * Return all scss/js/svg files that Webpack needs to compile.
- * @constructor
- * @param {string} BaseJsMatcher - Glob pattern.
- * @param {string} jsMatcher - Glob pattern.
- * @param {string} BaseScssMatcher - Glob pattern.
- * @param {string} ComponentScssMatcher - Glob pattern.
- * @param {string} ComponentLibraryScssMatcher - Glob pattern.
- * @param {string} spriteMatcher - Glob pattern.
+ * Generate Webpack entries for JS, SCSS, and SVG files.
+ *
+ * @param {string} BaseJsMatcher - Glob pattern for base JS files.
+ * @param {string} jsMatcher - Glob pattern for component JS files.
+ * @param {string} BaseScssMatcher - Glob pattern for base SCSS files.
+ * @param {string} ComponentScssMatcher - Glob pattern for component SCSS files.
+ * @param {string} ComponentLibraryScssMatcher - Glob pattern for component library SCSS files.
+ * @param {string} spriteMatcher - Glob pattern for SVG sprite configuration.
+ * @returns {Object} An object containing the Webpack entries.
  */
 function getEntries(
   BaseJsMatcher,
@@ -86,6 +99,12 @@ function getEntries(
 ) {
   const entries = {};
 
+  /**
+   * Add an entry to the entries object after sanitizing the key.
+   *
+   * @param {string} key - The key for the entry.
+   * @param {string} file - The file path to associate with the entry.
+   */
   const addEntry = (key, file) => {
     const sanitizedKey = sanitizePath(key);
     if (
@@ -97,21 +116,20 @@ function getEntries(
   };
 
   // Non-component or global JS entries.
-  glob.sync(BaseJsMatcher).forEach((file) => {
+  globSync(BaseJsMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
     const pathParts = filePath.split('/');
-    // Construct the output path by joining all path parts except the last, with "/js/" prefix.
-    const filePathDist = `${pathParts.slice(0, -1).join('/')}/js/${pathParts.at(-1).replace('.js', '')}`;
-    // Determine if the src directory exists and construct the appropriate path.
+    const filePathDist = `${pathParts.slice(0, -1).join('/')}/js/${pathParts
+      .at(-1)
+      .replace('.js', '')}`;
     const newFilePath = fs.existsSync(path.resolve(projectDir, 'src'))
       ? `dist/global/${filePathDist}`
       : `dist/js/${filePathDist}`;
-    // Add the file to the entries.
     addEntry(newFilePath, file);
   });
 
   // Component JS entries.
-  glob.sync(jsMatcher).forEach((file) => {
+  globSync(jsMatcher).forEach((file) => {
     if (!file.includes('dist/')) {
       const filePath = file.split('components/')[1];
       const filePathDist = replaceLastSlash(filePath, '/js/');
@@ -122,30 +140,28 @@ function getEntries(
         emulsifyConfig.project.platform === 'drupal' &&
         fs.existsSync(path.resolve(projectDir, 'src'))
           ? `components/${filePathDist.replace('.js', '')}`
-          : `dist/${distStructure}/${filePathDist.replace('.js', '')}`;
+          : `dist/${distStructure}/${
+              distStructure === 'components' ? 'components' : 'js'
+            }/${filePathDist.replace('.js', '')}`;
       addEntry(newFilePath, file);
     }
   });
 
   // Non-component or global SCSS entries.
-  glob.sync(BaseScssMatcher).forEach((file) => {
+  globSync(BaseScssMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
     const pathParts = filePath.split('/');
-
-    // Construct the output path by joining all path parts except the last, with "/css/" prefix.
-    const filePathDist = `${pathParts.slice(0, -1).join('/')}/css/${pathParts.at(-1).replace('.scss', '')}`;
-
-    // Determine if the src directory exists and construct the appropriate path.
+    const filePathDist = `${pathParts.slice(0, -1).join('/')}/css/${pathParts
+      .at(-1)
+      .replace('.scss', '')}`;
     const newFilePath = fs.existsSync(path.resolve(projectDir, 'src'))
       ? `dist/global/${filePathDist}`
       : `dist/css/${filePathDist}`;
-
-    // Add the file to the entries.
     addEntry(newFilePath, file);
   });
 
-  // Component SCSS entries.-
-  glob.sync(ComponentScssMatcher).forEach((file) => {
+  // Component SCSS entries.
+  globSync(ComponentScssMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
     const filePathDist = replaceLastSlash(filePath, '/css/');
     const distStructure = fs.existsSync(path.resolve(projectDir, 'src'))
@@ -155,18 +171,21 @@ function getEntries(
       emulsifyConfig.project.platform === 'drupal' &&
       fs.existsSync(path.resolve(projectDir, 'src'))
         ? `components/${filePathDist.replace('.scss', '')}`
-        : `dist/${distStructure}/${filePathDist.replace('.scss', '')}`;
+        : `dist/${distStructure}/${
+            distStructure === 'components' ? 'components' : 'css'
+          }/${filePathDist.replace('.scss', '')}`;
     addEntry(newFilePath, file);
   });
 
   // Component Library SCSS entries.
-  glob.sync(ComponentLibraryScssMatcher).forEach((file) => {
+  globSync(ComponentLibraryScssMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
     const newFilePath = `dist/storybook/${filePath.replace('.scss', '')}`;
     addEntry(newFilePath, file);
   });
 
-  glob.sync(spriteMatcher).forEach((file) => {
+  // SVG sprite config entries.
+  globSync(spriteMatcher).forEach((file) => {
     const filePath = file.split('/webpack/')[1];
     const newFilePath = `dist/${filePath.replace('.js', '')}`;
     addEntry(newFilePath, file);
@@ -175,7 +194,7 @@ function getEntries(
   return entries;
 }
 
-module.exports = {
+export default {
   stats: {
     errorDetails: true,
   },

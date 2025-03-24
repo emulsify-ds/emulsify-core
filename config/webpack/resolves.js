@@ -1,37 +1,43 @@
-const path = require('path');
-const glob = require('glob');
-const fs = require('fs-extra');
+/**
+ * @fileoverview Configures Twig alias resolution for the project.
+ */
 
-// Emulsify project configuration.
-const emulsifyConfig = require('../../../../../project.emulsify.json');
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { sync as globSync } from 'glob';
+import fs from 'fs-extra';
+import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
 
-// Get directories for file contexts.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const projectDir = path.resolve(__dirname, '../../../../..');
 const projectName = emulsifyConfig.project.name;
 const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
   ? path.resolve(projectDir, 'src')
   : path.resolve(projectDir, 'components');
 
-// Glob pattern for twig aliases.
 const aliasPattern = path.resolve(srcDir, '**/!(_*).twig');
 
 /**
- * Return all top-level directories from the projects source directory.
- * @constructor
- * @param {string} source - Path to source directory.
+ * Get all top-level directory names from a source directory.
+ *
+ * @param {string} source - The source directory path.
+ * @returns {string[]} Array of directory names.
  */
 function getDirectories(source) {
   const dirs = fs
-    .readdirSync(source, { withFileTypes: true }) // Read contents of the directory
-    .filter((dirent) => dirent.isDirectory()) // Filter only directories
+    .readdirSync(source, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory())
     .map((dirent) => dirent.name);
   return dirs;
 }
 
 /**
- * Return clean directory names if numbering is used for sorting.
- * @constructor
- * @param {string} dir - Given directory name.
+ * Remove numbering from a directory name if present.
+ *
+ * @param {string} dir - The original directory name.
+ * @returns {string} The cleaned directory name.
  */
 function cleanDirectoryName(dir) {
   if (/^\d{2}/.test(dir)) {
@@ -41,23 +47,20 @@ function cleanDirectoryName(dir) {
 }
 
 /**
- * Return a list of twig file file paths from the project source directory.
- * @constructor
- * @param {string} aliasMatcher - Glob pattern.
+ * Generate a set of Twig aliases from a glob pattern.
+ *
+ * @param {string} aliasMatcher - The glob pattern to match Twig files.
+ * @returns {Object} An object containing Twig aliases.
  */
 function getAliases(aliasMatcher) {
-  // Create default aliases
   let aliases = {};
-  // Add SDC compatible aliases.
-  glob.sync(aliasMatcher).forEach((file) => {
+  globSync(aliasMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
     const fileName = path.basename(filePath);
-
     if (emulsifyConfig.project.platform === 'drupal') {
       aliases[`${projectName}/${fileName.replace('.twig', '')}`] = file;
     }
   });
-  // Add typical @namespace (path to directory) aliases for twig partials.
   const dirs = getDirectories(srcDir);
   dirs.forEach((dir) => {
     const name = cleanDirectoryName(dir);
@@ -65,16 +68,12 @@ function getAliases(aliasMatcher) {
       [`@${name}`]: `${projectDir}/${path.basename(srcDir)}/${dir}`,
     });
   });
-
   return aliases;
 }
 
-// Alias twig namespaces.
 const TwigResolve = {
   extensions: ['.twig'],
   alias: getAliases(aliasPattern),
 };
 
-module.exports = {
-  TwigResolve,
-};
+export default { TwigResolve };
