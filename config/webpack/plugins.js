@@ -2,8 +2,7 @@
  * @fileoverview Configures Webpack plugins.
  */
 
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { resolve, dirname } from 'path';
 import webpack from 'webpack';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import _MiniCssExtractPlugin from 'mini-css-extract-plugin';
@@ -13,11 +12,18 @@ import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
 import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Create __filename from import.meta.url without fileURLToPath
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
 
-const projectDir = path.resolve(__dirname, '../../../../..');
-const srcDir = path.resolve(projectDir, 'src');
+// On Windows, remove the leading slash (e.g. "/C:/path" -> "C:/path")
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
+}
+
+const _dirname = dirname(_filename);
+
+const projectDir = resolve(_dirname, '../../../../..');
+const srcDir = resolve(projectDir, 'src');
 
 const MiniCssExtractPlugin = new _MiniCssExtractPlugin({
   filename: '[name].css',
@@ -30,7 +36,7 @@ const SpriteLoaderPlugin = new _SpriteLoaderPlugin({
 
 const ProgressPlugin = new webpack.ProgressPlugin();
 
-const componentFilesPattern = path.resolve(srcDir, '**/*.{twig,component.yml}');
+const componentFilesPattern = resolve(srcDir, '**/*.{twig,component.yml}');
 
 /**
  * Prepare a list of patterns for copying Twig and component files.
@@ -61,7 +67,7 @@ function getPatterns(filesMatcher) {
   return patterns;
 }
 
-const CopyTwigPlugin = fs.existsSync(path.resolve(projectDir, 'src'))
+const CopyTwigPlugin = fs.existsSync(resolve(projectDir, 'src'))
   ? new CopyPlugin({
       patterns: getPatterns(componentFilesPattern),
     })

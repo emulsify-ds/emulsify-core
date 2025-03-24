@@ -2,22 +2,28 @@
  * @fileoverview Configures Twig alias resolution for the project.
  */
 
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { basename, dirname, resolve } from 'path';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
 import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
 
-const _filename = fileURLToPath(import.meta.url);
-const _dirname = path.dirname(_filename);
+// Create __filename from import.meta.url without fileURLToPath
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
 
-const projectDir = path.resolve(_dirname, '../../../../..');
+// On Windows, remove the leading slash (e.g. "/C:/path" -> "C:/path")
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
+}
+
+const _dirname = dirname(_filename);
+
+const projectDir = resolve(_dirname, '../../../../..');
 const projectName = emulsifyConfig.project.name;
-const srcDir = fs.existsSync(path.resolve(projectDir, 'src'))
-  ? path.resolve(projectDir, 'src')
-  : path.resolve(projectDir, 'components');
+const srcDir = fs.existsSync(resolve(projectDir, 'src'))
+  ? resolve(projectDir, 'src')
+  : resolve(projectDir, 'components');
 
-const aliasPattern = path.resolve(srcDir, '**/!(_*).twig');
+const aliasPattern = resolve(srcDir, '**/!(_*).twig');
 
 /**
  * Get all top-level directory names from a source directory.
@@ -56,7 +62,7 @@ function getAliases(aliasMatcher) {
   let aliases = {};
   globSync(aliasMatcher).forEach((file) => {
     const filePath = file.split(`${srcDir}/`)[1];
-    const fileName = path.basename(filePath);
+    const fileName = basename(filePath);
     if (emulsifyConfig.project.platform === 'drupal') {
       aliases[`${projectName}/${fileName.replace('.twig', '')}`] = file;
     }
@@ -65,7 +71,7 @@ function getAliases(aliasMatcher) {
   dirs.forEach((dir) => {
     const name = cleanDirectoryName(dir);
     Object.assign(aliases, {
-      [`@${name}`]: `${projectDir}/${path.basename(srcDir)}/${dir}`,
+      [`@${name}`]: `${projectDir}/${basename(srcDir)}/${dir}`,
     });
   });
   return aliases;
