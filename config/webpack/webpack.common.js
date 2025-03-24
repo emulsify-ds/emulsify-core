@@ -13,8 +13,8 @@ import resolves from './resolves.js';
 import optimizers from './optimizers.js';
 import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const _filename = fileURLToPath(import.meta.url);
+const _dirname = path.dirname(_filename);
 
 /**
  * Sanitize a file path by removing unwanted characters.
@@ -25,8 +25,8 @@ const __dirname = path.dirname(__filename);
 const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
 
 // Get directories for file contexts.
-const webpackDir = path.resolve(__dirname);
-const projectDir = path.resolve(__dirname, '../../../../..');
+const webpackDir = path.resolve(_dirname);
+const projectDir = path.resolve(_dirname, '../../../../..');
 
 const srcPath = path.resolve(projectDir, 'src');
 const isSrcExists = fs.existsSync(srcPath);
@@ -195,6 +195,7 @@ function getEntries(
 }
 
 export default {
+  target: 'web',
   stats: {
     errorDetails: true,
   },

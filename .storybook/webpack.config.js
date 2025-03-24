@@ -1,12 +1,9 @@
-const path = require('path');
-const globImporter = require('node-sass-glob-importer');
-
-const _StyleLintPlugin = require('stylelint-webpack-plugin');
-const ESLintPlugin = require('eslint-webpack-plugin');
-const resolves = require('../config/webpack/resolves');
-
-// Emulsify project configuration.
-const emulsifyConfig = require('../../../../project.emulsify.json');
+import path from 'path';
+import globImporter from 'node-sass-glob-importer';
+import _StyleLintPlugin from 'stylelint-webpack-plugin';
+import ESLintPlugin from 'eslint-webpack-plugin';
+import resolves from '../config/webpack/resolves.js';
+import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
 
 /**
  * Transforms namespace:component to @namespace/template/path
@@ -20,31 +17,40 @@ class ProjectNameResolverPlugin {
     const target = resolver.ensureHook('resolve');
     resolver
       .getHook('before-resolve')
-      .tapAsync('ProjectNameResolverPlugin', (request, resolveContext, callback) => {
-        const requestPath = request.request;
+      .tapAsync(
+        'ProjectNameResolverPlugin',
+        (request, resolveContext, callback) => {
+          const requestPath = request.request;
 
-        if (requestPath && requestPath.startsWith(`${this.prefix}:`)) {
-          const newRequestPath = requestPath.replace(`${this.prefix}:`, `${this.prefix}/`);
-          const newRequest = {
-            ...request,
-            request: newRequestPath,
-          };
+          if (
+            requestPath &&
+            requestPath.startsWith(`${this.prefix}:`)
+          ) {
+            const newRequestPath = requestPath.replace(
+              `${this.prefix}:`,
+              `${this.prefix}/`
+            );
+            const newRequest = {
+              ...request,
+              request: newRequestPath,
+            };
 
-          resolver.doResolve(
-            target,
-            newRequest,
-            `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[requestPath]}`,
-            resolveContext,
-            callback
-          );
-        } else {
-          callback();
+            resolver.doResolve(
+              target,
+              newRequest,
+              `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[requestPath]}`,
+              resolveContext,
+              callback
+            );
+          } else {
+            callback();
+          }
         }
-      });
+      );
   }
 }
 
-module.exports = async ({ config }) => {
+export default async function ({ config }) {
   // Alias
   Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
 
@@ -53,7 +59,10 @@ module.exports = async ({ config }) => {
     test: /\.twig$/,
     use: [
       {
-        loader: path.resolve(__dirname, '../config/webpack/sdc-loader.js'),
+        loader: path.resolve(
+          __dirname,
+          '../config/webpack/sdc-loader.js'
+        ),
         options: {
           projectName: emulsifyConfig.project.name,
         },
@@ -121,4 +130,4 @@ module.exports = async ({ config }) => {
   };
 
   return config;
-};
+}
