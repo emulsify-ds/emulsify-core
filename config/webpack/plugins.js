@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import webpack from 'webpack';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import _MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import _SpriteLoaderPlugin from 'svg-sprite-loader/plugin';
+import _SpriteLoaderPlugin from 'svg-sprite-loader/plugin.js';
 import CopyPlugin from 'copy-webpack-plugin';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
