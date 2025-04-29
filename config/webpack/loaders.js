@@ -1,6 +1,6 @@
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const globImporter = require('node-sass-glob-importer');
-const fs = require('fs-extra');
+import MiniCssExtractPlugin from 'mini-css-extract-plugin';
+import globImporter from 'node-sass-glob-importer';
+import fs from 'fs-extra';
 
 let babelConfig;
 let postcssConfig;
@@ -88,7 +88,7 @@ const TwigLoader = {
   },
 };
 
-module.exports = {
+export default {
   JSLoader,
   CSSLoader,
   SVGSpriteLoader,

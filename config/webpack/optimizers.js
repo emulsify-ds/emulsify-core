@@ -1,4 +1,4 @@
-const ImageMinimizerPlugin = require('image-minimizer-webpack-plugin');
+import ImageMinimizerPlugin from 'image-minimizer-webpack-plugin';
 
 const ImageMinimizer = new ImageMinimizerPlugin({
   minimizer: {
@@ -13,6 +13,6 @@ const ImageMinimizer = new ImageMinimizerPlugin({
   },
 });
 
-module.exports = {
+export default {
   minimizer: [ImageMinimizer],
 };
