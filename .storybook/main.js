@@ -45,8 +45,11 @@ const config = {
         --colors-purple: #8B1E7E;
       }
 
-      .sidebar-container {
-        background: url('https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/corner-bkg.png?token=GHSAT0AAAAAACIEXLVDMX56QK3ZIZWHWHTEZNYFYIA') no-repeat top left;
+      .sidebar-container:not(:empty) {
+        background-image: url('https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/corner-bkg.png');
+        background-repeat: no-repeat;
+        background-position: top right;
+        background-size: 100% auto;
       }
 
       .sidebar-container .sidebar-subheading {
