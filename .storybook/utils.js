@@ -1,12 +1,18 @@
 import { resolve } from 'path';
-import { fileURLToPath } from 'url';
 import twigDrupal from 'twig-drupal-filters';
 import twigBEM from 'bem-twig-extension';
 import twigAddAttributes from 'add-attributes-twig-extension';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Create __filename from import.meta.url without fileURLToPath
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
+
+// On Windows, remove the leading slash (e.g. "/C:/path" -> "C:/path")
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
+}
+
+const _dirname = dirname(_filename);
 
 /**
  * Fetches project-based variant configuration. If no such configuration
@@ -52,7 +58,7 @@ const fetchCSSFiles = () => {
 // Build namespaces mapping.
 export const namespaces = {};
 for (const { name, directory } of fetchVariantConfig()) {
-  namespaces[name] = resolve(__dirname, '../../../../', directory);
+  namespaces[name] = resolve(_dirname, '../../../../', directory);
 }
 
 /**

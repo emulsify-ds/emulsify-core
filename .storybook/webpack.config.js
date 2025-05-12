@@ -1,9 +1,20 @@
-import path from 'path';
+import { dirname, resolve } from 'path';
 import globImporter from 'node-sass-glob-importer';
 import _StyleLintPlugin from 'stylelint-webpack-plugin';
 import ESLintPlugin from 'eslint-webpack-plugin';
 import resolves from '../config/webpack/resolves.js';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+
+// Create __filename from import.meta.url without fileURLToPath
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
+
+// On Windows, remove the leading slash (e.g. "/C:/path" -> "C:/path")
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
+}
+
+const _dirname = dirname(_filename);
+const projectDir = resolve(_dirname, '../../../../..');
 
 /**
  * Transforms namespace:component to @namespace/template/path
@@ -59,8 +70,8 @@ export default async function ({ config }) {
     test: /\.twig$/,
     use: [
       {
-        loader: path.resolve(
-          __dirname,
+        loader: resolve(
+          _dirname,
           '../config/webpack/sdc-loader.js'
         ),
         options: {
@@ -105,14 +116,14 @@ export default async function ({ config }) {
   // Plugins
   config.plugins.push(
     new _StyleLintPlugin({
-      configFile: path.resolve(__dirname, '../', '.stylelintrc.json'),
-      context: path.resolve(__dirname, '../', 'src'),
+      configFile: resolve(projectDir, '../', '.stylelintrc.json'),
+      context: resolve(projectDir, '../', 'src'),
       files: '**/*.scss',
       failOnError: false,
       quiet: false,
     }),
     new ESLintPlugin({
-      context: path.resolve(__dirname, '../', 'src'),
+      context: resolve(projectDir, '../', 'src'),
       extensions: ['js'],
     }),
   );

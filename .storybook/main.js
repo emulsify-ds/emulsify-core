@@ -1,4 +1,4 @@
-const { configOverrides } = require('../../../../config/emulsify-core/storybook/main');
+import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
 
 const safeConfigOverrides = configOverrides || {};
 
@@ -156,4 +156,4 @@ const config = {
   ...safeConfigOverrides,
 };
 
-module.exports = config;
+export default config;
