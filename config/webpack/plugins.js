@@ -67,10 +67,8 @@ function getPatterns(filesMatcher) {
   return patterns;
 }
 
-const CopyTwigPlugin = fs.existsSync(resolve(projectDir, 'src'))
-  ? new CopyPlugin({
-      patterns: getPatterns(componentFilesPattern),
-    })
+const CopyTwigPlugin = fs.pathExistsSync(resolve(projectDir, 'src'))
+  ? new CopyPlugin({ patterns: getPatterns(componentFilesPattern) })
   : '';
 
 const pluginConfig = {

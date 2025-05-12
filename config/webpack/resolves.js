@@ -19,7 +19,7 @@ const _dirname = dirname(_filename);
 
 const projectDir = resolve(_dirname, '../../../../..');
 const projectName = emulsifyConfig.project.name;
-const srcDir = fs.existsSync(resolve(projectDir, 'src'))
+const srcDir = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(projectDir, 'src')
   : resolve(projectDir, 'components');
 

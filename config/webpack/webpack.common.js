@@ -35,26 +35,26 @@ const webpackDir = resolve(_dirname);
 const projectDir = resolve(_dirname, '../../../../..');
 
 const srcPath = resolve(projectDir, 'src');
-const isSrcExists = fs.existsSync(srcPath);
+const isSrcExists = fs.pathExistsSync(srcPath);
 const srcDir = isSrcExists ? srcPath : resolve(projectDir, 'components');
 
 // Glob pattern for SCSS files that ignore file names prefixed with underscore.
-const BaseScssPattern = fs.existsSync(resolve(projectDir, 'src'))
+const BaseScssPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
   : '';
-const ComponentScssPattern = fs.existsSync(resolve(projectDir, 'src'))
+const ComponentScssPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(srcDir, 'components/**/!(_*|cl-*|sb-*).scss')
   : resolve(srcDir, '**/!(_*|cl-*|sb-*).scss');
 const ComponentLibraryScssPattern = resolve(srcDir, '**/*{cl-*,sb-*}.scss');
 
 // Glob pattern for JS files.
-const BaseJsPattern = fs.existsSync(resolve(projectDir, 'src'))
+const BaseJsPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(
       srcDir,
       '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
     )
   : '';
-const ComponentJsPattern = fs.existsSync(resolve(projectDir, 'src'))
+const ComponentJsPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
   : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
@@ -122,7 +122,7 @@ function getEntries(
     const filePathDist = `${pathParts.slice(0, -1).join('/')}/js/${pathParts
       .at(-1)
       .replace('.js', '')}`;
-    const newFilePath = fs.existsSync(resolve(projectDir, 'src'))
+    const newFilePath = fs.pathExistsSync(resolve(projectDir, 'src'))
       ? `dist/global/${filePathDist}`
       : `dist/js/${filePathDist}`;
     addEntry(newFilePath, file);
@@ -133,12 +133,12 @@ function getEntries(
     if (!file.includes('dist/')) {
       const filePath = file.split('components/')[1];
       const filePathDist = replaceLastSlash(filePath, '/js/');
-      const distStructure = fs.existsSync(resolve(projectDir, 'src'))
+      const distStructure = fs.pathExistsSync(resolve(projectDir, 'src'))
         ? 'components'
         : 'js';
       const newFilePath =
         emulsifyConfig.project.platform === 'drupal' &&
-        fs.existsSync(resolve(projectDir, 'src'))
+        fs.pathExistsSync(resolve(projectDir, 'src'))
           ? `components/${filePathDist.replace('.js', '')}`
           : `dist/${distStructure}/${
               distStructure === 'components' ? 'components' : 'js'
@@ -154,7 +154,7 @@ function getEntries(
     const filePathDist = `${pathParts.slice(0, -1).join('/')}/css/${pathParts
       .at(-1)
       .replace('.scss', '')}`;
-    const newFilePath = fs.existsSync(resolve(projectDir, 'src'))
+    const newFilePath = fs.pathExistsSync(resolve(projectDir, 'src'))
       ? `dist/global/${filePathDist}`
       : `dist/css/${filePathDist}`;
     addEntry(newFilePath, file);
@@ -164,12 +164,12 @@ function getEntries(
   globSync(ComponentScssMatcher).forEach((file) => {
     const filePath = file.split('components/')[1];
     const filePathDist = replaceLastSlash(filePath, '/css/');
-    const distStructure = fs.existsSync(resolve(projectDir, 'src'))
+    const distStructure = fs.pathExistsSync(resolve(projectDir, 'src'))
       ? 'components'
       : 'css';
     const newFilePath =
       emulsifyConfig.project.platform === 'drupal' &&
-      fs.existsSync(resolve(projectDir, 'src'))
+      fs.pathExistsSync(resolve(projectDir, 'src'))
         ? `components/${filePathDist.replace('.scss', '')}`
         : `dist/${distStructure}/${
             distStructure === 'components' ? 'components' : 'css'
