@@ -31,7 +31,6 @@ const _dirname = dirname(_filename);
 const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
 
 // Get directories for file contexts.
-const webpackDir = resolve(_dirname);
 const projectDir = resolve(_dirname, '../../../../..');
 
 const srcPath = resolve(projectDir, 'src');
@@ -59,7 +58,7 @@ const ComponentJsPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
   : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
 // Glob pattern for SVG sprite config.
-const spritePattern = resolve(webpackDir, 'svgSprite.js');
+const spritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
 
 /**
  * Replace the last occurrence of a slash in a string with a replacement.
@@ -186,9 +185,9 @@ function getEntries(
 
   // SVG sprite config entries.
   globSync(spriteMatcher).forEach((file) => {
-    const filePath = file.split('/webpack/')[1];
-    const newFilePath = `dist/${filePath.replace('.js', '')}`;
-    addEntry(newFilePath, file);
+    const filePath = file.split('/assets/')[1];
+    const newEntry = `dist/${filePath}`;
+    addEntry(newEntry, file);
   });
 
   return entries;

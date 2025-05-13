@@ -1,5 +1,3 @@
-// .storybook/preview.js
-
 import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
 import { setupTwig, fetchCSSFiles } from './utils.js';
