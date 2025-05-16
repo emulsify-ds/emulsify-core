@@ -1,14 +1,36 @@
+// .storybook/preview.js
 import { useEffect } from '@storybook/preview-api';
 import Twig from 'twig';
 import { setupTwig, fetchCSSFiles } from './utils.js';
 import { getRules } from 'axe-core';
-import overrideParams from '../../../../config/emulsify-core/storybook/preview.js';
 
-// If in a Drupal project, it's recommended to import a symlinked version of drupal.js.
+/**
+ * External override parameters loaded from project config file, if present.
+ * @type {object}
+ */
+let externalOverrides = {};
+
+// Load the preview.js from the project config overrides.
+try {
+  /**
+   * Dynamically require external preview overrides.
+   * @module '../../../../config/emulsify-core/storybook/preview.js'
+   */
+  externalOverrides = require(
+    '../../../../config/emulsify-core/storybook/preview.js'
+  ).default;
+} catch (err) {
+  // no override file? swallow the error and use {}
+  externalOverrides = {};
+}
+
+// Import Drupal behaviors for rich JavaScript integration.
 import './_drupal.js';
 
 /**
- * Enable only the a11y rules matching one of the given tags.
+ * Filters accessibility rules by matching tags.
+ * @param {string[]} [tags=[]] List of WCAG rule tags to enable.
+ * @returns {{id: string, enabled: boolean}[]} Array of rule configurations.
  */
 function enableRulesByTag(tags = []) {
   const allRules = getRules();
@@ -19,6 +41,10 @@ function enableRulesByTag(tags = []) {
   );
 }
 
+/**
+ * Precomputed Axe accessibility rules enabled by default.
+ * @type {{id: string, enabled: boolean}[]}
+ */
 const AxeRules = enableRulesByTag([
   'wcag2a',
   'wcag2aa',
@@ -32,8 +58,17 @@ const AxeRules = enableRulesByTag([
 setupTwig(Twig);
 fetchCSSFiles();
 
-// Decorators are picked up via the named export.
+/**
+ * Storybook decorators to apply Drupal behaviors before rendering each story.
+ * @type {Array<import('@storybook/react').Decorator>}
+ */
 export const decorators = [
+  /**
+   * Decorator that attaches Drupal behaviors on story mount.
+   * @param {Function} Story The story component to render.
+   * @param {object} context Story context including args.
+   * @returns {Function} Rendered story.
+   */
   (Story, { args }) => {
     useEffect(() => {
       Drupal.attachBehaviors();
@@ -42,8 +77,11 @@ export const decorators = [
   },
 ];
 
-// Parameters are also a named export, with your external overrides merged in.
-export const parameters = {
+/**
+ * Default Storybook parameters before applying overrides.
+ * @type {object}
+ */
+const defaultParams = {
   actions: { argTypesRegex: '^on[A-Z].*' },
   a11y: {
     config: {
@@ -52,6 +90,14 @@ export const parameters = {
       rules: AxeRules,
     },
   },
-  // Merge in your imported storySort config (or any other overrides).
-  ...overrideParams,
+  layout: 'fullscreen',
+};
+
+/**
+ * Merged Storybook parameters including external overrides.
+ * @type {object}
+ */
+export const parameters = {
+  ...defaultParams,
+  ...externalOverrides,
 };
