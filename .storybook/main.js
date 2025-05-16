@@ -1,5 +1,11 @@
+import { resolve } from 'path';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 const safeConfigOverrides = configOverrides || {};
 
 const config = {
@@ -20,6 +26,7 @@ const config = {
   ],
   core: {
     builder: 'webpack5',
+    disableTelemetry: true,
   },
   framework: {
     name: '@storybook/html-webpack5',
@@ -27,9 +34,6 @@ const config = {
   },
   docs: {
     autodocs: false,
-  },
-  core: {
-    disableTelemetry: true,
   },
   managerHead: (head) => `
     ${head}
@@ -159,6 +163,22 @@ const config = {
       }
     </style>
   `,
+  // This runs before Storybook renders the preview <head>
+  previewHead: (head) => {
+    // Adjust this relative path to point at your real file:
+    const externalHeadPath = resolve(
+      __dirname,
+      '../../../../config/emulsify-core/storybook/preview-head.html'
+    );
+
+    let externalHtml = '';
+    if (fs.existsSync(externalHeadPath)) {
+      externalHtml = fs.readFileSync(externalHeadPath, 'utf8');
+    }
+
+    // Append your external HEAD snippet (or nothing, if it doesn’t exist)
+    return `${head}\n${externalHtml}`;
+  },
   ...safeConfigOverrides,
 };
 
