@@ -28,6 +28,9 @@ const config = {
   docs: {
     autodocs: false,
   },
+  core: {
+    disableTelemetry: true,
+  },
   managerHead: (head) => `
     ${head}
     <style>
