@@ -141,6 +141,12 @@
     "semantic-release": "^24.2.3"
   },
   "overrides": {
-    "graceful-fs": "^4.2.11"
+    "inflight": "^1.0.7",
+    "graceful-fs": "^4.2.11",
+    "glob": "^11.0.2",
+    "rimraf": "^4.3.0",
+    "source-map-url": "^0.4.1",
+    "source-map-resolve": "^0.6.0",
+    "uuid": "^8.3.2"
   }
 }
