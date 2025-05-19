@@ -110,6 +110,7 @@ function getEntries(
       sanitizedKey &&
       !Object.prototype.hasOwnProperty.call(entries, sanitizedKey)
     ) {
+      // eslint-disable-next-line security/detect-object-injection
       entries[sanitizedKey] = file;
     }
   };

@@ -32,10 +32,12 @@ const aliasPattern = resolve(srcDir, '**/!(_*).twig');
  * @returns {string[]} Array of directory names.
  */
 function getDirectories(source) {
+  /* eslint-disable security/detect-non-literal-fs-filename */
   const dirs = fs
     .readdirSync(source, { withFileTypes: true })
     .filter((dirent) => dirent.isDirectory())
     .map((dirent) => dirent.name);
+  /* eslint-enable security/detect-non-literal-fs-filename */
   return dirs;
 }
 
