@@ -42,7 +42,7 @@
     "prepare": "[ -d '.git' ] && (husky install) || true",
     "prettier": "prettier --config config/prettierrc.json --ignore-unknown \"**/*.{js,yml,scss,md}\"",
     "prettier-fix": "prettier --config config/prettierrc.json --write --ignore-unknown \"**/*.{js,yml,scss,md}\"",
-    "semantic-release": "semantic-release --config ./release.config.cjs",
+    "semantic-release": "semantic-release --config ./release.config.mjs",
     "storybook": "NODE_OPTIONS=--no-deprecation storybook dev --ci -s ../../dist,../../assets/images,../../assets/icons,../../assets/videos -p 6006",
     "storybook-build": "storybook build -s ../../dist,../../assets/images,../../assets/icons,../../assets/videos -o .out",
     "storybook-deploy": "storybook-to-ghpages -o .out",
