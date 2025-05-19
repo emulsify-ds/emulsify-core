@@ -1,4 +1,5 @@
-module.exports = {
+// release.config.mjs
+export default {
   tagFormat: '${version}',
   branches: ['main'],
   repositoryUrl: 'git@github.com:emulsify-ds/emulsify-core.git',
