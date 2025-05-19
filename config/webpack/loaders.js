@@ -1,6 +1,10 @@
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const globImporter = require('node-sass-glob-importer');
-const fs = require('fs-extra');
+/**
+ * @fileoverview Configures Webpack loaders.
+ */
+
+import MiniCssExtractPlugin from 'mini-css-extract-plugin';
+import globImporter from 'node-sass-glob-importer';
+import fs from 'fs-extra';
 
 let babelConfig;
 let postcssConfig;
@@ -71,14 +75,19 @@ const CSSLoader = {
 };
 
 const SVGSpriteLoader = {
-  test: /icons\/.*\.svg$/, // your icons directory
-  loader: 'svg-sprite-loader',
-  options: {
-    extract: true,
-    runtimeCompat: true,
-    outputPath: 'dist/',
-    spriteFilename: './icons.svg',
-  },
+  test: /icons\/.*\.svg$/,
+  use: [
+    {
+      loader: 'svg-sprite-loader',
+      options: {
+        extract: true,
+        esModule: true,
+        runtimeCompat: true,
+        outputPath: 'dist/',
+        spriteFilename: './icons.svg',
+      },
+    },
+  ],
 };
 
 const TwigLoader = {
@@ -88,7 +97,7 @@ const TwigLoader = {
   },
 };
 
-module.exports = {
+export default {
   JSLoader,
   CSSLoader,
   SVGSpriteLoader,

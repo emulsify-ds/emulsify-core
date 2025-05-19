@@ -1,5 +1,4 @@
 // Documentation on theming Storybook: https://storybook.js.org/docs/configurations/theming/
-
 import { create } from '@storybook/theming';
 
 export default create({
@@ -34,5 +33,5 @@ export default create({
   brandTitle: 'Emulsify',
   brandUrl: 'https://emulsify.info',
   brandImage:
-    'https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/emulsify-logo-sb.svg?token=GHSAT0AAAAAACIEXLVC5R3KBCX6HGKGTBBSZNYFWMA',
+    'https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/emulsify-logo-sb.svg',
 });
