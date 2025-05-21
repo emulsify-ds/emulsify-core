@@ -93,13 +93,15 @@ const config = {
   },
 
   /**
-   * Custom styles injected into the Storybook manager (sidebar) head.
+   * Custom styles injected into the Storybook manager (sidebar) head,
+   * plus any external manager-head.html snippet.
    * @param {string} head - Existing head HTML.
-   * @returns {string} Modified head HTML with custom styles.
+   * @returns {string} Modified head HTML.
    */
-  managerHead: (head) =>
-    `${head}
-    <style>
+  managerHead: (head) => {
+    // inline theme styles
+    const inlineStyles = `
+      <style>
       :root {
         --colors-emulsify-blue-100: #e6f5fc;
         --colors-emulsify-blue-200: #CCECFA;
@@ -198,7 +200,22 @@ const config = {
         color: var(--colors-emulsify-blue-1000) !important;
       }
     </style>
-  `,
+    `;
+
+    // load external manager-head.html if present
+    const externalManagerHeadPath = resolve(
+      __dirname,
+      '../../../../config/emulsify-core/storybook/manager-head.html'
+    );
+    let externalManagerHtml = '';
+    if (fs.existsSync(externalManagerHeadPath)) {
+      externalManagerHtml = fs.readFileSync(externalManagerHeadPath, 'utf8');
+    }
+
+    return `${head}
+${inlineStyles}
+${externalManagerHtml}`;
+  },
 
   /**
    * Function to load and append an external preview-head.html into the preview iframe.
@@ -206,7 +223,6 @@ const config = {
    * @returns {string} Combined head HTML including external snippet if present.
    */
   previewHead: (head) => {
-    // Resolve the external preview-head.html path
     const externalHeadPath = resolve(
       __dirname,
       '../../../../config/emulsify-core/storybook/preview-head.html'
