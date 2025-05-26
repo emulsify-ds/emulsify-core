@@ -36,6 +36,7 @@ const projectDir = resolve(_dirname, '../../../../..');
 const srcPath = resolve(projectDir, 'src');
 const isSrcExists = fs.pathExistsSync(srcPath);
 const srcDir = isSrcExists ? srcPath : resolve(projectDir, 'components');
+const isDrupal = emulsifyConfig.project.platform === 'drupal';
 
 // Glob pattern for SCSS files that ignore file names prefixed with underscore.
 const BaseScssPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
@@ -131,18 +132,11 @@ function getEntries(
   // Component JS entries.
   globSync(jsMatcher).forEach((file) => {
     if (!file.includes('dist/')) {
-      const filePath = file.split('components/')[1];
-      const filePathDist = replaceLastSlash(filePath, '/js/');
-      const distStructure = fs.pathExistsSync(resolve(projectDir, 'src'))
-        ? 'components'
-        : 'js';
-      const newFilePath =
-        emulsifyConfig.project.platform === 'drupal' &&
-        fs.pathExistsSync(resolve(projectDir, 'src'))
-          ? `components/${filePathDist.replace('.js', '')}`
-          : `dist/${distStructure}/${
-              distStructure === 'components' ? 'components' : 'js'
-            }/${filePathDist.replace('.js', '')}`;
+      const filePath = file.split(`${srcDir}/components/`)[1];
+      const filePathDistRaw = replaceLastSlash(filePath, '/js/');
+      const filePathDist = filePathDistRaw.replace(/\.js$/, '');
+      const prefix = isDrupal && isSrcExists ? 'components' : 'dist/components';
+      const newFilePath = `${prefix}/${filePathDist}`;
       addEntry(newFilePath, file);
     }
   });
@@ -162,18 +156,11 @@ function getEntries(
 
   // Component SCSS entries.
   globSync(ComponentScssMatcher).forEach((file) => {
-    const filePath = file.split('components/')[1];
-    const filePathDist = replaceLastSlash(filePath, '/css/');
-    const distStructure = fs.pathExistsSync(resolve(projectDir, 'src'))
-      ? 'components'
-      : 'css';
-    const newFilePath =
-      emulsifyConfig.project.platform === 'drupal' &&
-      fs.pathExistsSync(resolve(projectDir, 'src'))
-        ? `components/${filePathDist.replace('.scss', '')}`
-        : `dist/${distStructure}/${
-            distStructure === 'components' ? 'components' : 'css'
-          }/${filePathDist.replace('.scss', '')}`;
+    const filePath = file.split(`${srcDir}/components/`)[1];
+    const filePathDistRaw = replaceLastSlash(filePath, '/css/');
+    const filePathDist = filePathDistRaw.replace(/\.scss$/, '');
+    const prefix = isDrupal && isSrcExists ? 'components' : 'dist/components';
+    const newFilePath = `${prefix}/${filePathDist}`;
     addEntry(newFilePath, file);
   });
 
