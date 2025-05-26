@@ -1,11 +1,10 @@
 // release.config.cjs
 module.exports = {
   branches: ['main'],
-  repositoryUrl: 'git@github.com:emulsify-ds/emulsify-core.git',
   plugins: [
-    '@semantic-release/commit-analyzer',
+    '@semantic-release/commit-analyzer',           // defaults to the "angular" preset
     '@semantic-release/release-notes-generator',
-    ['@semantic-release/npm', { npmPublish: false }],
-    '@semantic-release/github',
-  ],
+    '@semantic-release/npm',
+    '@semantic-release/github'
+  ]
 };
