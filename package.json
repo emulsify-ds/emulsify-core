@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Bundled tooling for Storybook development + Webpack Build",
   "keywords": [
     "component library",
@@ -50,7 +50,7 @@
     "twatch": "jest --no-coverage --watch --verbose"
   },
   "dependencies": {
-    "@babel/core": "^7.27.1",
+    "@babel/core": "^7.27.3",
     "@babel/eslint-parser": "^7.27.1",
     "@babel/preset-env": "^7.27.2",
     "@emulsify/cli": "^1.11.4",
@@ -80,7 +80,7 @@
     "eslint": "^9.27.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-jest": "^28.11.0",
+    "eslint-plugin-jest": "^28.11.1",
     "eslint-plugin-prettier": "^5.4.0",
     "eslint-plugin-security": "^3.0.1",
     "eslint-plugin-storybook": "^0.12.0",
@@ -137,7 +137,7 @@
     "@semantic-release/github": "^11.0.3",
     "@semantic-release/release-notes-generator": "^14.0.3",
     "husky": "^9.1.7",
-    "lint-staged": "^16.0.0",
+    "lint-staged": "^16.1.0",
     "semantic-release": "^24.2.5"
   },
   "overrides": {

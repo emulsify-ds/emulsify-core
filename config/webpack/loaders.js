@@ -10,15 +10,15 @@ let babelConfig;
 let postcssConfig;
 
 // Check if custom babel config is available.
-if (fs.existsSync('./config/babel.config.js')) {
-  babelConfig = './config/babel.config.js';
+if (fs.existsSync('./config/emulsify-core/webpack/babel.config.cjs')) {
+  babelConfig = './config/emulsify-core/webpack/babel.config.cjs';
 } else {
   babelConfig = './node_modules/@emulsify/core/config/babel.config.js';
 }
 
 // Check if custom postcss config is available.
-if (fs.existsSync('./config/postcss.config.js')) {
-  postcssConfig = './config/postcss.config.js';
+if (fs.existsSync('./config/emulsify-core/webpack/postcss.config.cjs')) {
+  postcssConfig = './config/emulsify-core/webpack/postcss.config.cjs';
 } else {
   postcssConfig = './node_modules/@emulsify/core/config/postcss.config.js';
 }
