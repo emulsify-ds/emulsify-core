@@ -36,7 +36,10 @@ const SpriteLoaderPlugin = new _SpriteLoaderPlugin({
 
 const ProgressPlugin = new webpack.ProgressPlugin();
 
-const componentFilesPattern = resolve(srcDir, '**/*.{twig,component.yml}');
+const componentFilesPattern = resolve(
+  srcDir,
+  '**/*.{twig,component.yml,component.json}',
+);
 
 /**
  * Prepare a list of patterns for copying Twig and component files.
