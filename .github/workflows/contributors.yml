@@ -31,9 +31,6 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git add README.md
           git commit -m "docs: update contributors" || exit 0
-          git remote set-url origin https://x-access-token:${CONTRIBUTORS_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
-          git push origin HEAD:${GITHUB_REF#refs/heads/}
+          git push
         env:
-          CONTRIBUTORS_TOKEN: ${{ secrets.CONTRIBUTORS_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF: ${{ github.ref }}
+          GITHUB_TOKEN: ${{ secrets.CONTRIBUTORS_TOKEN }}
