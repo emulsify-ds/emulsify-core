@@ -1,5 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/all-contributors/all-contributors/master/schema.json",
+  "projectName": "emulsify-core",
+  "projectOwner": "fourkitchens",
+  "repoType": "github",
+  "repoHost": "https://github.com",
   "files": [
     "README.md"
   ],
@@ -36,10 +39,7 @@
       "contributions": ["maintenance"]
     }
   ],
+  
   "contributorsPerLine": 6,
-  "skipCi": true,
-  "projectName": "emulsify-core",
-  "projectOwner": "fourkitchens",
-  "repoType": "github",
-  "repoHost": "https://github.com"
+  "skipCi": true
 } 
