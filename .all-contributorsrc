@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/all-contributors/all-contributors/master/schema.json",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": true,
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "callinmullaney",
+      "name": "Callin Mullaney",
+      "avatar_url": "https://avatars.githubusercontent.com/u/369018?v=4",
+      "profile": "https://github.com/callinmullaney",
+      "contributions": ["code", "doc"]
+    },
+    {
+      "login": "amazingrando",
+      "name": "Randy Oest",
+      "avatar_url": "https://avatars.githubusercontent.com/u/409903?v=4",
+      "profile": "https://github.com/amazingrando",
+      "contributions": ["code", "doc"]
+    },
+    {
+      "login": "roberthb94",
+      "name": "Roberto Hernandez",
+      "avatar_url": "https://avatars.githubusercontent.com/u/roberthb94?v=4",
+      "profile": "https://github.com/roberthb94",
+      "contributions": ["code"]
+    },
+    {
+      "login": "dependabot",
+      "name": "Dependabot",
+      "avatar_url": "https://avatars.githubusercontent.com/u/49699333?v=4",
+      "profile": "https://github.com/dependabot",
+      "contributions": ["maintenance"]
+    }
+  ],
+  "contributorsPerLine": 6,
+  "skipCi": true,
+  "projectName": "emulsify-core",
+  "projectOwner": "fourkitchens",
+  "repoType": "github",
+  "repoHost": "https://github.com"
+} 
