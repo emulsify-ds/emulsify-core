@@ -50,7 +50,7 @@
     "twatch": "jest --no-coverage --watch --verbose"
   },
   "dependencies": {
-    "@babel/core": "^7.27.3",
+    "@babel/core": "^7.27.4",
     "@babel/eslint-parser": "^7.27.5",
     "@babel/preset-env": "^7.27.2",
     "@emulsify/cli": "^1.11.4",
@@ -136,6 +136,7 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^11.0.3",
     "@semantic-release/release-notes-generator": "^14.0.3",
+    "all-contributors-cli": "^6.26.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.0",
     "semantic-release": "^24.2.5"
