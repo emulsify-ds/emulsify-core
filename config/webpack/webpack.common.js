@@ -217,4 +217,9 @@ export default {
   },
   resolve: resolves.TwigResolve,
   optimization: optimizers,
+  ignoreWarnings: [
+    (warning) =>
+      warning.message &&
+      /Sass @import rules are deprecated/.test(warning.message),
+  ],
 };
