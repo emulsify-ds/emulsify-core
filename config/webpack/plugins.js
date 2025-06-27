@@ -94,7 +94,8 @@ const CleanPlugin = new CleanWebpackPlugin({
   protectWebpackAssets: false,
   cleanOnceBeforeBuildPatterns: [
     // wipe all compiled assets
-    `${distPath}/**/*`,
+    `${distPath}/**/*.css`,
+    `${distPath}/**/*.js`,
     // but keep any images
     `!${distPath}/**/*.png`,
     `!${distPath}/**/*.jpg`,
