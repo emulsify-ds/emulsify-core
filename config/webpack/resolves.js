@@ -23,6 +23,10 @@ const srcDir = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(projectDir, 'src')
   : resolve(projectDir, 'components');
 
+if (!fs.pathExistsSync(resolve(srcDir))) {
+  fs.mkdirSync(srcDir, { recursive: true });
+}
+
 const aliasPattern = resolve(srcDir, '**/!(_*).twig');
 
 /**

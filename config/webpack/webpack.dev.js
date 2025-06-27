@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'fs-extra';
 import { resolve, dirname } from 'path';
 import { merge } from 'webpack-merge';
 import common from './webpack.common.js';
@@ -16,16 +16,18 @@ if (process.platform === 'win32' && _filename.startsWith('/')) {
 
 const _dirname = dirname(_filename);
 
-const isDrupal = emulsifyConfig.project.platform === 'drupal';
+// Get directories for file contexts.
+const projectDir = resolve(_dirname, '../../../../..');
 
-// Resolve the src directory alongside how you’re already locating project.emulsify.json
-const srcDir = resolve(_dirname, '../../../../../src');
+const srcPath = resolve(projectDir, 'src');
+const srcExists = fs.pathExistsSync(srcPath);
+const isDrupal = emulsifyConfig.project.platform === 'drupal';
 
 // Always ignore dist
 const ignored = ['**/dist/**'];
 
 // If it’s Drupal and there is no src/, also ignore components
-if (isDrupal && !fs.existsSync(srcDir)) {
+if (isDrupal && srcExists) {
   ignored.push('**/components/**');
 }
 
@@ -33,7 +35,6 @@ export default merge(common, {
   mode: 'development',
   devtool: 'source-map',
   watchOptions: {
-    // You can supply a RegExp, glob strings, or an array thereof
     ignored,
   },
 });
