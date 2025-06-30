@@ -7,9 +7,8 @@
  * @module .storybook/main
  */
 
-import { resolve } from 'path';
 import fs from 'fs';
-import path from 'path';
+import path, { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
 
@@ -59,11 +58,9 @@ const config = {
    * @type {string[]}
    */
   addons: [
-    '../../../@storybook/addon-a11y',
-    '../../../@storybook/addon-links',
-    '../../../@storybook/addon-essentials',
-    '../../../@storybook/addon-themes',
-    '../../../@storybook/addon-styling-webpack',
+    '@storybook/addon-a11y',
+    '@storybook/addon-links',
+    '@storybook/addon-themes',
   ],
 
   /**
@@ -71,7 +68,7 @@ const config = {
    * @type {{builder: string, disableTelemetry: boolean}}
    */
   core: {
-    builder: 'webpack5',
+    builder: '@storybook/builder-vite',
     disableTelemetry: true,
   },
 
@@ -80,7 +77,7 @@ const config = {
    * @type {{name: string, options: object}}
    */
   framework: {
-    name: '@storybook/html-webpack5',
+    name: '@storybook/react-vite',
     options: {},
   },
 

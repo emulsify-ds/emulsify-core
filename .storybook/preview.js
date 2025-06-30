@@ -1,8 +1,8 @@
 // .storybook/preview.js
-import { useEffect } from '@storybook/preview-api';
-import Twig from 'twig';
-import { setupTwig, fetchCSSFiles } from './utils.js';
 import { getRules } from 'axe-core';
+import { useEffect } from 'storybook/preview-api';
+import Twig from 'twig';
+import { fetchCSSFiles, setupTwig } from './utils.js';
 
 /**
  * External override parameters loaded from project config file, if present.
