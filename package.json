@@ -83,7 +83,7 @@
     "eslint-plugin-jest": "^29.0.1",
     "eslint-plugin-prettier": "^5.5.1",
     "eslint-plugin-security": "^3.0.1",
-    "eslint-plugin-storybook": "^0.12.0",
+    "eslint-plugin-storybook": "^9.0.17",
     "eslint-webpack-plugin": "^5.0.2",
     "file-loader": "^6.2.0",
     "fs-extra": "^11.3.0",
