@@ -38,6 +38,25 @@ const postcssConfigPath = fs.existsSync(
   : require.resolve('@emulsify/core/config/postcss.config.js');
 
 /**
+ * Resolve the directory of this file (without fileURLToPath).
+ * @type {string}
+ */
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
+}
+const _dirname = path.dirname(_filename);
+
+/**
+ * Root of the project (three levels up from this file).
+ * @type {string}
+ */
+const projectDir = path.resolve(_dirname, '../../../../..');
+
+/** Absolute path to the folder that contains sprite source icons. */
+const ICONS_DIR = path.resolve(projectDir, 'assets/icons');
+
+/**
  * @type {import('webpack').RuleSetRule}
  * JavaScript loader: transpile with Babel.
  */
@@ -111,22 +130,17 @@ const ImageLoader = {
 
 /**
  * @type {import('webpack').RuleSetRule}
- * SVG sprite loader: collects all /icons/*.svg into one sprite.
+ * General SVG loader for non-sprite SVGs (logos, illustrations, etc.).
+ * IMPORTANT: Excludes `assets/icons/` so `svg-spritemap-webpack-plugin`
+ * can consume those files without being intercepted by this rule.
  */
-const SVGSpriteLoader = {
+const SVGLoader = {
   test: /icons\/.*\.svg$/,
-  use: [
-    {
-      loader: 'svg-sprite-loader',
-      options: {
-        extract: true,
-        esModule: true,
-        runtimeCompat: true,
-        outputPath: 'dist/',
-        spriteFilename: './icons.svg',
-      },
-    },
-  ],
+  type: 'asset/resource',
+  generator: {
+    filename: 'icons.svg',
+  },
+  exclude: [ICONS_DIR],
 };
 
 /**
@@ -148,6 +162,6 @@ export default {
   JSLoader,
   CSSLoader,
   ImageLoader,
-  SVGSpriteLoader,
+  SVGLoader,
   TwigLoader,
 };

@@ -1,8 +1,9 @@
 import { resolve, dirname } from 'path';
 import webpack from 'webpack';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
+import RemoveEmptyScriptsPlugin from 'webpack-remove-empty-scripts';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import SpriteLoaderPlugin from 'svg-sprite-loader/plugin.js';
+import SVGSpritemapPlugin from 'svg-spritemap-webpack-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
@@ -104,6 +105,8 @@ const CleanPlugin = new CleanWebpackPlugin({
   ],
 });
 
+const RemoveEmptyJS = new RemoveEmptyScriptsPlugin();
+
 /**
  * MiniCssExtractPlugin instance: writes `[name].css` into your dist.
  */
@@ -113,11 +116,25 @@ const CssExtractPlugin = new MiniCssExtractPlugin({
 });
 
 /**
- * svg-sprite-loader plugin: bundles all /icons/*.svg.
+ * SVGSpritemapPlugin
+ * IMPORTANT: pass a glob string as the first argument (NOT an object).
+ * This will generate dist/icons.svg with <symbol id="icon-<filename>"> entries.
  */
-const SpritePlugin = new SpriteLoaderPlugin({
-  plainSprite: true,
-});
+const SpritePlugin = new SVGSpritemapPlugin(
+  resolve(projectDir, 'assets/icons/**/*.svg'),
+  {
+    output: {
+      filename: 'dist/icons.svg',
+      chunk: { keep: true },
+    },
+    sprite: {
+      prefix: '',
+      generate: {
+        title: false,
+      },
+    },
+  },
+);
 
 /**
  * webpack.ProgressPlugin for nice build progress output.
@@ -130,7 +147,8 @@ const ProgressPlugin = new webpack.ProgressPlugin();
 export default {
   ProgressPlugin,
   CleanWebpackPlugin: CleanPlugin,
+  RemoveEmptyJS,
   MiniCssExtractPlugin: CssExtractPlugin,
-  SpriteLoaderPlugin: SpritePlugin,
+  SpritePlugin,
   CopyTwigPlugin,
 };
