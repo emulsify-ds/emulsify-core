@@ -2,7 +2,7 @@ import { resolve, dirname } from 'path';
 import webpack from 'webpack';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import SpriteLoaderPlugin from 'svg-sprite-loader/plugin.js';
+import SVGSpritemapPlugin from 'svg-spritemap-webpack-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
@@ -115,9 +115,7 @@ const CssExtractPlugin = new MiniCssExtractPlugin({
 /**
  * svg-sprite-loader plugin: bundles all /icons/*.svg.
  */
-const SpritePlugin = new SpriteLoaderPlugin({
-  plainSprite: true,
-});
+const SpritePlugin = new SVGSpritemapPlugin();
 
 /**
  * webpack.ProgressPlugin for nice build progress output.
