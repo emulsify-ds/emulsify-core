@@ -113,9 +113,25 @@ const CssExtractPlugin = new MiniCssExtractPlugin({
 });
 
 /**
- * svg-sprite-loader plugin: bundles all /icons/*.svg.
+ * SVGSpritemapPlugin
+ * IMPORTANT: pass a glob string as the first argument (NOT an object).
+ * This will generate dist/icons.svg with <symbol id="icon-<filename>"> entries.
  */
-const SpritePlugin = new SVGSpritemapPlugin();
+const SpritePlugin = new SVGSpritemapPlugin(
+  resolve(projectDir, 'assets/icons/**/*.svg'),
+  {
+    output: {
+      filename: 'dist/icons.svg',
+      chunk: { keep: true },
+    },
+    sprite: {
+      prefix: '',
+      generate: {
+        title: false,
+      },
+    },
+  },
+);
 
 /**
  * webpack.ProgressPlugin for nice build progress output.
@@ -129,6 +145,6 @@ export default {
   ProgressPlugin,
   CleanWebpackPlugin: CleanPlugin,
   MiniCssExtractPlugin: CssExtractPlugin,
-  SpriteLoaderPlugin: SpritePlugin,
+  SpritePlugin,
   CopyTwigPlugin,
 };

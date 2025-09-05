@@ -58,9 +58,6 @@ const ComponentJsPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
   ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
   : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
-// Glob pattern for SVG sprite config.
-const spritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
-
 /**
  * Replace the last occurrence of a slash in a string with a replacement.
  *
@@ -95,7 +92,6 @@ function getEntries(
   BaseScssMatcher,
   ComponentScssMatcher,
   ComponentLibraryScssMatcher,
-  spriteMatcher,
 ) {
   const entries = {};
 
@@ -171,13 +167,6 @@ function getEntries(
     addEntry(newFilePath, file);
   });
 
-  // SVG sprite config entries.
-  globSync(spriteMatcher).forEach((file) => {
-    const filePath = file.split('/assets/')[1];
-    const newEntry = `dist/${filePath}`;
-    addEntry(newEntry, file);
-  });
-
   return entries;
 }
 
@@ -192,7 +181,6 @@ export default {
     BaseScssPattern,
     ComponentScssPattern,
     ComponentLibraryScssPattern,
-    spritePattern,
   ),
   module: {
     rules: [
@@ -206,7 +194,7 @@ export default {
   plugins: [
     plugins.MiniCssExtractPlugin,
     plugins.ImageminPlugin,
-    plugins.SpriteLoaderPlugin,
+    plugins.SpritePlugin,
     plugins.ProgressPlugin,
     plugins.CopyTwigPlugin,
     plugins.CleanWebpackPlugin,
