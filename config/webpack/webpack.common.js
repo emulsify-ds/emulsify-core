@@ -192,6 +192,7 @@ export default {
     ],
   },
   plugins: [
+    plugins.RemoveEmptyJS,
     plugins.MiniCssExtractPlugin,
     plugins.ImageminPlugin,
     plugins.SpritePlugin,

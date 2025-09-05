@@ -1,6 +1,7 @@
 import { resolve, dirname } from 'path';
 import webpack from 'webpack';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
+import RemoveEmptyScriptsPlugin from 'webpack-remove-empty-scripts';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import SVGSpritemapPlugin from 'svg-spritemap-webpack-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
@@ -104,6 +105,8 @@ const CleanPlugin = new CleanWebpackPlugin({
   ],
 });
 
+const RemoveEmptyJS = new RemoveEmptyScriptsPlugin();
+
 /**
  * MiniCssExtractPlugin instance: writes `[name].css` into your dist.
  */
@@ -144,6 +147,7 @@ const ProgressPlugin = new webpack.ProgressPlugin();
 export default {
   ProgressPlugin,
   CleanWebpackPlugin: CleanPlugin,
+  RemoveEmptyJS,
   MiniCssExtractPlugin: CssExtractPlugin,
   SpritePlugin,
   CopyTwigPlugin,

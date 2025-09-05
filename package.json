@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "description": "Bundled tooling for Storybook development + Webpack Build",
   "keywords": [
     "component library",
@@ -125,6 +125,7 @@
     "webpack": "^5.101.3",
     "webpack-cli": "^6.0.1",
     "webpack-merge": "^6.0.1",
+    "webpack-remove-empty-scripts": "^1.1.1",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
