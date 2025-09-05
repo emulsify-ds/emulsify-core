@@ -17,13 +17,13 @@ import configOverrides from '../../../../config/emulsify-core/storybook/main.js'
  * The full path to the current file (ESM compatible).
  * @type {string}
  */
-const __filename = fileURLToPath(import.meta.url);
+const _filename = fileURLToPath(import.meta.url);
 
 /**
  * The directory name of the current module file.
  * @type {string}
  */
-const __dirname  = path.dirname(__filename);
+const _dirname  = path.dirname(_filename);
 
 /**
  * Safely apply any user-provided overrides or fall back to an empty object.
@@ -204,7 +204,7 @@ const config = {
 
     // load external manager-head.html if present
     const externalManagerHeadPath = resolve(
-      __dirname,
+      _dirname,
       '../../../../config/emulsify-core/storybook/manager-head.html'
     );
     let externalManagerHtml = '';
@@ -224,7 +224,7 @@ ${externalManagerHtml}`;
    */
   previewHead: (head) => {
     const externalHeadPath = resolve(
-      __dirname,
+      _dirname,
       '../../../../config/emulsify-core/storybook/preview-head.html'
     );
 

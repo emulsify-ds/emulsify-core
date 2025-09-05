@@ -12,17 +12,17 @@ import emulsifyConfig from '../../../../../project.emulsify.json' with { type: '
  * Resolve the directory of this file (without fileURLToPath).
  * @type {string}
  */
-let __filename = decodeURIComponent(new URL(import.meta.url).pathname);
-if (process.platform === 'win32' && __filename.startsWith('/')) {
-  __filename = __filename.slice(1);
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
 }
-const __dirname = dirname(__filename);
+const _dirname = dirname(_filename);
 
 /**
  * Root of the project (three levels up from this file).
  * @type {string}
  */
-const projectDir = resolve(__dirname, '../../../../..');
+const projectDir = resolve(_dirname, '../../../../..');
 
 /**
  * Where your source files live (if you have a `/src` folder).
