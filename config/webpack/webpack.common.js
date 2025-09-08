@@ -42,13 +42,6 @@ const SDC = Boolean(emulsifyConfig?.project?.singleDirectoryComponents);
 const globalOutBase = hasSrc ? 'dist/global' : 'dist';
 
 /**
- * Sanitize an entry key (webpack "name") to a safe, portable path.
- * @param {string} p - Potential entry key.
- * @returns {string} A cleaned key containing only [A-Za-z0-9/_-].
- */
-const sanitizeKey = (p) => p.replace(/[^a-zA-Z0-9/_-]/g, '');
-
-/**
  * Create a path under the component output root.
  * - In Drupal + src layout, components resolve to "components/…"
  * - Otherwise, they resolve to "dist/components/…"
@@ -97,9 +90,6 @@ const distSubpathForComponent = (absFile, type) => {
   const name = path.basename(relFromComponents, ext);
   return SDC ? pj(dir, name) : pj(dir, outTypeDir, name);
 };
-
-/** @type {Map<string, string | string[]>} */
-const entries = new Map();
 
 /**
  * Reject keys that could touch object internals even after sanitization.
