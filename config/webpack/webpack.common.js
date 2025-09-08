@@ -6,7 +6,6 @@
  */
 
 import { posix as path } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
 
