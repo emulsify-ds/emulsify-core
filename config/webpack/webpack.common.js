@@ -16,13 +16,18 @@ import resolves from './resolves.js';
 import optimizers from './optimizers.js';
 import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
 
-/** @type {string} */
-const __filename = fileURLToPath(import.meta.url);
-/** @type {string} */
-const __dirname = path.dirname(__filename);
+/**
+ * Resolve the directory of this file (without fileURLToPath).
+ * @type {string}
+ */
+let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
+if (process.platform === 'win32' && _filename.startsWith('/')) {
+  _filename = _filename.slice(1);
+}
+const _dirname = path.dirname(_filename);
 
 /** @type {string} Absolute project root (five levels up from this file). */
-const projectDir = path.resolve(__dirname, '../../../../..');
+const projectDir = path.resolve(_dirname, '../../../../..');
 
 /** @type {boolean} True when a "src/" directory exists (WP layout). */
 const hasSrc = fs.pathExistsSync(path.resolve(projectDir, 'src'));
