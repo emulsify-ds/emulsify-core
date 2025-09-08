@@ -96,6 +96,14 @@ const distSubpathForComponent = (absFile, type) => {
 };
 
 /**
+ * Sanitize a file path by removing unwanted characters.
+ *
+ * @param {string} inputPath - The file path to sanitize.
+ * @returns {string} The sanitized file path.
+ */
+const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
+
+/**
  * Reject keys that could touch object internals even after sanitization.
  * @param {string} k
  * @returns {boolean}
@@ -239,6 +247,8 @@ export default {
     plugins.SpritePlugin,
     plugins.ProgressPlugin,
     plugins.CopyTwigPlugin,
+    plugins.CopyComponentAssetsPlugin,
+    ...(plugins.CopyGlobalAssetsPlugin ? [plugins.CopyGlobalAssetsPlugin] : []),
     plugins.CleanWebpackPlugin,
   ],
   output: {

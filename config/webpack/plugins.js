@@ -20,14 +20,14 @@ if (process.platform === 'win32' && _filename.startsWith('/')) {
 const _dirname = dirname(_filename);
 
 /**
- * Root of the project (three levels up from this file).
+ * Project root (five levels up).
  * @type {string}
  */
 const projectDir = resolve(_dirname, '../../../../..');
 
 /**
- * Where your source files live (if you have a `/src` folder).
- * Falls back to `components/` if `src/` does not exist.
+ * Where source files live.
+ * Prefer `<project>/src`; fall back to `<project>/components` (legacy layout).
  * @type {string}
  */
 const srcPath = resolve(projectDir, 'src');
@@ -35,8 +35,8 @@ const isSrcExists = fs.pathExistsSync(srcPath);
 const srcDir = isSrcExists ? srcPath : resolve(projectDir, 'components');
 
 /**
- * Where your built assets should live.
- * Mirrors the `srcDir` logic: prefer `dist/` if you have `src/`, else `components/`.
+ * Where built assets live.
+ * If `src/` exists, use `<project>/dist`; else write into `<project>/components`.
  * @type {string}
  */
 const distPath = isSrcExists
@@ -44,8 +44,32 @@ const distPath = isSrcExists
   : resolve(projectDir, 'components');
 
 /**
- * Glob pattern for all Twig & component files in your source.
- * We copy these through CopyPlugin so your PHP/Drupal theme sees them.
+ * Platform switch (affects component output roots).
+ * @type {boolean}
+ */
+const isDrupal = emulsifyConfig?.project?.platform === 'drupal';
+
+/**
+ * Component source root:
+ *  - with src/: `<project>/src/components`
+ *  - without src/: `<project>/components`
+ * @type {string}
+ */
+const componentsSrcRoot = isSrcExists ? resolve(srcDir, 'components') : srcDir;
+
+/**
+ * Component output root (where compiled component assets go):
+ *  - Drupal + src/: `components/…`
+ *  - Otherwise:     `dist/components/…`
+ * (Relative to `projectDir`; used by CopyPlugin’s `to:` path.)
+ * @type {string}
+ */
+const componentsOutRoot =
+  isDrupal && isSrcExists ? 'components' : 'dist/components';
+
+/**
+ * Glob pattern for Twig & component meta files. These are copied as-is so
+ * Drupal/WordPress themes can consume them alongside compiled assets.
  * @type {string}
  */
 const componentFilesPattern = resolve(
@@ -54,32 +78,34 @@ const componentFilesPattern = resolve(
 );
 
 /**
- * Turn a globbed source list into copy patterns.
+ * Build CopyPlugin patterns from a glob matcher, preserving source structure.
  *
- * @param {string} filesMatcher Glob pattern.
- * @returns {Array<{from:string,to:string}>}
+ * @param {string} filesMatcher - Glob for files to mirror.
+ * @returns {Array<{from:string,to:string}>} Copy patterns for CopyPlugin.
  */
 function getPatterns(filesMatcher) {
   return globSync(filesMatcher).map((file) => {
-    const projectPath = file.split('/src/')[0];
+    const projectPath = file.split('/src/')[0]; // base path before /src/
     const srcStructure = file.split(`${srcDir}/`)[1];
     const parentDir = srcStructure.split('/')[0];
-    // Consolidate foundation/layout under components for Drupal.
+
+    // Consolidate foundation/layout under "components" for Drupal.
     const consolidateDirs =
       parentDir === 'layout' || parentDir === 'foundation'
         ? '/components/'
         : '/';
     const filePath = file.split(/(foundation\/|components\/|layout\/)/)[2];
-    const destDir =
-      emulsifyConfig.project.platform === 'drupal'
-        ? `${projectPath}${consolidateDirs}${parentDir}/${filePath}`
-        : `${projectPath}/dist/${parentDir}/${filePath}`;
-    return { from: file, to: destDir };
+    const to = isDrupal
+      ? `${projectPath}${consolidateDirs}${parentDir}/${filePath}`
+      : `${projectPath}/dist/${parentDir}/${filePath}`;
+
+    return { from: file, to };
   });
 }
 
 /**
- * Only include CopyPlugin if we actually have a `src/` folder.
+ * CopyPlugin instance (only when `src/` exists):
+ * copies Twig and component meta files 1:1 into their expected destinations.
  * @type {CopyPlugin|false}
  */
 const CopyTwigPlugin = isSrcExists
@@ -87,17 +113,71 @@ const CopyTwigPlugin = isSrcExists
   : false;
 
 /**
+ * CopyPlugin instance: copies **component-local assets** (images, fonts, SVGs, etc.)
+ *
+ * Example:
+ *   src/components/accordion/assets/dropdown-icon.svg
+ * -> (Drupal+src) components/accordion/assets/dropdown-icon.svg
+ * -> (WP/legacy)  dist/components/accordion/assets/dropdown-icon.svg
+ *
+ * Notes:
+ * - `context` is set to the component source root so `[path]` starts **after**
+ *   `…/components/`.
+ * - `to` uses `[path][name][ext]` to mirror the original tree.
+ * - `noErrorOnMissing` avoids errors if no assets are present.
+ * @type {CopyPlugin}
+ */
+const CopyComponentAssetsPlugin = new CopyPlugin({
+  patterns: [
+    {
+      from: '**/assets/**/*',
+      context: componentsSrcRoot,
+      to: resolve(projectDir, componentsOutRoot, '[path][name][ext]'),
+      noErrorOnMissing: true,
+      globOptions: {
+        dot: false,
+        ignore: ['**/.DS_Store', '**/Thumbs.db'],
+      },
+    },
+  ],
+});
+
+/**
+ * CopyPlugin instance for **global (non-component) assets** that live
+ * under `src/` but *outside* `src/components/`.
+ *
+ * These are mirrored under `dist/global/…` (because your base SCSS/JS already
+ * use the `dist/global` convention).
+ *
+ * Disabled when there is no `src/` directory.
+ * @type {CopyPlugin|false}
+ */
+const CopyGlobalAssetsPlugin = isSrcExists
+  ? new CopyPlugin({
+      patterns: [
+        {
+          from: '!(components|util)/**/assets/**/*',
+          context: srcDir,
+          to: resolve(projectDir, 'dist', 'global', '[path][name][ext]'),
+          noErrorOnMissing: true,
+          globOptions: {
+            dot: false,
+            ignore: ['**/.DS_Store', '**/Thumbs.db'],
+          },
+        },
+      ],
+    })
+  : false;
+
+/**
  * CleanWebpackPlugin configuration.
- * Wipes out everything in `distPath` before a build,
- * except image files (we whitelist common image extensions).
+ * Wipes out compiled CSS/JS in `distPath` before a build; keeps images.
  */
 const CleanPlugin = new CleanWebpackPlugin({
   protectWebpackAssets: false,
   cleanOnceBeforeBuildPatterns: [
-    // wipe all compiled assets
     `${distPath}/**/*.css`,
     `${distPath}/**/*.js`,
-    // but keep any images
     `!${distPath}/**/*.png`,
     `!${distPath}/**/*.jpg`,
     `!${distPath}/**/*.gif`,
@@ -105,10 +185,11 @@ const CleanPlugin = new CleanWebpackPlugin({
   ],
 });
 
+/** Removes empty JS files generated for style-only entries. */
 const RemoveEmptyJS = new RemoveEmptyScriptsPlugin();
 
 /**
- * MiniCssExtractPlugin instance: writes `[name].css` into your dist.
+ * MiniCssExtractPlugin: emit CSS next to the entry key path (no hard-coded dist/).
  */
 const CssExtractPlugin = new MiniCssExtractPlugin({
   filename: ({ chunk }) => `${chunk.name}.css`,
@@ -116,9 +197,7 @@ const CssExtractPlugin = new MiniCssExtractPlugin({
 });
 
 /**
- * SVGSpritemapPlugin
- * IMPORTANT: pass a glob string as the first argument (NOT an object).
- * This will generate dist/icons.svg with <symbol id="icon-<filename>"> entries.
+ * Generate a single SVG spritemap at `dist/icons.svg`.
  */
 const SpritePlugin = new SVGSpritemapPlugin(
   resolve(projectDir, 'assets/icons/**/*.svg'),
@@ -129,20 +208,16 @@ const SpritePlugin = new SVGSpritemapPlugin(
     },
     sprite: {
       prefix: '',
-      generate: {
-        title: false,
-      },
+      generate: { title: false },
     },
   },
 );
 
-/**
- * webpack.ProgressPlugin for nice build progress output.
- */
+/** Build progress output. */
 const ProgressPlugin = new webpack.ProgressPlugin();
 
 /**
- * Export all plugins keyed for easy inclusion in your final Webpack config.
+ * Export plugin instances keyed for easy inclusion in your Webpack config.
  */
 export default {
   ProgressPlugin,
@@ -151,4 +226,6 @@ export default {
   MiniCssExtractPlugin: CssExtractPlugin,
   SpritePlugin,
   CopyTwigPlugin,
+  CopyComponentAssetsPlugin,
+  CopyGlobalAssetsPlugin,
 };
