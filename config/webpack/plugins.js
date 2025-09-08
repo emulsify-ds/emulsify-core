@@ -111,8 +111,8 @@ const RemoveEmptyJS = new RemoveEmptyScriptsPlugin();
  * MiniCssExtractPlugin instance: writes `[name].css` into your dist.
  */
 const CssExtractPlugin = new MiniCssExtractPlugin({
-  filename: '[name].css',
-  chunkFilename: '[id].css',
+  filename: ({ chunk }) => `${chunk.name}.css`,
+  chunkFilename: ({ chunk }) => `${chunk.name}.css`,
 });
 
 /**
