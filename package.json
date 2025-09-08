@@ -61,7 +61,7 @@
     "@storybook/addon-links": "^8.6.14",
     "@storybook/addon-styling-webpack": "^1.0.1",
     "@storybook/addon-themes": "^8.6.14",
-    "@storybook/html": "^8.6.14",
+    "@storybook/html": "^9.1.5",
     "@storybook/html-webpack5": "^8.6.14",
     "@storybook/manager-api": "^8.6.14",
     "@storybook/preview-api": "^8.6.14",
