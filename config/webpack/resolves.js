@@ -4,7 +4,14 @@
  * - Exposes a Webpack-style `resolve.alias` object for `.twig` files
  */
 
-import { basename, resolve, relative, isAbsolute, join, path } from 'path';
+import {
+  basename,
+  resolve,
+  relative,
+  isAbsolute,
+  join,
+  posix as path,
+} from 'node:path';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
 import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
