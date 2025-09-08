@@ -98,39 +98,48 @@ const distSubpathForComponent = (absFile, type) => {
   return SDC ? pj(dir, name) : pj(dir, outTypeDir, name);
 };
 
+/** @type {Map<string, string | string[]>} */
+const entries = new Map();
+
+/**
+ * Reject keys that could touch object internals even after sanitization.
+ * @param {string} k
+ * @returns {boolean}
+ */
+const isDangerousKey = (k) =>
+  k.includes('__proto__') || k.includes('prototype') || k === 'constructor';
+
 /**
  * Add a file under an entry key; if the key exists, merge to an array.
- * Ensures deterministic order: JS first, then styles.
- * @param {Record<string, string | string[]>} map
+ * Keeps JS before SCSS for deterministic order.
+ *
+ * @param {Map<string, string | string[]>} map
  * @param {string} key
  * @param {string} file
+ * @returns {void}
  */
 const addEntry = (map, key, file) => {
-  const safeKey = sanitizeKey(key);
-  if (!safeKey) return;
+  const safeKey = sanitizePath(String(key));
+  if (!safeKey || isDangerousKey(safeKey)) return;
 
-  const current = map[safeKey];
+  const current = map.get(safeKey);
 
   if (!current) {
-    map[safeKey] = file;
+    map.set(safeKey, file);
     return;
   }
 
   const arr = Array.isArray(current) ? current : [current];
+  if (!arr.includes(file)) arr.push(file);
 
-  // avoid duplicates
-  if (!arr.includes(file)) {
-    arr.push(file);
-  }
-
-  // Optional: keep JS before SCSS for nicer module order
+  // Optional: ensure JS comes before SCSS
   arr.sort((a, b) => {
-    const ax = a.endsWith('.js') ? 0 : 1; // JS first
+    const ax = a.endsWith('.js') ? 0 : 1;
     const bx = b.endsWith('.js') ? 0 : 1;
     return ax - bx || a.localeCompare(b);
   });
 
-  map[safeKey] = arr;
+  map.set(safeKey, arr);
 };
 
 /**
@@ -171,8 +180,8 @@ const ComponentJsPattern = hasSrc
  * @returns {Record<string,string>} Webpack entries.
  */
 const buildEntries = () => {
-  /** @type {Record<string,string>} */
-  const entries = {};
+  /** @type {Map<string, string | string[]>} */
+  const entries = new Map();
 
   /* ----------------------------- Base / Global JS ----------------------------- */
   for (const file of glob(BaseJsPattern)) {
@@ -209,7 +218,7 @@ const buildEntries = () => {
     addEntry(entries, pj('dist', 'storybook', rel), file);
   }
 
-  return entries;
+  return Object.fromEntries(entries);
 };
 
 /* -------------------------------------------------------------------------- */
