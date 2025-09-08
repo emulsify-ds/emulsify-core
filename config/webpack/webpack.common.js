@@ -1,26 +1,99 @@
 /**
- * @fileoverview Webpack configuration entry file.
- * This file generates Webpack entries for JS, SCSS, and SVG assets.
+ * @fileoverview Build Webpack entries and export the configuration.
+ * - Discovers JS/SCSS assets (base + component) via glob patterns
+ * - Shapes output paths based on platform and SDC (singleDirectoryComponents)
+ * - Wires up loaders, plugins, and optimizations
  */
 
-import { resolve, dirname } from 'path';
+import { posix as path } from 'node:path';
 import { sync as globSync } from 'glob';
 import fs from 'fs-extra';
+
 import loaders from './loaders.js';
 import plugins from './plugins.js';
 import resolves from './resolves.js';
 import optimizers from './optimizers.js';
 import emulsifyConfig from '../../../../../project.emulsify.json' with { type: 'json' };
 
-// Create __filename from import.meta.url without fileURLToPath
+/**
+ * Resolve the directory of this file (without fileURLToPath).
+ * @type {string}
+ */
 let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
-
-// On Windows, remove the leading slash (e.g. "/C:/path" -> "C:/path")
 if (process.platform === 'win32' && _filename.startsWith('/')) {
   _filename = _filename.slice(1);
 }
+const _dirname = path.dirname(_filename);
 
-const _dirname = dirname(_filename);
+/** @type {string} Absolute project root (five levels up from this file). */
+const projectDir = path.resolve(_dirname, '../../../../..');
+
+/** @type {boolean} True when a "src/" directory exists (WP layout). */
+const hasSrc = fs.pathExistsSync(path.resolve(projectDir, 'src'));
+
+/** @type {string} The canonical source directory ("src" if present, else "components"). */
+const srcDir = hasSrc
+  ? path.resolve(projectDir, 'src')
+  : path.resolve(projectDir, 'components');
+
+/** @type {boolean} True when platform is Drupal (affects component output root). */
+const isDrupal = emulsifyConfig?.project?.platform === 'drupal';
+
+/** @type {boolean} Respect SDC (single-directory-components) layout if explicitly true. */
+const SDC = Boolean(emulsifyConfig?.project?.singleDirectoryComponents);
+
+/** @type {string} Output base for "global" assets. */
+const globalOutBase = hasSrc ? 'dist/global' : 'dist';
+
+/**
+ * Create a path under the component output root.
+ * - In Drupal + src layout, components resolve to "components/…"
+ * - Otherwise, they resolve to "dist/components/…"
+ * @param {string} subpath - Component-local subpath (no extension).
+ * @returns {string} Component output path segment.
+ */
+const componentOutPath = (subpath) =>
+  (isDrupal && hasSrc ? 'components' : 'dist/components') + '/' + subpath;
+
+/**
+ * Join segments with POSIX semantics (forward slashes), trimming empties.
+ * @param {...string} segs - Path segments.
+ * @returns {string} POSIX-joined path.
+ */
+const pj = (...segs) => path.join(...segs.filter(Boolean));
+
+/**
+ * Compute the “dist subpath” for a non-component asset.
+ * Inserts a type folder ("js" or "css") when SDC = false.
+ * Drops the original file extension.
+ * @param {string} absFile - Absolute file path.
+ * @param {'js'|'css'} type - Asset type.
+ * @returns {string} Subpath under the global output base (no extension).
+ */
+const distSubpathForBase = (absFile, type) => {
+  const rel = path.relative(srcDir, absFile);
+  const dir = path.dirname(rel);
+  const name = path.basename(rel, '.' + type);
+  return SDC ? pj(dir, name) : pj(dir, type, name);
+};
+
+/**
+ * Compute the “dist subpath” for a component asset located under "…/components".
+ * Inserts a type folder ("js" or "css") when SDC = false.
+ * Drops the original file extension.
+ * @param {string} absFile - Absolute file path.
+ * @param {'js'|'scss'} type - Source type (scss maps to 'css').
+ * @returns {string} Component-local subpath (no extension).
+ */
+const distSubpathForComponent = (absFile, type) => {
+  const relFromComponents = path.relative(pj(srcDir, 'components'), absFile);
+  const dir = path.dirname(relFromComponents);
+  const isStyle = type === 'scss';
+  const outTypeDir = isStyle ? 'css' : 'js';
+  const ext = isStyle ? '.scss' : '.js';
+  const name = path.basename(relFromComponents, ext);
+  return SDC ? pj(dir, name) : pj(dir, outTypeDir, name);
+};
 
 /**
  * Sanitize a file path by removing unwanted characters.
@@ -30,170 +103,134 @@ const _dirname = dirname(_filename);
  */
 const sanitizePath = (inputPath) => inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
 
-// Get directories for file contexts.
-const projectDir = resolve(_dirname, '../../../../..');
-
-const srcPath = resolve(projectDir, 'src');
-const isSrcExists = fs.pathExistsSync(srcPath);
-const srcDir = isSrcExists ? srcPath : resolve(projectDir, 'components');
-const isDrupal = emulsifyConfig.project.platform === 'drupal';
-
-// Glob pattern for SCSS files that ignore file names prefixed with underscore.
-const BaseScssPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
-  ? resolve(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
-  : '';
-const ComponentScssPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
-  ? resolve(srcDir, 'components/**/!(_*|cl-*|sb-*).scss')
-  : resolve(srcDir, '**/!(_*|cl-*|sb-*).scss');
-const ComponentLibraryScssPattern = resolve(srcDir, '**/*{cl-*,sb-*}.scss');
-
-// Glob pattern for JS files.
-const BaseJsPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
-  ? resolve(
-      srcDir,
-      '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
-    )
-  : '';
-const ComponentJsPattern = fs.pathExistsSync(resolve(projectDir, 'src'))
-  ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
-  : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
-
-// Glob pattern for SVG sprite config.
-const spritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
+/**
+ * Reject keys that could touch object internals even after sanitization.
+ * @param {string} k
+ * @returns {boolean}
+ */
+const isDangerousKey = (k) =>
+  k.includes('__proto__') || k.includes('prototype') || k === 'constructor';
 
 /**
- * Replace the last occurrence of a slash in a string with a replacement.
+ * Add a file under an entry key; if the key exists, merge to an array.
+ * Keeps JS before SCSS for deterministic order.
  *
- * @param {string} str - The original string.
- * @param {string} replacement - The string to replace the last slash with.
- * @returns {string} The modified string.
+ * @param {Map<string, string | string[]>} map
+ * @param {string} key
+ * @param {string} file
+ * @returns {void}
  */
-function replaceLastSlash(str, replacement) {
-  const lastSlashIndex = str.lastIndexOf('/');
-  if (lastSlashIndex === -1) {
-    return str;
+const addEntry = (map, key, file) => {
+  const safeKey = sanitizePath(String(key));
+  if (!safeKey || isDangerousKey(safeKey)) return;
+
+  const current = map.get(safeKey);
+
+  if (!current) {
+    map.set(safeKey, file);
+    return;
   }
-  return (
-    str.slice(0, lastSlashIndex) + replacement + str.slice(lastSlashIndex + 1)
-  );
-}
+
+  const arr = Array.isArray(current) ? current : [current];
+  if (!arr.includes(file)) arr.push(file);
+
+  // Optional: ensure JS comes before SCSS
+  arr.sort((a, b) => {
+    const ax = a.endsWith('.js') ? 0 : 1;
+    const bx = b.endsWith('.js') ? 0 : 1;
+    return ax - bx || a.localeCompare(b);
+  });
+
+  map.set(safeKey, arr);
+};
 
 /**
- * Generate Webpack entries for JS, SCSS, and SVG files.
- *
- * @param {string} BaseJsMatcher - Glob pattern for base JS files.
- * @param {string} jsMatcher - Glob pattern for component JS files.
- * @param {string} BaseScssMatcher - Glob pattern for base SCSS files.
- * @param {string} ComponentScssMatcher - Glob pattern for component SCSS files.
- * @param {string} ComponentLibraryScssMatcher - Glob pattern for component library SCSS files.
- * @param {string} spriteMatcher - Glob pattern for SVG sprite configuration.
- * @returns {Object} An object containing the Webpack entries.
+ * Safe glob wrapper: returns [] if the pattern is falsy.
+ * @param {string} pattern - Glob pattern.
+ * @returns {string[]} Matching file paths.
  */
-function getEntries(
-  BaseJsMatcher,
-  jsMatcher,
-  BaseScssMatcher,
-  ComponentScssMatcher,
-  ComponentLibraryScssMatcher,
-  spriteMatcher,
-) {
-  const entries = {};
+const glob = (pattern) => (pattern ? globSync(pattern) : []);
 
-  /**
-   * Add an entry to the entries object after sanitizing the key.
-   *
-   * @param {string} key - The key for the entry.
-   * @param {string} file - The file path to associate with the entry.
-   */
-  const addEntry = (key, file) => {
-    const sanitizedKey = sanitizePath(key);
-    if (
-      sanitizedKey &&
-      !Object.prototype.hasOwnProperty.call(entries, sanitizedKey)
-    ) {
-      // eslint-disable-next-line security/detect-object-injection
-      entries[sanitizedKey] = file;
-    }
-  };
+/* -------------------------------------------------------------------------- */
+/*                                   GLOBS                                    */
+/* -------------------------------------------------------------------------- */
 
-  // Non-component or global JS entries.
-  globSync(BaseJsMatcher).forEach((file) => {
-    const filePath = file.split(`${srcDir}/`)[1];
-    const pathParts = filePath.split('/');
-    const filePathDist = `${pathParts.slice(0, -1).join('/')}/js/${pathParts
-      .at(-1)
-      .replace('.js', '')}`;
-    const newFilePath = fs.pathExistsSync(resolve(projectDir, 'src'))
-      ? `dist/global/${filePathDist}`
-      : `dist/js/${filePathDist}`;
-    addEntry(newFilePath, file);
-  });
+const BaseScssPattern = hasSrc
+  ? pj(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
+  : '';
 
-  // Component JS entries.
-  globSync(jsMatcher).forEach((file) => {
-    if (!file.includes('dist/')) {
-      const filePath = file.split(`${srcDir}/components/`)[1];
-      const filePathDistRaw = replaceLastSlash(filePath, '/js/');
-      const filePathDist = filePathDistRaw.replace(/\.js$/, '');
-      const prefix = isDrupal && isSrcExists ? 'components' : 'dist/components';
-      const newFilePath = `${prefix}/${filePathDist}`;
-      addEntry(newFilePath, file);
-    }
-  });
+const ComponentScssPattern = hasSrc
+  ? pj(srcDir, 'components/**/!(_*|cl-*|sb-*).scss')
+  : pj(srcDir, '**/!(_*|cl-*|sb-*).scss');
 
-  // Non-component or global SCSS entries.
-  globSync(BaseScssMatcher).forEach((file) => {
-    const filePath = file.split(`${srcDir}/`)[1];
-    const pathParts = filePath.split('/');
-    const filePathDist = `${pathParts.slice(0, -1).join('/')}/css/${pathParts
-      .at(-1)
-      .replace('.scss', '')}`;
-    const newFilePath = fs.pathExistsSync(resolve(projectDir, 'src'))
-      ? `dist/global/${filePathDist}`
-      : `dist/css/${filePathDist}`;
-    addEntry(newFilePath, file);
-  });
+const ComponentLibraryScssPattern = pj(srcDir, '**/*{cl-*,sb-*}.scss');
 
-  // Component SCSS entries.
-  globSync(ComponentScssMatcher).forEach((file) => {
-    const filePath = file.split(`${srcDir}/components/`)[1];
-    const filePathDistRaw = replaceLastSlash(filePath, '/css/');
-    const filePathDist = filePathDistRaw.replace(/\.scss$/, '');
-    const prefix = isDrupal && isSrcExists ? 'components' : 'dist/components';
-    const newFilePath = `${prefix}/${filePathDist}`;
-    addEntry(newFilePath, file);
-  });
+const BaseJsPattern = hasSrc
+  ? pj(srcDir, '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js')
+  : '';
 
-  // Component Library SCSS entries.
-  globSync(ComponentLibraryScssMatcher).forEach((file) => {
-    const filePath = file.split(`${srcDir}/`)[1];
-    const newFilePath = `dist/storybook/${filePath.replace('.scss', '')}`;
-    addEntry(newFilePath, file);
-  });
+const ComponentJsPattern = hasSrc
+  ? pj(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
+  : pj(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
-  // SVG sprite config entries.
-  globSync(spriteMatcher).forEach((file) => {
-    const filePath = file.split('/assets/')[1];
-    const newEntry = `dist/${filePath}`;
-    addEntry(newEntry, file);
-  });
+/* -------------------------------------------------------------------------- */
+/*                                 ENTRY BUILD                                */
+/* -------------------------------------------------------------------------- */
 
-  return entries;
-}
+/**
+ * Build the complete Webpack entries map.
+ * @returns {Record<string,string>} Webpack entries.
+ */
+const buildEntries = () => {
+  /** @type {Map<string, string | string[]>} */
+  const entries = new Map();
+
+  /* ----------------------------- Base / Global JS ----------------------------- */
+  for (const file of glob(BaseJsPattern)) {
+    const sub = distSubpathForBase(file, 'js');
+    // If no "src/", legacy layout puts global JS directly under "dist/js".
+    const outRoot = hasSrc ? pj(globalOutBase) : pj('dist', 'js');
+    addEntry(entries, pj(outRoot, sub), file);
+  }
+
+  /* --------------------------- Component JS (no dist) -------------------------- */
+  for (const file of glob(ComponentJsPattern)) {
+    if (file.includes('/dist/')) continue; // guard against accidental recursion
+    const sub = distSubpathForComponent(file, 'js');
+    addEntry(entries, componentOutPath(sub), file);
+  }
+
+  /* ------------------------------ Base / Global CSS --------------------------- */
+  for (const file of glob(BaseScssPattern)) {
+    const sub = distSubpathForBase(file, 'css');
+    // If no "src/", legacy layout puts global CSS directly under "dist/css".
+    const outRoot = hasSrc ? pj(globalOutBase) : pj('dist', 'css');
+    addEntry(entries, pj(outRoot, sub), file);
+  }
+
+  /* ---------------------------- Component CSS (SCSS) --------------------------- */
+  for (const file of glob(ComponentScssPattern)) {
+    const sub = distSubpathForComponent(file, 'scss'); // maps to css
+    addEntry(entries, componentOutPath(sub), file);
+  }
+
+  /* -------------------------- Component Library (Storybook) -------------------- */
+  for (const file of glob(ComponentLibraryScssPattern)) {
+    const rel = path.relative(srcDir, file).replace(/\.scss$/, '');
+    addEntry(entries, pj('dist', 'storybook', rel), file);
+  }
+
+  return Object.fromEntries(entries);
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              WEBPACK CONFIG EXPORT                          */
+/* -------------------------------------------------------------------------- */
 
 export default {
   target: 'web',
-  stats: {
-    errorDetails: true,
-  },
-  entry: getEntries(
-    BaseJsPattern,
-    ComponentJsPattern,
-    BaseScssPattern,
-    ComponentScssPattern,
-    ComponentLibraryScssPattern,
-    spritePattern,
-  ),
+  stats: { errorDetails: true },
+  entry: buildEntries(),
   module: {
     rules: [
       loaders.CSSLoader,
@@ -204,22 +241,26 @@ export default {
     ],
   },
   plugins: [
+    plugins.RemoveEmptyJS,
     plugins.MiniCssExtractPlugin,
     plugins.ImageminPlugin,
-    plugins.SpriteLoaderPlugin,
+    plugins.SpritePlugin,
     plugins.ProgressPlugin,
     plugins.CopyTwigPlugin,
+    plugins.CopyComponentAssetsPlugin,
+    ...(plugins.CopyGlobalAssetsPlugin ? [plugins.CopyGlobalAssetsPlugin] : []),
     plugins.CleanWebpackPlugin,
   ],
   output: {
-    path: `${projectDir}`,
+    path: projectDir,
     filename: '[name].js',
   },
   resolve: resolves.TwigResolve,
   optimization: optimizers,
+  // Quiet deprecation noise from Sass @import warnings
   ignoreWarnings: [
     (warning) =>
-      warning.message &&
+      Boolean(warning?.message) &&
       /Sass @import rules are deprecated/.test(warning.message),
   ],
 };

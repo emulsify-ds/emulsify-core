@@ -31,7 +31,9 @@ describe('a11y', () => {
     global.console.log.mockClear();
     global.process.exit.mockClear();
   });
-  it('can map axe issue severity to the correct chalk color', () => {
+
+  it('maps axe issue severity to a label', () => {
+    // (Name no longer mentions "chalk")
     expect.assertions(3);
     expect(severityToColor('error')).toBe('red');
     expect(severityToColor('warning')).toBe('yellow');
@@ -56,7 +58,7 @@ describe('a11y', () => {
     expect(issueIsValid({ code: 'chicken', runnerExtras: {} })).toBe(true);
   });
 
-  it('can use an axe issue to generate a single log message about the issue', () => {
+  it('logs a single issue without color codes', () => {
     expect.assertions(1);
     logIssue({
       type: 'error',
@@ -65,16 +67,16 @@ describe('a11y', () => {
       selector: 'kfc > popeyes > .chicken',
     });
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(`
-      "
-          severity: [31merror[39m
-          message: this chicken is not fried enough.
-          context: https://example.com
-          selector: kfc > popeyes > .chicken
-        "
-    `);
+"
+severity: error
+message: this chicken is not fried enough.
+context: https://example.com
+selector: kfc > popeyes > .chicken
+"
+`);
   });
 
-  it('can log a whole axe report', () => {
+  it('logs a whole report without color codes', () => {
     const report = {
       issues: [
         {
@@ -96,45 +98,56 @@ describe('a11y', () => {
     };
     expect(logReport(report)).toBe(true);
     expect(global.console.log.mock.calls).toMatchInlineSnapshot(`
-      Array [
-        Array [
-          "[31mIssues found in component: https://example/component.html[39m",
-        ],
-        Array [
-          "
-          severity: [31merror[39m
-          message: this pizza is too soggy
-          context: https://example.com
-          selector: pizza > .hut
-        ",
-        ],
-        Array [
-          "
-          severity: [31merror[39m
-          message: this pasta is undercooked
-          context: https://example.com
-          selector: olive > .garden
-        ",
-        ],
-      ]
-    `);
+Array [
+  Array [
+    "Issues found in component: https://example/component.html",
+  ],
+  Array [
+    "
+severity: error
+message: this pizza is too soggy
+context: https://example.com
+selector: pizza > .hut
+",
+  ],
+  Array [
+    "
+severity: error
+message: this pasta is undercooked
+context: https://example.com
+selector: olive > .garden
+",
+  ],
+]
+`);
   });
 
-  it('logs about a component having no issue if a report comes back empty', () => {
+  it('logs that a component has no issues when a report is empty', () => {
     expect(logReport({ issues: [], pageUrl: 'papa-johns' })).toBe(false);
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(
-      `"[32mNo issues found in component: papa-johns[39m"`,
+      `"No issues found in component: papa-johns"`,
     );
   });
 
-  it('can call pa11y with the full path to a component', async () => {
-    expect.assertions(2);
+  it('calls pa11y with the full path to a component', async () => {
+    expect.assertions(3);
     await expect(lintComponent('chicken-strips')).resolves.toBe(
       'very official report',
     );
-    expect(pa11y).toHaveBeenCalledWith(
+
+    // First arg: URL
+    expect(pa11y.mock.calls[0][0]).toBe(
       `${STORYBOOK_IFRAME}?id=chicken-strips`,
-      pa11yConfig,
+    );
+
+    // Second arg: options merged with defaults in a11y.js
+    expect(pa11y.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        includeNotices: true,
+        includeWarnings: true,
+        runners: ['axe'],
+        ...pa11yConfig,
+      }),
     );
   });
 
