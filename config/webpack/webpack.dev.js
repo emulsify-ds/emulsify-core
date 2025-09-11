@@ -27,13 +27,14 @@ const isDrupal = emulsifyConfig.project.platform === 'drupal';
 const ignored = ['**/dist/**'];
 
 // If it’s Drupal and there is no src/, also ignore components
-if (isDrupal && srcExists) {
+if (isDrupal && !srcExists) {
   ignored.push('**/components/**');
 }
 
 export default merge(common, {
   mode: 'development',
   devtool: 'source-map',
+  watch: true,
   watchOptions: {
     ignored,
   },
