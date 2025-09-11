@@ -1,57 +1,58 @@
 /* eslint-disable */
 
-import yml from '@modyfi/vite-plugin-yaml';
-import { globSync } from 'glob';
-import { join } from 'node:path';
-import { defineConfig } from 'vite';
-import twig from 'vite-plugin-twig-drupal';
-// import { viteStaticCopy } from "vite-plugin-static-copy";
-// import checker from "vite-plugin-checker";
+/**
+ * @file Vite configuration for Emulsify.
+ */
 
-// https://vitejs.dev/config/
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+import { resolveEnvironment } from './build/env.js';
+import { makePlugins } from './build/plugins.js';
+import { buildInputs, makePatterns } from './build/entries.js';
+
+const env = resolveEnvironment();
+
+// Build input map using the extracted module (keeps this file small & readable).
+const patterns = makePatterns({
+  projectDir: env.projectDir,
+  srcDir: env.srcDir,
+  srcExists: env.srcExists,
+  isDrupal: env.isDrupal,
+});
+const entries = buildInputs(
+  {
+    projectDir: env.projectDir,
+    srcDir: env.srcDir,
+    srcExists: env.srcExists,
+    isDrupal: env.isDrupal,
+  },
+  patterns,
+);
+
 export default defineConfig({
-  plugins: [
-    // checker({
-    //   eslint: {
-    //     lintCommand: 'eslint "./src/components/**/*.{js,jsx}"',
-    //   },
-    //   stylelint: {
-    //     lintCommand: 'stylelint "./src/**/*.css"',
-    //   },
-    // }),
-    // viteStaticCopy({
-    //   targets: [
-    //     {
-    //       src: "./src/components/**/*.{png,jpg,jpeg,svg,webp,mp4}",
-    //       dest: "images",
-    //     },
-    //   ],
-    // }),
-    twig({
-      framework: 'react',
-      namespaces: {
-        components: join(__dirname, './src/components'),
-        layout: join(__dirname, './src/layout'),
-        tokens: join(__dirname, './src/tokens'),
+  plugins: makePlugins(env),
+
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // additionalData: `$env: ${process.env.NODE_ENV};`,
+        // includePaths: [resolve(env.projectDir, 'src/styles')],
       },
-    }),
-    yml(),
-  ],
+    },
+  },
+
   build: {
     emptyOutDir: true,
     outDir: 'dist',
     rollupOptions: {
-      input: [
-        ...globSync('./src/**/*.js', {
-          ignore: './src/**/*.stories.js',
-        }),
-        ...globSync('./src/**/*.scss', {
-          ignore: './src/**/_*.scss',
-        }),
-      ],
+      input: entries,
       output: {
-        assetFileNames: 'css/[name].css',
-        entryFileNames: 'js/[name].js',
+        entryFileNames: '[name].js',
+        assetFileNames: (assetInfo) => {
+          const name = assetInfo.name || '';
+          if (name.endsWith('.css')) return '[name].css';
+          return 'assets/[name][extname]';
+        },
       },
     },
   },
