@@ -6,9 +6,9 @@
 
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { resolveEnvironment } from './build/env.js';
-import { makePlugins } from './build/plugins.js';
-import { buildInputs, makePatterns } from './build/entries.js';
+import { resolveEnvironment } from './environment.js';
+import { makePlugins } from './plugins.js';
+import { buildInputs, makePatterns } from './entries.js';
 
 const env = resolveEnvironment();
 
@@ -29,14 +29,17 @@ const entries = buildInputs(
   patterns,
 );
 
+console.log('Vite Inputs:', entries);
+
+
 export default defineConfig({
   plugins: makePlugins(env),
 
   css: {
     preprocessorOptions: {
       scss: {
-        // additionalData: `$env: ${process.env.NODE_ENV};`,
-        // includePaths: [resolve(env.projectDir, 'src/styles')],
+        additionalData: `$env: ${process.env.NODE_ENV};`,
+        includePaths: [resolve(env.projectDir, 'src/styles')],
       },
     },
   },
@@ -49,11 +52,12 @@ export default defineConfig({
       output: {
         entryFileNames: '[name].js',
         assetFileNames: (assetInfo) => {
-          const name = assetInfo.name || '';
-          if (name.endsWith('.css')) return '[name].css';
+          const n = assetInfo.name ?? '';
+          if (n.endsWith('.css')) return '[name].css';
           return 'assets/[name][extname]';
         },
       },
     },
+    watch: {},
   },
 });
