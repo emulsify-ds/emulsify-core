@@ -73,8 +73,10 @@ const pj = (...segs) => path.join(...segs.filter(Boolean));
 const distSubpathForBase = (absFile, type) => {
   const rel = path.relative(srcDir, absFile);
   const dir = path.dirname(rel);
-  const name = path.basename(rel, '.' + type);
-  return SDC ? pj(dir, name) : pj(dir, type, name);
+  const ext = path.extname(rel);
+  const name = path.basename(rel, ext);
+  const outTypeDir = type === 'css' ? 'css' : 'js';
+  return SDC ? pj(dir, name) : pj(dir, outTypeDir, name);
 };
 
 /**
