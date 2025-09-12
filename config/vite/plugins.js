@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * @file Vite plugins factory for Emulsify.
  * @description Exposes a function that takes the resolved environment and returns the plugins array.
