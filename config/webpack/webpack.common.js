@@ -230,6 +230,10 @@ const buildEntries = () => {
 export default {
   target: 'web',
   stats: { errorDetails: true },
+  externals: {
+    drupal: 'Drupal',
+    drupalSettings: 'drupalSettings',
+  },
   entry: buildEntries(),
   module: {
     rules: [
