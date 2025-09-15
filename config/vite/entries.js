@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * @file Entries map builder for Vite/Rollup.
  * @description
@@ -94,7 +92,10 @@ export function makePatterns(ctx) {
 
   // JS
   const BaseJsPattern = srcExists
-    ? resolve(srcDir, '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js')
+    ? resolve(
+        srcDir,
+        '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
+      )
     : '';
   const ComponentJsPattern = srcExists
     ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
@@ -165,7 +166,9 @@ export function buildInputs(ctx, patterns) {
   const relativePathFromSrc = (absolutePath) => {
     const absPosix = toPosix(absolutePath);
     const needle = `${srcDirPosix}/`;
-    return absPosix.startsWith(needle) ? absPosix.slice(needle.length) : absPosix;
+    return absPosix.startsWith(needle)
+      ? absPosix.slice(needle.length)
+      : absPosix;
   };
 
   /**
@@ -187,7 +190,10 @@ export function buildInputs(ctx, patterns) {
       return bucket === 'css' ? `${withoutExt}${CSS_SUFFIX}` : withoutExt;
     }
     // Insert /css or /js before the filename directory.
-    return replaceLastSlash(relativePath, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
+    return replaceLastSlash(relativePath, `/${bucket}/`).replace(
+      /\.(scss|js)$/i,
+      '',
+    );
   };
 
   /* ----------------------------- Base / Global JS ----------------------------- */
@@ -203,13 +209,17 @@ export function buildInputs(ctx, patterns) {
   for (const absolutePath of globSync(toPosix(ComponentJsPattern))) {
     const filePosix = toPosix(absolutePath);
     const markerIdx = filePosix.indexOf('/components/');
-    const afterComponents = markerIdx !== -1
-      ? filePosix.slice(markerIdx + '/components/'.length)
-      : relativePathFromSrc(absolutePath);
+    const afterComponents =
+      markerIdx !== -1
+        ? filePosix.slice(markerIdx + '/components/'.length)
+        : relativePathFromSrc(absolutePath);
 
     // Build from a "components/<rest>" shape then drop the prefixed folder from the stem.
-    const stem = computeOutputStem(`components/${afterComponents}`, 'js', SDC)
-      .replace(/^components\//, '');
+    const stem = computeOutputStem(
+      `components/${afterComponents}`,
+      'js',
+      SDC,
+    ).replace(/^components\//, '');
     const keyStem = `components/${stem}`;
     addInputEntry(keyStem, absolutePath);
   }
@@ -227,12 +237,16 @@ export function buildInputs(ctx, patterns) {
   for (const absolutePath of globSync(toPosix(ComponentScssPattern))) {
     const filePosix = toPosix(absolutePath);
     const markerIdx = filePosix.indexOf('/components/');
-    const afterComponents = markerIdx !== -1
-      ? filePosix.slice(markerIdx + '/components/'.length)
-      : relativePathFromSrc(absolutePath);
+    const afterComponents =
+      markerIdx !== -1
+        ? filePosix.slice(markerIdx + '/components/'.length)
+        : relativePathFromSrc(absolutePath);
 
-    const stem = computeOutputStem(`components/${afterComponents}`, 'css', SDC)
-      .replace(/^components\//, '');
+    const stem = computeOutputStem(
+      `components/${afterComponents}`,
+      'css',
+      SDC,
+    ).replace(/^components\//, '');
     const keyStem = `components/${stem}`;
     addInputEntry(keyStem, absolutePath);
   }
@@ -257,7 +271,11 @@ export function buildInputs(ctx, patterns) {
  * @param {boolean} [SDC=false] - Single-Directory Components mode toggle.
  * @returns {Record<string, string>} Inputs map suitable for `rollupOptions.input`.
  */
-export function buildInputsFromProject(projectDir, isDrupal = false, SDC = false) {
+export function buildInputsFromProject(
+  projectDir,
+  isDrupal = false,
+  SDC = false,
+) {
   const srcPath = resolve(projectDir, 'src');
   const srcExists = fs.existsSync(srcPath);
   const srcDir = srcExists ? srcPath : resolve(projectDir, 'components');
