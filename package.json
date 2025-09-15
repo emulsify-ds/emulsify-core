@@ -117,6 +117,7 @@
     "stylelint-selector-bem-pattern": "^4.0.1",
     "stylelint-webpack-plugin": "^5.0.1",
     "svg-spritemap-webpack-plugin": "^5.0.1",
+    "terser-webpack-plugin": "^5.3.9",
     "token-transformer": "^0.0.33",
     "twig-drupal-filters": "^3.2.0",
     "twig-testing-library": "^1.2.0",
