@@ -2,74 +2,35 @@
 
 /**
  * @file Vite configuration for Emulsify.
+ * @description
+ * - Resolves the project environment (paths, platform flags).
+ * - Builds a Rollup input map keyed to desired output paths.
+ * - Configures Vite/Rollup outputs so files land using the `[name]` key.
+ * - Normalizes generated CSS filenames by stripping a helper suffix (`__style`).
  */
 
 import { defineConfig } from 'vite';
-import { mkdirSync, copyFileSync, unlinkSync, readdirSync, rmdirSync } from 'fs';
-import { resolve as presolve, dirname, join } from 'path';
 
 import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
 import { buildInputs, makePatterns } from './entries.js';
 
+/**
+ * @typedef {Object} EmulsifyEnvironment
+ * @property {string} projectDir  Absolute project root.
+ * @property {string} srcDir      Absolute path to the source directory (usually `src/`).
+ * @property {boolean} srcExists  Whether `src/` exists (affects routing).
+ * @property {boolean} isDrupal   Whether the target platform is Drupal.
+ * @property {boolean} SDC        Single-Directory Components mode toggle.
+ */
+
+/** @type {EmulsifyEnvironment} */
 const env = resolveEnvironment();
 
-function mirrorComponentsToRoot({ enabled, projectDir }) {
-  const isEmptyDir = (dir) => {
-    try {
-      return readdirSync(dir).length === 0;
-    } catch {
-      return false;
-    }
-  };
-
-  // Remove empty ancestors up to (but not including) stopAt
-  const pruneEmptyAncestors = (startDir, stopAt) => {
-    const stop = presolve(stopAt);
-    let cur = presolve(startDir);
-    // Guard: only prune inside stopAt subtree
-    while (cur.startsWith(stop)) {
-      if (!isEmptyDir(cur)) break;
-      try { rmdirSync(cur); } catch {}
-      const parent = dirname(cur);
-      if (parent === cur || parent === stop) break;
-      cur = parent;
-    }
-  };
-
-  return {
-    name: 'mirror-components-to-root',
-    apply: 'build',
-    enforce: 'post',
-    writeBundle(options, bundle) {
-      if (!enabled) return;
-      const outDir = options.dir || 'dist';
-      const distComponentsRoot = join(outDir, 'components');
-
-      for (const fileName of Object.keys(bundle)) {
-        if (!fileName.startsWith('components/')) continue;
-
-        const src = join(outDir, fileName);           // dist/components/...
-        const dest = join(projectDir, fileName);      // ./components/...
-
-        mkdirSync(dirname(dest), { recursive: true });
-        try {
-          copyFileSync(src, dest);
-          try {
-            unlinkSync(src);                          // remove file in dist
-            pruneEmptyAncestors(dirname(src), distComponentsRoot);
-          } catch {}
-        } catch (e) {
-          this.warn(`Mirror copy failed for ${fileName}: ${e.message}`);
-        }
-      }
-
-      pruneEmptyAncestors(distComponentsRoot, join(outDir));
-    },
-  };
-}
-
-// Build input map using the extracted module (keeps this file small & readable).
+/**
+ * Build the set of glob patterns used to discover entry files.
+ * Keeping discovery logic isolated makes this file small and readable.
+ */
 const patterns = makePatterns({
   projectDir: env.projectDir,
   srcDir: env.srcDir,
@@ -78,6 +39,13 @@ const patterns = makePatterns({
   SDC: env.SDC,
 });
 
+/**
+ * Construct a Rollup input map where:
+ *  - keys are *output* path stems (used as `[name]`)
+ *  - values are absolute input file paths
+ * This lets us control final output locations strictly via `[name]`.
+ * @type {Record<string, string>}
+ */
 const entries = buildInputs(
   {
     projectDir: env.projectDir,
@@ -90,34 +58,100 @@ const entries = buildInputs(
 );
 
 export default defineConfig({
+  /**
+   * Root is the current working directory. Adjust if you run Vite
+   * from a different location than the project root.
+   */
   root: process.cwd(),
-  plugins: [
-    ...makePlugins(env),
-    mirrorComponentsToRoot({
-      enabled: env.srcExists && env.isDrupal,     // only mirror for Drupal+src
-      projectDir: env.projectDir,
-    }),
-  ],
-  css: { devSourcemap: true },
+
+  /**
+   * Plugins (Twig, YAML, sprites, custom copy/mirror) are built
+   * from the environment so they can branch on `srcExists`, `isDrupal`, etc.
+   */
+  plugins: makePlugins(env),
+
+  /**
+   * Generate CSS source maps in dev to aid debugging.
+   */
+  css: {
+    devSourcemap: true,
+  },
+
+  /**
+   * Vite build configuration.
+   */
   build: {
+    /**
+     * Whether to empty the output directory before building.
+     * Set to `true` if `dist/` contains only build artifacts.
+     * Leave `false` if you manually place static files there.
+     */
     emptyOutDir: true,
+
+    /**
+     * Output directory. Trailing slash is accepted by Vite; keep consistent
+     * with any custom plugins that read this value.
+     */
     outDir: 'dist/',
+
+    /** Emit source maps for JS/CSS. */
+    sourcemap: true,
+
+    /**
+     * Rollup-specific options.
+     * We pass the generated `entries` map and control filenames
+     * using `[name]` which is derived from `entries` keys.
+     */
     rollupOptions: {
+      /**
+       * Keyed input map: { [name]: absolutePath }
+       */
       input: entries,
+
+      /**
+       * Output naming.
+       * - JS: `[name].js` (placed exactly according to the key path)
+       * - CSS: `[name].css`, with an extra step to drop the `__style` suffix
+       *        used to avoid name collisions in SDC mode.
+       */
       output: {
         entryFileNames: '[name].js',
+
+        /**
+         * Customize asset names:
+         * - Place CSS and CSS sourcemaps next to the CSS file (respect the keyed path).
+         * - Strip the __style suffix we used at the key level to avoid name collisions.
+         * - Send all other assets to a stable bucket.
+         *
+         * @param {import('rollup').PreRenderedAsset} assetInfo
+         * @returns {string}
+         */
         assetFileNames: (assetInfo) => {
           const file = assetInfo.name || assetInfo.fileName || '';
-          if (file.endsWith('.css')) {
-            // Normalize path and drop the CSS_SUFFIX ('__style') used to avoid key collisions
-            return file.replace(/__style(?=\.css$)/, '');
+
+          // Keep CSS and CSS sourcemaps next to the CSS they belong to.
+          if (file.endsWith('.css') || file.endsWith('.map')) {
+            // Drop the helper suffix for both foo__style.css and foo__style.css.map
+            return file.replace(/__style(?=\.css(\.map)?$)/, '');
           }
+
+          // Everything else (images, fonts, etc.) goes under dist/assets/
           return 'assets/[name][extname]';
         },
       },
     },
-    server: {
-      watch: { usePolling: false },
-    },
+  },
+
+  /**
+   * Dev server configuration.
+   * NOTE: This block belongs at the top level (not inside `build`).
+   */
+  server: {
+    /**
+     * File watching tweaks.
+     * Set `usePolling: true` with an `interval` if you’re on Docker/WSL/NFS
+     * and native FS events are unreliable.
+     */
+    watch: { usePolling: false },
   },
 });
