@@ -28,6 +28,7 @@ export function resolveEnvironment() {
     : { project: { platform: 'generic' } };
 
   const isDrupal = emulsifyConfig?.project?.platform === 'drupal';
+  const SDC = Boolean(emulsifyConfig?.project?.singleDirectoryComponents);
 
   const srcPath = resolve(projectDir, 'src');
   const srcExists = fs.existsSync(srcPath);
@@ -38,6 +39,7 @@ export function resolveEnvironment() {
     emulsifyConfigPath,
     emulsifyConfig,
     isDrupal,
+    SDC,
     srcDir,
     srcExists,
   };

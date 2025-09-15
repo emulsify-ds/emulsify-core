@@ -21,7 +21,7 @@ import svgSprite from 'vite-plugin-svg-sprite';
  * @returns {import('vite').PluginOption[]} Vite plugins array.
  */
 export function makePlugins(env) {
-  const { projectDir, isDrupal, srcExists } = env;
+  const { projectDir, srcDir } = env;
 
   return [
     /**
@@ -46,12 +46,14 @@ export function makePlugins(env) {
      */
     viteStaticCopy({
       targets: [
+        { src: `${srcDir}/components/**/!(_*).twig`, dest: 'components' },
+        { src: `${srcDir}/components/**/*.component.yml`, dest: 'components' },
+        { src: `${srcDir}/components/**/*.component.json`, dest: 'components' },
+        { src: `${srcDir}/!(components|util)/**/!(_*).twig`, dest: 'global' },
         {
-          src: srcExists ? 'src/components/**/*.twig' : 'components/**/*.twig',
-          dest: isDrupal && srcExists ? 'components' : 'dist/components',
+          src: `${srcDir}/components/**/*.{png,jpg,jpeg,svg,webp,mp4}`,
+          dest: 'components',
         },
-        // Add more targets if you previously copied images/videos/etc:
-        // { src: 'src/components/**/*.{png,jpg,jpeg,svg,webp,mp4}', dest: 'dist/images' },
       ],
     }),
 

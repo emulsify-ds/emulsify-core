@@ -2,72 +2,39 @@
 
 /**
  * @file Entries map builder for Vite/Rollup.
- * @description Recreates the Webpack-style multi-entry generation for JS and SCSS,
- *              preserving Emulsify’s output folder structure.
- *
- * IMPORTANT:
- * - Keys are output paths WITHOUT extensions (e.g., "components/foo/css/foo").
- * - Do NOT include "dist/" in keys. Vite's outDir handles that.
- * - Vite config should use:
- *     entryFileNames: '[name].js'
- *     assetFileNames: (info) => info.name.endsWith('.css') ? '[name].css' : 'assets/[name][extname]'
+ * @description Builds a keyed input map where each key encodes its final folder:
+ *   - Global/base assets → "dist/..." (always)
+ *   - Component assets → "components/..." if (srcExists && isDrupal), else "dist/components/..."
+ *   - SDC=true removes the "/css" or "/js" bucket level
  */
 
 import fs from 'fs';
 import { resolve, sep } from 'path';
 import { globSync } from 'glob';
 
-/**
- * Normalize filesystem paths to POSIX for Rollup keys.
- *
- * @param {string} p - A platform-specific file path.
- * @returns {string} POSIX-normalized path.
- */
+/** POSIX normalize for keys */
 export const toPosix = (p) => p.split(sep).join('/');
 
-/**
- * Remove characters that would confuse Rollup naming or file systems.
- *
- * @param {string} inputPath - An entry key or path.
- * @returns {string} Sanitized path.
- */
-export const sanitizePath = (inputPath) =>
-  inputPath.replace(/[^a-zA-Z0-9/_-]/g, '');
+/** Sanitize keys */
+export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
 
-/**
- * Replace the last slash in a string with a subpath (used to insert /css/ or /js/).
- *
- * @param {string} str - The path string to modify.
- * @param {string} replacement - The replacement string (e.g., "/css/").
- * @returns {string} Modified path.
- */
+/** Replace last slash with injected subdir (e.g. '/css/' or '/js/') */
 export function replaceLastSlash(str, replacement) {
-  const lastSlashIndex = str.lastIndexOf('/');
-  if (lastSlashIndex === -1) return str;
-  return str.slice(0, lastSlashIndex) + replacement + str.slice(lastSlashIndex + 1);
+  const i = str.lastIndexOf('/');
+  if (i === -1) return str;
+  return str.slice(0, i) + replacement + str.slice(i + 1);
 }
 
 /**
  * @typedef {Object} BuildContext
- * @property {string} projectDir - Absolute path to the project root.
- * @property {string} srcDir - Absolute path to the "src" (or "components") root.
- * @property {boolean} srcExists - Whether a "src" directory exists.
- * @property {boolean} isDrupal - Whether the target platform is Drupal.
+ * @property {string} projectDir
+ * @property {string} srcDir
+ * @property {boolean} srcExists
+ * @property {boolean} isDrupal
+ * @property {boolean} SDC
  */
 
-/**
- * Construct glob patterns matching the original Webpack config logic.
- *
- * @param {BuildContext} ctx - Build context references.
- * @returns {{
- *   BaseScssPattern: string,
- *   ComponentScssPattern: string,
- *   ComponentLibraryScssPattern: string,
- *   BaseJsPattern: string,
- *   ComponentJsPattern: string,
- *   SpritePattern: string
- * }}
- */
+/** Build all glob patterns */
 export function makePatterns(ctx) {
   const { projectDir, srcDir, srcExists } = ctx;
 
@@ -88,7 +55,7 @@ export function makePatterns(ctx) {
     ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
     : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
-  // Icons (not used in inputs map here, but kept for parity)
+  // Icons (not used in inputs map but preserved)
   const SpritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
 
   return {
@@ -102,16 +69,12 @@ export function makePatterns(ctx) {
 }
 
 /**
- * Build a Rollup/Vite input map from Emulsify file structure.
- * Keys are **output paths without extensions** (e.g., "components/foo/css/foo"),
- * values are absolute source file paths.
- *
- * @param {BuildContext} ctx - Build context (projectDir, srcDir, srcExists, isDrupal).
- * @param {ReturnType<makePatterns>} patterns - Glob patterns created by {@link makePatterns}.
- * @returns {Record<string, string>} A map suitable for `build.rollupOptions.input`.
+ * Build keyed input map.
+ * Keys encode their full path relative to project root (no extension):
+ *   - dist/global/... or dist/components/... or components/...
  */
 export function buildInputs(ctx, patterns) {
-  const { projectDir, srcDir, srcExists /*, isDrupal */ } = ctx;
+  const { projectDir, srcDir, srcExists, isDrupal, SDC } = ctx;
   const {
     BaseJsPattern,
     ComponentJsPattern,
@@ -122,105 +85,86 @@ export function buildInputs(ctx, patterns) {
 
   /** @type {Record<string, string>} */
   const inputs = {};
-
   const SRC_POSIX = toPosix(srcDir);
-  const PROJECT_POSIX = toPosix(projectDir);
 
-  /**
-   * Add one entry safely after sanitizing.
-   *
-   * @param {string} key - Rollup name (path without extension).
-   * @param {string} file - Absolute source filepath.
-   */
-  const addInput = (key, file) => {
-    const normalizedKey = sanitizePath(toPosix(key).replace(/^\/+/, ''));
-    if (normalizedKey && !Object.prototype.hasOwnProperty.call(inputs, normalizedKey)) {
-      inputs[normalizedKey] = file;
-    }
+  const add = (key, abs) => {
+    const k = sanitizePath(toPosix(key).replace(/^\/+/, ''));
+    if (k && !Object.prototype.hasOwnProperty.call(inputs, k)) inputs[k] = abs;
   };
 
-  /**
-   * Get path relative to srcDir (POSIX).
-   */
-  const relFromSrc = (absFile) => {
-    const posix = toPosix(absFile);
+  const relFromSrc = (abs) => {
+    const posix = toPosix(abs);
     const needle = `${SRC_POSIX}/`;
     return posix.startsWith(needle) ? posix.slice(needle.length) : posix;
   };
 
-  /**
-   * Ensure final key starts with "components/..." no matter where srcDir is.
-   */
-  const ensureComponentsPrefix = (rel) => {
-    if (rel.startsWith('components/')) return rel;
-    return `components/${rel}`;
+  /** Given rel path and desired bucket ('css'|'js'), insert bucket unless SDC */
+  const insertBucket = (rel, bucket, SDC) => {
+    // rel is like "components/accordion/accordion.scss" or "layout/layout.js"
+    const withoutExt = rel.replace(/\.(scss|js)$/i, '');
+    if (SDC) {
+      // No /css or /js subfolder; add suffix ONLY for CSS to avoid key collision
+      return bucket === 'css' ? `${withoutExt}__style` : withoutExt;
+    }
+    // SDC=false: keep /css|/js bucket
+    return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
   };
 
-  // --- Non-component/global JS ---
+  /** Component root (may be outside dist) */
+  const componentRoot = (srcExists && isDrupal) ? 'components' : 'dist/components';
+
+  /* ----------------------------- Base / Global JS ----------------------------- */
   if (BaseJsPattern) {
-    globSync(toPosix(BaseJsPattern)).forEach((file) => {
-      const rel = relFromSrc(file); // e.g. "global/foo/bar.js"
-      const withBucket = replaceLastSlash(rel, '/js/'); // insert "/js/" before filename dir
-      const key = withBucket.replace(/\.js$/i, ''); // remove extension
-      // Put non-component JS under "global/..." (no "dist/" here)
-      addInput(`global/${key}`, file);
-    });
+    for (const file of globSync(toPosix(BaseJsPattern))) {
+      const rel = relFromSrc(file);
+      const key = `global/${insertBucket(rel, 'js', SDC)}`;
+      add(key, file);
+    }
   }
 
-  // --- Component JS ---
-  globSync(toPosix(ComponentJsPattern)).forEach((file) => {
-    // Prefer cutting after "/components/" if present; otherwise, compute from srcDir
+  /* ----------------------------- Component JS -------------------------------- */
+  for (const file of globSync(toPosix(ComponentJsPattern))) {
     const posix = toPosix(file);
     const idx = posix.indexOf('/components/');
-    const afterComponents = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFromSrc(file);
-    const rel = ensureComponentsPrefix(afterComponents); // "components/video/video.js" (or deeper)
-    const distRaw = replaceLastSlash(rel, '/js/').replace(/\.js$/i, ''); // "components/video/js/video"
-    addInput(distRaw, file);
-  });
+    const after = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFromSrc(file);
+    const key = `components/${insertBucket(`components/${after}`, 'js', SDC).replace(/^components\//, '')}`;
+    add(key, file);
+  }
 
-  // --- Non-component/global SCSS ---
+  /* --------------------------- Base / Global SCSS ---------------------------- */
   if (BaseScssPattern) {
-    globSync(toPosix(BaseScssPattern)).forEach((file) => {
-      const rel = relFromSrc(file); // e.g. "global/foo/bar.scss"
-      const withBucket = replaceLastSlash(rel, '/css/');
-      const key = withBucket.replace(/\.scss$/i, '');
-      addInput(`global/${key}`, file);
-    });
+    for (const file of globSync(toPosix(BaseScssPattern))) {
+      const rel = relFromSrc(file);
+      const key = `global/${insertBucket(rel, 'css', SDC)}`;
+      add(key, file);
+    }
   }
 
-  // --- Component SCSS ---
-  globSync(toPosix(ComponentScssPattern)).forEach((file) => {
+  /* --------------------------- Component SCSS -------------------------------- */
+  for (const file of globSync(toPosix(ComponentScssPattern))) {
     const posix = toPosix(file);
     const idx = posix.indexOf('/components/');
-    const afterComponents = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFromSrc(file);
-    const rel = ensureComponentsPrefix(afterComponents); // "components/video/video.scss"
-    const distRaw = replaceLastSlash(rel, '/css/').replace(/\.scss$/i, ''); // "components/video/css/video"
-    addInput(distRaw, file);
-  });
+    const after = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFromSrc(file);
+    const key = `components/${insertBucket(`components/${after}`, 'css', SDC).replace(/^components\//, '')}`;
+    add(key, file);
+  }
 
-  // --- Component Library (Storybook/CL) SCSS ---
-  globSync(toPosix(ComponentLibraryScssPattern)).forEach((file) => {
-    const rel = relFromSrc(file); // keep original folders below src
-    const key = `storybook/${rel.replace(/\.scss$/i, '')}`;
-    addInput(key, file);
-  });
+  /* ----------- Component Library (Storybook/CL) ----------- */
+  for (const file of globSync(toPosix(ComponentLibraryScssPattern))) {
+    const rel = relFromSrc(file).replace(/\.scss$/i, '');
+    add(`storybook/${rel}`, file);
+  }
 
   return inputs;
 }
 
-/**
- * Convenience wrapper to build inputs directly from a projectDir.
- *
- * @param {string} projectDir - Absolute path to the project root.
- * @param {boolean} [isDrupal=false] - Whether the project targets Drupal behavior (kept for API parity).
- * @returns {Record<string, string>} Inputs map for Rollup.
- */
-export function buildInputsFromProject(projectDir, isDrupal = false) {
+/** Convenience wrapper */
+export function buildInputsFromProject(projectDir, isDrupal = false, SDC = false) {
   const srcPath = resolve(projectDir, 'src');
   const srcExists = fs.existsSync(srcPath);
   const srcDir = srcExists ? srcPath : resolve(projectDir, 'components');
 
-  const ctx = { projectDir, srcDir, srcExists, isDrupal };
+  const ctx = { projectDir, srcDir, srcExists, isDrupal, SDC };
   const patterns = makePatterns(ctx);
   return buildInputs(ctx, patterns);
 }
