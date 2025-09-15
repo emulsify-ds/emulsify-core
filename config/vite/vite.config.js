@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * @file Vite configuration for Emulsify.
  * @description

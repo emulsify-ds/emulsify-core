@@ -276,7 +276,6 @@ function mirrorComponentsPlugin({ enabled, projectDir }) {
             // ignore unlink/prune failures
           }
         } catch (err) {
-          // eslint-disable-next-line no-console
           console.warn(
             `Mirror copy failed for ${relativeFromOutDir}: ${err?.message || err}`,
           );
