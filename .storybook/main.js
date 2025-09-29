@@ -11,6 +11,7 @@ import fs from 'fs';
 import path, { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
+import viteConfig from '../config/vite/vite.config.js';
 
 /**
  * The full path to the current file (ESM compatible).
@@ -22,7 +23,7 @@ const __filename = fileURLToPath(import.meta.url);
  * The directory name of the current module file.
  * @type {string}
  */
-const __dirname  = path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 /**
  * Safely apply any user-provided overrides or fall back to an empty object.
@@ -40,7 +41,7 @@ const config = {
    * @type {string[]}
    */
   stories: [
-    '../../../../(src|components)/**/*.stories.@(js|jsx|ts|tsx)',
+    '../../../../@(src|components)/**/*.stories.@(js|jsx|ts|tsx)',
   ],
 
   /**
@@ -232,6 +233,34 @@ ${externalManagerHtml}`;
 
     return `${head}
 ${externalHtml}`;
+  },
+
+  // Storybook specific Vite configuration.
+  async viteFinal(config) {
+    const { mergeConfig } = await import('vite');
+    return mergeConfig(config, {
+      ...viteConfig,
+      esbuild: {
+        'jsx': 'automatic',
+        loader: 'jsx',
+        include: /.*\.jsx?$/,
+        exclude: [],
+      },
+      optimizeDeps: {
+        include: [
+          'path',
+          'twig',
+          'twig-drupal-filters',
+          'bem-twig-extension',
+          'add-attributes-twig-extension',
+        ],
+        esbuildOptions: {
+          loader: {
+            '.js': 'jsx',
+          },
+        },
+      },
+    })
   },
 
   // Merge in user overrides without modifying original logic

@@ -1,18 +1,7 @@
-import { resolve, dirname } from 'path';
-import twigDrupal from 'twig-drupal-filters';
-import twigBEM from 'bem-twig-extension';
 import twigAddAttributes from 'add-attributes-twig-extension';
+import twigBEM from 'bem-twig-extension';
+import twigDrupal from 'twig-drupal-filters';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
-
-// Create __filename from import.meta.url without fileURLToPath
-let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
-
-// On Windows, remove the leading slash (e.g. "/C:/path" -> "C:/path")
-if (process.platform === 'win32' && _filename.startsWith('/')) {
-  _filename = _filename.slice(1);
-}
-
-const _dirname = dirname(_filename);
 
 /**
  * Fetches project-based variant configuration. If no such configuration
@@ -42,24 +31,18 @@ const fetchVariantConfig = () => {
 const fetchCSSFiles = () => {
   try {
     // Load all CSS files from 'dist'.
-    const cssFiles = require.context('../../../../dist', true, /\.css$/);
-    cssFiles.keys().forEach((file) => cssFiles(file));
+    const cssFiles = import.meta.glob('../../../../dist/**/*.css', { eager: true });
+    Object.values(cssFiles).forEach((css) => css);
 
     // Load all CSS files from 'components' for 'drupal' platform.
     if (emulsifyConfig.project.platform === 'drupal') {
-      const drupalCSSFiles = require.context('../../../../components', true, /\.css$/);
-      drupalCSSFiles.keys().forEach((file) => drupalCSSFiles(file));
+      const drupalCSSFiles = import.meta.glob('../../../../components/**/*.css', { eager: true });
+      Object.values(drupalCSSFiles).forEach((css) => css);
     }
   } catch (e) {
     return undefined;
   }
 };
-
-// Build namespaces mapping.
-export const namespaces = {};
-for (const { name, directory } of fetchVariantConfig()) {
-  namespaces[name] = resolve(_dirname, '../../../../', directory);
-}
 
 /**
  * Configures and extends a standard Twig object.
