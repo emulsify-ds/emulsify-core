@@ -1,63 +1,78 @@
 /**
  * @file Environment resolution for Emulsify + Vite.
  * @description
- * - No longer reads `singleDirectoryComponents` or `isDrupal` from project.emulsify.json.
- * - Only derives `platform` and checks `platform === 'drupal'` when needed.
+ * Reads project-local config and returns normalized env flags used by the
+ * entries and plugin layers.
+ *
+ * - projectDir: absolute CWD
+ * - srcDir/srcExists: prefer <project>/src if present, else <project>/components
+ * - platform: 'drupal' | 'generic' (env var wins, else project.emulsify.json)
+ * - SDC: boolean (single directory components)
+ *        Read from env var EMULSIFY_SDC (if set) else project.emulsify.json
  */
 
 import fs from 'fs';
 import { resolve } from 'path';
 
 /**
+ * @typedef {Object} EmulsifyEnv
+ * @property {string} projectDir
+ * @property {string} srcDir
+ * @property {boolean} srcExists
+ * @property {string} platform
+ * @property {boolean} SDC
+ */
+
+/**
  * Resolve environment details for the current project.
- * - `projectDir` is the current working directory (Vite root).
- * - `srcDir` prefers `<project>/src` if it exists, else `<project>/components`.
- * - `platform` is pulled from:
- *      1) process.env.EMULSIFY_PLATFORM (if present),
- *      2) project.emulsify.json -> { project: { platform } } (if present),
- *      3) defaults to "generic".
- *
- * @returns {{
- *   projectDir: string,
- *   srcDir: string,
- *   srcExists: boolean,
- *   platform: 'drupal' | 'generic' | string
- * }}
+ * @returns {EmulsifyEnv}
  */
 export function resolveEnvironment() {
   const projectDir = process.cwd();
 
-  // src/ preferred; fallback to components/ for legacy repos
+  // Prefer <proj>/src; fall back to <proj>/components
   const srcPath = resolve(projectDir, 'src');
   const srcExists = fs.existsSync(srcPath);
   const srcDir = srcExists ? srcPath : resolve(projectDir, 'components');
 
-  // Determine platform:
-  // 1) env var (highest precedence)
-  // 2) project.emulsify.json (if present)
-  // 3) default 'generic'
-  let platform = (process.env.EMULSIFY_PLATFORM || '')
-    .toString()
-    .toLowerCase()
-    .trim();
+  // Defaults
+  let platform = 'generic';
+  let SDC = false;
 
-  if (!platform) {
-    try {
-      const cfgPath = resolve(projectDir, 'project.emulsify.json');
-      if (fs.existsSync(cfgPath)) {
-        const raw = fs.readFileSync(cfgPath, 'utf8');
-        const json = JSON.parse(raw);
-        platform = (json?.project?.platform || json?.platform || '')
-          .toString()
-          .toLowerCase()
-          .trim();
+  // Optional: project.emulsify.json
+  try {
+    const cfgPath = resolve(projectDir, 'project.emulsify.json');
+    if (fs.existsSync(cfgPath)) {
+      const raw = fs.readFileSync(cfgPath, 'utf8');
+      const json = JSON.parse(raw);
+
+      const p = (json?.project?.platform || json?.platform || '')
+        .toString()
+        .trim()
+        .toLowerCase();
+      if (p) platform = p;
+
+      // SDC from config (boolean if present)
+      if (typeof json?.project?.singleDirectoryComponents === 'boolean') {
+        SDC = Boolean(json.project.singleDirectoryComponents);
       }
-    } catch {
-      // ignore JSON read/parse issues; fall through to default
     }
+  } catch {
+    // ignore read/parse errors and keep defaults
   }
 
-  if (!platform) platform = 'generic';
+  // Environment variable overrides (highest precedence)
+  const envPlatform = (process.env.EMULSIFY_PLATFORM || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+  if (envPlatform) platform = envPlatform;
 
-  return { projectDir, srcDir, srcExists, platform };
+  if (typeof process.env.EMULSIFY_SDC !== 'undefined') {
+    const v = (process.env.EMULSIFY_SDC || '').toString().trim().toLowerCase();
+    // Accept "1", "true", "yes" → true
+    SDC = v === '1' || v === 'true' || v === 'yes';
+  }
+
+  return { projectDir, srcDir, srcExists, platform, SDC };
 }

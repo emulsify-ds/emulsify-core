@@ -1,47 +1,53 @@
-/* eslint-disable */
-
 /**
  * @file Entries map builder for Vite/Rollup.
- * @description
- * Produces a keyed input map where each **key** (Rollup `[name]`) directly
- * encodes the desired output location relative to `outDir`:
  *
- * - Globals → `global/...`
- * - Components → `components/...`
- * - Storybook/CL → `storybook/...`
+ * @summary
+ * Creates a **keyed input map** for Rollup/Vite where each key becomes the
+ * output stem (`[name]`) relative to your build `outDir`, and each value is an
+ * absolute path to the source file. Keys intentionally encode the final folder
+ * so your `vite.config.js` can write files exactly where Emulsify expects:
  *
- * Simplifications:
- * - No `singleDirectoryComponents` flag. We default to **single-directory style**
- *   (no `/css` or `/js` buckets). To avoid name collisions when a component has
- *   both JS and CSS, CSS keys get a `__style` suffix which is stripped in
- *   `vite.config.js -> assetFileNames`.
- * - No `isDrupal` flag from config; Drupal mirroring happens in a plugin that
- *   checks `env.platform === 'drupal'`.
+ * - Global/base assets   → keys start with `"global/..."`   → dist/global/...
+ * - Component assets     → keys start with `"components/..."` → dist/components/...
+ * - Storybook/CL assets  → keys start with `"storybook/..."` → dist/storybook/...
+ *
+ * The **SDC** switch (Single Directory Components) controls whether we insert
+ * a `/css` or `/js` folder in the generated keys:
+ * - When `SDC === true`, we **do not** insert the type folder. To avoid JS/CSS
+ *   name collisions, we add a temporary `__style` suffix to CSS keys. You must
+ *   strip this suffix in `assetFileNames` (see vite.config.js).
+ * - When `SDC === false`, we mimic the old Webpack layout by inserting a
+ *   `/css` or `/js` folder just before the filename.
+ *
+ * This module does **not** decide whether components end up under `dist/` or
+ * the project-level `./components/`. That responsibility belongs to the build
+ * plugins (e.g. a mirroring plugin for Drupal projects).
  */
 
-import fs from 'fs';
 import { resolve, sep } from 'path';
 import { globSync } from 'glob';
 
-/** Suffix used for CSS entries to avoid collisions with JS stems. */
-const CSS_SUFFIX = '__style';
+/* ==========================================================================
+ * Tiny utilities
+ * ======================================================================== */
 
 /**
- * Normalize a path to POSIX (forward slashes).
+ * Convert a platform path to POSIX form (forward slashes).
  * @param {string} p
  * @returns {string}
  */
 export const toPosix = (p) => p.split(sep).join('/');
 
 /**
- * Sanitize a Rollup name/path (strip odd characters).
+ * Remove characters that could confuse file systems or Rollup naming.
  * @param {string} s
  * @returns {string}
  */
-export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
+export const sanitizePath = (s) => String(s).replace(/[^a-zA-Z0-9/_-]/g, '');
 
 /**
- * Replace the last slash with a subpath (unused in SDC default, kept for parity).
+ * Replace the last slash in a path-like string with a replacement.
+ * Useful for injecting `/css/` or `/js/` just before the filename.
  * @param {string} str
  * @param {string} replacement
  * @returns {string}
@@ -52,16 +58,20 @@ export function replaceLastSlash(str, replacement) {
   return str.slice(0, i) + replacement + str.slice(i + 1);
 }
 
+/* ==========================================================================
+ * Types
+ * ======================================================================== */
+
 /**
  * @typedef {Object} BuildContext
- * @property {string} projectDir - Absolute project root.
- * @property {string} srcDir     - Absolute source root.
- * @property {boolean} srcExists - Whether `src/` exists.
- * @property {string} platform   - Platform string (e.g., 'drupal' or 'generic').
+ * @property {string} projectDir Absolute path to the project root.
+ * @property {string} srcDir     Absolute path to the canonical source dir.
+ * @property {boolean} srcExists Whether a `src/` directory exists.
+ * @property {boolean} SDC       Single Directory Components mode.
  */
 
 /**
- * @typedef {Object} PatternSet
+ * @typedef {Object} Patterns
  * @property {string} BaseScssPattern
  * @property {string} ComponentScssPattern
  * @property {string} ComponentLibraryScssPattern
@@ -70,10 +80,14 @@ export function replaceLastSlash(str, replacement) {
  * @property {string} SpritePattern
  */
 
+/* ==========================================================================
+ * Pattern builder
+ * ======================================================================== */
+
 /**
- * Build glob patterns used to discover inputs.
+ * Build all glob patterns based on the environment.
  * @param {BuildContext} ctx
- * @returns {PatternSet}
+ * @returns {Patterns}
  */
 export function makePatterns(ctx) {
   const { projectDir, srcDir, srcExists } = ctx;
@@ -89,13 +103,16 @@ export function makePatterns(ctx) {
 
   // JS
   const BaseJsPattern = srcExists
-    ? resolve(srcDir, '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js')
+    ? resolve(
+        srcDir,
+        '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
+      )
     : '';
   const ComponentJsPattern = srcExists
     ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
     : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
-  // Icons (not used directly; kept for parity)
+  // Icons (not used here; preserved for consumers)
   const SpritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
 
   return {
@@ -108,16 +125,44 @@ export function makePatterns(ctx) {
   };
 }
 
+/* ==========================================================================
+ * Input map builder
+ * ======================================================================== */
+
 /**
- * Build the keyed input map for Rollup/Vite.
- * Keys encode the destination path (no extension), values are absolute sources.
+ * Compute the "output stem" (key without extension) for a given **relative**
+ * source path and asset type.
+ *
+ * @param {string} rel A path relative to `srcDir` (POSIX).
+ * @param {'js'|'css'} type Asset type.
+ * @param {boolean} SDC Single Directory Components mode.
+ * @returns {string} The computed key segment (no extension).
+ */
+function computeOutputStem(rel, type, SDC) {
+  // Drop the original extension first.
+  const withoutExt = rel.replace(/\.(scss|js)$/i, '');
+
+  if (SDC) {
+    // SDC mode: keep the directory structure as-is.
+    // Add a temporary suffix for CSS to avoid collisions with JS of same name.
+    return type === 'css' ? `${withoutExt}__style` : withoutExt;
+  }
+
+  // Non-SDC: inject `/css/` or `/js/` just before the filename.
+  return replaceLastSlash(rel, `/${type}/`).replace(/\.(scss|js)$/i, '');
+}
+
+/**
+ * Build the complete Rollup/Vite **input map**.
+ * Keys are **relative to `outDir`** (e.g., `"global/layout/header"`), and values
+ * are the absolute file paths to compile.
  *
  * @param {BuildContext} ctx
- * @param {PatternSet} patterns
- * @returns {Record<string, string>}
+ * @param {Patterns} patterns
+ * @returns {Record<string, string>} An object suitable for `rollupOptions.input`.
  */
 export function buildInputs(ctx, patterns) {
-  const { srcDir } = ctx;
+  const { srcDir, SDC } = ctx;
   const {
     BaseJsPattern,
     ComponentJsPattern,
@@ -126,96 +171,117 @@ export function buildInputs(ctx, patterns) {
     ComponentLibraryScssPattern,
   } = patterns;
 
-  /** @type {Record<string, string>} */
-  const inputs = {};
+  // Use a Map to avoid the "Generic Object Injection Sink" lint warning and to
+  // keep insertion order deterministic.
+  /** @type {Map<string, string>} */
+  const inputMap = new Map();
+
   const SRC_POSIX = toPosix(srcDir);
 
   /**
-   * Add a unique input key/value.
+   * Safely add one entry to the map after sanitizing the key.
+   * If a key already exists, the first one wins (deterministic).
    * @param {string} key
-   * @param {string} abs
+   * @param {string} absPath
    */
-  const add = (key, abs) => {
-    const k = sanitizePath(toPosix(key).replace(/^\/+/, ''));
-    if (k && !Object.prototype.hasOwnProperty.call(inputs, k)) inputs[k] = abs;
+  const add = (key, absPath) => {
+    const clean = sanitizePath(toPosix(key).replace(/^\/+/, ''));
+    if (!clean || inputMap.has(clean)) return;
+    inputMap.set(clean, absPath);
   };
 
   /**
-   * Convert an absolute path to a POSIX path relative to `srcDir`.
+   * Get a POSIX relative path from `srcDir` to an absolute file.
    * @param {string} abs
    * @returns {string}
    */
-  const relFromSrc = (abs) => {
+  const relativePathFromSrc = (abs) => {
     const posix = toPosix(abs);
-    const needle = `${SRC_POSIX}/`;
+    const needle = `${toPosix(SRC_POSIX)}/`;
     return posix.startsWith(needle) ? posix.slice(needle.length) : posix;
-  };
-
-  /**
-   * Compute the output stem (Rollup `[name]`) in **single-directory** style.
-   * CSS gets a `__style` suffix to avoid collisions with same-stem JS.
-   * @param {string} rel - POSIX relative path including extension.
-   * @param {'css'|'js'} kind
-   * @returns {string} stem without extension
-   */
-  const singleDirStem = (rel, kind) => {
-    const withoutExt = rel.replace(/\.(scss|js)$/i, '');
-    return kind === 'css' ? `${withoutExt}${CSS_SUFFIX}` : withoutExt;
   };
 
   /* ----------------------------- Base / Global JS ----------------------------- */
   if (BaseJsPattern) {
-    for (const file of globSync(toPosix(BaseJsPattern))) {
-      const rel = relFromSrc(file);
-      add(`global/${singleDirStem(rel, 'js')}`, file);
+    for (const absolutePath of globSync(toPosix(BaseJsPattern))) {
+      const rel = relativePathFromSrc(absolutePath); // e.g., "layout/header.js"
+      const stem = computeOutputStem(rel, 'js', SDC);
+      add(`global/${stem}`, absolutePath);
     }
   }
 
   /* ----------------------------- Component JS -------------------------------- */
-  for (const file of globSync(toPosix(ComponentJsPattern))) {
-    const posix = toPosix(file);
-    const idx = posix.indexOf('/components/');
-    const after = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFromSrc(file);
-    add(`components/${singleDirStem(`components/${after}`, 'js').replace(/^components\//, '')}`, file);
+  for (const absolutePath of globSync(toPosix(ComponentJsPattern))) {
+    const filePosix = toPosix(absolutePath);
+    const markerIdx = filePosix.indexOf('/components/');
+    const afterComponents =
+      markerIdx !== -1
+        ? filePosix.slice(markerIdx + '/components/'.length)
+        : relativePathFromSrc(absolutePath);
+
+    // Build from a "components/<rest>" shape then drop the prefixed folder from the stem.
+    const stem = computeOutputStem(
+      `components/${afterComponents}`,
+      'js',
+      SDC,
+    ).replace(/^components\//, '');
+    add(`components/${stem}`, absolutePath);
   }
 
-  /* --------------------------- Base / Global SCSS ---------------------------- */
+  /* --------------------------- Base / Global SCSS ----------------------------- */
   if (BaseScssPattern) {
-    for (const file of globSync(toPosix(BaseScssPattern))) {
-      const rel = relFromSrc(file);
-      add(`global/${singleDirStem(rel, 'css')}`, file);
+    for (const absolutePath of globSync(toPosix(BaseScssPattern))) {
+      const rel = relativePathFromSrc(absolutePath); // e.g., "layout/layout.scss"
+      const stem = computeOutputStem(rel, 'css', SDC);
+      add(`global/${stem}`, absolutePath);
     }
   }
 
-  /* --------------------------- Component SCSS -------------------------------- */
-  for (const file of globSync(toPosix(ComponentScssPattern))) {
-    const posix = toPosix(file);
-    const idx = posix.indexOf('/components/');
-    const after = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFromSrc(file);
-    add(`components/${singleDirStem(`components/${after}`, 'css').replace(/^components\//, '')}`, file);
+  /* --------------------------- Component SCSS --------------------------------- */
+  for (const absolutePath of globSync(toPosix(ComponentScssPattern))) {
+    const filePosix = toPosix(absolutePath);
+    const markerIdx = filePosix.indexOf('/components/');
+    const afterComponents =
+      markerIdx !== -1
+        ? filePosix.slice(markerIdx + '/components/'.length)
+        : relativePathFromSrc(absolutePath);
+
+    const stem = computeOutputStem(
+      `components/${afterComponents}`,
+      'css',
+      SDC,
+    ).replace(/^components\//, '');
+    add(`components/${stem}`, absolutePath);
   }
 
-  /* ----------------- Component Library (Storybook / CL) ---------------------- */
-  for (const file of globSync(toPosix(ComponentLibraryScssPattern))) {
-    const rel = relFromSrc(file).replace(/\.scss$/i, '');
-    add(`storybook/${rel}`, file);
+  /* --------------------- Component Library (Storybook / CL) ------------------- */
+  for (const absolutePath of globSync(toPosix(ComponentLibraryScssPattern))) {
+    const rel = relativePathFromSrc(absolutePath).replace(/\.scss$/i, '');
+    add(`storybook/${rel}`, absolutePath);
   }
 
-  return inputs;
+  // Convert to a plain object for Vite/Rollup.
+  return Object.fromEntries(inputMap.entries());
 }
 
+/* ==========================================================================
+ * (Optional) Deprecated convenience wrapper
+ * ======================================================================== */
+
 /**
- * Convenience wrapper to build inputs from only `projectDir`.
- * @param {string} projectDir
- * @param {string} [platform='generic']
+ * @deprecated Prefer resolving your environment once (e.g., via `resolveEnvironment()`)
+ * and then call `makePatterns(env)` and `buildInputs(env, patterns)` directly.
+ * This wrapper is kept for backwards compatibility but avoids filesystem probing
+ * that triggers security linters.
+ *
+ * @param {string} projectDir Absolute path to the project root.
+ * @param {boolean} [SDC=false] Whether to use SDC (no /css|/js buckets).
  * @returns {Record<string, string>}
  */
-export function buildInputsFromProject(projectDir, platform = 'generic') {
-  const srcPath = resolve(projectDir, 'src');
-  const srcExists = fs.existsSync(srcPath);
-  const srcDir = srcExists ? srcPath : resolve(projectDir, 'components');
-
-  const ctx = { projectDir, srcDir, srcExists, platform };
+export function buildInputsFromProject(projectDir, SDC = false) {
+  // Assume the canonical layout and let callers pass a proper env if different.
+  const srcDir = resolve(projectDir, 'src');
+  const ctx = { projectDir, srcDir, srcExists: true, SDC };
   const patterns = makePatterns(ctx);
   return buildInputs(ctx, patterns);
 }
