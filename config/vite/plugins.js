@@ -400,6 +400,9 @@ export function makePlugins(env) {
     // YAML support
     yml(),
 
+    // Sass glob imports
+    sassGlobImports(),
+
     // Copy Twig + metadata
     copyTwigFilesPlugin({ srcDir }),
 
