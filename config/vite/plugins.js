@@ -1,15 +1,18 @@
-/* eslint-disable */
-
 /**
  * @file Vite plugins factory for Emulsify.
- * - Copies TWIGs and related component metadata into `dist/` using the same
- *   routing rules as JS/CSS (components → `dist/components/...`, everything
- *   else in `src/!(components|util)` → `dist/global/...`).
- * - If `srcExists && isDrupal`, mirrors `dist/components/**` to `./components/**`,
- *   deletes the originals, and prunes empty directories.
+ *
+ * @description
+ *  - Copies TWIGs/metadata into `dist/` using the same routing rules as JS/CSS:
+ *      • `src/components/**`         → `dist/components/**`
+ *      • `src/!(components|util)/**` → `dist/global/**`
+ *  - Copies **all non-code assets** found under `src/` to the same routed locations
+ *    (images, icons, audio/video, fonts, docs, etc.).
+ *  - Builds a **physical** spritemap at `dist/assets/icons.sprite.svg` from icon globs.
+ *  - If `env.platform === 'drupal'` and a `src/` dir exists, mirrors `dist/components/**`
+ *    to `./components/**` and prunes any empty folders left behind.
  */
 
-import { resolve, join, dirname } from 'path';
+import { resolve, join, dirname, basename } from 'path';
 import {
   mkdirSync,
   copyFileSync,
@@ -18,55 +21,58 @@ import {
   rmdirSync,
   statSync,
   existsSync,
+  readFileSync,
 } from 'fs';
 import { globSync } from 'glob';
 
 import yml from '@modyfi/vite-plugin-yaml';
 import twig from 'vite-plugin-twig-drupal';
-import svgSprite from 'vite-plugin-svg-sprite';
+
+/* ============================================================================
+ * Small, focused helpers
+ * ==========================================================================
+ */
 
 /**
- * Is the file a "partial" (filename starts with underscore)?
- * @param {string} filePath - Path to a file.
- * @returns {boolean} True if the final segment starts with `_`.
+ * Returns true when a Twig file is a partial (filename starts with `_`).
+ * Example: `_button.twig` → true, `button.twig` → false
+ *
+ * @param {string} filePath - Path to a Twig file.
+ * @returns {boolean}
  */
-const isPartialFileName = (filePath) => {
-  const base = (filePath.split('/')?.pop() || '').trim();
-  return base.startsWith('_');
-};
+const isPartial = (filePath) =>
+  (filePath.split('/')?.pop() || '').trim().startsWith('_');
 
 /**
- * Recursively collect full file paths under a directory.
- * @param {string} rootDir - Directory to walk.
- * @returns {string[]} Flat list of files (no directories).
+ * Depth-first walk to list **all files** (no directories) under a given root.
+ *
+ * @param {string} rootDir - Directory to crawl.
+ * @returns {string[]} Absolute paths to files.
  */
-const walkAllFiles = (rootDir) => {
+const walkFiles = (rootDir) => {
   /** @type {string[]} */
   const files = [];
   /** @type {string[]} */
-  const dirsToVisit = [rootDir];
+  const stack = [rootDir];
 
-  while (dirsToVisit.length) {
-    const currentDir = dirsToVisit.pop();
+  while (stack.length) {
+    const currentDir = stack.pop();
     if (!currentDir) continue;
 
     /** @type {string[]} */
-    let childNames = [];
+    let entryNames = [];
     try {
-      childNames = readdirSync(currentDir);
+      entryNames = readdirSync(currentDir);
     } catch {
-      continue;
+      continue; // unreadable directory
     }
 
-    for (const childName of childNames) {
-      const childPath = join(currentDir, childName);
+    for (const name of entryNames) {
+      const fullPath = join(currentDir, name);
       try {
-        const stats = statSync(childPath);
-        if (stats.isDirectory()) {
-          dirsToVisit.push(childPath);
-        } else {
-          files.push(childPath);
-        }
+        const stats = statSync(fullPath);
+        if (stats.isDirectory()) stack.push(fullPath);
+        else files.push(fullPath);
       } catch {
         // ignore unreadable entries
       }
@@ -77,158 +83,383 @@ const walkAllFiles = (rootDir) => {
 };
 
 /**
- * Determine whether a directory is empty.
- * @param {string} dirPath - Directory path.
- * @returns {boolean} True if empty or unreadable.
+ * Removes empty parent directories from a start directory **up to (but not including)**
+ * a stopping boundary directory.
+ *
+ * @param {string} startDir - Directory where pruning should begin.
+ * @param {string} stopAtDir - Boundary directory (non-inclusive).
  */
-const isDirectoryEmpty = (dirPath) => {
-  try {
-    return readdirSync(dirPath).length === 0;
-  } catch {
-    return false;
-  }
-};
-
-/**
- * Remove empty parent directories from `startDir` up to (but not including) `stopAtDir`.
- * @param {string} startDir - Directory to start pruning from.
- * @param {string} stopAtDir - Directory boundary (non-inclusive).
- */
-const pruneEmptyDirectoriesUpTo = (startDir, stopAtDir) => {
-  const stopPath = resolve(stopAtDir);
+const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
+  const stopAbs = resolve(stopAtDir);
   let cursor = resolve(startDir);
 
-  while (cursor.startsWith(stopPath)) {
-    if (!isDirectoryEmpty(cursor)) break;
+  /**
+   * Is the directory empty? Returns false on IO errors (treat as not empty).
+   * @param {string} dir
+   * @returns {boolean}
+   */
+  const isEmpty = (dir) => {
+    try {
+      return readdirSync(dir).length === 0;
+    } catch {
+      return false;
+    }
+  };
+
+  while (cursor.startsWith(stopAbs)) {
+    if (!isEmpty(cursor)) break;
 
     try {
       rmdirSync(cursor);
     } catch {
-      // Non-empty or permission issues; stop pruning at this level.
+      // Cannot remove (in use or permissions) → stop trying here.
+      break;
     }
 
     const parent = dirname(cursor);
-    if (parent === cursor || parent === stopPath) break;
+    if (parent === cursor || parent === stopAbs) break;
     cursor = parent;
   }
 };
 
+/* ============================================================================
+ * Plugin: Copy Twig files (+ component metadata) using JS/CSS-like routing
+ * ==========================================================================
+ */
+
 /**
- * Copy TWIG files (and optional component metadata) from `srcDir` to `dist/`
- * with routing that mirrors JS/CSS:
+ * Copies Twig templates and component metadata from `src/` to `dist/`,
+ * respecting the same routing rules used for JS/CSS:
  *
- * @param {{ srcDir: string }} opts
- * @returns {import('vite').PluginOption} Vite plugin
+ * - Component Twig:
+ *   `src/components/**` → `dist/components/**`
+ *   (partials `_*.twig` are skipped)
+ *
+ * - Global Twig:
+ *   `src/!(components|util)/**` → `dist/global/**`
+ *
+ * - Component metadata:
+ *   `*.component.(yml|yaml|json)` next to components → same path in `dist/components/**`
+ *
+ * @param {{ srcDir: string }} opts - Options.
+ * @returns {import('vite').PluginOption}
  */
 function copyTwigFilesPlugin({ srcDir }) {
   /** @type {string} */
-  let resolvedOutDir = 'dist';
+  let outDir = 'dist';
+  /** @param {string} p */
+  const posix = (p) => p.replace(/\\/g, '/');
 
   return {
-    name: 'emulsify-copy-twig-like',
+    name: 'emulsify-copy-twig-files',
     apply: 'build',
     enforce: 'post',
 
     /**
-     * Capture the final outDir early and keep it in closure.
+     * Capture the resolved outDir.
      * @param {import('vite').ResolvedConfig} cfg
      */
     configResolved(cfg) {
-      resolvedOutDir = cfg.build?.outDir || 'dist';
+      outDir = cfg.build?.outDir || 'dist';
     },
 
     /**
-     * Do the actual copying after the bundle is written so we can safely
-     * place files next to built assets.
+     * Perform copy work **after** Vite writes outputs so we can place files
+     * next to compiled assets safely.
      */
     closeBundle() {
-      /* ------------------------- COMPONENT TWIGS -------------------------- */
-      const componentTwigFiles = globSync(
-        join(srcDir, 'components/**/*.twig').replace(/\\/g, '/'),
+      /* 1) Component Twig → dist/components */
+      const componentTwigs = globSync(
+        posix(join(srcDir, 'components/**/*.twig')),
       );
+      for (const absPath of componentTwigs) {
+        const relFromSrc = posix(absPath).split(posix(srcDir) + '/')[1]; // "components/x/y.twig"
+        const withinComponents = relFromSrc.replace(/^components\//, '');
+        if (isPartial(withinComponents)) continue; // skip `_*.twig`
 
-      for (const absPath of componentTwigFiles) {
-        const relFromSrc = absPath.split(srcDir + '/')[1]; // e.g. "components/accordion/accordion.twig"
-        const componentRelative = relFromSrc.replace(/^components\//, ''); // e.g. "accordion/accordion.twig"
-        if (isPartialFileName(componentRelative)) continue;
-
-        const destinationPath = join(
-          resolvedOutDir,
-          'components',
-          componentRelative,
-        );
-
-        mkdirSync(dirname(destinationPath), { recursive: true });
+        const destPath = join(outDir, 'components', withinComponents);
+        mkdirSync(dirname(destPath), { recursive: true });
         try {
-          copyFileSync(absPath, destinationPath);
+          copyFileSync(absPath, destPath);
         } catch {
-          // ignore copy failures (permissions, transient issues)
+          /* noop */
         }
       }
 
-      /* ------------- OPTIONAL: component schemas next to components ------- */
-      const componentYamlFiles = globSync(
-        join(srcDir, 'components/**/*.component.@(yml|yaml)').replace(/\\/g, '/'),
-      );
-      for (const absPath of componentYamlFiles) {
-        const rel = absPath.split(srcDir + '/')[1].replace(/^components\//, '');
-        const destinationPath = join(resolvedOutDir, 'components', rel);
-        mkdirSync(dirname(destinationPath), { recursive: true });
-        try {
-          copyFileSync(absPath, destinationPath);
-        } catch {}
+      /* 2) Component metadata → dist/components */
+      for (const pattern of [
+        'components/**/*.component.@(yml|yaml)',
+        'components/**/*.component.json',
+      ]) {
+        const metaFiles = globSync(posix(join(srcDir, pattern)));
+        for (const absPath of metaFiles) {
+          const rel = posix(absPath)
+            .split(posix(srcDir) + '/')[1]
+            .replace(/^components\//, '');
+          const destPath = join(outDir, 'components', rel);
+          mkdirSync(dirname(destPath), { recursive: true });
+          try {
+            copyFileSync(absPath, destPath);
+          } catch {
+            /* noop */
+          }
+        }
       }
 
-      const componentJsonFiles = globSync(
-        join(srcDir, 'components/**/*.component.json').replace(/\\/g, '/'),
-      );
-      for (const absPath of componentJsonFiles) {
-        const rel = absPath.split(srcDir + '/')[1].replace(/^components\//, '');
-        const destinationPath = join(resolvedOutDir, 'components', rel);
-        mkdirSync(dirname(destinationPath), { recursive: true });
+      /* 3) Global Twig → dist/global  (exclude components/, util/, and partials) */
+      const globalTwigs = globSync(posix(join(srcDir, '**/*.twig')), {
+        ignore: [
+          posix(join(srcDir, 'components/**')),
+          posix(join(srcDir, 'util/**')),
+          posix(join(srcDir, '**/_*.twig')),
+        ],
+      });
+
+      for (const absPath of globalTwigs) {
+        const rel = posix(absPath).split(posix(srcDir) + '/')[1];
+        const destPath = join(outDir, 'global', rel);
+        mkdirSync(dirname(destPath), { recursive: true });
         try {
-          copyFileSync(absPath, destinationPath);
-        } catch {}
-      }
-
-      /* --------------------------- GLOBAL TWIGS --------------------------- */
-      const globalTwigFiles = globSync(
-        join(srcDir, '**/*.twig').replace(/\\/g, '/'),
-        {
-          ignore: [
-            join(srcDir, 'components/**').replace(/\\/g, '/'),
-            join(srcDir, 'util/**').replace(/\\/g, '/'),
-            join(srcDir, '**/_*.twig').replace(/\\/g, '/'),
-          ],
-        },
-      );
-
-      for (const absPath of globalTwigFiles) {
-        const relFromSrc = absPath.split(srcDir + '/')[1]; // e.g. "layout/container/container.twig"
-
-        // Current behavior: preserve the first folder under src (matches your latest config).
-        const relForGlobal = relFromSrc;
-
-        const destinationPath = join(resolvedOutDir, 'global', relForGlobal);
-        mkdirSync(dirname(destinationPath), { recursive: true });
-        try {
-          copyFileSync(absPath, destinationPath);
-        } catch {}
+          copyFileSync(absPath, destPath);
+        } catch {
+          /* noop */
+        }
       }
     },
   };
 }
 
+/* ============================================================================
+ * Plugin: Copy **all non-code** assets under `src/` with the same routing
+ * ==========================================================================
+ */
+
 /**
- * Mirror everything under `dist/components/**` to `./components/**` (project root),
- * then delete the originals and prune empty directories. Only runs when `enabled`.
+ * Copies anything under `src/` that is **not** a code/template file into
+ * either `dist/components/**` or `dist/global/**`, preserving relative paths.
+ *
+ * Excluded patterns:
+ * - Code: `*.js`, `*.scss`, `*.twig`, `*.map`
+ * - Component schemas: `*.component.(yml|yaml|json)`
+ *
+ * @param {{ srcDir: string }} opts - Options.
+ * @returns {import('vite').PluginOption}
+ */
+function copyAllSrcAssetsPlugin({ srcDir }) {
+  /** @type {string} */
+  let outDir = 'dist';
+  /** @param {string} p */
+  const posix = (p) => p.replace(/\\/g, '/');
+
+  return {
+    name: 'emulsify-copy-all-src-assets',
+    apply: 'build',
+    enforce: 'post',
+
+    /**
+     * Capture the resolved outDir.
+     * @param {import('vite').ResolvedConfig} cfg
+     */
+    configResolved(cfg) {
+      outDir = cfg.build?.outDir || 'dist';
+    },
+
+    /**
+     * Copy non-code assets for components and global areas.
+     */
+    closeBundle() {
+      /* A) Component-side assets → dist/components */
+      const componentAssets = globSync(posix(join(srcDir, 'components/**/*')), {
+        nodir: true,
+        ignore: [
+          posix(join(srcDir, 'components/**/*.js')),
+          posix(join(srcDir, 'components/**/*.scss')),
+          posix(join(srcDir, 'components/**/*.twig')),
+          posix(join(srcDir, 'components/**/*.component.@(yml|yaml|json)')),
+          posix(join(srcDir, 'components/**/*.map')),
+        ],
+      });
+
+      for (const absPath of componentAssets) {
+        const rel = posix(absPath)
+          .split(posix(srcDir) + '/')[1]
+          .replace(/^components\//, '');
+        const destPath = join(outDir, 'components', rel);
+        mkdirSync(dirname(destPath), { recursive: true });
+        try {
+          copyFileSync(absPath, destPath);
+        } catch {
+          /* noop */
+        }
+      }
+
+      /* B) Global-side assets → dist/global */
+      const globalAssets = globSync(posix(join(srcDir, '**/*')), {
+        nodir: true,
+        ignore: [
+          posix(join(srcDir, 'components/**')),
+          posix(join(srcDir, 'util/**')),
+          posix(join(srcDir, '**/*.js')),
+          posix(join(srcDir, '**/*.scss')),
+          posix(join(srcDir, '**/*.twig')),
+          posix(join(srcDir, '**/*.component.@(yml|yaml|json)')),
+          posix(join(srcDir, '**/*.map')),
+        ],
+      });
+
+      for (const absPath of globalAssets) {
+        const rel = posix(absPath).split(posix(srcDir) + '/')[1];
+        const destPath = join(outDir, 'global', rel);
+        mkdirSync(dirname(destPath), { recursive: true });
+        try {
+          copyFileSync(absPath, destPath);
+        } catch {
+          /* noop */
+        }
+      }
+    },
+  };
+}
+
+/* ============================================================================
+ * Plugin: Build a **physical** SVG spritemap at dist/assets/icons.sprite.svg
+ * ==========================================================================
+ */
+
+/**
+ * Builds a single SVG sprite file from a set of icon globs and emits it as
+ * `assets/icons.sprite.svg`. Only the options you’re using are supported:
+ *
+ * @param {{ include: string|string[], symbolId?: string }} options
+ *  - include   Glob(s) of SVG files to include in the sprite.
+ *  - symbolId  Pattern for symbol IDs; `[name]` is replaced by the file stem.
+ *
+ * @returns {import('vite').PluginOption}
+ */
+function svgSpriteFilePlugin({ include, symbolId = 'icon-[name]' }) {
+  /** @param {string|string[]} x */
+  const toArray = (x) => (Array.isArray(x) ? x : [x]).filter(Boolean);
+  /** @param {string} p */
+  const posix = (p) => p.replace(/\\/g, '/');
+
+  /** @type {string[]} */
+  let patterns = [];
+
+  return {
+    name: 'emulsify-svg-sprite-file',
+    apply: 'build',
+
+    /**
+     * Record include patterns and register files for watch (useful in --watch).
+     */
+    buildStart() {
+      patterns = toArray(include).map(posix);
+      const files = patterns.flatMap((p) => globSync(p));
+      for (const file of files) {
+        try {
+          this.addWatchFile(file);
+        } catch {
+          /* noop */
+        }
+      }
+    },
+
+    /**
+     * Concatenate all matched SVGs into a single <svg><symbol/></svg> file.
+     */
+    generateBundle() {
+      const files = patterns
+        .flatMap((p) => globSync(p))
+        .sort((a, b) => posix(a).localeCompare(posix(b)));
+
+      if (!files.length) return;
+
+      const usedIds = new Set();
+
+      /**
+       * Convert file stem to a safe ID and ensure uniqueness.
+       * @param {string} absPath
+       * @returns {string}
+       */
+      const idFor = (absPath) => {
+        const stem = basename(absPath).replace(/\.svg$/i, '');
+        const base = symbolId.replace('[name]', stem);
+        let id = base
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+        if (!usedIds.has(id)) {
+          usedIds.add(id);
+          return id;
+        }
+        let i = 2;
+        while (usedIds.has(`${id}-${i}`)) i += 1;
+        id = `${id}-${i}`;
+        usedIds.add(id);
+        return id;
+      };
+
+      /**
+       * Extract inner content & viewBox (if available) from SVG.
+       * @param {string} absPath
+       * @returns {string} <symbol>…</symbol> or empty string on error
+       */
+      const toSymbol = (absPath) => {
+        let svg = '';
+        try {
+          svg = readFileSync(absPath, 'utf8');
+        } catch {
+          return '';
+        }
+
+        const match = svg.match(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/i);
+        const inner = (match ? match[2] : svg)
+          .replace(/<\/*symbol[^>]*>/gi, '')
+          .replace(/<\/*defs[^>]*>/gi, '')
+          .trim();
+
+        const attr = match ? match[1] : '';
+        const vb = attr.match(/\bviewBox="([^"]+)"/i);
+        const viewBoxAttr = vb ? ` viewBox="${vb[1]}"` : '';
+
+        return `<symbol id="${idFor(absPath)}"${viewBoxAttr}>${inner}</symbol>`;
+      };
+
+      const symbols = files.map(toSymbol).filter(Boolean);
+
+      const sprite = [
+        '<svg xmlns="http://www.w3.org/2000/svg" style="display:none">',
+        ...symbols,
+        '</svg>\n',
+      ].join('\n');
+
+      this.emitFile({
+        type: 'asset',
+        fileName: 'assets/icons.sprite.svg',
+        source: sprite,
+      });
+    },
+  };
+}
+
+/* ============================================================================
+ * Plugin: Mirror `dist/components/**` → `./components/**` (Drupal only)
+ * ==========================================================================
+ */
+
+/**
+ * Mirrors built component files to the project root’s `./components/` directory
+ * when `enabled` is true (i.e., `env.platform === 'drupal'` and `src/` exists).
+ * After copying, the originals in `dist/components/` are deleted and any now-empty
+ * folders are pruned for a clean output dir.
  *
  * @param {{ enabled: boolean, projectDir: string }} opts
- * @returns {import('vite').PluginOption} Vite plugin
+ * @returns {import('vite').PluginOption}
  */
-function mirrorComponentsPlugin({ enabled, projectDir }) {
+function mirrorComponentsToRoot({ enabled, projectDir }) {
   /** @type {string} */
-  let resolvedOutDir = 'dist';
+  let outDir = 'dist';
 
   return {
     name: 'emulsify-mirror-components-to-root',
@@ -236,74 +467,75 @@ function mirrorComponentsPlugin({ enabled, projectDir }) {
     enforce: 'post',
 
     /**
-     * Capture outDir once Vite has finalized it.
+     * Discover the final outDir chosen by Vite.
      * @param {import('vite').ResolvedConfig} cfg
      */
     configResolved(cfg) {
-      resolvedOutDir = cfg.build?.outDir || 'dist';
+      outDir = cfg.build?.outDir || 'dist';
     },
 
     /**
-     * Mirror → delete from dist → prune empty dirs.
+     * Copy → delete → prune flow.
      */
     closeBundle() {
       if (!enabled) return;
 
-      const distComponentsRoot = join(resolvedOutDir, 'components');
-      if (!existsSync(distComponentsRoot)) return;
+      const distComponents = join(outDir, 'components');
+      if (!existsSync(distComponents)) return;
 
-      const filesInDistComponents = walkAllFiles(distComponentsRoot);
+      for (const srcFile of walkFiles(distComponents)) {
+        // e.g. "components/accordion/accordion.twig"
+        const relFromOutDir = srcFile.slice(join(outDir, '').length);
+        const destFile = join(projectDir, relFromOutDir); // "./components/..."
 
-      for (const sourcePath of filesInDistComponents) {
-        // Convert "dist/..." → relative (e.g., "components/accordion/accordion.twig").
-        const relativeFromOutDir = sourcePath.slice(
-          (join(resolvedOutDir, '')).length,
-        );
-
-        // Final destination under the project root: "./components/...".
-        const finalDestination = join(projectDir, relativeFromOutDir);
-
-        mkdirSync(dirname(finalDestination), { recursive: true });
-
+        mkdirSync(dirname(destFile), { recursive: true });
         try {
-          copyFileSync(sourcePath, finalDestination);
+          copyFileSync(srcFile, destFile);
 
-          // Delete original, then prune any empty parent folders inside dist/components.
           try {
-            unlinkSync(sourcePath);
-            pruneEmptyDirectoriesUpTo(dirname(sourcePath), distComponentsRoot);
+            unlinkSync(srcFile);
+            pruneEmptyDirsUpTo(dirname(srcFile), distComponents);
           } catch {
-            // ignore unlink/prune failures
+            /* noop */
           }
-        } catch (err) {
+        } catch (e) {
+          // eslint-disable-next-line no-console
           console.warn(
-            `Mirror copy failed for ${relativeFromOutDir}: ${err?.message || err}`,
+            `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`,
           );
         }
       }
 
-      // Optionally remove `dist/components` itself if now empty.
-      pruneEmptyDirectoriesUpTo(distComponentsRoot, resolvedOutDir);
+      // Clean up the root `dist/components` if it's now empty.
+      pruneEmptyDirsUpTo(distComponents, outDir);
     },
   };
 }
 
+/* ============================================================================
+ * Factory: assemble all plugins for this environment
+ * ==========================================================================
+ */
+
 /**
- * Create the Vite plugins array based on environment.
+ * Create the Vite plugin array used by Emulsify builds.
  *
  * @param {{
- *   projectDir: string,
- *   isDrupal: boolean,
- *   srcDir: string,
- *   srcExists: boolean
- * }} env - Environment object.
- * @returns {import('vite').PluginOption[]} Vite plugins array.
+ *   projectDir: string,  // Absolute project root
+ *   platform: string,    // e.g., 'drupal' or 'generic'
+ *   srcDir: string,      // Absolute path to the preferred source dir (src or components)
+ *   srcExists: boolean   // True if `src/` exists
+ * }} env
+ * @returns {import('vite').PluginOption[]} Ordered plugins for Vite
  */
 export function makePlugins(env) {
-  const { projectDir, isDrupal, srcDir, srcExists } = env;
+  const { projectDir, platform, srcDir, srcExists } = env;
 
   return [
-    // Enable Twig templating in preview/dev flows (namespaces optional).
+    /**
+     * Twig plugin for dev/preview (Storybook/interactive dev).
+     * Namespaces are additive and point at **source** locations.
+     */
     twig({
       framework: 'react',
       namespaces: {
@@ -313,16 +545,36 @@ export function makePlugins(env) {
       },
     }),
 
-    // YAML support for tokens/configs.
+    /** Allow importing YAML files (tokens/config). */
     yml(),
 
-    // Optional SVG sprite support.
-    svgSprite({ include: ['assets/icons/**/*.svg'] }),
-
-    // 1) Copy Twig and related component metadata into dist/ with correct routing.
+    /** Copy Twig templates + component metadata with the same routing as CSS/JS. */
     copyTwigFilesPlugin({ srcDir }),
 
-    // 2) Mirror dist/components → ./components for Drupal when src/ exists.
-    mirrorComponentsPlugin({ enabled: srcExists && isDrupal, projectDir }),
+    /** Copy every non-code asset under src/ (fonts/images/audio/docs…) with same routing. */
+    copyAllSrcAssetsPlugin({ srcDir }),
+
+    /**
+     * Build a **physical** SVG sprite (single file).
+     * Note: only `include` (globs) and `symbolId` are supported here.
+     */
+    svgSpriteFilePlugin({
+      include: [
+        `${projectDir.replace(/\\/g, '/')}/assets/icons/**/*.svg`,
+        'assets/icons/**/*.svg',
+        'src/assets/icons/**/*.svg',
+        'src/**/icons/**/*.svg',
+      ],
+      symbolId: 'icon-[name]',
+    }),
+
+    /**
+     * For Drupal projects with a `src/` folder, mirror `dist/components/**` → `./components/**`.
+     * This matches expected Drupal SDC locations at runtime.
+     */
+    mirrorComponentsToRoot({
+      enabled: srcExists && platform === 'drupal',
+      projectDir,
+    }),
   ];
 }
