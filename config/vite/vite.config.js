@@ -17,8 +17,7 @@ const patterns = makePatterns({
   srcExists: env.srcExists,
   isDrupal: env.platform === 'drupal',
   SDC: env.SDC,
-  legacyVariant: env.legacyVariant,
-  variantRoots: env.variantRoots,
+  // structureOverrides/structureRoots are consumed in buildInputs
 });
 
 const entries = buildInputs(
@@ -28,8 +27,8 @@ const entries = buildInputs(
     srcExists: env.srcExists,
     isDrupal: env.platform === 'drupal',
     SDC: env.SDC,
-    legacyVariant: env.legacyVariant,
-    variantRoots: env.variantRoots,
+    structureOverrides: env.structureOverrides,
+    structureRoots: env.structureRoots,
   },
   patterns,
 );

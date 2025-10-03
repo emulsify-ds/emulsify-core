@@ -10,8 +10,8 @@
  *  - If `env.platform === 'drupal'` and a `src/` dir exists, mirrors `dist/components/**`
  *    to `./components/**` and prunes any empty folders left behind.
  *
- * Legacy Variant behavior:
- *  - When `env.legacyVariant === true`, we **skip** copying Twig and assets, and also
+ * Component Structure Overrides behavior:
+ *  - When `env.structureOverrides === true`, we **skip** copying Twig and assets, and also
  *    **skip** mirroring. (Only JS/CSS compile is needed.)
  */
 
@@ -33,14 +33,17 @@ import twig from 'vite-plugin-twig-drupal';
 
 /* ============================================================================
  * Small, focused helpers
- * ==========================================================================
- */
+ * ========================================================================== */
 
-/** Is a Twig partial (filename starts with `_`)? */
+/** Determine whether a Twig file is a partial (filename starts with `_`). */
 const isPartial = (filePath) =>
   (filePath.split('/')?.pop() || '').trim().startsWith('_');
 
-/** Depth-first walk to list **all files** (no directories) under a given root. */
+/**
+ * Depth-first walk to list **all files** (no directories) under a given root.
+ * @param {string} rootDir
+ * @returns {string[]}
+ */
 const walkFiles = (rootDir) => {
   const files = [];
   const stack = [rootDir];
@@ -51,7 +54,6 @@ const walkFiles = (rootDir) => {
 
     let entryNames = [];
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       entryNames = readdirSync(currentDir);
     } catch {
       continue; // unreadable directory
@@ -60,7 +62,6 @@ const walkFiles = (rootDir) => {
     for (const name of entryNames) {
       const fullPath = join(currentDir, name);
       try {
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         const stats = statSync(fullPath);
         if (stats.isDirectory()) stack.push(fullPath);
         else files.push(fullPath);
@@ -69,13 +70,14 @@ const walkFiles = (rootDir) => {
       }
     }
   }
-
   return files;
 };
 
 /**
- * Removes empty parent directories from a start directory **up to (but not including)**
+ * Remove empty parent directories from a start directory **up to (but not including)**
  * a stopping boundary directory.
+ * @param {string} startDir
+ * @param {string} stopAtDir
  */
 const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
   const stopAbs = resolve(stopAtDir);
@@ -83,7 +85,6 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
 
   const isEmpty = (dir) => {
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       return readdirSync(dir).length === 0;
     } catch {
       return false;
@@ -94,9 +95,9 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
     if (!isEmpty(cursor)) break;
 
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       rmdirSync(cursor);
     } catch {
+      // cannot remove (in use or permissions) → stop trying here
       break;
     }
 
@@ -108,9 +109,15 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
 
 /* ============================================================================
  * Plugin: Copy Twig files (+ component metadata) using JS/CSS-like routing
- * ==========================================================================
- */
+ * ========================================================================== */
 
+/**
+ * Copy Twig templates and component metadata from `src/` to `dist/`,
+ * respecting the same routing used for JS/CSS.
+ *
+ * @param {{ srcDir: string }} opts
+ * @returns {import('vite').PluginOption}
+ */
 function copyTwigFilesPlugin({ srcDir }) {
   let outDir = 'dist';
   const posix = (p) => p.replace(/\\/g, '/');
@@ -120,23 +127,22 @@ function copyTwigFilesPlugin({ srcDir }) {
     apply: 'build',
     enforce: 'post',
 
+    /** Capture the final outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
     },
 
+    /** Perform the copying after the bundle has been written. */
     closeBundle() {
       // components/**/*.twig
       const componentTwigs = globSync(
         posix(join(srcDir, 'components/**/*.twig')),
       );
-
       for (const absPath of componentTwigs) {
         const relFromSrc = posix(absPath).split(posix(srcDir) + '/')[1]; // "components/x/y.twig"
         const withinComponents = relFromSrc.replace(/^components\//, '');
-        if (isPartial(withinComponents)) continue;
-
+        if (isPartial(withinComponents)) continue; // skip `_*.twig`
         const destPath = join(outDir, 'components', withinComponents);
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
           copyFileSync(absPath, destPath);
@@ -156,7 +162,6 @@ function copyTwigFilesPlugin({ srcDir }) {
             .split(posix(srcDir) + '/')[1]
             .replace(/^components\//, '');
           const destPath = join(outDir, 'components', rel);
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           mkdirSync(dirname(destPath), { recursive: true });
           try {
             copyFileSync(absPath, destPath);
@@ -166,7 +171,7 @@ function copyTwigFilesPlugin({ srcDir }) {
         }
       }
 
-      // global Twig → dist/global  (exclude components/, util/, and partials)
+      // global Twig: everything under src except components/, util/, and partials
       const globalTwigs = globSync(posix(join(srcDir, '**/*.twig')), {
         ignore: [
           posix(join(srcDir, 'components/**')),
@@ -178,7 +183,6 @@ function copyTwigFilesPlugin({ srcDir }) {
       for (const absPath of globalTwigs) {
         const rel = posix(absPath).split(posix(srcDir) + '/')[1];
         const destPath = join(outDir, 'global', rel);
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
           copyFileSync(absPath, destPath);
@@ -192,9 +196,17 @@ function copyTwigFilesPlugin({ srcDir }) {
 
 /* ============================================================================
  * Plugin: Copy **all non-code** assets under `src/` with the same routing
- * ==========================================================================
- */
+ * ========================================================================== */
 
+/**
+ * Copies anything in `src/` that is **not** a code/template file into
+ * either `dist/components/**` or `dist/global/**`, preserving relative paths.
+ *
+ * Excludes: .js, .scss, .twig, source maps, and `*.component.(yml|yaml|json)`.
+ *
+ * @param {{ srcDir: string }} opts
+ * @returns {import('vite').PluginOption}
+ */
 function copyAllSrcAssetsPlugin({ srcDir }) {
   let outDir = 'dist';
   const posix = (p) => p.replace(/\\/g, '/');
@@ -204,12 +216,14 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
     apply: 'build',
     enforce: 'post',
 
+    /** Capture outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
     },
 
+    /** Copy component/global assets. */
     closeBundle() {
-      // A) Component-side assets → dist/components
+      // Component-side assets → dist/components
       const componentAssets = globSync(posix(join(srcDir, 'components/**/*')), {
         nodir: true,
         ignore: [
@@ -220,13 +234,11 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
           posix(join(srcDir, 'components/**/*.map')),
         ],
       });
-
       for (const absPath of componentAssets) {
         const rel = posix(absPath)
           .split(posix(srcDir) + '/')[1]
           .replace(/^components\//, '');
         const destPath = join(outDir, 'components', rel);
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
           copyFileSync(absPath, destPath);
@@ -235,7 +247,7 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
         }
       }
 
-      // B) Global-side assets → dist/global
+      // Global-side assets → dist/global
       const globalAssets = globSync(posix(join(srcDir, '**/*')), {
         nodir: true,
         ignore: [
@@ -248,11 +260,9 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
           posix(join(srcDir, '**/*.map')),
         ],
       });
-
       for (const absPath of globalAssets) {
         const rel = posix(absPath).split(posix(srcDir) + '/')[1];
         const destPath = join(outDir, 'global', rel);
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
           copyFileSync(absPath, destPath);
@@ -266,31 +276,40 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
 
 /* ============================================================================
  * Plugin: Build a **physical** SVG spritemap at dist/assets/icons.sprite.svg
- * ==========================================================================
- */
+ * ========================================================================== */
 
+/**
+ * Builds a single SVG sprite file from a set of icon globs and emits it as
+ * `assets/icons.sprite.svg`. Only the options you’re using are supported:
+ *
+ * @param {{ include: string|string[], symbolId?: string }} options
+ * @returns {import('vite').PluginOption}
+ */
 function svgSpriteFilePlugin({ include, symbolId = 'icon-[name]' }) {
   const toArray = (x) => (Array.isArray(x) ? x : [x]).filter(Boolean);
   const posix = (p) => p.replace(/\\/g, '/');
 
+  /** @type {string[]} */
   let patterns = [];
 
   return {
     name: 'emulsify-svg-sprite-file',
     apply: 'build',
 
+    /** Register icons for watch. */
     buildStart() {
       patterns = toArray(include).map(posix);
       const files = patterns.flatMap((p) => globSync(p));
-      for (const file of files) {
+      for (const f of files) {
         try {
-          this.addWatchFile(file);
+          this.addWatchFile(f);
         } catch {
           /* noop */
         }
       }
     },
 
+    /** Concatenate all matched SVGs into a single sprite. */
     generateBundle() {
       const files = patterns
         .flatMap((p) => globSync(p))
@@ -298,50 +317,44 @@ function svgSpriteFilePlugin({ include, symbolId = 'icon-[name]' }) {
 
       if (!files.length) return;
 
-      const usedIds = new Set();
-
-      const idFor = (absPath) => {
-        const stem = basename(absPath).replace(/\.svg$/i, '');
-        const base = symbolId.replace('[name]', stem);
-        let id = base
+      const used = new Set();
+      const makeId = (abs) => {
+        const stem = basename(abs).replace(/\.svg$/i, '');
+        let id = symbolId
+          .replace('[name]', stem)
           .toLowerCase()
           .replace(/[^a-z0-9_-]+/g, '-')
           .replace(/^-+|-+$/g, '');
-
-        if (!usedIds.has(id)) {
-          usedIds.add(id);
+        if (!used.has(id)) {
+          used.add(id);
           return id;
         }
         let i = 2;
-        while (usedIds.has(`${id}-${i}`)) i += 1;
+        while (used.has(`${id}-${i}`)) i += 1;
         id = `${id}-${i}`;
-        usedIds.add(id);
+        used.add(id);
         return id;
       };
 
-      const toSymbol = (absPath) => {
-        let svg = '';
-        try {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
-          svg = readFileSync(absPath, 'utf8');
-        } catch {
-          return '';
-        }
-
-        const match = svg.match(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/i);
-        const inner = (match ? match[2] : svg)
-          .replace(/<\/*symbol[^>]*>/gi, '')
-          .replace(/<\/*defs[^>]*>/gi, '')
-          .trim();
-
-        const attr = match ? match[1] : '';
-        const vb = attr.match(/\bviewBox="([^"]+)"/i);
-        const viewBoxAttr = vb ? ` viewBox="${vb[1]}"` : '';
-
-        return `<symbol id="${idFor(absPath)}"${viewBoxAttr}>${inner}</symbol>`;
-      };
-
-      const symbols = files.map(toSymbol).filter(Boolean);
+      const symbols = files
+        .map((abs) => {
+          let content = '';
+          try {
+            content = readFileSync(abs, 'utf8');
+          } catch {
+            return '';
+          }
+          const m = content.match(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/i);
+          const inner = (m ? m[2] : content)
+            .replace(/<\/*symbol[^>]*>/gi, '')
+            .replace(/<\/*defs[^>]*>/gi, '')
+            .trim();
+          const attrs = m ? m[1] : '';
+          const vb = attrs.match(/\bviewBox="([^"]+)"/i);
+          const viewBoxAttr = vb ? ` viewBox="${vb[1]}"` : '';
+          return `<symbol id="${makeId(abs)}"${viewBoxAttr}>${inner}</symbol>`;
+        })
+        .filter(Boolean);
 
       const sprite = [
         '<svg xmlns="http://www.w3.org/2000/svg" style="display:none">',
@@ -360,53 +373,48 @@ function svgSpriteFilePlugin({ include, symbolId = 'icon-[name]' }) {
 
 /* ============================================================================
  * Plugin: Mirror `dist/components/**` → `./components/**` (Drupal only)
- * ==========================================================================
- */
+ * ========================================================================== */
 
+/**
+ * Mirrors built component files to the project root’s `./components/` directory
+ * when `enabled` is true (for Drupal with `src/` present). After copying, the originals
+ * in `dist/components/` are deleted and any now-empty folders are pruned.
+ *
+ * @param {{ enabled: boolean, projectDir: string }} opts
+ * @returns {import('vite').PluginOption}
+ */
 function mirrorComponentsToRoot({ enabled, projectDir }) {
   let outDir = 'dist';
-
   return {
     name: 'emulsify-mirror-components-to-root',
     apply: 'build',
     enforce: 'post',
-
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
     },
-
     closeBundle() {
       if (!enabled) return;
-
       const distComponents = join(outDir, 'components');
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       if (!existsSync(distComponents)) return;
 
       for (const srcFile of walkFiles(distComponents)) {
-        const relFromOutDir = srcFile.slice(join(outDir, '').length); // "components/.."
-        const destFile = join(projectDir, relFromOutDir); // "./components/..."
-
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
+        const relFromOutDir = srcFile.slice(join(outDir, '').length);
+        const destFile = join(projectDir, relFromOutDir);
         mkdirSync(dirname(destFile), { recursive: true });
         try {
           copyFileSync(srcFile, destFile);
-
           try {
-            // eslint-disable-next-line security/detect-non-literal-fs-filename
             unlinkSync(srcFile);
             pruneEmptyDirsUpTo(dirname(srcFile), distComponents);
           } catch {
             /* noop */
           }
         } catch (e) {
-          // Keep console here; useful during site builds.
-
           console.warn(
             `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`,
           );
         }
       }
-
       pruneEmptyDirsUpTo(distComponents, outDir);
     },
   };
@@ -414,23 +422,22 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
 
 /* ============================================================================
  * Factory: assemble all plugins for this environment
- * ==========================================================================
- */
+ * ========================================================================== */
 
 /**
  * Create the Vite plugin array used by Emulsify builds.
  *
  * @param {{
- *   projectDir: string,  // Absolute project root
- *   platform: string,    // e.g., 'drupal' or 'generic'
- *   srcDir: string,      // Absolute path to the preferred source dir (src or components)
- *   srcExists: boolean,  // True if `src/` exists
- *   legacyVariant?: boolean
+ *   projectDir: string,
+ *   platform: string,
+ *   srcDir: string,
+ *   srcExists: boolean,
+ *   structureOverrides?: boolean
  * }} env
- * @returns {import('vite').PluginOption[]} Ordered plugins for Vite
+ * @returns {import('vite').PluginOption[]}
  */
 export function makePlugins(env) {
-  const { projectDir, platform, srcDir, srcExists, legacyVariant } = env;
+  const { projectDir, platform, srcDir, srcExists, structureOverrides } = env;
 
   const basePlugins = [
     // Twig in dev/preview
@@ -450,30 +457,18 @@ export function makePlugins(env) {
     yml(),
   ];
 
-  // If legacy variant is active, skip Twig/assets copying + mirroring.
-  if (legacyVariant) {
-    return [
-      ...basePlugins,
-      svgSpriteFilePlugin({
-        include: [
-          `${projectDir.replace(/\\/g, '/')}/assets/icons/**/*.svg`,
-          'assets/icons/**/*.svg',
-          'src/assets/icons/**/*.svg',
-          'src/**/icons/**/*.svg',
-        ],
-        symbolId: 'icon-[name]',
-      }),
-    ];
+  // If component structure overrides are in play, skip copy/mirror plugins.
+  if (structureOverrides) {
+    return basePlugins;
   }
 
-  // Modern behavior (unchanged from before).
   return [
     ...basePlugins,
 
     // Copy Twig & metadata
     copyTwigFilesPlugin({ srcDir }),
 
-    // Copy all non-code assets under src/ with correct routing
+    // Copy every non-code asset under src/ (fonts/images/audio/docs…) with same routing.
     copyAllSrcAssetsPlugin({ srcDir }),
 
     // Emit a physical `dist/assets/icons.sprite.svg`
@@ -487,7 +482,7 @@ export function makePlugins(env) {
       symbolId: 'icon-[name]',
     }),
 
-    // Mirror to ./components for Drupal only
+    // For Drupal projects with a `src/` folder, mirror `dist/components/**` → `./components/**`.
     mirrorComponentsToRoot({
       enabled: srcExists && platform === 'drupal',
       projectDir,
