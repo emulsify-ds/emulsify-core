@@ -18,7 +18,7 @@
  */
 
 import fs from 'fs';
-import { resolve, sep, relative, dirname } from 'path';
+import { resolve, sep } from 'path';
 import { globSync } from 'glob';
 
 /** Normalize filesystem paths to POSIX for Rollup keys. */
@@ -105,8 +105,6 @@ export function buildInputs(ctx, patterns) {
 
   /** @type {Record<string, string>} */
   const inputs = {};
-  const SRC_POSIX = toPosix(srcDir);
-  const PROJ_POSIX = toPosix(projectDir);
 
   /**
    * Add a key/file pair into the inputs map safely.
@@ -137,9 +135,6 @@ export function buildInputs(ctx, patterns) {
     }
     return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
   };
-
-  const useComponentRoot =
-    srcExists && isDrupal ? 'components' : 'dist/components';
 
   /* ------------------------------------------------------------------------ */
   /* LEGACY VARIANT BRANCH                                                    */
