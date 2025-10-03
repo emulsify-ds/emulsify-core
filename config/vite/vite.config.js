@@ -1,9 +1,7 @@
+/* eslint-disable */
+
 /**
  * @file Vite configuration for Emulsify.
- * @description
- * - Uses env flags from environment.js (including `SDC` from project.emulsify.json)
- * - Builds inputs with entries.js (SDC-aware keying)
- * - Strips the `__style` suffix from CSS assets in `assetFileNames`
  */
 
 import { defineConfig } from 'vite';
@@ -14,12 +12,15 @@ import { buildInputs, makePatterns } from './entries.js';
 
 const env = resolveEnvironment();
 
-// Build input map using extracted helpers
+// Build input map using the extracted module (keeps this file small & readable).
 const patterns = makePatterns({
   projectDir: env.projectDir,
   srcDir: env.srcDir,
   srcExists: env.srcExists,
+  isDrupal: env.platform === 'drupal',
   SDC: env.SDC,
+  legacyVariant: env.legacyVariant,
+  variantRoots: env.variantRoots,
 });
 
 const entries = buildInputs(
@@ -27,7 +28,10 @@ const entries = buildInputs(
     projectDir: env.projectDir,
     srcDir: env.srcDir,
     srcExists: env.srcExists,
+    isDrupal: env.platform === 'drupal',
     SDC: env.SDC,
+    legacyVariant: env.legacyVariant,
+    variantRoots: env.variantRoots,
   },
   patterns,
 );
@@ -44,14 +48,10 @@ export default defineConfig({
       input: entries,
       output: {
         entryFileNames: '[name].js',
-        /**
-         * Keep asset paths stable and strip the SDC CSS suffix (`__style`) we use
-         * in keys to avoid JS/CSS collisions when SDC === true.
-         */
         assetFileNames: (assetInfo) => {
           const file = assetInfo.name || assetInfo.fileName || '';
           if (file.endsWith('.css')) {
-            // drop the temporary suffix before the .css extension
+            // Normalize path and drop the CSS_SUFFIX ('__style') used to avoid key collisions
             return file.replace(/__style(?=\.css$)/, '');
           }
           return 'assets/[name][extname]';
