@@ -1,155 +1,163 @@
 /**
  * @file Vite configuration for Emulsify.
- * @description
- * - Resolves the project environment (paths, platform flags).
- * - Builds a Rollup input map keyed to desired output paths.
- * - Configures Vite/Rollup outputs so files land using the `[name]` key.
- * - Normalizes generated CSS filenames by stripping a helper suffix (`__style`).
+ * @see https://vite.dev/config/
+ *
+ * @overview
+ * This configuration wires Emulsify’s Vite build in a few clear steps:
+ *
+ *  1. Resolve the build **environment** (paths, platform flags) via {@link resolveEnvironment}.
+ *  2. Create the **glob patterns** used to discover inputs with {@link makePatterns}.
+ *  3. Build the Rollup/Vite **entries map** with {@link buildInputs}.
+ *  4. Load optional **project extensions** (extra plugins and/or a config patcher)
+ *     from `.config/emulsify-core/vite/plugins.*` via {@link loadProjectExtensions}.
+ *  5. Assemble a base Vite config and (optionally) let the project **extend/override**
+ *     parts of it by returning a patch object from `extendConfig(...)`.
+ *
+ * Notes:
+ * - CSS & JS sourcemaps are enabled.
+ * - CSS assets keep their path and drop the internal `__style` suffix if present.
+ * - The optional project patch uses `mergeConfig`. If your runtime does not already
+ *   provide it in scope, add: `import { defineConfig, mergeConfig } from 'vite';`
  */
 
-import { defineConfig } from 'vite';
+// import mergeConfig alongside defineConfig:
+import { defineConfig, mergeConfig } from 'vite';
 
 import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
 import { buildInputs, makePatterns } from './entries.js';
+import { loadProjectExtensions } from './project-extensions.js';
 
-/**
- * @typedef {Object} EmulsifyEnvironment
- * @property {string} projectDir  Absolute project root.
- * @property {string} srcDir      Absolute path to the source directory (usually `src/`).
- * @property {boolean} srcExists  Whether `src/` exists (affects routing).
- * @property {boolean} isDrupal   Whether the target platform is Drupal.
- * @property {boolean} SDC        Single-Directory Components mode toggle.
- */
+export default defineConfig(async () => {
+  /**
+   * Environment details for this build (project paths, platform, flags).
+   * @typedef {Object} EmulsifyEnv
+   * @property {string} projectDir - Absolute project root.
+   * @property {string} srcDir - Absolute source directory (`src/` if present, otherwise `components/`).
+   * @property {boolean} srcExists - Whether `src/` exists in the project.
+   * @property {string} platform - Deployment platform (e.g., `"drupal"`).
+   * @property {boolean} [SDC] - Single Directory Components toggle, if available.
+   * @property {boolean} [structureOverrides] - Whether component structure overrides are enabled.
+   * @property {Record<string,string[]>} [structureRoots] - Override roots map, if provided.
+   */
 
-/** @type {EmulsifyEnvironment} */
-const env = resolveEnvironment();
+  /** @type {EmulsifyEnv} */
+  const env = resolveEnvironment();
 
-/**
- * Build the set of glob patterns used to discover entry files.
- * Keeping discovery logic isolated makes this file small and readable.
- */
-const patterns = makePatterns({
-  projectDir: env.projectDir,
-  srcDir: env.srcDir,
-  srcExists: env.srcExists,
-  isDrupal: env.isDrupal,
-  SDC: env.SDC,
-});
-
-/**
- * Construct a Rollup input map where:
- *  - keys are *output* path stems (used as `[name]`)
- *  - values are absolute input file paths
- * This lets us control final output locations strictly via `[name]`.
- * @type {Record<string, string>}
- */
-const entries = buildInputs(
-  {
+  // ---------------------------------------------------------------------------
+  // 1) Build input discovery patterns (kept separate for readability/testing).
+  //    These honor platform & flags like SDC and structure overrides.
+  // ---------------------------------------------------------------------------
+  /** @type {ReturnType<typeof makePatterns>} */
+  const patterns = makePatterns({
     projectDir: env.projectDir,
     srcDir: env.srcDir,
     srcExists: env.srcExists,
-    isDrupal: env.isDrupal,
+    isDrupal: env.platform === 'drupal',
     SDC: env.SDC,
-  },
-  patterns,
-);
+    structureOverrides: env.structureOverrides,
+    structureRoots: env.structureRoots,
+  });
 
-export default defineConfig({
+  // ---------------------------------------------------------------------------
+  // 2) Build the Rollup/Vite entry map.
+  //    Keys encode output paths; values are absolute source file paths.
+  // ---------------------------------------------------------------------------
+  /** @type {Record<string, string>} */
+  const entries = buildInputs(
+    {
+      projectDir: env.projectDir,
+      srcDir: env.srcDir,
+      srcExists: env.srcExists,
+      isDrupal: env.platform === 'drupal',
+      SDC: env.SDC,
+      structureOverrides: env.structureOverrides,
+      structureRoots: env.structureRoots,
+    },
+    patterns,
+  );
+
+  // ---------------------------------------------------------------------------
+  // 3) Load project-provided extensions:
+  //    - `projectPlugins`: extra Vite plugins to append
+  //    - `extendConfig(base, { env })`: returns a partial config to merge
+  // ---------------------------------------------------------------------------
   /**
-   * Root is the current working directory. Adjust if you run Vite
-   * from a different location than the project root.
+   * @type {{
+   *   projectPlugins: import('vite').PluginOption[],
+   *   extendConfig?: (base: import('vite').UserConfig, ctx: { env: EmulsifyEnv }) => import('vite').UserConfig
+   * }}
    */
-  root: process.cwd(),
+  const { projectPlugins, extendConfig } = await loadProjectExtensions({ env });
 
-  /**
-   * Plugins (Twig, YAML, sprites, custom copy/mirror) are built
-   * from the environment so they can branch on `srcExists`, `isDrupal`, etc.
-   */
-  plugins: makePlugins(env),
+  // ---------------------------------------------------------------------------
+  // 4) Assemble the base Vite config (kept minimal & readable on purpose).
+  //    Project extensions (if any) are applied *after* this via `extendConfig`.
+  // ---------------------------------------------------------------------------
+  /** @type {import('vite').UserConfig} */
+  const base = {
+    // Treat the current working directory as the root.
+    root: process.cwd(),
 
-  /**
-   * Generate CSS source maps in dev to aid debugging.
-   */
-  css: {
-    devSourcemap: true,
-  },
+    // Core plugin set + project-provided plugins (if any).
+    plugins: [...makePlugins(env), ...projectPlugins],
 
-  /**
-   * Vite build configuration.
-   */
-  build: {
-    /**
-     * Whether to empty the output directory before building.
-     * Set to `true` if `dist/` contains only build artifacts.
-     * Leave `false` if you manually place static files there.
-     */
-    emptyOutDir: true,
+    // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
+    css: { devSourcemap: true },
 
-    /**
-     * Output directory. Trailing slash is accepted by Vite; keep consistent
-     * with any custom plugins that read this value.
-     */
-    outDir: 'dist/',
+    build: {
+      // Clean the output directory before building.
+      emptyOutDir: true,
 
-    /** Emit source maps for JS/CSS. */
-    sourcemap: true,
+      // All outputs are written into ./dist/
+      outDir: 'dist/',
 
-    /**
-     * Rollup-specific options.
-     * We pass the generated `entries` map and control filenames
-     * using `[name]` which is derived from `entries` keys.
-     */
-    rollupOptions: {
-      /**
-       * Keyed input map: { [name]: absolutePath }
-       */
-      input: entries,
+      // Emit production sourcemaps as well.
+      sourcemap: true,
 
-      /**
-       * Output naming.
-       * - JS: `[name].js` (placed exactly according to the key path)
-       * - CSS: `[name].css`, with an extra step to drop the `__style` suffix
-       *        used to avoid name collisions in SDC mode.
-       */
-      output: {
-        entryFileNames: '[name].js',
+      rollupOptions: {
+        // Multi-entry input map constructed above.
+        input: entries,
 
-        /**
-         * Customize asset names:
-         * - Place CSS and CSS sourcemaps next to the CSS file (respect the keyed path).
-         * - Strip the __style suffix we used at the key level to avoid name collisions.
-         * - Send all other assets to a stable bucket.
-         *
-         * @param {import('rollup').PreRenderedAsset} assetInfo
-         * @returns {string}
-         */
-        assetFileNames: (assetInfo) => {
-          const file = assetInfo.name || assetInfo.fileName || '';
+        // Keep file names deterministic and strip the internal CSS key suffix.
+        output: {
+          entryFileNames: '[name].js',
 
-          // Keep CSS and CSS sourcemaps next to the CSS they belong to.
-          if (file.endsWith('.css') || file.endsWith('.map')) {
-            // Drop the helper suffix for both foo__style.css and foo__style.css.map
-            return file.replace(/__style(?=\.css(\.map)?$)/, '');
-          }
-
-          // Everything else (images, fonts, etc.) goes under dist/assets/
-          return 'assets/[name][extname]';
+          /**
+           * Decide asset filenames. Normalizes `.css` paths and removes the `__style`
+           * suffix used to avoid name collisions in entry keys.
+           * @param {import('rollup').PreRenderedAsset} assetInfo
+           * @returns {string}
+           */
+          assetFileNames: (assetInfo) => {
+            const file = assetInfo.name || assetInfo.fileName || '';
+            if (file.endsWith('.css')) {
+              // Normalize path and drop the CSS_SUFFIX ('__style') used to avoid key collisions
+              return file.replace(/__style(?=\.css$)/, '');
+            }
+            return 'assets/[name][extname]';
+          },
         },
       },
     },
-  },
 
-  /**
-   * Dev server configuration.
-   * NOTE: This block belongs at the top level (not inside `build`).
-   */
-  server: {
-    /**
-     * File watching tweaks.
-     * Set `usePolling: true` with an `interval` if you’re on Docker/WSL/NFS
-     * and native FS events are unreliable.
-     */
-    watch: { usePolling: false },
-  },
+    // Dev server tweaks; disable polling by default for performance.
+    server: {
+      watch: { usePolling: false },
+    },
+  };
+
+  // ---------------------------------------------------------------------------
+  // 5) Allow the project to patch the final Vite config.
+  //    If `extendConfig` returns a partial object, merge it into `base`.
+  //    (Requires `mergeConfig` from 'vite'; if it isn't imported, add it.)
+  // ---------------------------------------------------------------------------
+  /** @type {import('vite').UserConfig} */
+  const patched =
+    typeof extendConfig === 'function'
+      ? // @ts-expect-error: ensure `mergeConfig` is imported if not already in scope
+        mergeConfig(base, extendConfig(base, { env }) || {})
+      : base;
+
+  return patched;
 });
