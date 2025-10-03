@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * @file Entries map builder for Vite/Rollup.
  *
@@ -65,7 +63,10 @@ export function makePatterns(ctx) {
 
   // JS
   const BaseJsPattern = srcExists
-    ? resolve(srcDir, '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js')
+    ? resolve(
+        srcDir,
+        '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
+      )
     : '';
   const ComponentJsPattern = srcExists
     ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
@@ -122,7 +123,9 @@ export function buildInputs(ctx, patterns) {
     const posixAbs = toPosix(abs);
     const posixBase = toPosix(baseAbs).replace(/\/$/, '');
     const needle = `${posixBase}/`;
-    return posixAbs.startsWith(needle) ? posixAbs.slice(needle.length) : posixAbs;
+    return posixAbs.startsWith(needle)
+      ? posixAbs.slice(needle.length)
+      : posixAbs;
   };
 
   const insertBucket = (rel, bucket, sdc) => {
@@ -135,7 +138,8 @@ export function buildInputs(ctx, patterns) {
     return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
   };
 
-  const useComponentRoot = (srcExists && isDrupal) ? 'components' : 'dist/components';
+  const useComponentRoot =
+    srcExists && isDrupal ? 'components' : 'dist/components';
 
   /* ------------------------------------------------------------------------ */
   /* LEGACY VARIANT BRANCH                                                    */
@@ -147,7 +151,10 @@ export function buildInputs(ctx, patterns) {
     const storybookScss = [];
 
     for (const rootAbs of variantRoots) {
-      const jsGlob = resolve(rootAbs, '**/!(*.stories|*.component|*.min|*.test).js');
+      const jsGlob = resolve(
+        rootAbs,
+        '**/!(*.stories|*.component|*.min|*.test).js',
+      );
       const scssGlob = resolve(rootAbs, '**/!(_*|cl-*|sb-*).scss');
       const clSbGlob = resolve(rootAbs, '**/*{cl-*,sb-*}.scss');
 
@@ -214,7 +221,10 @@ export function buildInputs(ctx, patterns) {
   for (const file of globSync(toPosix(ComponentJsPattern))) {
     const posix = toPosix(file);
     const idx = posix.indexOf('/components/');
-    const after = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFrom(file, srcDir);
+    const after =
+      idx !== -1
+        ? posix.slice(idx + '/components/'.length)
+        : relFrom(file, srcDir);
     const key = `components/${insertBucket(`components/${after}`, 'js', SDC).replace(/^components\//, '')}`;
     add(key, file);
   }
@@ -232,7 +242,10 @@ export function buildInputs(ctx, patterns) {
   for (const file of globSync(toPosix(ComponentScssPattern))) {
     const posix = toPosix(file);
     const idx = posix.indexOf('/components/');
-    const after = idx !== -1 ? posix.slice(idx + '/components/'.length) : relFrom(file, srcDir);
+    const after =
+      idx !== -1
+        ? posix.slice(idx + '/components/'.length)
+        : relFrom(file, srcDir);
     const key = `components/${insertBucket(`components/${after}`, 'css', SDC).replace(/^components\//, '')}`;
     add(key, file);
   }
@@ -254,12 +267,26 @@ export function buildInputs(ctx, patterns) {
  * @param {boolean} legacyVariant
  * @param {string[]} [variantRoots]
  */
-export function buildInputsFromProject(projectDir, isDrupal = false, SDC = false, legacyVariant = false, variantRoots = []) {
+export function buildInputsFromProject(
+  projectDir,
+  isDrupal = false,
+  SDC = false,
+  legacyVariant = false,
+  variantRoots = [],
+) {
   const srcPath = resolve(projectDir, 'src');
   const srcExists = fs.existsSync(srcPath);
   const srcDir = srcExists ? srcPath : resolve(projectDir, 'components');
 
-  const ctx = { projectDir, srcDir, srcExists, isDrupal, SDC, legacyVariant, variantRoots };
+  const ctx = {
+    projectDir,
+    srcDir,
+    srcExists,
+    isDrupal,
+    SDC,
+    legacyVariant,
+    variantRoots,
+  };
   const patterns = makePatterns(ctx);
   return buildInputs(ctx, patterns);
 }

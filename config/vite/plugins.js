@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * @file Vite plugins factory for Emulsify.
  *
@@ -141,7 +139,6 @@ function copyTwigFilesPlugin({ srcDir }) {
         // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           copyFileSync(absPath, destPath);
         } catch {
           /* noop */
@@ -162,7 +159,6 @@ function copyTwigFilesPlugin({ srcDir }) {
           // eslint-disable-next-line security/detect-non-literal-fs-filename
           mkdirSync(dirname(destPath), { recursive: true });
           try {
-            // eslint-disable-next-line security/detect-non-literal-fs-filename
             copyFileSync(absPath, destPath);
           } catch {
             /* noop */
@@ -185,7 +181,6 @@ function copyTwigFilesPlugin({ srcDir }) {
         // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           copyFileSync(absPath, destPath);
         } catch {
           /* noop */
@@ -234,7 +229,6 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
         // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           copyFileSync(absPath, destPath);
         } catch {
           /* noop */
@@ -261,7 +255,6 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
         // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destPath), { recursive: true });
         try {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           copyFileSync(absPath, destPath);
         } catch {
           /* noop */
@@ -396,7 +389,6 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
         // eslint-disable-next-line security/detect-non-literal-fs-filename
         mkdirSync(dirname(destFile), { recursive: true });
         try {
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           copyFileSync(srcFile, destFile);
 
           try {
@@ -408,8 +400,10 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
           }
         } catch (e) {
           // Keep console here; useful during site builds.
-          // eslint-disable-next-line no-console
-          console.warn(`Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`);
+
+          console.warn(
+            `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`,
+          );
         }
       }
 

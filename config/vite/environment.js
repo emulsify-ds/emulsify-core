@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * @file Environment resolution for Emulsify + Vite.
  *
@@ -26,7 +24,8 @@ import { resolve, normalize, sep } from 'path';
 function coerceToProjectPath(projectDir, candidate) {
   const absProject = resolve(projectDir);
   const absCandidate = resolve(projectDir, candidate);
-  const inProject = absCandidate.startsWith(absProject + sep) || absCandidate === absProject;
+  const inProject =
+    absCandidate.startsWith(absProject + sep) || absCandidate === absProject;
   return inProject ? absCandidate : null;
 }
 
@@ -89,7 +88,10 @@ export function resolveEnvironment() {
   const srcDir = srcExists ? srcCandidate : resolve(projectDir, 'components');
 
   // Platform: ENV wins, then JSON, else default.
-  let platform = (process.env.EMULSIFY_PLATFORM || '').toString().toLowerCase().trim();
+  let platform = (process.env.EMULSIFY_PLATFORM || '')
+    .toString()
+    .toLowerCase()
+    .trim();
   const emulsifyJson = safeReadJson(projectDir, 'project.emulsify.json');
 
   if (!platform) {
@@ -97,16 +99,23 @@ export function resolveEnvironment() {
       emulsifyJson?.project?.platform ||
       emulsifyJson?.variant?.platform ||
       'generic'
-    ).toString().toLowerCase().trim();
+    )
+      .toString()
+      .toLowerCase()
+      .trim();
   }
 
   // Single Directory Components flag (if present).
   const SDC = Boolean(emulsifyJson?.project?.singleDirectoryComponents);
 
   // Legacy variant support (structureImplementations).
-  const variantRoots = Array.isArray(emulsifyJson?.variant?.structureImplementations)
+  const variantRoots = Array.isArray(
+    emulsifyJson?.variant?.structureImplementations,
+  )
     ? emulsifyJson.variant.structureImplementations
-        .map((item) => typeof item?.directory === 'string' ? item.directory : null)
+        .map((item) =>
+          typeof item?.directory === 'string' ? item.directory : null,
+        )
         .filter(Boolean)
         .map((dir) => {
           const coerced = coerceToProjectPath(projectDir, dir);
