@@ -450,6 +450,17 @@ export function makePlugins(env) {
       },
     }),
 
+    // Emit a physical `dist/assets/icons.sprite.svg`
+    svgSpriteFilePlugin({
+      include: [
+        `${projectDir.replace(/\\/g, '/')}/assets/icons/**/*.svg`,
+        'assets/icons/**/*.svg',
+        'src/assets/icons/**/*.svg',
+        'src/**/icons/**/*.svg',
+      ],
+      symbolId: 'icon-[name]',
+    }),
+
     // Sass glob imports
     sassGlobImports(),
 
@@ -470,17 +481,6 @@ export function makePlugins(env) {
 
     // Copy every non-code asset under src/ (fonts/images/audio/docs…) with same routing.
     copyAllSrcAssetsPlugin({ srcDir }),
-
-    // Emit a physical `dist/assets/icons.sprite.svg`
-    svgSpriteFilePlugin({
-      include: [
-        `${projectDir.replace(/\\/g, '/')}/assets/icons/**/*.svg`,
-        'assets/icons/**/*.svg',
-        'src/assets/icons/**/*.svg',
-        'src/**/icons/**/*.svg',
-      ],
-      symbolId: 'icon-[name]',
-    }),
 
     // For Drupal projects with a `src/` folder, mirror `dist/components/**` → `./components/**`.
     mirrorComponentsToRoot({
