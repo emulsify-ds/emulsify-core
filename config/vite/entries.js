@@ -93,15 +93,7 @@ export function makePatterns(ctx) {
  * @returns {Record<string, string>}
  */
 export function buildInputs(ctx, patterns) {
-  const {
-    projectDir,
-    srcDir,
-    srcExists,
-    isDrupal,
-    SDC,
-    legacyVariant,
-    variantRoots = [],
-  } = ctx;
+  const { projectDir, srcDir, SDC, legacyVariant, variantRoots = [] } = ctx;
 
   /** @type {Record<string, string>} */
   const inputs = {};
