@@ -55,6 +55,20 @@ const fetchCSSFiles = () => {
   }
 };
 
+/**
+ * Fetches the project machine name from Emulsify configuration.
+ * Returns undefined if the config is unavailable or machineName is not set.
+ *
+ * @returns {string|undefined} Project machine name string, or undefined if not available
+ */
+export function getProjectMachineName() {
+  try {
+    return emulsifyConfig.project.machineName;
+  } catch (e) {
+    return undefined;
+  }
+};
+
 // Build namespaces mapping.
 export const namespaces = {};
 for (const { name, directory } of fetchVariantConfig()) {
