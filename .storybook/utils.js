@@ -3,6 +3,8 @@ import twigDrupal from 'twig-drupal-filters';
 import twigBEM from 'bem-twig-extension';
 import twigAddAttributes from 'add-attributes-twig-extension';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+import twigInclude from './polyfills/twig-include';
+import twigSource from './polyfills/twig-source';
 
 // Create __filename from import.meta.url without fileURLToPath
 let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
@@ -86,6 +88,8 @@ export function setupTwig(twig) {
   twigDrupal(twig);
   twigBEM(twig);
   twigAddAttributes(twig);
+  twigInclude(twig);
+  twigSource(twig);
   return twig;
 }
 
