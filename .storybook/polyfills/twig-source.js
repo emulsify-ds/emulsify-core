@@ -1,7 +1,12 @@
+import { getProjectMachineName } from '../utils';
+
+const namespace = getProjectMachineName();
+
 // Constants used by the `source()` polyfill.
-const PUBLIC_ASSET_BASE = (typeof window !== 'undefined' && window.location && window.location.hostname === 'fourkitchens.github.io')
-  ? '/bcj/assets/'
+const PUBLIC_ASSET_BASE = (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname.endsWith('github.io'))
+  ? `/${namespace}/assets/`
   : '/assets/';
+
 const INLINE_ASSET_EXTS = new Set(['svg', 'html', 'twig', 'css', 'js', 'json', 'txt', 'md']);
 const IMAGE_ASSET_EXTS  = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
 
