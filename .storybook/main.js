@@ -74,7 +74,7 @@ const config = {
   },
 
   /**
-   * Framework specification for Storybook (HTML + Webpack5).
+   * Framework specification for Storybook (HTML + Vite).
    * @type {{name: string, options: object}}
    */
   framework: {
