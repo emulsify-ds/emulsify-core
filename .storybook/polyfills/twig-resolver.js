@@ -3,7 +3,7 @@ import { getProjectMachineName } from '../utils';
 const namespace = getProjectMachineName();
 
 const twigComponents = require.context(
-  '../../../../../src/components/ui/',
+  '../../../../../src/components/',
   true,
   /\.twig$/
 );
