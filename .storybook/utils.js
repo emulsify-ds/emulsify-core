@@ -3,6 +3,8 @@ import twigDrupal from 'twig-drupal-filters';
 import twigBEM from 'bem-twig-extension';
 import twigAddAttributes from 'add-attributes-twig-extension';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+import twigInclude from './polyfills/twig-include';
+import twigSource from './polyfills/twig-source';
 
 // Create __filename from import.meta.url without fileURLToPath
 let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
@@ -55,6 +57,20 @@ const fetchCSSFiles = () => {
   }
 };
 
+/**
+ * Fetches the project machine name from Emulsify configuration.
+ * Returns undefined if the config is unavailable or machineName is not set.
+ *
+ * @returns {string|undefined} Project machine name string, or undefined if not available
+ */
+export function getProjectMachineName() {
+  try {
+    return emulsifyConfig.project.machineName;
+  } catch (e) {
+    return undefined;
+  }
+};
+
 // Build namespaces mapping.
 export const namespaces = {};
 for (const { name, directory } of fetchVariantConfig()) {
@@ -72,6 +88,8 @@ export function setupTwig(twig) {
   twigDrupal(twig);
   twigBEM(twig);
   twigAddAttributes(twig);
+  twigInclude(twig);
+  twigSource(twig);
   return twig;
 }
 
