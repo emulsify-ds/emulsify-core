@@ -12,6 +12,7 @@ import path, { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
 import viteConfig from '../config/vite/vite.config.js';
+import { resolveEnvironment } from '../config/vite/environment.js';
 
 /**
  * The full path to the current file (ESM compatible).
@@ -211,8 +212,8 @@ const config = {
     }
 
     return `${head}
-${inlineStyles}
-${externalManagerHtml}`;
+      ${inlineStyles}
+      ${externalManagerHtml}`;
   },
 
   /**
@@ -232,14 +233,23 @@ ${externalManagerHtml}`;
     }
 
     return `${head}
-${externalHtml}`;
+      ${externalHtml}`;
   },
 
   // Storybook specific Vite configuration.
   async viteFinal(config) {
     const { mergeConfig } = await import('vite');
+    const env = resolveEnvironment();
+    const existingDefine = (config && config.define) || {};
+    const viteDefine = (viteConfig && viteConfig.define) || {};
+    
     return mergeConfig(config, {
       ...viteConfig,
+      define: {
+        ...viteDefine,
+        ...existingDefine,
+        __EMULSIFY_ENV__: JSON.stringify(env),
+      },
       esbuild: {
         'jsx': 'automatic',
         loader: 'jsx',

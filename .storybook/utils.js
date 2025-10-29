@@ -2,6 +2,8 @@ import twigAddAttributes from 'add-attributes-twig-extension';
 import twigBEM from 'bem-twig-extension';
 import twigDrupal from 'twig-drupal-filters';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+import twigInclude from './polyfills/twig-include';
+import twigSource from './polyfills/twig-source';
 
 /**
  * Fetches project-based variant configuration. If no such configuration
@@ -45,6 +47,20 @@ const fetchCSSFiles = () => {
 };
 
 /**
+ * Fetches the project machine name from Emulsify configuration.
+ * Returns undefined if the config is unavailable or machineName is not set.
+ *
+ * @returns {string|undefined} Project machine name string, or undefined if not available
+ */
+export function getProjectMachineName() {
+  try {
+    return emulsifyConfig.project.machineName;
+  } catch (e) {
+    return undefined;
+  }
+};
+
+/**
  * Configures and extends a standard Twig object.
  *
  * @param {Object} twig - Twig object that should be configured and extended.
@@ -55,6 +71,8 @@ export function setupTwig(twig) {
   twigDrupal(twig);
   twigBEM(twig);
   twigAddAttributes(twig);
+  twigInclude(twig);
+  twigSource(twig);
   return twig;
 }
 
