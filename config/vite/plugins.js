@@ -15,7 +15,7 @@
  *    **skip** mirroring. (Only JS/CSS compile is needed.)
  */
 
-import { resolve, join, dirname, basename } from 'path';
+import { resolve, join, dirname, basename, posix as pathPosix } from 'path';
 import {
   mkdirSync,
   copyFileSync,
@@ -285,7 +285,7 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
  * @param {{ include: string|string[], symbolId?: string }} options
  * @returns {import('vite').PluginOption}
  */
-function svgSpriteFilePlugin({ include, symbolId = 'icon-[name]' }) {
+function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
   const toArray = (x) => (Array.isArray(x) ? x : [x]).filter(Boolean);
   const posix = (p) => p.replace(/\\/g, '/');
 
@@ -364,9 +364,46 @@ function svgSpriteFilePlugin({ include, symbolId = 'icon-[name]' }) {
 
       this.emitFile({
         type: 'asset',
-        fileName: 'assets/icons.sprite.svg',
+        fileName: 'assets/icons.svg',
         source: sprite,
       });
+    },
+  };
+}
+
+/* ============================================================================
+ * Plugin: Relativize CSS asset URLs
+ * ========================================================================== */
+
+/**
+ * Rewrites any `url(assets/...)` found in emitted CSS to a path relative to
+ * the CSS file's directory. This preserves authored relative URLs even when
+ * Vite emits CSS into nested folders.
+ *
+ * @param {{ assetsRoot?: string }} [opts]
+ * @returns {import('vite').PluginOption}
+ */
+function cssAssetUrlRelativizer({ assetsRoot = 'assets' } = {}) {
+  return {
+    name: 'emulsify-css-asset-url-relativizer',
+    apply: 'build',
+    generateBundle(_, bundle) {
+      for (const [fileName, chunk] of Object.entries(bundle)) {
+        if (chunk.type !== 'asset') continue;
+        if (!fileName.endsWith('.css')) continue;
+        if (typeof chunk.source !== 'string') continue;
+
+        const fromDir = pathPosix.dirname(fileName);
+
+        chunk.source = chunk.source.replace(
+          /url\((['"]?)(\/?)assets\/([^)'"]+)\1\)/g,
+          (match, quote = '', _leadingSlash = '', rest) => {
+            const target = pathPosix.join(assetsRoot, rest);
+            const rel = pathPosix.relative(fromDir, target);
+            return `url(${quote}${rel}${quote})`;
+          },
+        );
+      }
     },
   };
 }
@@ -450,7 +487,7 @@ export function makePlugins(env) {
       },
     }),
 
-    // Emit a physical `dist/assets/icons.sprite.svg`
+    // Emit a physical `dist/assets/icons.svg`
     svgSpriteFilePlugin({
       include: [
         `${projectDir.replace(/\\/g, '/')}/assets/icons/**/*.svg`,
@@ -458,7 +495,7 @@ export function makePlugins(env) {
         'src/assets/icons/**/*.svg',
         'src/**/icons/**/*.svg',
       ],
-      symbolId: 'icon-[name]',
+      symbolId: '[name]',
     }),
 
     // Sass glob imports
@@ -466,6 +503,9 @@ export function makePlugins(env) {
 
     // YAML support
     yml(),
+
+    // Keep CSS asset URLs relative to the emitted CSS location.
+    cssAssetUrlRelativizer({ assetsRoot: 'assets' }),
   ];
 
   // If component structure overrides are in play, skip copy/mirror plugins.
