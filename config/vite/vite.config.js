@@ -22,6 +22,7 @@
 
 // import mergeConfig alongside defineConfig:
 import { defineConfig, mergeConfig } from 'vite';
+import path from 'node:path';
 
 import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
@@ -103,7 +104,9 @@ export default defineConfig(async () => {
     plugins: [...makePlugins(env), ...projectPlugins],
 
     // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
-    css: { devSourcemap: true },
+    css: {
+      devSourcemap: true,
+    },
 
     build: {
       // Clean the output directory before building.
@@ -134,6 +137,27 @@ export default defineConfig(async () => {
             if (file.endsWith('.css')) {
               // Normalize path and drop the CSS_SUFFIX ('__style') used to avoid key collisions
               return file.replace(/__style(?=\.css$)/, '');
+            }
+            const [original] = Array.isArray(assetInfo.originalFileNames)
+              ? assetInfo.originalFileNames
+              : assetInfo.originalFileName
+                ? [assetInfo.originalFileName]
+                : [];
+            if (original) {
+              const normalizedOriginal = path.normalize(original);
+              const relativeToProject = path.isAbsolute(normalizedOriginal)
+                ? path.relative(env.projectDir, normalizedOriginal)
+                : normalizedOriginal.replace(/^[/\\]+/, '');
+              const normalizedRelative = relativeToProject
+                .split(path.sep)
+                .join('/');
+              // Prevent traversing above dist/ if a relative path climbs directories.
+              const safePath = normalizedRelative.startsWith('..')
+                ? normalizedRelative.replace(/^(\.\.\/)+/g, '')
+                : normalizedRelative;
+              if (safePath) {
+                return safePath;
+              }
             }
             return 'assets/[name][extname]';
           },
