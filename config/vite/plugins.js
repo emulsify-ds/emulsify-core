@@ -320,7 +320,6 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
       const used = new Set();
       const makeId = (abs) => {
         const stem = basename(abs).replace(/\.svg$/i, '');
-        console.log(stem);
         let id = symbolId
           .replace('[name]', stem)
           .toLowerCase()
