@@ -320,6 +320,7 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
       const used = new Set();
       const makeId = (abs) => {
         const stem = basename(abs).replace(/\.svg$/i, '');
+        console.log(stem);
         let id = symbolId
           .replace('[name]', stem)
           .toLowerCase()
@@ -348,6 +349,8 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
           const inner = (m ? m[2] : content)
             .replace(/<\/*symbol[^>]*>/gi, '')
             .replace(/<\/*defs[^>]*>/gi, '')
+            // Drop namespace-prefixed attributes that lose their prefix in the merged sprite.
+            .replace(/\s+[a-zA-Z0-9_-]+:[a-zA-Z0-9_.-]+="[^"]*"/g, '')
             .trim();
           const attrs = m ? m[1] : '';
           const vb = attrs.match(/\bviewBox="([^"]+)"/i);
