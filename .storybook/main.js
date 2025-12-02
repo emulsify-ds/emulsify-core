@@ -18,13 +18,13 @@ import { resolveEnvironment } from '../config/vite/environment.js';
  * The full path to the current file (ESM compatible).
  * @type {string}
  */
-const __filename = fileURLToPath(import.meta.url);
+const _filename = fileURLToPath(import.meta.url);
 
 /**
  * The directory name of the current module file.
  * @type {string}
  */
-const __dirname = path.dirname(__filename);
+const _dirname = path.dirname(_filename);
 
 /**
  * Safely apply any user-provided overrides or fall back to an empty object.
@@ -203,7 +203,7 @@ const config = {
 
     // load external manager-head.html if present
     const externalManagerHeadPath = resolve(
-      __dirname,
+      _dirname,
       '../../../../config/emulsify-core/storybook/manager-head.html'
     );
     let externalManagerHtml = '';
@@ -223,7 +223,7 @@ const config = {
    */
   previewHead: (head) => {
     const externalHeadPath = resolve(
-      __dirname,
+      _dirname,
       '../../../../config/emulsify-core/storybook/preview-head.html'
     );
 
@@ -240,16 +240,69 @@ const config = {
   async viteFinal(config) {
     const { mergeConfig } = await import('vite');
     const env = resolveEnvironment();
+    const baseViteConfig =
+      typeof viteConfig === 'function'
+        ? await viteConfig({ command: 'serve', mode: config?.mode || 'development' })
+        : viteConfig;
     const existingDefine = (config && config.define) || {};
-    const viteDefine = (viteConfig && viteConfig.define) || {};
+    const viteDefine = (baseViteConfig && baseViteConfig.define) || {};
+    const allowList = new Set([
+      ...(config?.server?.fs?.allow || []),
+      env.projectDir,
+      path.resolve(env.projectDir, 'src'),
+      path.resolve(env.projectDir, 'components'),
+      path.resolve(env.projectDir, 'dist'),
+    ]);
+    const assetsInclude = Array.from(
+      new Set([...(config.assetsInclude || []), ...(baseViteConfig.assetsInclude || []), '**/*.twig']),
+    );
+    const toRootRel = (abs) => {
+      const rel = path.relative(env.projectDir, abs);
+      const normalized = rel.split(path.sep).join('/');
+      return `/${normalized}`.replace(/\/{2,}/g, '/');
+    };
+    const candidateRoots =
+      env.structureOverrides && Array.isArray(env.structureRoots) && env.structureRoots.length
+        ? env.structureRoots
+        : env.srcDir
+          ? [path.join(env.srcDir, 'components')]
+          : [];
+    const rootRels = candidateRoots.map(toRootRel);
+    const globBases = rootRels.length ? rootRels : ['/src/components', '/components'];
+    const twigGlobImports = `mergeGlobMaps([\n${globBases
+      .map((base) => `  import.meta.glob('${base}/**/*.twig', { eager: true })`)
+      .join(',\n')}\n])`;
     
     return mergeConfig(config, {
-      ...viteConfig,
+      ...baseViteConfig,
       define: {
         ...viteDefine,
         ...existingDefine,
         __EMULSIFY_ENV__: JSON.stringify(env),
       },
+      server: {
+        ...(baseViteConfig?.server || {}),
+        fs: {
+          allow: Array.from(allowList),
+        },
+      },
+      assetsInclude,
+      plugins: [
+        ...(baseViteConfig?.plugins || []),
+        {
+          name: 'emulsify-inject-twig-globs',
+          enforce: 'pre',
+          transform(code, id) {
+            const cleanId = id.split('?')[0];
+            if (!cleanId.endsWith('/.storybook/polyfills/twig-resolver.js')) return null;
+            const replaced = code.replace(
+              /__EMULSIFY_TWIG_GLOB_IMPORTS__/g,
+              twigGlobImports,
+            );
+            return replaced === code ? null : replaced;
+          },
+        },
+      ],
       esbuild: {
         'jsx': 'automatic',
         loader: 'jsx',
