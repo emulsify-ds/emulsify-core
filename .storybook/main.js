@@ -1,9 +1,15 @@
 // .storybook/main.js
 
 /**
- * Storybook main configuration file.
- * This configures stories, static directories, addons, core builder,
- * framework, documentation settings, manager head styles, and overrides.
+ * Central Storybook configuration for Emulsify.
+ *
+ * This shared config defines the default Storybook behavior for consumers of
+ * the package, then lets a project layer local overrides on top at the end.
+ * The main custom behavior here is:
+ * - injecting manager/preview head markup
+ * - adapting the shared Vite config for Storybook
+ * - wiring Twig template discovery into the Storybook build
+ *
  * @module .storybook/main
  */
 
@@ -13,6 +19,21 @@ import { fileURLToPath } from 'url';
 import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
 import viteConfig from '../config/vite/vite.config.js';
 import { resolveEnvironment } from '../config/vite/environment.js';
+
+/**
+ * Minimal subset of the resolved Emulsify environment used by this file.
+ *
+ * @typedef {object} StorybookEnvironment
+ * @property {string} projectDir - Absolute path to the consuming project root.
+ * @property {boolean} [structureOverrides] - Whether custom structure roots are enabled.
+ * @property {string[]} [structureRoots] - Absolute component root paths when overrides are active.
+ * @property {string} [srcDir] - Absolute path to the project's `src` directory when present.
+ */
+
+/**
+ * Storybook config type used for editor hints in this plain JS file.
+ * @typedef {import('@storybook/core-common').StorybookConfig} StorybookConfig
+ */
 
 /**
  * The full path to the current file (ESM compatible).
@@ -27,6 +48,73 @@ const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
 
 /**
+ * Reads an optional HTML fragment relative to this config file.
+ *
+ * Missing files are treated as empty content so downstream projects can opt in
+ * to extra markup without making Storybook fail on startup.
+ *
+ * @param {string} relativePath - Relative path from this file to the HTML fragment.
+ * @returns {string} File contents when the fragment exists, otherwise an empty string.
+ */
+function readOptionalHtmlFragment(relativePath) {
+  const fragmentPath = resolve(_dirname, relativePath);
+
+  if (!fs.existsSync(fragmentPath)) {
+    return '';
+  }
+
+  return fs.readFileSync(fragmentPath, 'utf8');
+}
+
+/**
+ * Converts an absolute path inside the project into the root-relative format
+ * Vite expects for `import.meta.glob()` patterns.
+ *
+ * The path separator normalization matters because Storybook may run on
+ * Windows as well as POSIX systems.
+ *
+ * @param {string} projectDir - Absolute path to the consuming project root.
+ * @param {string} absolutePath - Absolute path that should become root-relative.
+ * @returns {string} Vite-compatible root-relative path.
+ */
+function toRootRelativePath(projectDir, absolutePath) {
+  const rel = path.relative(projectDir, absolutePath);
+  const normalized = rel.split(path.sep).join('/');
+
+  return `/${normalized}`.replace(/\/{2,}/g, '/');
+}
+
+/**
+ * Builds the `import.meta.glob()` expression injected into the Twig resolver.
+ *
+ * The component roots can move when a project enables structure overrides, so
+ * the import list is generated at runtime instead of hard-coded.
+ *
+ * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
+ * @returns {string} JavaScript source that eagerly imports Twig templates.
+ */
+function buildTwigGlobImports(env) {
+  const candidateRoots =
+    env.structureOverrides &&
+    Array.isArray(env.structureRoots) &&
+    env.structureRoots.length
+      ? env.structureRoots
+      : env.srcDir
+        ? [path.join(env.srcDir, 'components')]
+        : [];
+  const rootRelativePaths = candidateRoots.map((root) =>
+    toRootRelativePath(env.projectDir, root),
+  );
+  const globBases = rootRelativePaths.length
+    ? rootRelativePaths
+    : ['/src/components', '/components'];
+
+  return `mergeGlobMaps([\n${globBases
+    .map((base) => `  import.meta.glob('${base}/**/*.twig', { eager: true })`)
+    .join(',\n')}\n])`;
+}
+
+/**
  * Safely apply any user-provided overrides or fall back to an empty object.
  * @type {object}
  */
@@ -34,19 +122,25 @@ const safeConfigOverrides = configOverrides || {};
 
 /**
  * Primary Storybook configuration object.
- * @type {import('@storybook/core-common').StorybookConfig}
+ * @type {StorybookConfig}
  */
 const config = {
   /**
-   * Patterns for locating story files under src or components directories.
+   * Discover stories from both supported component roots.
+   *
+   * This shared config supports projects that keep stories under `src` as well
+   * as projects that expose a top-level `components` directory.
+   *
    * @type {string[]}
    */
-  stories: [
-    '../../../../@(src|components)/**/*.stories.@(js|jsx|ts|tsx)',
-  ],
+  stories: ['../../../../@(src|components)/**/*.stories.@(js|jsx|ts|tsx)'],
 
   /**
-   * Directories to serve as static assets in the Storybook build.
+   * Mount shared assets into Storybook's static file server.
+   *
+   * Anything referenced by URL inside stories should live in one of these
+   * directories so it works in both `storybook dev` and static builds.
+   *
    * @type {string[]}
    */
   staticDirs: [
@@ -56,7 +150,11 @@ const config = {
   ],
 
   /**
-   * List of Storybook addons to enable various features.
+   * Enable the default addon set used by Emulsify.
+   *
+   * `a11y` adds accessibility tooling, `links` supports story-to-story
+   * navigation, and `themes` exposes theme switching in the Storybook UI.
+   *
    * @type {string[]}
    */
   addons: [
@@ -66,7 +164,7 @@ const config = {
   ],
 
   /**
-   * Core builder configuration for Storybook.
+   * Force the Vite builder and disable Storybook telemetry for shared usage.
    * @type {{builder: string, disableTelemetry: boolean}}
    */
   core: {
@@ -75,7 +173,7 @@ const config = {
   },
 
   /**
-   * Framework specification for Storybook (HTML + Vite).
+   * Tell Storybook to use the React + Vite framework package.
    * @type {{name: string, options: object}}
    */
   framework: {
@@ -84,7 +182,11 @@ const config = {
   },
 
   /**
-   * Documentation settings for Storybook autodocs.
+   * Disable automatic docs generation.
+   *
+   * Storybook will only render documentation pages that are authored
+   * explicitly instead of generating them from component metadata.
+   *
    * @type {{autodocs: boolean}}
    */
   docs: {
@@ -92,13 +194,17 @@ const config = {
   },
 
   /**
-   * Custom styles injected into the Storybook manager (sidebar) head,
-   * plus any external manager-head.html snippet.
-   * @param {string} head - Existing head HTML.
-   * @returns {string} Modified head HTML.
+   * Appends Emulsify branding to the Storybook manager UI.
+   *
+   * This only affects Storybook's chrome, such as the sidebar, toolbar, and
+   * addon panels. It does not affect the iframe where stories actually render.
+   *
+   * @param {string} head - Existing manager head markup provided by Storybook.
+   * @returns {string} Manager head markup with Emulsify additions appended.
    */
   managerHead: (head) => {
-    // inline theme styles
+    // Keep the manager styling inline so consumers inherit the branded UI
+    // without having to maintain a separate manager-only stylesheet.
     const inlineStyles = `
       <style>
       :root {
@@ -200,16 +306,9 @@ const config = {
       }
     </style>
     `;
-
-    // load external manager-head.html if present
-    const externalManagerHeadPath = resolve(
-      _dirname,
-      '../../../../config/emulsify-core/storybook/manager-head.html'
+    const externalManagerHtml = readOptionalHtmlFragment(
+      '../../../../config/emulsify-core/storybook/manager-head.html',
     );
-    let externalManagerHtml = '';
-    if (fs.existsSync(externalManagerHeadPath)) {
-      externalManagerHtml = fs.readFileSync(externalManagerHeadPath, 'utf8');
-    }
 
     return `${head}
       ${inlineStyles}
@@ -217,35 +316,51 @@ const config = {
   },
 
   /**
-   * Function to load and append an external preview-head.html into the preview iframe.
-   * @param {string} head - Existing preview head HTML.
-   * @returns {string} Combined head HTML including external snippet if present.
+   * Appends project-level head markup to the story preview iframe.
+   *
+   * This is the place for preview-only fonts, scripts, or meta tags that the
+   * rendered component output depends on.
+   *
+   * @param {string} head - Existing preview head markup provided by Storybook.
+   * @returns {string} Preview head markup with optional project HTML appended.
    */
   previewHead: (head) => {
-    const externalHeadPath = resolve(
-      _dirname,
-      '../../../../config/emulsify-core/storybook/preview-head.html'
+    const externalHtml = readOptionalHtmlFragment(
+      '../../../../config/emulsify-core/storybook/preview-head.html',
     );
-
-    let externalHtml = '';
-    if (fs.existsSync(externalHeadPath)) {
-      externalHtml = fs.readFileSync(externalHeadPath, 'utf8');
-    }
 
     return `${head}
       ${externalHtml}`;
   },
 
-  // Storybook specific Vite configuration.
+  /**
+   * Merges Storybook's generated Vite config with Emulsify's shared Vite config.
+   *
+   * Storybook supplies a baseline config, but Emulsify still needs to expose
+   * the resolved environment, expand filesystem access, and inject the Twig
+   * template globs used by the runtime resolver.
+   *
+   * @param {import('vite').UserConfig} config - Storybook's generated Vite config.
+   * @returns {Promise<import('vite').UserConfig>} Final Vite config used by Storybook.
+   */
   async viteFinal(config) {
     const { mergeConfig } = await import('vite');
+    /** @type {StorybookEnvironment} */
     const env = resolveEnvironment();
+
+    // Keep using the `serve` branch of the shared Vite config here. Storybook
+    // has historically consumed that branch, while `mode` still reflects
+    // whether Storybook is running in development or production.
+    const mode = config?.mode || 'development';
     const baseViteConfig =
       typeof viteConfig === 'function'
-        ? await viteConfig({ command: 'serve', mode: config?.mode || 'development' })
+        ? await viteConfig({ command: 'serve', mode })
         : viteConfig;
     const existingDefine = (config && config.define) || {};
     const viteDefine = (baseViteConfig && baseViteConfig.define) || {};
+
+    // Allow Storybook's dev server to read component sources from the project
+    // root and any structure override paths used by Emulsify consumers.
     const allowList = new Set([
       ...(config?.server?.fs?.allow || []),
       env.projectDir,
@@ -253,29 +368,23 @@ const config = {
       path.resolve(env.projectDir, 'components'),
       path.resolve(env.projectDir, 'dist'),
     ]);
+
+    // Twig files are loaded through custom resolvers/plugins, so they need to
+    // be treated as importable assets by Storybook's Vite pipeline.
     const assetsInclude = Array.from(
-      new Set([...(config.assetsInclude || []), ...(baseViteConfig.assetsInclude || []), '**/*.twig']),
+      new Set([
+        ...(config.assetsInclude || []),
+        ...(baseViteConfig.assetsInclude || []),
+        '**/*.twig',
+      ]),
     );
-    const toRootRel = (abs) => {
-      const rel = path.relative(env.projectDir, abs);
-      const normalized = rel.split(path.sep).join('/');
-      return `/${normalized}`.replace(/\/{2,}/g, '/');
-    };
-    const candidateRoots =
-      env.structureOverrides && Array.isArray(env.structureRoots) && env.structureRoots.length
-        ? env.structureRoots
-        : env.srcDir
-          ? [path.join(env.srcDir, 'components')]
-          : [];
-    const rootRels = candidateRoots.map(toRootRel);
-    const globBases = rootRels.length ? rootRels : ['/src/components', '/components'];
-    const twigGlobImports = `mergeGlobMaps([\n${globBases
-      .map((base) => `  import.meta.glob('${base}/**/*.twig', { eager: true })`)
-      .join(',\n')}\n])`;
-    
+    const twigGlobImports = buildTwigGlobImports(env);
+
     return mergeConfig(config, {
       ...baseViteConfig,
       define: {
+        // Preserve shared and Storybook-provided constants, then publish the
+        // resolved Emulsify environment to client-side code.
         ...viteDefine,
         ...existingDefine,
         __EMULSIFY_ENV__: JSON.stringify(env),
@@ -294,7 +403,12 @@ const config = {
           enforce: 'pre',
           transform(code, id) {
             const cleanId = id.split('?')[0];
-            if (!cleanId.endsWith('/.storybook/polyfills/twig-resolver.js')) return null;
+            if (!cleanId.endsWith('/.storybook/polyfills/twig-resolver.js')) {
+              return null;
+            }
+
+            // Replace the placeholder token in the Twig resolver polyfill with
+            // the project-specific import list computed above.
             const replaced = code.replace(
               /__EMULSIFY_TWIG_GLOB_IMPORTS__/g,
               twigGlobImports,
@@ -304,7 +418,9 @@ const config = {
         },
       ],
       esbuild: {
-        'jsx': 'automatic',
+        // Some downstream code is authored as `.js` files containing JSX, so
+        // keep Storybook's esbuild settings aligned with the shared Vite config.
+        jsx: 'automatic',
         loader: 'jsx',
         include: /.*\.jsx?$/,
         exclude: [],
@@ -319,14 +435,16 @@ const config = {
         ],
         esbuildOptions: {
           loader: {
+            // Pre-bundle `.js` dependencies with the JSX loader for packages
+            // that ship JSX without a `.jsx` extension.
             '.js': 'jsx',
           },
         },
       },
-    })
+    });
   },
 
-  // Merge in user overrides without modifying original logic
+  // Spread consumer overrides last so local projects can replace any default above.
   ...safeConfigOverrides,
 };
 
