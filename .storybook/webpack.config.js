@@ -1,7 +1,6 @@
 import { dirname, resolve } from 'path';
 import globImporter from 'node-sass-glob-importer';
 import _StyleLintPlugin from 'stylelint-webpack-plugin';
-import ESLintPlugin from 'eslint-webpack-plugin';
 import resolves from '../config/webpack/resolves.js';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
 
@@ -54,13 +53,10 @@ class ProjectNameResolverPlugin {
       (request, resolveContext, callback) => {
         const requestPath = request.request;
 
-        if (
-          requestPath &&
-          requestPath.startsWith(`${this.prefix}:`)
-        ) {
+        if (requestPath && requestPath.startsWith(`${this.prefix}:`)) {
           const newRequestPath = requestPath.replace(
             `${this.prefix}:`,
-            `${this.prefix}/`
+            `${this.prefix}/`,
           );
           const newRequest = {
             ...request,
@@ -70,14 +66,14 @@ class ProjectNameResolverPlugin {
           resolver.doResolve(
             target,
             newRequest,
-            `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[requestPath]}`,
+            `Resolved ${this.prefix} URI`,
             resolveContext,
-            callback
+            callback,
           );
         } else {
           callback();
         }
-      }
+      },
     );
   }
 }
@@ -159,7 +155,9 @@ export default async function ({ config }) {
     loader: 'js-yaml-loader',
   });
 
-  // StyleLint and ESLint plugins
+  // Keep style linting in the Storybook webpack build. ESLint runs via the
+  // dedicated npm scripts instead, which avoids coupling Storybook to a
+  // specific ESLint major version.
   config.plugins.push(
     new _StyleLintPlugin({
       configFile: resolve(projectDir, '../', '.stylelintrc.json'),
@@ -167,10 +165,6 @@ export default async function ({ config }) {
       files: '**/*.scss',
       failOnError: false,
       quiet: false,
-    }),
-    new ESLintPlugin({
-      context: resolve(projectDir, '../', 'src'),
-      extensions: ['js'],
     }),
   );
 

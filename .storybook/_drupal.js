@@ -32,14 +32,14 @@ window.Drupal = { behaviors: {} };
   Drupal.attachBehaviors = function (context, settings) {
     context = context || document;
     settings = settings || drupalSettings;
-    /** @type {Object.<string, {attach: Function}>} */
-    const behaviors = Drupal.behaviors;
+    /** @type {Array<{attach?: Function}>} */
+    const behaviors = Object.values(Drupal.behaviors);
 
     // Iterate through each behavior and invoke its attach method if defined.
-    Object.keys(behaviors).forEach(function (i) {
-      if (typeof behaviors[i].attach === 'function') {
+    behaviors.forEach(function (behavior) {
+      if (typeof behavior.attach === 'function') {
         try {
-          behaviors[i].attach(context, settings);
+          behavior.attach(context, settings);
         } catch (e) {
           Drupal.throwError(e);
         }

@@ -1,5 +1,5 @@
 // .storybook/preview.js
-import { useEffect } from '@storybook/preview-api';
+import { useEffect } from 'storybook/preview-api';
 import Twig from 'twig';
 import { setupTwig, fetchCSSFiles } from './utils.js';
 import { getRules } from 'axe-core';
@@ -8,7 +8,7 @@ import { getRules } from 'axe-core';
  * External override parameters loaded from project config file, if present.
  * @type {object}
  */
-let externalOverrides = {};
+let externalOverrides;
 
 // Load the preview.js from the project config overrides.
 try {
@@ -16,10 +16,9 @@ try {
    * Dynamically require external preview overrides.
    * @module '../../../../config/emulsify-core/storybook/preview.js'
    */
-  externalOverrides = require(
-    '../../../../config/emulsify-core/storybook/preview.js'
-  ).default;
-} catch (err) {
+  externalOverrides =
+    require('../../../../config/emulsify-core/storybook/preview.js').default;
+} catch {
   // no override file? swallow the error and use {}
   externalOverrides = {};
 }
@@ -34,10 +33,10 @@ import './_drupal.js';
  */
 function enableRulesByTag(tags = []) {
   const allRules = getRules();
-  return allRules.map(rule =>
-    tags.some(t => rule.tags.includes(t))
+  return allRules.map((rule) =>
+    tags.some((t) => rule.tags.includes(t))
       ? { id: rule.ruleId, enabled: true }
-      : { id: rule.ruleId, enabled: false }
+      : { id: rule.ruleId, enabled: false },
   );
 }
 
@@ -60,7 +59,8 @@ fetchCSSFiles();
 
 /**
  * Storybook decorators to apply Drupal behaviors before rendering each story.
- * @type {Array<import('@storybook/react').Decorator>}
+ * The HTML renderer still uses the generic Storybook decorator signature.
+ * @type {Function[]}
  */
 export const decorators = [
   /**
