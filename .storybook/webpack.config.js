@@ -1,8 +1,12 @@
 import { dirname, resolve } from 'path';
+import { createRequire } from 'module';
 import globImporter from 'node-sass-glob-importer';
 import _StyleLintPlugin from 'stylelint-webpack-plugin';
+import webpack from 'webpack';
 import resolves from '../config/webpack/resolves.js';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+
+const require = createRequire(import.meta.url);
 
 // Create __filename from import.meta.url without fileURLToPath
 let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
@@ -85,6 +89,9 @@ class ProjectNameResolverPlugin {
  * @returns {object} The updated webpack config.
  */
 export default async function ({ config }) {
+  config.resolve = config.resolve || {};
+  config.plugins = config.plugins || [];
+
   config.module = config.module || {};
   config.module.rules = config.module.rules || [];
 
@@ -231,13 +238,32 @@ export default async function ({ config }) {
     }),
   ];
 
-  // Fallback for optional modules
+  // Merge fallbacks so we do not clobber Storybook defaults.
   config.resolve.fallback = {
+    ...(config.resolve.fallback || {}),
+    process: require.resolve('process/browser'),
     /**
      * Prevent resolution of components directory if missing.
      */
     '../../../../components': false,
   };
+
+  // Provide global `process` for browser bundles that pull in node-style libs.
+  const hasProcessProvidePlugin = config.plugins.some(
+    (plugin) =>
+      plugin &&
+      plugin.constructor &&
+      plugin.constructor.name === 'ProvidePlugin' &&
+      plugin.definitions &&
+      Object.prototype.hasOwnProperty.call(plugin.definitions, 'process'),
+  );
+  if (!hasProcessProvidePlugin) {
+    config.plugins.push(
+      new webpack.ProvidePlugin({
+        process: 'process/browser',
+      }),
+    );
+  }
 
   return config;
 }
