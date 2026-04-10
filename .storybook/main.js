@@ -92,7 +92,7 @@ const config = {
    * @type {{name: string, options: object}}
    */
   framework: {
-    name: '@storybook/html',
+    name: '@storybook/server-webpack5',
     options: {},
   },
 

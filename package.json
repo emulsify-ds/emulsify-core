@@ -59,7 +59,7 @@
     "@storybook/addon-styling-webpack": "^2.0.0",
     "@storybook/addon-themes": "^9.1.20",
     "@storybook/builder-webpack5": "^9.1.20",
-    "@storybook/html": "^9.1.20",
+    "@storybook/server-webpack5": "^9.1.20",
     "add-attributes-twig-extension": "^0.1.0",
     "autoprefixer": "^10.4.21",
     "babel-loader": "^10.0.0",
