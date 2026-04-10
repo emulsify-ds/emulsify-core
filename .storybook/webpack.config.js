@@ -85,75 +85,131 @@ class ProjectNameResolverPlugin {
  * @returns {object} The updated webpack config.
  */
 export default async function ({ config }) {
+  config.module = config.module || {};
+  config.module.rules = config.module.rules || [];
+
+  const hasLoader = (rule, loaderName) => {
+    if (!rule) {
+      return false;
+    }
+
+    if (typeof rule.loader === 'string' && rule.loader.includes(loaderName)) {
+      return true;
+    }
+
+    const use = rule.use;
+    if (typeof use === 'string') {
+      return use.includes(loaderName);
+    }
+    if (Array.isArray(use)) {
+      return use.some((entry) => {
+        if (typeof entry === 'string') {
+          return entry.includes(loaderName);
+        }
+        return (
+          entry &&
+          typeof entry.loader === 'string' &&
+          entry.loader.includes(loaderName)
+        );
+      });
+    }
+
+    return false;
+  };
+
+  const hasRule = (testRegex, loaderName) =>
+    config.module.rules.some(
+      (rule) =>
+        rule &&
+        rule.test &&
+        String(rule.test) === String(testRegex) &&
+        hasLoader(rule, loaderName),
+    );
+
+  const pushRuleOnce = (rule, loaderName) => {
+    if (!hasRule(rule.test, loaderName)) {
+      config.module.rules.push(rule);
+    }
+  };
+
   // Alias
   Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
 
   // Twig loader
-  config.module.rules.push({
-    /**
-     * @type {RegExp}
-     */
-    test: /\.twig$/,
-    use: [
-      {
-        /**
-         * Custom loader for svg/spritemap integration.
-         * @type {string}
-         */
-        loader: resolve(_dirname, '../config/webpack/sdc-loader.js'),
-        options: {
+  pushRuleOnce(
+    {
+      /**
+       * @type {RegExp}
+       */
+      test: /\.twig$/,
+      use: [
+        {
           /**
-           * Name of the Emulsify project for resolving.
+           * Custom loader for svg/spritemap integration.
            * @type {string}
            */
-          projectName: emulsifyConfig.project.name,
-        },
-      },
-      {
-        /**
-         * Standard Twig JS loader.
-         * @type {string}
-         */
-        loader: 'twigjs-loader',
-      },
-    ],
-  });
-
-  // SCSS Loader configuration
-  config.module.rules.push({
-    test: /\.s[ac]ss$/i,
-    use: [
-      'style-loader',
-      {
-        loader: 'css-loader',
-        options: {
-          /**
-           * Enable source maps for CSS.
-           * @type {boolean}
-           */
-          sourceMap: true,
-        },
-      },
-      {
-        loader: 'sass-loader',
-        options: {
-          sourceMap: true,
-          sassOptions: {
-            importer: globImporter(),
+          loader: resolve(_dirname, '../config/webpack/sdc-loader.js'),
+          options: {
+            /**
+             * Name of the Emulsify project for resolving.
+             * @type {string}
+             */
+            projectName: emulsifyConfig.project.name,
           },
         },
-      },
-    ],
-  });
+        {
+          /**
+           * Standard Twig JS loader.
+           * @type {string}
+           */
+          loader: 'twigjs-loader',
+        },
+      ],
+    },
+    'twigjs-loader',
+  );
+
+  // SCSS Loader configuration
+  pushRuleOnce(
+    {
+      test: /\.s[ac]ss$/i,
+      use: [
+        'style-loader',
+        {
+          loader: 'css-loader',
+          options: {
+            /**
+             * Enable source maps for CSS.
+             * @type {boolean}
+             */
+            sourceMap: true,
+          },
+        },
+        {
+          loader: 'sass-loader',
+          options: {
+            sourceMap: true,
+            sassOptions: {
+              importer: globImporter(),
+            },
+          },
+        },
+      ],
+    },
+    'sass-loader',
+  );
 
   // YAML loader
-  config.module.rules.push({
-    /**
-     * @type {RegExp}
-     */
-    test: /\.ya?ml$/,
-    loader: 'js-yaml-loader',
-  });
+  pushRuleOnce(
+    {
+      /**
+       * @type {RegExp}
+       */
+      test: /\.ya?ml$/,
+      loader: 'js-yaml-loader',
+    },
+    'js-yaml-loader',
+  );
 
   // Keep style linting in the Storybook webpack build. ESLint runs via the
   // dedicated npm scripts instead, which avoids coupling Storybook to a

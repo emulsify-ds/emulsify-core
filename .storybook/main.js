@@ -29,6 +29,45 @@ const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
 
 /**
+ * Migrate the consumer Storybook theme import from "@storybook/theming" to
+ * "storybook/theming" when needed.
+ *
+ * This runs opportunistically during startup and never throws so Storybook
+ * startup is resilient across all projects.
+ */
+const migrateConsumerThemeImport = () => {
+  try {
+    const themeConfigPath = resolve(
+      _dirname,
+      '../../../../config/emulsify-core/storybook/theme.js',
+    );
+
+    if (!fs.existsSync(themeConfigPath)) {
+      return;
+    }
+
+    const originalThemeConfig = fs.readFileSync(themeConfigPath, 'utf8');
+
+    if (!originalThemeConfig.includes('@storybook/theming')) {
+      return;
+    }
+
+    const migratedThemeConfig = originalThemeConfig.replace(
+      /(['"])@storybook\/theming\1/g,
+      '$1storybook/theming$1',
+    );
+
+    if (migratedThemeConfig !== originalThemeConfig) {
+      fs.writeFileSync(themeConfigPath, migratedThemeConfig, 'utf8');
+    }
+  } catch {
+    // Ignore migration failures so Storybook startup is never blocked.
+  }
+};
+
+migrateConsumerThemeImport();
+
+/**
  * Safely apply any user-provided overrides or fall back to an empty object.
  * @type {object}
  */
