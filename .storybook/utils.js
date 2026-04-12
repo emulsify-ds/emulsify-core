@@ -3,6 +3,8 @@ import twigDrupal from 'twig-drupal-filters';
 import twigBEM from 'bem-twig-extension';
 import twigAddAttributes from 'add-attributes-twig-extension';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+import twigInclude from './polyfills/twig-include.js';
+import twigSource from './polyfills/twig-source.js';
 
 // Create __filename from import.meta.url without fileURLToPath
 let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
@@ -23,7 +25,7 @@ const _dirname = dirname(_filename);
 const fetchVariantConfig = () => {
   try {
     return emulsifyConfig.variant.structureImplementations;
-  } catch (e) {
+  } catch {
     return [
       {
         name: 'components',
@@ -47,19 +49,39 @@ const fetchCSSFiles = () => {
 
     // Load all CSS files from 'components' for 'drupal' platform.
     if (emulsifyConfig.project.platform === 'drupal') {
-      const drupalCSSFiles = require.context('../../../../components', true, /\.css$/);
+      const drupalCSSFiles = require.context(
+        '../../../../components',
+        true,
+        /\.css$/,
+      );
       drupalCSSFiles.keys().forEach((file) => drupalCSSFiles(file));
     }
-  } catch (e) {
+  } catch {
     return undefined;
   }
 };
 
-// Build namespaces mapping.
-export const namespaces = {};
-for (const { name, directory } of fetchVariantConfig()) {
-  namespaces[name] = resolve(_dirname, '../../../../', directory);
+/**
+ * Fetches the project machine name from Emulsify configuration.
+ * Returns undefined if the config is unavailable or machineName is not set.
+ *
+ * @returns {string|undefined} Project machine name string, or undefined if not available
+ */
+export function getProjectMachineName() {
+  try {
+    return emulsifyConfig.project.machineName;
+  } catch {
+    return undefined;
+  }
 }
+
+// Build namespaces mapping.
+export const namespaces = Object.fromEntries(
+  fetchVariantConfig().map(({ name, directory }) => [
+    name,
+    resolve(_dirname, '../../../../', directory),
+  ]),
+);
 
 /**
  * Configures and extends a standard Twig object.
@@ -72,6 +94,8 @@ export function setupTwig(twig) {
   twigDrupal(twig);
   twigBEM(twig);
   twigAddAttributes(twig);
+  twigInclude(twig);
+  twigSource(twig);
   return twig;
 }
 

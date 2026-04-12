@@ -1,9 +1,12 @@
 import { dirname, resolve } from 'path';
+import { createRequire } from 'module';
 import globImporter from 'node-sass-glob-importer';
 import _StyleLintPlugin from 'stylelint-webpack-plugin';
-import ESLintPlugin from 'eslint-webpack-plugin';
+import webpack from 'webpack';
 import resolves from '../config/webpack/resolves.js';
 import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
+
+const require = createRequire(import.meta.url);
 
 // Create __filename from import.meta.url without fileURLToPath
 let _filename = decodeURIComponent(new URL(import.meta.url).pathname);
@@ -54,13 +57,10 @@ class ProjectNameResolverPlugin {
       (request, resolveContext, callback) => {
         const requestPath = request.request;
 
-        if (
-          requestPath &&
-          requestPath.startsWith(`${this.prefix}:`)
-        ) {
+        if (requestPath && requestPath.startsWith(`${this.prefix}:`)) {
           const newRequestPath = requestPath.replace(
             `${this.prefix}:`,
-            `${this.prefix}/`
+            `${this.prefix}/`,
           );
           const newRequest = {
             ...request,
@@ -70,14 +70,14 @@ class ProjectNameResolverPlugin {
           resolver.doResolve(
             target,
             newRequest,
-            `Resolved ${this.prefix} URI: ${resolves.TwigResolve.alias[requestPath]}`,
+            `Resolved ${this.prefix} URI`,
             resolveContext,
-            callback
+            callback,
           );
         } else {
           callback();
         }
-      }
+      },
     );
   }
 }
@@ -89,77 +89,138 @@ class ProjectNameResolverPlugin {
  * @returns {object} The updated webpack config.
  */
 export default async function ({ config }) {
+  config.resolve = config.resolve || {};
+  config.plugins = config.plugins || [];
+
+  config.module = config.module || {};
+  config.module.rules = config.module.rules || [];
+
+  const hasLoader = (rule, loaderName) => {
+    if (!rule) {
+      return false;
+    }
+
+    if (typeof rule.loader === 'string' && rule.loader.includes(loaderName)) {
+      return true;
+    }
+
+    const use = rule.use;
+    if (typeof use === 'string') {
+      return use.includes(loaderName);
+    }
+    if (Array.isArray(use)) {
+      return use.some((entry) => {
+        if (typeof entry === 'string') {
+          return entry.includes(loaderName);
+        }
+        return (
+          entry &&
+          typeof entry.loader === 'string' &&
+          entry.loader.includes(loaderName)
+        );
+      });
+    }
+
+    return false;
+  };
+
+  const hasRule = (testRegex, loaderName) =>
+    config.module.rules.some(
+      (rule) =>
+        rule &&
+        rule.test &&
+        String(rule.test) === String(testRegex) &&
+        hasLoader(rule, loaderName),
+    );
+
+  const pushRuleOnce = (rule, loaderName) => {
+    if (!hasRule(rule.test, loaderName)) {
+      config.module.rules.push(rule);
+    }
+  };
+
   // Alias
   Object.assign(config.resolve.alias, resolves.TwigResolve.alias);
 
   // Twig loader
-  config.module.rules.push({
-    /**
-     * @type {RegExp}
-     */
-    test: /\.twig$/,
-    use: [
-      {
-        /**
-         * Custom loader for svg/spritemap integration.
-         * @type {string}
-         */
-        loader: resolve(_dirname, '../config/webpack/sdc-loader.js'),
-        options: {
+  pushRuleOnce(
+    {
+      /**
+       * @type {RegExp}
+       */
+      test: /\.twig$/,
+      use: [
+        {
           /**
-           * Name of the Emulsify project for resolving.
+           * Custom loader for svg/spritemap integration.
            * @type {string}
            */
-          projectName: emulsifyConfig.project.name,
-        },
-      },
-      {
-        /**
-         * Standard Twig JS loader.
-         * @type {string}
-         */
-        loader: 'twigjs-loader',
-      },
-    ],
-  });
-
-  // SCSS Loader configuration
-  config.module.rules.push({
-    test: /\.s[ac]ss$/i,
-    use: [
-      'style-loader',
-      {
-        loader: 'css-loader',
-        options: {
-          /**
-           * Enable source maps for CSS.
-           * @type {boolean}
-           */
-          sourceMap: true,
-        },
-      },
-      {
-        loader: 'sass-loader',
-        options: {
-          sourceMap: true,
-          sassOptions: {
-            importer: globImporter(),
+          loader: resolve(_dirname, '../config/webpack/sdc-loader.js'),
+          options: {
+            /**
+             * Name of the Emulsify project for resolving.
+             * @type {string}
+             */
+            projectName: emulsifyConfig.project.name,
           },
         },
-      },
-    ],
-  });
+        {
+          /**
+           * Standard Twig JS loader.
+           * @type {string}
+           */
+          loader: 'twigjs-loader',
+        },
+      ],
+    },
+    'twigjs-loader',
+  );
+
+  // SCSS Loader configuration
+  pushRuleOnce(
+    {
+      test: /\.s[ac]ss$/i,
+      use: [
+        'style-loader',
+        {
+          loader: 'css-loader',
+          options: {
+            /**
+             * Enable source maps for CSS.
+             * @type {boolean}
+             */
+            sourceMap: true,
+          },
+        },
+        {
+          loader: 'sass-loader',
+          options: {
+            sourceMap: true,
+            sassOptions: {
+              importer: globImporter(),
+            },
+          },
+        },
+      ],
+    },
+    'sass-loader',
+  );
 
   // YAML loader
-  config.module.rules.push({
-    /**
-     * @type {RegExp}
-     */
-    test: /\.ya?ml$/,
-    loader: 'js-yaml-loader',
-  });
+  pushRuleOnce(
+    {
+      /**
+       * @type {RegExp}
+       */
+      test: /\.ya?ml$/,
+      loader: 'js-yaml-loader',
+    },
+    'js-yaml-loader',
+  );
 
-  // StyleLint and ESLint plugins
+  // Keep style linting in the Storybook webpack build. ESLint runs via the
+  // dedicated npm scripts instead, which avoids coupling Storybook to a
+  // specific ESLint major version.
   config.plugins.push(
     new _StyleLintPlugin({
       configFile: resolve(projectDir, '../', '.stylelintrc.json'),
@@ -167,10 +228,6 @@ export default async function ({ config }) {
       files: '**/*.scss',
       failOnError: false,
       quiet: false,
-    }),
-    new ESLintPlugin({
-      context: resolve(projectDir, '../', 'src'),
-      extensions: ['js'],
     }),
   );
 
@@ -181,13 +238,32 @@ export default async function ({ config }) {
     }),
   ];
 
-  // Fallback for optional modules
+  // Merge fallbacks so we do not clobber Storybook defaults.
   config.resolve.fallback = {
+    ...(config.resolve.fallback || {}),
+    process: require.resolve('process/browser'),
     /**
      * Prevent resolution of components directory if missing.
      */
     '../../../../components': false,
   };
+
+  // Provide global `process` for browser bundles that pull in node-style libs.
+  const hasProcessProvidePlugin = config.plugins.some(
+    (plugin) =>
+      plugin &&
+      plugin.constructor &&
+      plugin.constructor.name === 'ProvidePlugin' &&
+      plugin.definitions &&
+      Object.prototype.hasOwnProperty.call(plugin.definitions, 'process'),
+  );
+  if (!hasProcessProvidePlugin) {
+    config.plugins.push(
+      new webpack.ProvidePlugin({
+        process: 'process/browser',
+      }),
+    );
+  }
 
   return config;
 }

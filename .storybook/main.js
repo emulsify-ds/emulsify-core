@@ -11,7 +11,10 @@ import { resolve } from 'path';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
+import { createRequire } from 'module';
+import extendWebpackConfig from './webpack.config.js';
+
+const require = createRequire(import.meta.url);
 
 /**
  * The full path to the current file (ESM compatible).
@@ -23,26 +26,70 @@ const _filename = fileURLToPath(import.meta.url);
  * The directory name of the current module file.
  * @type {string}
  */
-const _dirname  = path.dirname(_filename);
+const _dirname = path.dirname(_filename);
+
+/**
+ * Migrate the consumer Storybook theme import from "@storybook/theming" to
+ * "storybook/theming" when needed.
+ *
+ * This runs opportunistically during startup and never throws so Storybook
+ * startup is resilient across all projects.
+ */
+const migrateConsumerThemeImport = () => {
+  try {
+    const themeConfigPath = resolve(
+      _dirname,
+      '../../../../config/emulsify-core/storybook/theme.js',
+    );
+
+    if (!fs.existsSync(themeConfigPath)) {
+      return;
+    }
+
+    const originalThemeConfig = fs.readFileSync(themeConfigPath, 'utf8');
+
+    if (!originalThemeConfig.includes('@storybook/theming')) {
+      return;
+    }
+
+    const migratedThemeConfig = originalThemeConfig.replace(
+      /(['"])@storybook\/theming\1/g,
+      '$1storybook/theming$1',
+    );
+
+    if (migratedThemeConfig !== originalThemeConfig) {
+      fs.writeFileSync(themeConfigPath, migratedThemeConfig, 'utf8');
+    }
+  } catch {
+    // Ignore migration failures so Storybook startup is never blocked.
+  }
+};
+
+migrateConsumerThemeImport();
 
 /**
  * Safely apply any user-provided overrides or fall back to an empty object.
  * @type {object}
  */
-const safeConfigOverrides = configOverrides || {};
+const safeConfigOverrides = (() => {
+  try {
+    const overridesModule = require('../../../../config/emulsify-core/storybook/main.js');
+    return overridesModule.default || overridesModule || {};
+  } catch {
+    return {};
+  }
+})();
 
 /**
  * Primary Storybook configuration object.
- * @type {import('@storybook/core-common').StorybookConfig}
+ * @type {import('storybook/internal/types').StorybookConfig}
  */
 const config = {
   /**
    * Patterns for locating story files under src or components directories.
    * @type {string[]}
    */
-  stories: [
-    '../../../../(src|components)/**/*.stories.@(js|jsx|ts|tsx)',
-  ],
+  stories: ['../../../../@(src|components)/**/*.stories.@(js|jsx|ts|tsx)'],
 
   /**
    * Directories to serve as static assets in the Storybook build.
@@ -52,6 +99,7 @@ const config = {
     '../../../../assets/images',
     '../../../../assets/icons',
     '../../../../dist',
+    '../../../../assets/videos',
   ],
 
   /**
@@ -59,28 +107,31 @@ const config = {
    * @type {string[]}
    */
   addons: [
-    '../../../@storybook/addon-a11y',
-    '../../../@storybook/addon-links',
-    '../../../@storybook/addon-essentials',
-    '../../../@storybook/addon-themes',
-    '../../../@storybook/addon-styling-webpack',
+    '@storybook/addon-a11y',
+    '@storybook/addon-links',
+    '@storybook/addon-themes',
+    '@storybook/addon-styling-webpack',
   ],
 
   /**
    * Core builder configuration for Storybook.
-   * @type {{builder: string, disableTelemetry: boolean}}
+   * Storybook 9 splits the HTML renderer from the webpack builder, so the
+   * builder must be declared explicitly instead of relying on html-webpack5.
+   * @type {{builder: {name: string}, disableTelemetry: boolean}}
    */
   core: {
-    builder: 'webpack5',
+    builder: {
+      name: '@storybook/builder-webpack5',
+    },
     disableTelemetry: true,
   },
 
   /**
-   * Framework specification for Storybook (HTML + Webpack5).
+   * Framework specification for Storybook's HTML renderer.
    * @type {{name: string, options: object}}
    */
   framework: {
-    name: '@storybook/html-webpack5',
+    name: '@storybook/server-webpack5',
     options: {},
   },
 
@@ -205,7 +256,7 @@ const config = {
     // load external manager-head.html if present
     const externalManagerHeadPath = resolve(
       _dirname,
-      '../../../../config/emulsify-core/storybook/manager-head.html'
+      '../../../../config/emulsify-core/storybook/manager-head.html',
     );
     let externalManagerHtml = '';
     if (fs.existsSync(externalManagerHeadPath)) {
@@ -225,7 +276,7 @@ ${externalManagerHtml}`;
   previewHead: (head) => {
     const externalHeadPath = resolve(
       _dirname,
-      '../../../../config/emulsify-core/storybook/preview-head.html'
+      '../../../../config/emulsify-core/storybook/preview-head.html',
     );
 
     let externalHtml = '';
@@ -236,6 +287,16 @@ ${externalManagerHtml}`;
     return `${head}
 ${externalHtml}`;
   },
+
+  /**
+   * Forward Storybook 9's webpack hook to the existing shared webpack helper so
+   * custom Twig, Sass, YAML, and resolver behavior still applies.
+   * @param {object} storybookConfig - Storybook's generated webpack config.
+   * @param {object} options - Storybook webpack hook options.
+   * @returns {Promise<object>} The merged webpack config.
+   */
+  webpackFinal: async (storybookConfig, options) =>
+    extendWebpackConfig({ config: storybookConfig, ...options }),
 
   // Merge in user overrides without modifying original logic
   ...safeConfigOverrides,
