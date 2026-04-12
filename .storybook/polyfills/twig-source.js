@@ -1,14 +1,27 @@
-import { getProjectMachineName } from '../utils';
+import { getProjectMachineName } from '../utils.js';
 
 const namespace = getProjectMachineName();
 
 // Constants used by the `source()` polyfill.
-const PUBLIC_ASSET_BASE = (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname.endsWith('github.io'))
-  ? `/${namespace}/assets/`
-  : '/assets/';
+const PUBLIC_ASSET_BASE =
+  typeof window !== 'undefined' &&
+  window.location &&
+  window.location.hostname &&
+  window.location.hostname.endsWith('github.io')
+    ? `/${namespace}/assets/`
+    : '/assets/';
 
-const INLINE_ASSET_EXTS = new Set(['svg', 'html', 'twig', 'css', 'js', 'json', 'txt', 'md']);
-const IMAGE_ASSET_EXTS  = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
+const INLINE_ASSET_EXTS = new Set([
+  'svg',
+  'html',
+  'twig',
+  'css',
+  'js',
+  'json',
+  'txt',
+  'md',
+]);
+const IMAGE_ASSET_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
 
 /**
  * Twig `source()` polyfill.
@@ -33,10 +46,8 @@ function twigSource(Twig) {
         if (xhr.status >= 200 && xhr.status < 300) {
           return xhr.responseText;
         }
-        // eslint-disable-next-line no-console
         console.error(`source(): ${xhr.status} while fetching ${relPath}`);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error(`source(): failed to fetch ${relPath}`, err);
       }
     }
@@ -49,6 +60,6 @@ function twigSource(Twig) {
     // Fallback: return public URL.
     return `${PUBLIC_ASSET_BASE}${relPath}`;
   });
-};
+}
 
 export default twigSource;

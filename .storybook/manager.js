@@ -1,7 +1,7 @@
 // .storybook/manager.js
 
-import { addons } from '@storybook/manager-api';
-import emulsifyTheme from './emulsifyTheme';
+import { addons } from 'storybook/manager-api';
+import emulsifyTheme from './emulsifyTheme.js';
 
 /**
  * Dynamically import the user-provided Storybook theme override.
@@ -19,7 +19,8 @@ import('../../../../config/emulsify-core/storybook/theme')
      */
     const isEmptyObject =
       !customTheme ||
-      (typeof customTheme === 'object' && Object.keys(customTheme).length === 0);
+      (typeof customTheme === 'object' &&
+        Object.keys(customTheme).length === 0);
 
     /**
      * Apply the chosen theme to Storybook’s manager UI configuration.
@@ -42,4 +43,3 @@ import('../../../../config/emulsify-core/storybook/theme')
       theme: emulsifyTheme,
     });
   });
-  
