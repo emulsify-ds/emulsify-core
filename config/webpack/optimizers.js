@@ -1,4 +1,5 @@
 import ImageMinimizerPlugin from 'image-minimizer-webpack-plugin';
+import TerserPlugin from 'terser-webpack-plugin';
 
 const ImageMinimizer = new ImageMinimizerPlugin({
   minimizer: {
@@ -12,6 +13,14 @@ const ImageMinimizer = new ImageMinimizerPlugin({
   },
 });
 
+const TerserMinimizer = new TerserPlugin({
+  terserOptions: {
+    mangle: {
+      reserved: ['Drupal', 'drupalSettings', 'once'],
+    },
+  },
+});
+
 export default {
-  minimizer: [ImageMinimizer],
+  minimizer: [ImageMinimizer, TerserMinimizer],
 };
