@@ -57,7 +57,7 @@
     "@storybook/addon-a11y": "^9.1.20",
     "@storybook/addon-links": "^9.1.20",
     "@storybook/addon-styling-webpack": "^2.0.0",
-    "@storybook/addon-themes": "^9.1.20",
+    "@storybook/addon-themes": "^10.3.5",
     "@storybook/builder-webpack5": "^9.1.20",
     "@storybook/server-webpack5": "^9.1.20",
     "add-attributes-twig-extension": "^0.1.0",
