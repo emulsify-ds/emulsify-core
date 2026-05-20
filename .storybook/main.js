@@ -427,6 +427,7 @@ const config = {
       },
       optimizeDeps: {
         include: [
+          'react',
           'path',
           'twig',
           'twig-drupal-filters',
