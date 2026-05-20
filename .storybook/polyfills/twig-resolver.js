@@ -9,10 +9,11 @@ const namespace = getProjectMachineName();
  */
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
-// Determine candidate roots: prefer structure overrides, otherwise src/components.
+// Determine candidate roots: prefer structure overrides, otherwise the primary
+// component root resolved for the project.
 const candidateRoots = Array.isArray(ENV?.structureRoots) && ENV?.structureOverrides && ENV.structureRoots.length
   ? ENV.structureRoots
-  : (ENV?.srcDir ? [`${ENV.srcDir}/components`] : []);
+  : (ENV?.srcDir ? [ENV.srcDir] : []);
 
 /**
  * Convert an absolute path to a Vite project-root-relative path, prefixed with "/".
@@ -44,11 +45,7 @@ function mergeGlobMaps(maps) {
 // - Nested component folders:   /root/thing/thing.twig
 // - Flat component files:       /root/thing.twig
 // We pre-load everything under each root so resolution is O(1).
-const twigModules = mergeGlobMaps(
-  rootRels.flatMap((base) => [
-    import.meta.glob(`${base}/**/*.twig`, { eager: true }),
-  ])
-);
+const twigModules = __EMULSIFY_TWIG_GLOB_IMPORTS__;
 
 // Helper: generate likely keys for a given component “part” under every root.
 // We try the canonical “part/part.twig”, then “part.twig”.

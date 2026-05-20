@@ -100,7 +100,7 @@ function buildTwigGlobImports(env) {
     env.structureRoots.length
       ? env.structureRoots
       : env.srcDir
-        ? [path.join(env.srcDir, 'components')]
+        ? [env.srcDir]
         : [];
   const rootRelativePaths = candidateRoots.map((root) =>
     toRootRelativePath(env.projectDir, root),
