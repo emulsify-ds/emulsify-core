@@ -10,9 +10,47 @@ An open-source toolset for creating and implementing design systems.
 
 Emulsify Core's Twig integration is platform-agnostic. The shared Vite config uses [`@vituum/vite-plugin-twig`](https://github.com/vituum/vite-plugin-twig) for generic Twig rendering and an Emulsify-owned Vite plugin to keep Storybook component imports working as render functions, including `*.twig` and `*.twig?twig` imports.
 
-Drupal-specific Twig helpers such as `twig-drupal-filters`, `bem-twig-extension`, and `add-attributes-twig-extension` are still registered in Storybook as compatibility extensions for existing component libraries. They are not the core renderer and can coexist with Drupal, WordPress, Craft CMS, or other Twig-based project integrations.
+Drupal-specific Twig helpers such as `twig-drupal-filters` are still registered in Storybook as compatibility extensions for existing component libraries. They are not the core renderer and can coexist with Drupal, WordPress, Craft CMS, or other Twig-based project integrations.
 
 Drupal component mirroring remains intentionally Drupal-specific: when a Drupal project builds from `src/`, `dist/components/**` is mirrored back to the root `components/` directory for Drupal SDC compatibility. Generic, WordPress, Craft CMS, and other platform builds do not use that mirroring behavior by default.
+
+## Native extensions
+
+Emulsify Core includes native Twig.js implementations for the Emulsify `bem()` and `add_attributes()` helpers. These are registered through one shared extension registry so Storybook, Vite Twig rendering, and imported Twig component modules use the same behavior.
+
+The extension source lives under `src/extensions/`:
+
+- `src/extensions/twig/` contains Twig functions and registration helpers.
+- `src/extensions/shared/` contains reusable HTML attribute and list utilities.
+- `src/extensions/react/` is reserved for React extension registration as those APIs grow.
+
+`bem()` remains backward-compatible with the existing positional API:
+
+```twig
+<h1 {{ bem('title', ['small', 'red'], 'card', ['js-click']) }}></h1>
+```
+
+It also supports object syntax for clearer future usage:
+
+```twig
+<h1 {{ bem({
+  block: 'card',
+  element: 'title',
+  modifiers: ['small', 'red'],
+  extra: ['js-click']
+}) }}></h1>
+```
+
+`add_attributes()` can safely compose with `bem()` output:
+
+```twig
+{% set additional_attributes = {
+  class: bem('title', ['small'], 'card'),
+  disabled: true
+} %}
+
+<h1 {{ add_attributes(additional_attributes) }}></h1>
+```
 
 ## Installation and usage
 Installation and configuration is set up by the provided project starter or platform package. Emulsify Drupal is the current reference integration, and the core Vite/Twig configuration is intended to support additional Twig-based platforms without changing the renderer.
@@ -79,26 +117,3 @@ To facilitate automatic semantic release versioning, we utilize the [Conventiona
 ## Author
 
 Emulsify&reg; is a product of [Four Kitchens](https://fourkitchens.com).
-
-## Contributors
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/callinmullaney"><img src="https://avatars.githubusercontent.com/u/369018?v=4?s=100" width="100px;" alt="Callin Mullaney"/><br /><sub><b>Callin Mullaney</b></sub></a><br /><a href="https://github.com/fourkitchens/emulsify-core/commits?author=callinmullaney" title="Code">💻</a> <a href="https://github.com/fourkitchens/emulsify-core/commits?author=callinmullaney" title="Documentation">📖</a></td>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/amazingrando"><img src="https://avatars.githubusercontent.com/u/409903?v=4?s=100" width="100px;" alt="Randy Oest"/><br /><sub><b>Randy Oest</b></sub></a><br /><a href="https://github.com/fourkitchens/emulsify-core/commits?author=amazingrando" title="Code">💻</a> <a href="https://github.com/fourkitchens/emulsify-core/commits?author=amazingrando" title="Documentation">📖</a></td>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/robherba"><img src="https://avatars.githubusercontent.com/u/9342274?v=4?s=100" width="100px;" alt="Roberto Hernandez"/><br /><sub><b>Roberto Hernandez</b></sub></a><br /><a href="https://github.com/fourkitchens/emulsify-core/commits?author=robherba" title="Code">💻</a></td>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/dependabot"><img src="https://avatars.githubusercontent.com/u/49699333?v=4?s=100" width="100px;" alt="Dependabot"/><br /><sub><b>Dependabot</b></sub></a><br /><a href="#maintenance-dependabot" title="Maintenance">🚧</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

@@ -501,8 +501,6 @@ const config = {
           'path',
           'twig',
           'twig-drupal-filters',
-          'bem-twig-extension',
-          'add-attributes-twig-extension',
         ],
         esbuildOptions: {
           loader: {

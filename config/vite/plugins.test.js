@@ -1,7 +1,11 @@
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { makePlugins, makeTwigNamespaces } from './plugins.js';
+import {
+  makePlugins,
+  makeTwigNamespaces,
+  makeTwigPluginOptions,
+} from './plugins.js';
 
 jest.mock('vite-plugin-sass-glob-import', () => ({
   __esModule: true,
@@ -115,6 +119,15 @@ describe('Vite Twig plugins', () => {
         '@vituum/vite-plugin-twig',
       ]),
     );
+  });
+
+  it('adds native Emulsify Twig functions to generic Twig rendering options', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    expect(
+      Object.keys(makeTwigPluginOptions(makeEnv(projectDir)).functions),
+    ).toEqual(['add_attributes', 'bem']);
   });
 
   it('keeps copy plugins for normal projects and omits them for structure overrides', () => {

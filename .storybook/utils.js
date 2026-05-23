@@ -1,6 +1,5 @@
-import twigAddAttributes from 'add-attributes-twig-extension';
-import twigBEM from 'bem-twig-extension';
 import twigDrupal from 'twig-drupal-filters';
+import { registerTwigExtensions } from '../src/extensions/twig/index.js';
 import twigInclude from './polyfills/twig-include';
 import twigSource from './polyfills/twig-source';
 
@@ -80,8 +79,7 @@ export function getProjectMachineName() {
 export function setupTwig(twig) {
   twig.cache();
   twigDrupal(twig);
-  twigBEM(twig);
-  twigAddAttributes(twig);
+  registerTwigExtensions(twig);
   twigInclude(twig);
   twigSource(twig);
   return twig;
