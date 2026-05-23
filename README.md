@@ -4,10 +4,18 @@
 
 An open-source toolset for creating and implementing design systems.
 
-**Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Vite](https://vite.dev/) development environment. It is meant to make project setup and ongoing development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone project.
+**Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Vite](https://vite.dev/) development environment. It is meant to make project setup and ongoing development easier by bundling reusable configuration for Twig-based themes and standalone projects.
+
+## Twig rendering
+
+Emulsify Core's Twig integration is platform-agnostic. The shared Vite config uses [`@vituum/vite-plugin-twig`](https://github.com/vituum/vite-plugin-twig) for generic Twig rendering and an Emulsify-owned Vite plugin to keep Storybook component imports working as render functions, including `*.twig` and `*.twig?twig` imports.
+
+Drupal-specific Twig helpers such as `twig-drupal-filters`, `bem-twig-extension`, and `add-attributes-twig-extension` are still registered in Storybook as compatibility extensions for existing component libraries. They are not the core renderer and can coexist with Drupal, WordPress, Craft CMS, or other Twig-based project integrations.
+
+Drupal component mirroring remains intentionally Drupal-specific: when a Drupal project builds from `src/`, `dist/components/**` is mirrored back to the root `components/` directory for Drupal SDC compatibility. Generic, WordPress, Craft CMS, and other platform builds do not use that mirroring behavior by default.
 
 ## Installation and usage
-Installation and configuration is setup by the provided base theme project(s). As of this writing, Emulsify Drupal is the only base theme project [with this integration](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L36).
+Installation and configuration is set up by the provided project starter or platform package. Emulsify Drupal is the current reference integration, and the core Vite/Twig configuration is intended to support additional Twig-based platforms without changing the renderer.
 
 ### Manual installation
 - `npm install @emulsify/core` within your repository or project theme.
@@ -16,7 +24,7 @@ Installation and configuration is setup by the provided base theme project(s). A
 
 ### Common Scripts
 
-Run `nvm use` prior to running any of the following commands to verify you are using Node 20.
+Run `nvm use` prior to running any of the following commands to verify you are using the supported Node version.
 (Each is prefixed with `npm run `)
 
 **develop**
