@@ -4,6 +4,17 @@ const mockExit = jest
   .spyOn(global.process, 'exit')
   .mockImplementation(() => {});
 jest.mock('pa11y', () => jest.fn());
+jest.mock(
+  '../../../config/emulsify-core/a11y.config.js',
+  () => ({
+    components: [],
+    ignore: {
+      codes: ['landmark-one-main', 'page-has-heading-one'],
+      descriptions: ['Ensures all page content is contained by landmarks'],
+    },
+  }),
+  { virtual: true },
+);
 jest.spyOn(global.console, 'log').mockImplementation(() => {});
 const pa11y = require('pa11y');
 const path = require('path');
@@ -66,11 +77,11 @@ describe('a11y', () => {
     });
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(`
       "
-          severity: [31merror[39m
-          message: this chicken is not fried enough.
-          context: https://example.com
-          selector: kfc > popeyes > .chicken
-        "
+      severity: error
+      message: this chicken is not fried enough.
+      context: https://example.com
+      selector: kfc > popeyes > .chicken
+      "
     `);
   });
 
@@ -96,25 +107,25 @@ describe('a11y', () => {
     };
     expect(logReport(report)).toBe(true);
     expect(global.console.log.mock.calls).toMatchInlineSnapshot(`
-      Array [
-        Array [
-          "[31mIssues found in component: https://example/component.html[39m",
+      [
+        [
+          "Issues found in component: https://example/component.html",
         ],
-        Array [
+        [
           "
-          severity: [31merror[39m
-          message: this pizza is too soggy
-          context: https://example.com
-          selector: pizza > .hut
-        ",
+      severity: error
+      message: this pizza is too soggy
+      context: https://example.com
+      selector: pizza > .hut
+      ",
         ],
-        Array [
+        [
           "
-          severity: [31merror[39m
-          message: this pasta is undercooked
-          context: https://example.com
-          selector: olive > .garden
-        ",
+      severity: error
+      message: this pasta is undercooked
+      context: https://example.com
+      selector: olive > .garden
+      ",
         ],
       ]
     `);
@@ -123,7 +134,7 @@ describe('a11y', () => {
   it('logs about a component having no issue if a report comes back empty', () => {
     expect(logReport({ issues: [], pageUrl: 'papa-johns' })).toBe(false);
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(
-      `"[32mNo issues found in component: papa-johns[39m"`,
+      `"No issues found in component: papa-johns"`,
     );
   });
 
