@@ -76,7 +76,7 @@ Installation and configuration is set up by the provided project starter or plat
 
 ### Common Scripts
 
-Run `nvm use` prior to running any of the following commands to verify you are using the supported Node version.
+Node.js 24 or later is required for every project script. Run `nvm use` prior to running any of the following commands to verify you are using the supported Node version.
 (Each is prefixed with `npm run `)
 
 **develop**
