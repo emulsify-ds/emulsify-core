@@ -5,16 +5,16 @@
  * encodes the final folder inside the Vite outDir (default `dist/`).
  *
  * Modern projects:
- *   - Global/base assets → "global/..."
- *   - Component assets   → "components/..." (or mirrored to ./components when Drupal)
+ *   - Global/base assets -> "global/..."
+ *   - Component assets   -> "components/..." (or mirrored to ./components when Drupal)
  *   - SDC=true removes the injected "/css" or "/js" bucket
  *
  * Component Structure Overrides projects (project.emulsify.json: variant.structureImplementations):
- *   - **Only** compile JS/SCSS.
- *   - JS  → "js/<relative-without-ext>"
- *   - CSS → "css/<relative-without-ext>"
+ *   - Only compile JS/SCSS.
+ *   - JS  -> "js/<relative-without-ext>"
+ *   - CSS -> "css/<relative-without-ext>"
  *   - No Twig/assets copying here (handled in plugins and disabled for Component Structure Overrides).
- *   - cl-* / sb-* SCSS → "storybook/<path-without-ext>"
+ *   - cl-* / sb-* SCSS -> "storybook/<path-without-ext>"
  */
 
 import fs from 'fs';
@@ -64,7 +64,7 @@ export function replaceLastSlash(str, replacement) {
 export function makePatterns(ctx) {
   const { projectDir, srcDir, srcExists } = ctx;
 
-  // SCSS
+  // SCSS patterns separate global styles, component styles, and Storybook styles.
   const BaseScssPattern = srcExists
     ? resolve(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
     : '';
@@ -73,7 +73,7 @@ export function makePatterns(ctx) {
     : resolve(srcDir, '**/!(_*|cl-*|sb-*).scss');
   const ComponentLibraryScssPattern = resolve(srcDir, '**/*{cl-*,sb-*}.scss');
 
-  // JS
+  // JS patterns exclude stories, component metadata, minified files, and tests.
   const BaseJsPattern = srcExists
     ? resolve(
         srcDir,
@@ -84,7 +84,7 @@ export function makePatterns(ctx) {
     ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
     : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
 
-  // Icons (not used here but preserved for parity)
+  // Preserve the icon pattern for compatibility with older consumers.
   const SpritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
 
   return {
@@ -198,7 +198,7 @@ export function buildInputs(ctx, patterns) {
       storybookScss.push(...globSync(toPosix(clSbGlob)));
     }
 
-    // JS → dist/js/<relative-from-components-without-ext>
+    // JS files emit under dist/js using the path below components when possible.
     for (const file of jsFiles) {
       // Compute path relative to the top-level `components/` folder if present,
       // else relative to the project root as a fallback.
@@ -211,7 +211,7 @@ export function buildInputs(ctx, patterns) {
       add(outKey, file);
     }
 
-    // CSS → dist/css/<relative-from-components-without-ext>
+    // SCSS files emit under dist/css using the same relative path rules.
     for (const file of scssFiles) {
       const relFromProj = relFrom(file, projectDir);
       const relFromComponents = relFromProj.includes('components/')
@@ -222,7 +222,7 @@ export function buildInputs(ctx, patterns) {
       add(outKey, file);
     }
 
-    // Storybook/CL styles → dist/storybook/<relative-without-ext>
+    // Storybook and component-library styles stay under dist/storybook.
     for (const file of storybookScss) {
       const relFromProj = relFrom(file, projectDir).replace(/\.scss$/i, '');
       const outKey = `storybook/${relFromProj}`;

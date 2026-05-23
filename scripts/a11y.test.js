@@ -1,3 +1,7 @@
+/**
+ * @file Unit tests for the pa11y accessibility reporting script.
+ */
+
 import 'regenerator-runtime/runtime';
 
 const mockExit = jest
@@ -39,6 +43,7 @@ pa11y.mockResolvedValue('very official report');
 
 describe('a11y', () => {
   beforeEach(() => {
+    // Reset mocked process and console state between report scenarios.
     global.console.log.mockClear();
     global.process.exit.mockClear();
   });
@@ -134,7 +139,7 @@ describe('a11y', () => {
   it('logs about a component having no issue if a report comes back empty', () => {
     expect(logReport({ issues: [], pageUrl: 'papa-johns' })).toBe(false);
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(
-      `"No issues found in component: papa-johns"`,
+      '"No issues found in component: papa-johns"',
     );
   });
 

@@ -1,4 +1,7 @@
-// .storybook/preview.js
+/**
+ * @file Storybook preview configuration shared by Emulsify projects.
+ */
+
 import { getRules } from 'axe-core';
 import { useEffect } from 'storybook/preview-api';
 import Twig from 'twig';
@@ -10,21 +13,20 @@ import { fetchCSSFiles, setupTwig } from './utils.js';
  */
 let externalOverrides = {};
 
-// Load the preview.js from the project config overrides.
+// Load optional project preview overrides without requiring every consumer to define them.
 try {
   /**
    * Dynamically require external preview overrides.
    * @module '../../../../config/emulsify-core/storybook/preview.js'
    */
-  externalOverrides = require(
-    '../../../../config/emulsify-core/storybook/preview.js'
-  ).default;
+  externalOverrides =
+    require('../../../../config/emulsify-core/storybook/preview.js').default;
 } catch (err) {
-  // no override file? swallow the error and use {}
+  // Missing override files are expected for package-level smoke tests.
   externalOverrides = {};
 }
 
-// Import Drupal behaviors for rich JavaScript integration.
+// Register the Drupal behavior shim before stories render.
 import './_drupal.js';
 
 /**
@@ -34,10 +36,10 @@ import './_drupal.js';
  */
 function enableRulesByTag(tags = []) {
   const allRules = getRules();
-  return allRules.map(rule =>
-    tags.some(t => rule.tags.includes(t))
+  return allRules.map((rule) =>
+    tags.some((t) => rule.tags.includes(t))
       ? { id: rule.ruleId, enabled: true }
-      : { id: rule.ruleId, enabled: false }
+      : { id: rule.ruleId, enabled: false },
   );
 }
 
@@ -54,7 +56,7 @@ const AxeRules = enableRulesByTag([
   'best-practice',
 ]);
 
-// Initialize Twig and load any CSS that your stories need.
+// Initialize Twig compatibility helpers and eager-load story CSS.
 setupTwig(Twig);
 fetchCSSFiles();
 

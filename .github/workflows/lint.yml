@@ -1,3 +1,4 @@
+# Runs the project lint task on pushes and pull requests that target release branches.
 name: Lint
 on:
   push:
@@ -17,6 +18,7 @@ jobs:
         with:
           node-version: 20
       - name: Install
+        # npm install validates the package the same way consumers install it.
         run: npm install
       - name: Lint
         run: npm run lint

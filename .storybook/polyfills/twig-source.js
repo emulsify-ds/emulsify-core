@@ -1,14 +1,32 @@
+/**
+ * @file Twig source() compatibility helper for Storybook-rendered templates.
+ */
+
 import { getProjectMachineName } from '../utils';
 
 const namespace = getProjectMachineName();
 
-// Constants used by the `source()` polyfill.
-const PUBLIC_ASSET_BASE = (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname.endsWith('github.io'))
-  ? `/${namespace}/assets/`
-  : '/assets/';
+// GitHub Pages serves static assets from a repository-prefixed base path.
+const PUBLIC_ASSET_BASE =
+  typeof window !== 'undefined' &&
+  window.location &&
+  window.location.hostname &&
+  window.location.hostname.endsWith('github.io')
+    ? `/${namespace}/assets/`
+    : '/assets/';
 
-const INLINE_ASSET_EXTS = new Set(['svg', 'html', 'twig', 'css', 'js', 'json', 'txt', 'md']);
-const IMAGE_ASSET_EXTS  = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
+// Text assets can be safely inlined; binary assets should remain URL-based.
+const INLINE_ASSET_EXTS = new Set([
+  'svg',
+  'html',
+  'twig',
+  'css',
+  'js',
+  'json',
+  'txt',
+  'md',
+]);
+const IMAGE_ASSET_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
 
 /**
  * Twig `source()` polyfill.
@@ -50,6 +68,6 @@ function twigSource(Twig) {
     // Fallback: return public URL.
     return `${PUBLIC_ASSET_BASE}${relPath}`;
   });
-};
+}
 
 export default twigSource;

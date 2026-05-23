@@ -11,6 +11,7 @@
  */
 export function flattenList(value) {
   if (value === null || typeof value === 'undefined' || value === false) {
+    // Match Twig-style falsey class handling without discarding 0 or ''.
     return [];
   }
 
@@ -32,6 +33,7 @@ export function uniqueList(values) {
   const result = [];
 
   for (const value of values) {
+    // Preserve first-seen order; class order can affect utility CSS output.
     if (seen.has(value)) continue;
     seen.add(value);
     result.push(value);

@@ -1,16 +1,17 @@
 /**
  * @file Vite plugins factory for Emulsify.
  *
- * @description
- *  - Copies TWIGs/metadata into `dist/` using the same routing rules as JS/CSS:
- *      • `src/components/**`         → `dist/components/**`
- *      • `src/!(components|util)/**` → `dist/global/**`
- *  - Copies **all non-code assets** found under `src/` to the same routed locations.
- *  - Builds a **physical** spritemap at `dist/assets/icons.sprite.svg`.
+ * This module assembles the shared plugin chain used by Vite and Storybook.
+ * It copies Twig templates, component metadata, and non-code assets with the
+ * same routing rules as JS/CSS:
+ *   - `src/components/**`         -> `dist/components/**`
+ *   - `src/!(components|util)/**` -> `dist/global/**`
+ *
+ * It also builds a physical SVG spritemap at `dist/assets/icons.svg`.
  *
  * Component Structure Overrides behavior:
- *  - When `env.structureOverrides === true`, we **skip** copying Twig and assets, and also
- *    **skip** platform-specific mirroring. (Only JS/CSS compile is needed.)
+ *  - When `env.structureOverrides === true`, copying and platform-specific
+ *    mirroring are skipped because only JS/CSS compilation is needed.
  */
 
 import { resolve, join, dirname, basename, posix as pathPosix } from 'path';
@@ -53,8 +54,10 @@ const firstExistingPath = (paths) =>
     return existsSync(filePath);
   });
 
+/** Normalize Windows separators before paths are used in globs or output keys. */
 const toPosixPath = (filePath) => filePath.replace(/\\/g, '/');
 
+/** Twig token types that can reference another template file. */
 const includeTokenTypes = [
   'Twig.logic.type.embed',
   'Twig.logic.type.extends',
@@ -63,14 +66,32 @@ const includeTokenTypes = [
   'Twig.logic.type.include',
 ];
 
+/**
+ * Determine whether a Vite request should compile as a Twig render module.
+ *
+ * @param {string} id - Vite module id, including an optional query string.
+ * @returns {boolean} TRUE when the request is a renderable Twig module.
+ */
 const isTwigModuleRequest = (id) => {
   const [filePath, query = ''] = id.split('?');
   if (!filePath.endsWith('.twig')) return false;
   return !query || query === 'twig' || !/(^|&)(raw|url)\b/.test(query);
 };
 
+/**
+ * Remove the Vite query string from a module id.
+ *
+ * @param {string} id - Vite module id.
+ * @returns {string} Filesystem path without query parameters.
+ */
 const stripRequestQuery = (id) => id.split('?')[0];
 
+/**
+ * Extract referenced Twig templates from compiled Twig token trees.
+ *
+ * @param {Array} [tokens=[]] - Twig token tree.
+ * @returns {string[]} Referenced template paths.
+ */
 const pluckIncludes = (tokens = []) => [
   ...tokens
     .filter((token) => includeTokenTypes.includes(token.token?.type))
@@ -82,8 +103,21 @@ const pluckIncludes = (tokens = []) => [
   ...tokens.flatMap((token) => pluckIncludes(token.token?.output || [])),
 ];
 
+/**
+ * Return truthy values in first-seen order with duplicates removed.
+ *
+ * @param {*[]} items - Candidate values.
+ * @returns {*[]} Unique truthy values.
+ */
 const unique = (items) => [...new Set(items.filter(Boolean))];
 
+/**
+ * Build likely filesystem candidates for a Twig template reference.
+ *
+ * @param {string} baseDir - Directory used as the resolution root.
+ * @param {string} templatePath - Template path from Twig source.
+ * @returns {string[]} Candidate absolute paths.
+ */
 const fileCandidates = (baseDir, templatePath) => {
   const normalizedTemplatePath = toPosixPath(templatePath);
   const withoutTwigExt = normalizedTemplatePath.replace(/\.twig$/i, '');
@@ -98,6 +132,12 @@ const fileCandidates = (baseDir, templatePath) => {
   ]);
 };
 
+/**
+ * Return the first candidate that exists as a file.
+ *
+ * @param {string[]} paths - Candidate absolute paths.
+ * @returns {string|undefined} Existing file path.
+ */
 const resolveExistingFile = (paths) =>
   paths.filter(Boolean).find((filePath) => {
     try {
@@ -108,6 +148,13 @@ const resolveExistingFile = (paths) =>
     }
   });
 
+/**
+ * Resolve Twig namespace syntax to a namespace root and relative path.
+ *
+ * @param {string} templatePath - Template reference from Twig source.
+ * @param {Record<string, string>} [namespaces={}] - Namespace root map.
+ * @returns {{ root: string, path: string }|null} Namespace lookup result.
+ */
 const namespaceReference = (templatePath, namespaces = {}) => {
   const namespaceNames = Object.keys(namespaces);
   const atNamespace = templatePath.match(/^@([^/]+)\/(.+)$/);
@@ -138,6 +185,13 @@ const namespaceReference = (templatePath, namespaces = {}) => {
   return null;
 };
 
+/**
+ * Resolve shorthand component references against the components namespace.
+ *
+ * @param {string} templatePath - Template reference from Twig source.
+ * @param {string} componentRoot - Absolute component root path.
+ * @returns {string|null} Existing template path when found.
+ */
 const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
   if (!componentRoot || templatePath.startsWith('.')) return null;
 
@@ -162,6 +216,14 @@ const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
   );
 };
 
+/**
+ * Resolve a Twig include/import/extends reference from a source directory.
+ *
+ * @param {string} templatePath - Template reference from Twig source.
+ * @param {string} fromDir - Directory of the importing template.
+ * @param {{ root: string, namespaces: Record<string, string> }} options - Twig plugin options.
+ * @returns {string|null} Existing template path when found.
+ */
 const resolveTwigTemplate = (templatePath, fromDir, options) => {
   if (templatePath === '_self') return null;
 
@@ -186,6 +248,14 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
   );
 };
 
+/**
+ * Compile a Twig template and collect its nested template references.
+ *
+ * @param {string} templateId - Twig template id.
+ * @param {string} filePath - Absolute template file path.
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @returns {{ code: string, includes: string[] }} Compiled template code and references.
+ */
 const compileTwigTemplate = (templateId, filePath, options) => {
   registerTwigExtensions(Twig);
 
@@ -456,7 +526,8 @@ function emulsifyTwigModulePlugin(options) {
 }
 
 /**
- * Depth-first walk to list **all files** (no directories) under a given root.
+ * Depth-first walk to list every file under a given root.
+ *
  * @param {string} rootDir
  * @returns {string[]}
  */
@@ -472,7 +543,8 @@ const walkFiles = (rootDir) => {
     try {
       entryNames = readdirSync(currentDir);
     } catch {
-      continue; // unreadable directory
+      // Skip unreadable directories and keep walking the remaining stack.
+      continue;
     }
 
     for (const name of entryNames) {
@@ -482,7 +554,7 @@ const walkFiles = (rootDir) => {
         if (stats.isDirectory()) stack.push(fullPath);
         else files.push(fullPath);
       } catch {
-        // ignore unreadable entries
+        // Ignore unreadable entries so one file does not stop the copy pass.
       }
     }
   }
@@ -490,8 +562,9 @@ const walkFiles = (rootDir) => {
 };
 
 /**
- * Remove empty parent directories from a start directory **up to (but not including)**
+ * Remove empty parent directories from a start directory up to, but not including,
  * a stopping boundary directory.
+ *
  * @param {string} startDir
  * @param {string} stopAtDir
  */
@@ -513,7 +586,7 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
     try {
       rmdirSync(cursor);
     } catch {
-      // cannot remove (in use or permissions) → stop trying here
+      // Stop at the first directory that cannot be removed.
       break;
     }
 
@@ -611,11 +684,11 @@ function copyTwigFilesPlugin({ srcDir }) {
 }
 
 /* ============================================================================
- * Plugin: Copy **all non-code** assets under `src/` with the same routing
+ * Plugin: Copy all non-code assets under `src/` with the same routing
  * ========================================================================== */
 
 /**
- * Copies anything in `src/` that is **not** a code/template file into
+ * Copies anything in `src/` that is not a code/template file into
  * either `dist/components/**` or `dist/global/**`, preserving relative paths.
  *
  * Excludes: .js, .scss, .twig, source maps, and `*.component.(yml|yaml|json)`.
@@ -639,7 +712,7 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
 
     /** Copy component/global assets. */
     closeBundle() {
-      // Component-side assets → dist/components
+      // Component-side assets emit under dist/components.
       const componentAssets = globSync(posix(join(srcDir, 'components/**/*')), {
         nodir: true,
         ignore: [
@@ -663,7 +736,7 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
         }
       }
 
-      // Global-side assets → dist/global
+      // Global-side assets emit under dist/global.
       const globalAssets = globSync(posix(join(srcDir, '**/*')), {
         nodir: true,
         ignore: [
@@ -691,12 +764,12 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
 }
 
 /* ============================================================================
- * Plugin: Build a **physical** SVG spritemap at dist/assets/icons.sprite.svg
+ * Plugin: Build a physical SVG spritemap at dist/assets/icons.svg
  * ========================================================================== */
 
 /**
  * Builds a single SVG sprite file from a set of icon globs and emits it as
- * `assets/icons.sprite.svg`. Only the options you’re using are supported:
+ * `assets/icons.svg`. Only the options used by Emulsify are supported.
  *
  * @param {{ include: string|string[], symbolId?: string }} options
  * @returns {import('vite').PluginOption}
@@ -827,13 +900,14 @@ function cssAssetUrlRelativizer({ assetsRoot = 'assets' } = {}) {
 }
 
 /* ============================================================================
- * Plugin: Mirror `dist/components/**` → `./components/**` (Drupal only)
+ * Plugin: Mirror `dist/components/**` to `./components/**` (Drupal only)
  * ========================================================================== */
 
 /**
- * Mirrors built component files to the project root’s `./components/` directory
- * when `enabled` is true (for Drupal with `src/` present). After copying, the originals
- * in `dist/components/` are deleted and any now-empty folders are pruned.
+ * Mirrors built component files to the project root `./components/` directory
+ * when enabled. Drupal projects with `src/` present need this for SDC output.
+ * After copying, originals in `dist/components/` are deleted and empty folders
+ * are pruned.
  *
  * @param {{ enabled: boolean, projectDir: string }} opts
  * @returns {import('vite').PluginOption}
@@ -901,7 +975,7 @@ export function makePlugins(env) {
     // Generic Twig rendering for dev/preview.
     ...makeTwigPlugins(env, twigOptions),
 
-    // Emit a physical `dist/assets/icons.svg`
+    // Emit a physical dist/assets/icons.svg sprite.
     svgSpriteFilePlugin({
       include: [
         `${projectDir.replace(/\\/g, '/')}/assets/icons/**/*.svg`,
@@ -912,10 +986,10 @@ export function makePlugins(env) {
       symbolId: '[name]',
     }),
 
-    // Sass glob imports
+    // Sass glob imports preserve existing component stylesheet patterns.
     sassGlobImports(),
 
-    // YAML support
+    // YAML support lets component metadata import into Vite modules.
     yml(),
 
     // Keep CSS asset URLs relative to the emitted CSS location.
@@ -930,13 +1004,13 @@ export function makePlugins(env) {
   return [
     ...basePlugins,
 
-    // Copy Twig & metadata
+    // Copy Twig templates and component metadata beside compiled assets.
     copyTwigFilesPlugin({ srcDir }),
 
-    // Copy every non-code asset under src/ (fonts/images/audio/docs…) with same routing.
+    // Copy every non-code asset under src with the same routing.
     copyAllSrcAssetsPlugin({ srcDir }),
 
-    // For Drupal projects with a `src/` folder, mirror `dist/components/**` → `./components/**`.
+    // Drupal projects with src mirror dist/components back to ./components.
     mirrorComponentsToRoot({
       enabled: srcExists && platform === 'drupal',
       projectDir,

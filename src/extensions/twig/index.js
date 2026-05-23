@@ -3,6 +3,7 @@
  * @module extensions/twig
  */
 
+// Export registry helpers before individual functions for the public API.
 export { getTwigFunctionMap } from './function-map.js';
 export { registerTwigExtensions } from './register.js';
 export {

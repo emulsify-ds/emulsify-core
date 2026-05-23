@@ -1,3 +1,7 @@
+/**
+ * @file Jest configuration for unit tests and coverage reporting.
+ */
+
 export default {
   rootDir: '..',
   testEnvironment: 'jsdom',
@@ -13,8 +17,7 @@ export default {
   },
   coverageDirectory: '.coverage',
   coverageProvider: 'v8',
-  // @TODO: once every file has 100% test coverage,
-  // these thresholds should be updated.
+  // TODO: Raise these thresholds once coverage exists for every maintained file.
   coverageThreshold: {
     global: {
       branches: 0,

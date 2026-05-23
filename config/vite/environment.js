@@ -1,7 +1,7 @@
 /**
  * @file Environment resolution for Emulsify + Vite.
  *
- * Reads project settings and exposes a normalized “env” object used by
+ * Reads project settings and exposes a normalized "env" object used by
  * entries, plugins, and the Vite config.
  *
  * Highlights:
@@ -32,8 +32,7 @@ function coerceToProjectPath(projectDir, candidate) {
 /**
  * Safe existence check (guards path is inside project root).
  *
- * NOTE: Using this wrapper avoids sprinkling fs.* calls over non-literal paths.
- *       If eslint still flags it, it’s one narrow, justified place to disable.
+ * Keep non-literal filesystem access isolated to one validated helper.
  *
  * @param {string} absPath
  * @param {string} projectDir
@@ -82,12 +81,12 @@ function safeReadJson(projectDir, relFilename) {
 export function resolveEnvironment() {
   const projectDir = process.cwd();
 
-  // Prefer <project>/src when present; else <project>/components (legacy repos).
+  // Prefer <project>/src when present, then legacy <project>/components.
   const srcCandidate = resolve(projectDir, 'src');
   const srcExists = safeExistsSync(srcCandidate, projectDir);
   const srcDir = srcExists ? srcCandidate : resolve(projectDir, 'components');
 
-  // Platform: ENV wins, then JSON, else default.
+  // Platform resolution order: environment variable, project JSON, default.
   let platform = (process.env.EMULSIFY_PLATFORM || '')
     .toString()
     .toLowerCase()
@@ -105,10 +104,10 @@ export function resolveEnvironment() {
       .trim();
   }
 
-  // Single Directory Components flag (if present).
+  // Single Directory Components flag from project metadata.
   const SDC = Boolean(emulsifyJson?.project?.singleDirectoryComponents);
 
-  // Legacy variant support (structureImplementations).
+  // Structure overrides support legacy variant component roots.
   const structureRoots = Array.isArray(
     emulsifyJson?.variant?.structureImplementations,
   )

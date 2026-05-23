@@ -13,6 +13,7 @@
  * @returns {Object} The provided extension definition.
  */
 export function defineReactExtension(extension) {
+  // Keep this pass-through stable until React extensions need normalization.
   return extension;
 }
 
@@ -23,5 +24,6 @@ export function defineReactExtension(extension) {
  * @returns {Object[]} Filtered extension definitions.
  */
 export function createReactExtensionRegistry(extensions = []) {
+  // Drop empty placeholders so callers can compose optional extension arrays.
   return extensions.filter(Boolean);
 }

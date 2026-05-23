@@ -1,3 +1,5 @@
+# Keep generated outputs and local tooling files out of source control.
+
 # Ignore compiled files.
 dist
 

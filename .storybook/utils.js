@@ -1,11 +1,18 @@
+/**
+ * @file Shared Storybook runtime helpers.
+ */
+
 import twigDrupal from 'twig-drupal-filters';
 import { registerTwigExtensions } from '../src/extensions/twig/index.js';
 import twigInclude from './polyfills/twig-include';
 import twigSource from './polyfills/twig-source';
 
-const projectConfigModules = import.meta.glob('../../../../project.emulsify.json', {
-  eager: true,
-});
+const projectConfigModules = import.meta.glob(
+  '../../../../project.emulsify.json',
+  {
+    eager: true,
+  },
+);
 const emulsifyConfig =
   Object.values(projectConfigModules)[0]?.default ||
   Object.values(projectConfigModules)[0] ||
@@ -21,6 +28,7 @@ const fetchVariantConfig = () => {
   try {
     return emulsifyConfig.variant.structureImplementations;
   } catch (e) {
+    // Legacy projects without config use the top-level components directory.
     return [
       {
         name: 'components',
@@ -38,13 +46,18 @@ const fetchVariantConfig = () => {
  */
 const fetchCSSFiles = () => {
   try {
-    // Load all CSS files from 'dist'.
-    const cssFiles = import.meta.glob('../../../../dist/**/*.css', { eager: true });
+    // Load compiled CSS from dist for both development and static previews.
+    const cssFiles = import.meta.glob('../../../../dist/**/*.css', {
+      eager: true,
+    });
     Object.values(cssFiles).forEach((css) => css);
 
-    // Load all CSS files from 'components' for 'drupal' platform.
+    // Drupal builds mirror component CSS to the root components directory.
     if (emulsifyConfig.project?.platform === 'drupal') {
-      const drupalCSSFiles = import.meta.glob('../../../../components/**/*.css', { eager: true });
+      const drupalCSSFiles = import.meta.glob(
+        '../../../../components/**/*.css',
+        { eager: true },
+      );
       Object.values(drupalCSSFiles).forEach((css) => css);
     }
   } catch (e) {
@@ -64,7 +77,7 @@ export function getProjectMachineName() {
   } catch (e) {
     return undefined;
   }
-};
+}
 
 /**
  * Configures and extends a standard Twig object.
@@ -85,5 +98,5 @@ export function setupTwig(twig) {
   return twig;
 }
 
-// Export the fetchCSSFiles function.
+// Keep this named export stable for preview.js and downstream overrides.
 export { fetchCSSFiles };

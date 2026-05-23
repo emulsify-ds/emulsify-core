@@ -1,15 +1,14 @@
 /**
- * @file user-vite-extensions.js
- * @description
+ * @file Project-level Vite extension loader.
+ *
  * Loads optional project-level Vite plugin extensions from:
  *   .config/emulsify-core/vite/plugins.(mjs|js|cjs)
  *
  * Supported shapes in that file:
  *   1) export default [vitePlugin(), ...]
  *   2) export default (ctx) => [vitePlugin(), ...]
- *   3) module.exports = [ ... ]  // CJS
+ *   3) module.exports = [ ... ]
  *   4) export const extendConfig = (config, ctx) => patchObject
- *      // lets the project tweak the final Vite config (e.g. set postcss)
  */
 
 import { existsSync } from 'fs';
@@ -17,19 +16,34 @@ import { resolve, normalize } from 'path';
 import { pathToFileURL } from 'url';
 import { createRequire } from 'module';
 
-/** Resolve absolute path inside project root */
+/**
+ * Resolve a path inside the current project root.
+ *
+ * @param {string} rel - Project-relative path.
+ * @returns {string} Absolute path.
+ */
 function inProject(rel) {
   return resolve(process.cwd(), rel);
 }
 
-/** Guard: ensure path stays under project root (helps strict linters) */
+/**
+ * Determine whether an absolute path stays inside the current project.
+ *
+ * @param {string} abs - Absolute path to inspect.
+ * @returns {boolean} TRUE when the path is under the current working directory.
+ */
 function insideCwd(abs) {
   const base = normalize(process.cwd() + '/');
   const target = normalize(abs);
   return target.startsWith(base);
 }
 
-/** Try file candidates in order, return the first that exists */
+/**
+ * Return the first existing candidate path.
+ *
+ * @param {string[]} paths - Project-relative candidate paths.
+ * @returns {string|null} Absolute path when found.
+ */
 function firstExisting(paths) {
   for (const rel of paths) {
     const abs = inProject(rel);
@@ -40,7 +54,12 @@ function firstExisting(paths) {
   return null;
 }
 
-/** Load ESM or CJS module by path (returns its module namespace) */
+/**
+ * Load an ESM or CJS module from an absolute path.
+ *
+ * @param {string|null} absPath - Absolute module path.
+ * @returns {Promise<object|null>} Module namespace or null.
+ */
 async function loadModule(absPath) {
   if (!absPath) return null;
   if (absPath.endsWith('.cjs')) {
@@ -49,13 +68,14 @@ async function loadModule(absPath) {
     const mod = req(absPath);
     return mod && typeof mod === 'object' ? mod : { default: mod };
   }
-  // ESM (.mjs or .js treated as ESM here)
+  // Treat .mjs and .js files as ESM in this package.
   return import(pathToFileURL(absPath).href);
 }
 
 /**
- * Load user-supplied plugins & optional config patcher.
- * @param {object} ctx - anything useful you want to pass (env, helpers)
+ * Load user-supplied plugins and an optional config patcher.
+ *
+ * @param {object} ctx - Context passed to project plugin factories.
  * @returns {Promise<{ projectPlugins: import('vite').PluginOption[], extendConfig?: Function }>}
  */
 export async function loadProjectExtensions(ctx = {}) {
@@ -69,7 +89,7 @@ export async function loadProjectExtensions(ctx = {}) {
 
   const mod = await loadModule(candidate);
 
-  // Gather plugins (array or function)
+  // Normalize supported default export shapes into a plugin array.
   let projectPlugins = [];
   const raw = mod?.default ?? mod;
   if (Array.isArray(raw)) {
@@ -78,7 +98,7 @@ export async function loadProjectExtensions(ctx = {}) {
     projectPlugins = raw(ctx) || [];
   }
 
-  // Optional named export for patching Vite config
+  // Named extendConfig export lets projects patch the assembled Vite config.
   const extendConfig =
     typeof mod?.extendConfig === 'function' ? mod.extendConfig : undefined;
 

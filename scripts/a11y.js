@@ -56,7 +56,8 @@ const severityToColor = R.cond([
 const issueIsValid = (issue) => {
   const code = issue?.code;
   const description = issue?.runnerExtras?.description;
-  const codeIgnored = Array.isArray(ignore?.codes) && ignore.codes.includes(code);
+  const codeIgnored =
+    Array.isArray(ignore?.codes) && ignore.codes.includes(code);
   const descIgnored =
     description &&
     Array.isArray(ignore?.descriptions) &&
@@ -138,7 +139,6 @@ const lintReportAndExit = R.pipe(
 // Only perform linting/reporting when instructed via "-r".
 /* istanbul ignore next */
 if (R.pathEq(['argv', 2], '-r')(process)) {
-  // eslint-disable-next-line promise/catch-or-return
   lintReportAndExit(components);
 }
 

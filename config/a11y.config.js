@@ -1,3 +1,10 @@
+/**
+ * @file Shared accessibility linting configuration.
+ *
+ * These defaults are consumed by the pa11y script and can be extended by
+ * consuming projects through their local Emulsify config.
+ */
+
 module.exports = {
   storybookBuildDir: '../../../../.out',
   pa11y: {
@@ -5,10 +12,7 @@ module.exports = {
     includeWarnings: false,
     runners: ['axe'],
   },
-  // A11y linting is done on a component-by-component
-  // basis, which results in the linter reporting some errors that
-  // should be ignored. These codes and descriptions allow for those
-  // errors to be targeted specifically.
+  // Ignore rules that are noisy for isolated component pages.
   ignore: {
     codes: ['landmark-one-main', 'page-has-heading-one'],
     descriptions: ['Ensures all page content is contained by landmarks'],

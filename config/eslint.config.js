@@ -1,4 +1,7 @@
-// Import ESLint Flat Config and required plugins
+/**
+ * @file ESLint flat configuration for Emulsify Core.
+ */
+
 import js from '@eslint/js';
 import babelParser from '@babel/eslint-parser';
 import importPlugin from 'eslint-plugin-import';
@@ -6,10 +9,9 @@ import pluginSecurity from 'eslint-plugin-security';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default [
-  // Base ESLint recommended rules
+  // Start with core and plugin recommendations before project overrides.
   js.configs.recommended,
 
-  // Plugin configurations
   importPlugin.flatConfigs.recommended,
   pluginSecurity.configs.recommended,
   eslintPluginPrettierRecommended,
@@ -39,6 +41,7 @@ export default [
     ignores: ['**/*.min.js', '**/node_modules/**/*'],
 
     rules: {
+      // Keep historical project conventions while warning on risky patterns.
       strict: 0,
       'consistent-return': 'off',
       'no-underscore-dangle': 'off',

@@ -12,6 +12,7 @@ const ATTRIBUTE_NAME_PATTERN = /^[A-Za-z_:][A-Za-z0-9:_.-]*$/;
  * @returns {boolean} TRUE when the name can be safely serialized.
  */
 export function isSafeAttributeName(name) {
+  // Reject spaces, quotes, and event-like malformed names before serialization.
   return ATTRIBUTE_NAME_PATTERN.test(String(name || ''));
 }
 

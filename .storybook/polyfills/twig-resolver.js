@@ -1,3 +1,7 @@
+/**
+ * @file Runtime Twig template resolver used by Storybook polyfills.
+ */
+
 import { getProjectMachineName } from '../utils';
 
 const namespace = getProjectMachineName();
@@ -5,7 +9,7 @@ const namespace = getProjectMachineName();
 /**
  * Build a dynamic module map of Twig files from all possible component roots.
  * We rely on __EMULSIFY_ENV__ injected in .storybook/main.js via viteFinal(),
- * using the same “structure overrides / roots” logic you use in environment.js.
+ * using the same structure override logic used by environment.js.
  */
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
@@ -37,15 +41,17 @@ function toRootRel(abs) {
   return abs.startsWith('/') ? abs : `/${abs}`;
 }
 
-// Build globs for each candidate root. We’ll eagerly import all Twig modules.
+// Build globs for each candidate root and eagerly import every Twig module.
 const rootRels = candidateRoots.length
   ? candidateRoots.flatMap((root) => {
       const base = toRootRel(root);
-      return base.endsWith('/components') ? [base] : [base, `${base}/components`];
+      return base.endsWith('/components')
+        ? [base]
+        : [base, `${base}/components`];
     })
   : ['/src', '/src/components', '/components'];
 
-// Vite doesn’t support an array directly in a single import.meta.glob(),
+// Vite does not support an array directly in a single import.meta.glob(),
 // so merge multiple glob maps into one.
 function mergeGlobMaps(maps) {
   return Object.assign({}, ...maps);
@@ -57,8 +63,7 @@ function mergeGlobMaps(maps) {
 // We pre-load everything under each root so resolution is O(1).
 const twigModules = __EMULSIFY_TWIG_GLOB_IMPORTS__;
 
-// Helper: generate likely keys for a given component “part” under every root.
-// We try the canonical “part/part.twig”, then “part.twig”.
+// Generate likely keys for a component part under every configured root.
 function candidateKeysForPart(part) {
   const normalizedPart = part.replace(/\.twig$/, '');
   const stem = normalizedPart.split('/').pop();
@@ -71,6 +76,7 @@ function candidateKeysForPart(part) {
 }
 
 function resolveCandidateKeys(candidates) {
+  // Prefer the first matching key so namespace fallback order stays predictable.
   for (const key of candidates) {
     const mod = twigModules[key];
     if (mod) {
@@ -81,6 +87,7 @@ function resolveCandidateKeys(candidates) {
 }
 
 function uniqueParts(parts) {
+  // Preserve resolution order while dropping duplicate guesses.
   return Array.from(new Set(parts.filter(Boolean)));
 }
 
@@ -89,6 +96,7 @@ function removeTwigExtension(name) {
 }
 
 function partsFromTemplateReference(name) {
+  // Project namespace references should resolve before generic namespace syntax.
   if (namespace && name.startsWith(`${namespace}:`)) {
     return [removeTwigExtension(name.split(':').slice(1).join(':'))];
   }
@@ -149,10 +157,12 @@ function resolveTemplate(name) {
     }
 
     // eslint-disable-next-line no-console
-    console.error(`Cannot resolve Twig component for '${name}'. Tried: ${candidates.join(', ')}`);
+    console.error(
+      `Cannot resolve Twig component for '${name}'. Tried: ${candidates.join(', ')}`,
+    );
   }
 
-  // @icon.twig → icon/icon.twig (fallback to icon.twig)
+  // @icon.twig resolves to icon/icon.twig first, then icon.twig.
   if (name.startsWith('@') && name.endsWith('.twig')) {
     const part = name.slice(1, -5); // remove leading @ and trailing .twig
     const candidates = candidateKeysForPart(part);
@@ -161,7 +171,9 @@ function resolveTemplate(name) {
       return template;
     }
     // eslint-disable-next-line no-console
-    console.error(`Cannot resolve Twig shorthand template '${name}'. Tried: ${candidates.join(', ')}`);
+    console.error(
+      `Cannot resolve Twig shorthand template '${name}'. Tried: ${candidates.join(', ')}`,
+    );
   }
 
   // Vite environment: avoid require() fallback; return a safe noop.

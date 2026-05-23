@@ -78,6 +78,7 @@ describe('addAttributes', () => {
         ),
       ),
     ).toBe('class="existing new" id="card" data-state="ready"');
+    // Context attributes are cleared after rendering to match Drupal output.
     expect(invocationContext.context.attributes).toEqual({});
   });
 });

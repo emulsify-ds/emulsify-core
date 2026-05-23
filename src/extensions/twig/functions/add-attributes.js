@@ -17,6 +17,7 @@ import {
  * @returns {AttributeBag} AttributeBag ready for Twig serialization.
  */
 export function addAttributes(additionalAttributes = {}, invocationContext) {
+  // Context attributes are merged first so explicit additions can append safely.
   const attributeBag = attributesFromContext(invocationContext);
   attributeBag.merge(additionalAttributes);
   clearContextAttributes(invocationContext);
@@ -31,6 +32,7 @@ export function addAttributes(additionalAttributes = {}, invocationContext) {
  * @returns {AttributeBag} AttributeBag ready for Twig serialization.
  */
 export function addAttributesTwigFunction(additionalAttributes = {}) {
+  // Preserve Twig.js' invocation context for Drupal-compatible attributes.
   return addAttributes(additionalAttributes, this);
 }
 

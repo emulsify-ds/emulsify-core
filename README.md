@@ -52,10 +52,24 @@ It also supports object syntax for clearer future usage:
 <h1 {{ add_attributes(additional_attributes) }}></h1>
 ```
 
+## Code comment conventions
+
+Maintained JavaScript source, config, scripts, and tests should use a consistent comment style:
+
+- Start each maintained JS file with a short JSDoc file block that explains the file's responsibility.
+- Use JSDoc blocks for exported functions, complex helpers, and public contracts.
+- Use `//` comments for local intent, compatibility behavior, and non-obvious edge cases.
+- Keep comments concise and factual. Prefer explaining why behavior exists instead of restating the code.
+- Use YAML or shell comments in workflow, hook, and fixture files where the format supports comments.
+
+Do not add comments to JSON files, lockfiles, binary assets, generated output, legal documents, or dependency files. Those formats either do not support comments or should remain exact artifacts.
+
 ## Installation and usage
+
 Installation and configuration is set up by the provided project starter or platform package. Emulsify Drupal is the current reference integration, and the core Vite/Twig configuration is intended to support additional Twig-based platforms without changing the renderer.
 
 ### Manual installation
+
 - `npm install @emulsify/core` within your repository or project theme.
 - Copy the provided `npm run` scripts from [Emulsify Drupal's package.json](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L15)
 - Copy the contents of `whisk/config/emulsify-core/` from [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/tree/main/whisk/config/emulsify-core) into your project so `config/` exists at the root of your repository or project theme. The files within `config/` allow you to extend or overwrite configuration provided by Emulsify Core.
@@ -82,7 +96,6 @@ Automatically fixes any simple code formatting violations.
 
 **storybook-build**
 Builds a static output of the storybook instance.
-
 
 ### Quick Links
 

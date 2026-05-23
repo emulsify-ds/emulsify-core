@@ -1,3 +1,7 @@
+/**
+ * @file Tests for Emulsify Vite plugin assembly and Twig namespace behavior.
+ */
+
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -32,6 +36,7 @@ const makeTempProject = () => mkdtempSync(join(tmpdir(), 'emulsify-core-'));
 const makeEnv = (projectDir, overrides = {}) => {
   const srcDir = join(projectDir, 'src');
 
+  // Tests override only the environment values relevant to each scenario.
   return {
     projectDir,
     srcDir,

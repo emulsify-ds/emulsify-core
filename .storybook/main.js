@@ -1,5 +1,3 @@
-// .storybook/main.js
-
 /**
  * Central Storybook configuration for Emulsify.
  *
@@ -301,7 +299,7 @@ const config = {
       .sidebar-container .sidebar-subheading button:focus {
         color: var(--colors-emulsify-blue-300);
       }
-      /** Triangle icon **/
+      /* Triangle icon. */
       .sidebar-container .sidebar-subheading button span {
         color: var(--colors-emulsify-blue-300);
       }
@@ -496,12 +494,7 @@ const config = {
         exclude: [],
       },
       optimizeDeps: {
-        include: [
-          'react',
-          'path',
-          'twig',
-          'twig-drupal-filters',
-        ],
+        include: ['react', 'path', 'twig', 'twig-drupal-filters'],
         esbuildOptions: {
           loader: {
             // Pre-bundle `.js` dependencies with the JSX loader for packages
@@ -513,7 +506,7 @@ const config = {
     });
   },
 
-  // Spread consumer overrides last so local projects can replace any default above.
+  // Spread consumer overrides last so local projects can replace defaults above.
   ...safeConfigOverrides,
 };
 

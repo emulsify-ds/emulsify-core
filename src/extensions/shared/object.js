@@ -16,6 +16,7 @@
 export function isPlainObject(value) {
   if (!value || typeof value !== 'object') return false;
 
+  // Twig context maps may be created with null prototypes.
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }

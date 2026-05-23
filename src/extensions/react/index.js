@@ -3,6 +3,7 @@
  * @module extensions/react
  */
 
+// Re-export from a single entry point for consumers and future registry growth.
 export {
   createReactExtensionRegistry,
   defineReactExtension,

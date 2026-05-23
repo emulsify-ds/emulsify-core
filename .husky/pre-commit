@@ -1,2 +1,3 @@
 #!/bin/sh
+# Run the project lint task before commits are created.
 npm run husky:pre-commit

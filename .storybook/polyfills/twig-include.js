@@ -1,3 +1,6 @@
+/**
+ * @file Twig include() compatibility helper for Storybook-rendered templates.
+ */
 
 import resolveTemplate from './twig-resolver.js';
 
@@ -13,7 +16,12 @@ import resolveTemplate from './twig-resolver.js';
 function twigInclude(Twig) {
   Twig.extendFunction('include', (...args) => {
     let [templateName, variables = {}, withContext = false] = args;
-    if (typeof withContext !== 'boolean' && variables && typeof variables.with_context !== 'undefined') {
+    if (
+      typeof withContext !== 'boolean' &&
+      variables &&
+      typeof variables.with_context !== 'undefined'
+    ) {
+      // Support Drupal-style options objects that carry the with_context flag.
       withContext = variables.with_context;
       delete variables.with_context;
     }
@@ -22,9 +30,11 @@ function twigInclude(Twig) {
       const templateFn = resolveTemplate(templateName);
       if (!templateFn) return '';
 
-      const finalContext = withContext && typeof this === 'object'
-        ? { ...(this.context || {}), ...variables }
-        : variables;
+      // Merge Twig context only when include() explicitly requests it.
+      const finalContext =
+        withContext && typeof this === 'object'
+          ? { ...(this.context || {}), ...variables }
+          : variables;
 
       return templateFn(finalContext);
     } catch (err) {
@@ -32,6 +42,6 @@ function twigInclude(Twig) {
       return '';
     }
   });
-};
+}
 
 export default twigInclude;

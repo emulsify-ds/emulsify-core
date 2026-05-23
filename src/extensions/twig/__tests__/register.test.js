@@ -11,6 +11,7 @@ describe('registerTwigExtensions', () => {
       extendFunction: jest.fn(),
     };
 
+    // Calling twice should not duplicate Twig.js function registration.
     registerTwigExtensions(Twig);
     registerTwigExtensions(Twig);
 

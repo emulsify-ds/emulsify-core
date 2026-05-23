@@ -3,24 +3,21 @@
  * @see https://vite.dev/config/
  *
  * @overview
- * This configuration wires Emulsify’s Vite build in a few clear steps:
+ * This configuration wires Emulsify's Vite build in a few clear steps:
  *
- *  1. Resolve the build **environment** (paths, platform flags) via {@link resolveEnvironment}.
- *  2. Create the **glob patterns** used to discover inputs with {@link makePatterns}.
- *  3. Build the Rollup/Vite **entries map** with {@link buildInputs}.
- *  4. Load optional **project extensions** (extra plugins and/or a config patcher)
+ *  1. Resolve the build environment (paths, platform flags) via {@link resolveEnvironment}.
+ *  2. Create the glob patterns used to discover inputs with {@link makePatterns}.
+ *  3. Build the Rollup/Vite entries map with {@link buildInputs}.
+ *  4. Load optional project extensions (extra plugins and/or a config patcher)
  *     from `.config/emulsify-core/vite/plugins.*` via {@link loadProjectExtensions}.
- *  5. Assemble a base Vite config and (optionally) let the project **extend/override**
+ *  5. Assemble a base Vite config and optionally let the project extend/override
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *
  * Notes:
  * - CSS & JS sourcemaps are enabled.
  * - CSS assets keep their path and drop the internal `__style` suffix if present.
- * - The optional project patch uses `mergeConfig`. If your runtime does not already
- *   provide it in scope, add: `import { defineConfig, mergeConfig } from 'vite';`
  */
 
-// import mergeConfig alongside defineConfig:
 import { defineConfig, mergeConfig } from 'vite';
 import path from 'node:path';
 
@@ -45,10 +42,7 @@ export default defineConfig(async () => {
   /** @type {EmulsifyEnv} */
   const env = resolveEnvironment();
 
-  // ---------------------------------------------------------------------------
-  // 1) Build input discovery patterns (kept separate for readability/testing).
-  //    These honor platform & flags like SDC and structure overrides.
-  // ---------------------------------------------------------------------------
+  // Build input discovery patterns separately for readability and testing.
   /** @type {ReturnType<typeof makePatterns>} */
   const patterns = makePatterns({
     projectDir: env.projectDir,
@@ -60,10 +54,7 @@ export default defineConfig(async () => {
     structureRoots: env.structureRoots,
   });
 
-  // ---------------------------------------------------------------------------
-  // 2) Build the Rollup/Vite entry map.
-  //    Keys encode output paths; values are absolute source file paths.
-  // ---------------------------------------------------------------------------
+  // Build the Rollup/Vite entry map: keys encode output paths, values source files.
   /** @type {Record<string, string>} */
   const entries = buildInputs(
     {
@@ -78,11 +69,7 @@ export default defineConfig(async () => {
     patterns,
   );
 
-  // ---------------------------------------------------------------------------
-  // 3) Load project-provided extensions:
-  //    - `projectPlugins`: extra Vite plugins to append
-  //    - `extendConfig(base, { env })`: returns a partial config to merge
-  // ---------------------------------------------------------------------------
+  // Load optional project-provided plugins and config patches.
   /**
    * @type {{
    *   projectPlugins: import('vite').PluginOption[],
@@ -91,10 +78,7 @@ export default defineConfig(async () => {
    */
   const { projectPlugins, extendConfig } = await loadProjectExtensions({ env });
 
-  // ---------------------------------------------------------------------------
-  // 4) Assemble the base Vite config (kept minimal & readable on purpose).
-  //    Project extensions (if any) are applied *after* this via `extendConfig`.
-  // ---------------------------------------------------------------------------
+  // Assemble the base config before applying project extensions.
   /** @type {import('vite').UserConfig} */
   const base = {
     // Treat the current working directory as the root.
@@ -135,7 +119,7 @@ export default defineConfig(async () => {
           assetFileNames: (assetInfo) => {
             const file = assetInfo.name || assetInfo.fileName || '';
             if (file.endsWith('.css')) {
-              // Normalize path and drop the CSS_SUFFIX ('__style') used to avoid key collisions
+              // Drop the CSS key suffix used to avoid JS/CSS entry collisions.
               return file.replace(/__style(?=\.css$)/, '');
             }
             const [original] = Array.isArray(assetInfo.originalFileNames)
@@ -171,16 +155,11 @@ export default defineConfig(async () => {
     },
   };
 
-  // ---------------------------------------------------------------------------
-  // 5) Allow the project to patch the final Vite config.
-  //    If `extendConfig` returns a partial object, merge it into `base`.
-  //    (Requires `mergeConfig` from 'vite'; if it isn't imported, add it.)
-  // ---------------------------------------------------------------------------
+  // Let project extensions patch the final Vite config.
   /** @type {import('vite').UserConfig} */
   const patched =
     typeof extendConfig === 'function'
-      ? // @ts-expect-error: ensure `mergeConfig` is imported if not already in scope
-        mergeConfig(base, extendConfig(base, { env }) || {})
+      ? mergeConfig(base, extendConfig(base, { env }) || {})
       : base;
 
   return patched;

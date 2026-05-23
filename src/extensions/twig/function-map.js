@@ -12,6 +12,7 @@ import { bemTwigFunction } from './functions/bem.js';
  * @returns {Record<string, Function>} Function names keyed to Twig callbacks.
  */
 export function getTwigFunctionMap() {
+  // Twig.js expects function names keyed to callable implementations.
   return {
     add_attributes: addAttributesTwigFunction,
     bem: bemTwigFunction,

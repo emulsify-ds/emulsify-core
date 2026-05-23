@@ -1,4 +1,4 @@
-# Unix-style newlines with a newline ending every file
+# Keep editor defaults aligned with Prettier and repository formatting.
 [*]
 indent_style = space
 indent_size = 2

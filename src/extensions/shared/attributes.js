@@ -33,6 +33,7 @@ function cleanClassToken(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
+  // Cache by raw input so repeated BEM renders avoid repeated regex work.
   if (classNameCache.has(raw)) {
     return classNameCache.get(raw);
   }
@@ -54,6 +55,7 @@ function cleanClassToken(value) {
  */
 export function classTokensFromValue(value) {
   if (isAttributeBag(value)) {
+    // AttributeBag class values are already normalized by this module.
     return value.getClassList();
   }
 
@@ -73,6 +75,7 @@ export function classTokensFromValue(value) {
  */
 function valueToAttributeParts(value) {
   if (isAttributeBag(value)) {
+    // Preserve nested AttributeBag composition for helpers like add_attributes().
     return value.toObject();
   }
 
@@ -197,6 +200,7 @@ export class AttributeBag {
     if (!isSafeAttributeName(attributeName)) return this;
 
     if (attributeName === 'class') {
+      // Legacy callers may still pass class="..." strings from old helpers.
       const classString =
         typeof value === 'string' ? parseClassAttributeString(value) : null;
       this.addClass(classString || value);

@@ -1,2 +1,3 @@
 #!/bin/sh
+# Run commitlint through npm so local and CI hook behavior stay aligned.
 npm run husky:commit-msg

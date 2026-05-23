@@ -1,4 +1,6 @@
-// Simple Drupal.behaviors usage for Storybook
+/**
+ * @file Minimal Drupal.behaviors compatibility layer for Storybook.
+ */
 
 /**
  * Global Drupal namespace stub for Storybook environment.
@@ -35,7 +37,7 @@ window.Drupal = { behaviors: {} };
     /** @type {Object.<string, {attach: Function}>} */
     const behaviors = Drupal.behaviors;
 
-    // Iterate through each behavior and invoke its attach method if defined.
+    // Attach each registered behavior while isolating individual failures.
     Object.keys(behaviors).forEach(function (i) {
       if (typeof behaviors[i].attach === 'function') {
         try {
