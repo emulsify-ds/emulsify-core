@@ -12,7 +12,8 @@ const IMAGE_ASSET_EXTS  = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif'])
 
 /**
  * Twig `source()` polyfill.
- * Returns an <img> tag or URL for @assets paths.
+ * Supports the @assets compatibility alias used by existing Storybook Twig
+ * templates.
  * @param {string} assetPath
  * @return {string}
  */
@@ -20,7 +21,7 @@ function twigSource(Twig) {
   Twig.extendFunction('source', (assetPath) => {
     if (typeof assetPath !== 'string') return '';
 
-    // Strip Drupal-style alias and extract file extension.
+    // Strip the compatibility alias and extract the file extension.
     const relPath = assetPath.replace(/^@assets\//, '');
     const extension = relPath.split('.').pop().toLowerCase();
 

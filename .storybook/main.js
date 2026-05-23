@@ -15,8 +15,7 @@
 
 import fs from 'fs';
 import path, { resolve } from 'path';
-import { fileURLToPath } from 'url';
-import configOverrides from '../../../../config/emulsify-core/storybook/main.js';
+import { fileURLToPath, pathToFileURL } from 'url';
 import viteConfig from '../config/vite/vite.config.js';
 import { resolveEnvironment } from '../config/vite/environment.js';
 
@@ -67,6 +66,19 @@ function readOptionalHtmlFragment(relativePath) {
 }
 
 /**
+ * Keeps Storybook static directory config aligned to the consuming project.
+ *
+ * Storybook errors when a declared static directory is absent, so only expose
+ * project asset directories that exist in the current workspace.
+ *
+ * @param {string[]} staticDirs - Absolute static directory paths.
+ * @returns {string[]} Existing static directory paths.
+ */
+function existingStaticDirs(staticDirs) {
+  return staticDirs.filter((staticDir) => fs.existsSync(staticDir));
+}
+
+/**
  * Converts an absolute path inside the project into the root-relative format
  * Vite expects for `import.meta.glob()` patterns.
  *
@@ -85,6 +97,65 @@ function toRootRelativePath(projectDir, absolutePath) {
 }
 
 /**
+ * Reads optional project-level Storybook overrides.
+ *
+ * Downstream projects can provide this file, but the shared config also needs
+ * to load in package-level smoke tests where that project file is absent.
+ *
+ * @returns {Promise<object>} Consumer overrides, or an empty object.
+ */
+async function loadConfigOverrides() {
+  const overridePath = resolve(
+    _dirname,
+    '../../../../config/emulsify-core/storybook/main.js',
+  );
+
+  if (!fs.existsSync(overridePath)) {
+    return {};
+  }
+
+  const configOverrides = await import(pathToFileURL(overridePath).href);
+  return configOverrides.default || {};
+}
+
+/**
+ * Builds candidate roots whose Twig files should be importable in Storybook.
+ *
+ * Modern projects usually resolve `srcDir` to `src`, while component templates
+ * live under `src/components`. Legacy projects may resolve directly to a
+ * top-level `components` directory. Keep both shapes importable.
+ *
+ * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
+ * @returns {string[]} Absolute candidate roots.
+ */
+function buildTwigCandidateRoots(env) {
+  const rawRoots =
+    env.structureOverrides &&
+    Array.isArray(env.structureRoots) &&
+    env.structureRoots.length
+      ? env.structureRoots
+      : env.srcDir
+        ? [env.srcDir]
+        : [];
+  const roots = new Set();
+
+  for (const root of rawRoots) {
+    roots.add(root);
+    if (path.basename(root) !== 'components') {
+      roots.add(path.resolve(root, 'components'));
+    }
+  }
+
+  if (!roots.size) {
+    roots.add(path.resolve(env.projectDir, 'src'));
+    roots.add(path.resolve(env.projectDir, 'src/components'));
+    roots.add(path.resolve(env.projectDir, 'components'));
+  }
+
+  return Array.from(roots);
+}
+
+/**
  * Builds the `import.meta.glob()` expression injected into the Twig resolver.
  *
  * The component roots can move when a project enables structure overrides, so
@@ -94,20 +165,12 @@ function toRootRelativePath(projectDir, absolutePath) {
  * @returns {string} JavaScript source that eagerly imports Twig templates.
  */
 function buildTwigGlobImports(env) {
-  const candidateRoots =
-    env.structureOverrides &&
-    Array.isArray(env.structureRoots) &&
-    env.structureRoots.length
-      ? env.structureRoots
-      : env.srcDir
-        ? [env.srcDir]
-        : [];
-  const rootRelativePaths = candidateRoots.map((root) =>
+  const rootRelativePaths = buildTwigCandidateRoots(env).map((root) =>
     toRootRelativePath(env.projectDir, root),
   );
   const globBases = rootRelativePaths.length
     ? rootRelativePaths
-    : ['/src/components', '/components'];
+    : ['/src', '/src/components', '/components'];
 
   return `mergeGlobMaps([\n${globBases
     .map((base) => `  import.meta.glob('${base}/**/*.twig', { eager: true })`)
@@ -118,7 +181,7 @@ function buildTwigGlobImports(env) {
  * Safely apply any user-provided overrides or fall back to an empty object.
  * @type {object}
  */
-const safeConfigOverrides = configOverrides || {};
+const safeConfigOverrides = await loadConfigOverrides();
 
 /**
  * Primary Storybook configuration object.
@@ -133,7 +196,12 @@ const config = {
    *
    * @type {string[]}
    */
-  stories: ['../../../../@(src|components)/**/*.stories.@(js|jsx|ts|tsx)'],
+  stories: [
+    path
+      .resolve(process.cwd(), '@(src|components)/**/*.stories.@(js|jsx|ts|tsx)')
+      .split(path.sep)
+      .join('/'),
+  ],
 
   /**
    * Mount shared assets into Storybook's static file server.
@@ -144,9 +212,11 @@ const config = {
    * @type {string[]}
    */
   staticDirs: [
-    '../../../../assets/images',
-    '../../../../assets/icons',
-    '../../../../dist',
+    ...existingStaticDirs([
+      path.resolve(process.cwd(), 'assets/images'),
+      path.resolve(process.cwd(), 'assets/icons'),
+      path.resolve(process.cwd(), 'dist'),
+    ]),
   ],
 
   /**

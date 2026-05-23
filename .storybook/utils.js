@@ -1,9 +1,16 @@
 import twigAddAttributes from 'add-attributes-twig-extension';
 import twigBEM from 'bem-twig-extension';
 import twigDrupal from 'twig-drupal-filters';
-import emulsifyConfig from '../../../../project.emulsify.json' with { type: 'json' };
 import twigInclude from './polyfills/twig-include';
 import twigSource from './polyfills/twig-source';
+
+const projectConfigModules = import.meta.glob('../../../../project.emulsify.json', {
+  eager: true,
+});
+const emulsifyConfig =
+  Object.values(projectConfigModules)[0]?.default ||
+  Object.values(projectConfigModules)[0] ||
+  {};
 
 /**
  * Fetches project-based variant configuration. If no such configuration
@@ -37,7 +44,7 @@ const fetchCSSFiles = () => {
     Object.values(cssFiles).forEach((css) => css);
 
     // Load all CSS files from 'components' for 'drupal' platform.
-    if (emulsifyConfig.project.platform === 'drupal') {
+    if (emulsifyConfig.project?.platform === 'drupal') {
       const drupalCSSFiles = import.meta.glob('../../../../components/**/*.css', { eager: true });
       Object.values(drupalCSSFiles).forEach((css) => css);
     }
@@ -62,6 +69,10 @@ export function getProjectMachineName() {
 
 /**
  * Configures and extends a standard Twig object.
+ *
+ * The Drupal filters and BEM/add-attributes helpers are compatibility
+ * extensions for existing stories; they are separate from the generic Twig
+ * renderer configured in Vite.
  *
  * @param {Object} twig - Twig object that should be configured and extended.
  * @returns {Object} Configured Twig object.

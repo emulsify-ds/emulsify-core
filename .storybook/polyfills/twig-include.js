@@ -3,7 +3,8 @@ import resolveTemplate from './twig-resolver.js';
 
 /**
  * Twig `include()` polyfill.
- * Mirrors Drupal behaviour inside Storybook.
+ * Provides Storybook compatibility for Drupal-style include() calls while the
+ * underlying Twig renderer remains platform-agnostic.
  * @param {string} templateName
  * @param {Object} [variables]
  * @param {boolean} [withContext=false]

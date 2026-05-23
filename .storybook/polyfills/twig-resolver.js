@@ -10,10 +10,15 @@ const namespace = getProjectMachineName();
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
 // Determine candidate roots: prefer structure overrides, otherwise the primary
-// component root resolved for the project.
-const candidateRoots = Array.isArray(ENV?.structureRoots) && ENV?.structureOverrides && ENV.structureRoots.length
-  ? ENV.structureRoots
-  : (ENV?.srcDir ? [ENV.srcDir] : []);
+// source root resolved for the project.
+const candidateRoots =
+  Array.isArray(ENV?.structureRoots) &&
+  ENV?.structureOverrides &&
+  ENV.structureRoots.length
+    ? ENV.structureRoots
+    : ENV?.srcDir
+      ? [ENV.srcDir]
+      : [];
 
 /**
  * Convert an absolute path to a Vite project-root-relative path, prefixed with "/".
@@ -33,7 +38,12 @@ function toRootRel(abs) {
 }
 
 // Build globs for each candidate root. We’ll eagerly import all Twig modules.
-const rootRels = candidateRoots.map(toRootRel);
+const rootRels = candidateRoots.length
+  ? candidateRoots.flatMap((root) => {
+      const base = toRootRel(root);
+      return base.endsWith('/components') ? [base] : [base, `${base}/components`];
+    })
+  : ['/src', '/src/components', '/components'];
 
 // Vite doesn’t support an array directly in a single import.meta.glob(),
 // so merge multiple glob maps into one.
@@ -50,12 +60,66 @@ const twigModules = __EMULSIFY_TWIG_GLOB_IMPORTS__;
 // Helper: generate likely keys for a given component “part” under every root.
 // We try the canonical “part/part.twig”, then “part.twig”.
 function candidateKeysForPart(part) {
+  const normalizedPart = part.replace(/\.twig$/, '');
+  const stem = normalizedPart.split('/').pop();
   const keys = [];
   for (const base of rootRels) {
-    keys.push(`${base}/${part}/${part}.twig`);
-    keys.push(`${base}/${part}.twig`);
+    keys.push(`${base}/${normalizedPart}/${stem}.twig`);
+    keys.push(`${base}/${normalizedPart}.twig`);
   }
   return keys;
+}
+
+function resolveCandidateKeys(candidates) {
+  for (const key of candidates) {
+    const mod = twigModules[key];
+    if (mod) {
+      return mod.default ?? mod;
+    }
+  }
+  return undefined;
+}
+
+function uniqueParts(parts) {
+  return Array.from(new Set(parts.filter(Boolean)));
+}
+
+function removeTwigExtension(name) {
+  return name.replace(/\.twig$/, '');
+}
+
+function partsFromTemplateReference(name) {
+  if (namespace && name.startsWith(`${namespace}:`)) {
+    return [removeTwigExtension(name.split(':').slice(1).join(':'))];
+  }
+  if (namespace && name.startsWith(`@${namespace}/`)) {
+    return [
+      removeTwigExtension(name.replace(new RegExp(`^@?${namespace}/`), '')),
+    ];
+  }
+
+  const colonMatch = name.match(/^[^:/.]+:(.+)$/);
+  if (colonMatch) {
+    return [removeTwigExtension(colonMatch[1])];
+  }
+
+  const atMatch = name.match(/^@[^/]+\/(.+)$/);
+  if (atMatch) {
+    return [
+      removeTwigExtension(name.replace(/^@/, '')),
+      removeTwigExtension(atMatch[1]),
+    ];
+  }
+
+  const slashMatch = name.match(/^[^/]+\/(.+)$/);
+  if (slashMatch) {
+    return uniqueParts([
+      removeTwigExtension(name),
+      removeTwigExtension(slashMatch[1]),
+    ]);
+  }
+
+  return [];
 }
 
 /**
@@ -65,17 +129,22 @@ function candidateKeysForPart(part) {
  * @returns {Function|undefined} Compiled function or noop
  */
 function resolveTemplate(name) {
-  // namespace:icon, @namespace/icon.twig
-  if (name.startsWith(`${namespace}:`) || name.startsWith(`@${namespace}/`)) {
-    const part = name.startsWith(`${namespace}:`)
-      ? name.split(':')[1]
-      : name.replace(new RegExp(`^@?${namespace}/`), '').replace(/\.twig$/, '');
+  // Exact glob keys are accepted for callers that already resolved a template.
+  const direct = twigModules[name];
+  if (direct) {
+    return direct.default ?? direct;
+  }
 
-    const candidates = candidateKeysForPart(part);
-    for (const key of candidates) {
-      const mod = twigModules[key];
-      if (mod) {
-        return mod.default ?? mod;
+  // namespace:icon, @namespace/icon.twig, @namespace/icon, namespace/icon
+  const namespaceParts = partsFromTemplateReference(name);
+  if (namespaceParts.length) {
+    const candidates = [];
+    for (const namespacePart of namespaceParts) {
+      const partCandidates = candidateKeysForPart(namespacePart);
+      candidates.push(...partCandidates);
+      const template = resolveCandidateKeys(partCandidates);
+      if (template) {
+        return template;
       }
     }
 
@@ -87,34 +156,12 @@ function resolveTemplate(name) {
   if (name.startsWith('@') && name.endsWith('.twig')) {
     const part = name.slice(1, -5); // remove leading @ and trailing .twig
     const candidates = candidateKeysForPart(part);
-    for (const key of candidates) {
-      const mod = twigModules[key];
-      if (mod) {
-        return mod.default ?? mod;
-      }
+    const template = resolveCandidateKeys(candidates);
+    if (template) {
+      return template;
     }
     // eslint-disable-next-line no-console
     console.error(`Cannot resolve Twig shorthand template '${name}'. Tried: ${candidates.join(', ')}`);
-  }
-
-  // namespace/icon.twig via alias-like usage (without @)
-  if (name.startsWith(`${namespace}/`)) {
-    const part = name.replace(new RegExp(`^${namespace}/`), '').replace(/\.twig$/, '');
-    const candidates = candidateKeysForPart(part);
-    for (const key of candidates) {
-      const mod = twigModules[key];
-      if (mod) {
-        return mod.default ?? mod;
-      }
-    }
-    // eslint-disable-next-line no-console
-    console.error(`Cannot resolve Twig alias template '${name}'. Tried: ${candidates.join(', ')}`);
-  }
-
-  // Final attempt: direct key access if caller passed an exact glob key.
-  const direct = twigModules[name];
-  if (direct) {
-    return direct.default ?? direct;
   }
 
   // Vite environment: avoid require() fallback; return a safe noop.
