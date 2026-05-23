@@ -1,8 +1,15 @@
+/**
+ * @file Tests for the native `add_attributes()` Twig helper.
+ */
+
 import Twig from 'twig';
 import { addAttributes } from '../functions/add-attributes.js';
 import { bemAttributes } from '../functions/bem.js';
 import { registerTwigExtensions } from '../register.js';
 
+/**
+ * Pure attribute builder coverage keeps serialization independent from Twig.js.
+ */
 describe('addAttributes', () => {
   it('serializes scalar and list attributes', () => {
     expect(
@@ -50,6 +57,9 @@ describe('addAttributes', () => {
     ).toBe('disabled draggable="0"');
   });
 
+  /**
+   * Context merge coverage protects the Drupal-compatible print-once behavior.
+   */
   it('merges context attributes before additional attributes', () => {
     const invocationContext = {
       context: {
@@ -72,6 +82,9 @@ describe('addAttributes', () => {
   });
 });
 
+/**
+ * Twig.js registration coverage verifies the public template API.
+ */
 describe('registered add_attributes Twig function', () => {
   it('renders in Twig.js templates', () => {
     registerTwigExtensions(Twig);

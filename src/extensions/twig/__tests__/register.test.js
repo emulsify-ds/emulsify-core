@@ -1,3 +1,7 @@
+/**
+ * @file Tests for native Twig extension registration.
+ */
+
 import { getTwigFunctionMap } from '../function-map.js';
 import { registerTwigExtensions } from '../register.js';
 

@@ -1,8 +1,15 @@
+/**
+ * @file Tests for the native `bem()` Twig helper.
+ */
+
 import Twig from 'twig';
 import { AttributeBag } from '../../shared/attributes.js';
 import { bemAttributes } from '../functions/bem.js';
 import { registerTwigExtensions } from '../register.js';
 
+/**
+ * Pure BEM builder coverage keeps class generation independent from Twig.js.
+ */
 describe('bemAttributes', () => {
   it('builds a simple block class', () => {
     expect(String(bemAttributes('title'))).toBe('class="title"');
@@ -58,6 +65,9 @@ describe('bemAttributes', () => {
   });
 });
 
+/**
+ * Twig.js registration coverage verifies the public template API.
+ */
 describe('registered bem Twig function', () => {
   it('renders in Twig.js templates', () => {
     registerTwigExtensions(Twig);
@@ -85,6 +95,7 @@ describe('registered bem Twig function', () => {
     expect(template.render(context)).toBe(
       '<h1 class="title from-context" id="headline"></h1>',
     );
+    // Context attributes are consumed once to mirror Drupal template output.
     expect(context.attributes).toEqual({});
   });
 });

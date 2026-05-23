@@ -1,3 +1,14 @@
+/**
+ * @file List coercion utilities shared by extension implementations.
+ * @module extensions/shared/lists
+ */
+
+/**
+ * Convert scalar or nested array values into a flat list.
+ *
+ * @param {*} value - Value to flatten.
+ * @returns {*[]} Flat list with null, undefined, and false treated as empty.
+ */
 export function flattenList(value) {
   if (value === null || typeof value === 'undefined' || value === false) {
     return [];
@@ -10,6 +21,12 @@ export function flattenList(value) {
   return value.flatMap((item) => flattenList(item));
 }
 
+/**
+ * Return values in their first-seen order with duplicates removed.
+ *
+ * @param {*[]} values - Values to deduplicate.
+ * @returns {*[]} Unique values.
+ */
 export function uniqueList(values) {
   const seen = new Set();
   const result = [];

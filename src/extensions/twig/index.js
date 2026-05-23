@@ -1,3 +1,8 @@
+/**
+ * @file Public exports for native Twig extensions.
+ * @module extensions/twig
+ */
+
 export { getTwigFunctionMap } from './function-map.js';
 export { registerTwigExtensions } from './register.js';
 export {
