@@ -29,6 +29,10 @@ import sassGlobImports from 'vite-plugin-sass-glob-import';
 import yml from '@modyfi/vite-plugin-yaml';
 import twig from '@vituum/vite-plugin-twig';
 import Twig from 'twig';
+import {
+  getTwigFunctionMap,
+  registerTwigExtensions,
+} from '../../src/extensions/twig/index.js';
 
 /* ============================================================================
  * Small, focused helpers
@@ -183,6 +187,8 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
 };
 
 const compileTwigTemplate = (templateId, filePath, options) => {
+  registerTwigExtensions(Twig);
+
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const source = readFileSync(filePath, 'utf8');
   const compileOptions = {
@@ -284,6 +290,7 @@ export function makeTwigPluginOptions(env) {
   return {
     root: root || srcDir || projectDir,
     namespaces: makeTwigNamespaces(env),
+    functions: getTwigFunctionMap(),
     reload: (filePath) => /\.(twig|json)$/i.test(filePath),
   };
 }
