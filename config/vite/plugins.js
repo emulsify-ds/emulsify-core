@@ -7,12 +7,10 @@
  *      • `src/!(components|util)/**` → `dist/global/**`
  *  - Copies **all non-code assets** found under `src/` to the same routed locations.
  *  - Builds a **physical** spritemap at `dist/assets/icons.sprite.svg`.
- *  - If `env.platform === 'drupal'` and a `src/` dir exists, mirrors `dist/components/**`
- *    to `./components/**` and prunes any empty folders left behind.
  *
  * Component Structure Overrides behavior:
  *  - When `env.structureOverrides === true`, we **skip** copying Twig and assets, and also
- *    **skip** mirroring. (Only JS/CSS compile is needed.)
+ *    **skip** platform-specific mirroring. (Only JS/CSS compile is needed.)
  */
 
 import { resolve, join, dirname, basename, posix as pathPosix } from 'path';
@@ -29,7 +27,8 @@ import {
 import { globSync } from 'glob';
 import sassGlobImports from 'vite-plugin-sass-glob-import';
 import yml from '@modyfi/vite-plugin-yaml';
-import twig from 'vite-plugin-twig-drupal';
+import twig from '@vituum/vite-plugin-twig';
+import Twig from 'twig';
 
 /* ============================================================================
  * Small, focused helpers
@@ -38,6 +37,416 @@ import twig from 'vite-plugin-twig-drupal';
 /** Determine whether a Twig file is a partial (filename starts with `_`). */
 const isPartial = (filePath) =>
   (filePath.split('/')?.pop() || '').trim().startsWith('_');
+
+/**
+ * Return the first existing path in a list.
+ * @param {string[]} paths
+ * @returns {string|undefined}
+ */
+const firstExistingPath = (paths) =>
+  paths.filter(Boolean).find((filePath) => {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
+    return existsSync(filePath);
+  });
+
+const toPosixPath = (filePath) => filePath.replace(/\\/g, '/');
+
+const includeTokenTypes = [
+  'Twig.logic.type.embed',
+  'Twig.logic.type.extends',
+  'Twig.logic.type.from',
+  'Twig.logic.type.import',
+  'Twig.logic.type.include',
+];
+
+const isTwigModuleRequest = (id) => {
+  const [filePath, query = ''] = id.split('?');
+  if (!filePath.endsWith('.twig')) return false;
+  return !query || query === 'twig' || !/(^|&)(raw|url)\b/.test(query);
+};
+
+const stripRequestQuery = (id) => id.split('?')[0];
+
+const pluckIncludes = (tokens = []) => [
+  ...tokens
+    .filter((token) => includeTokenTypes.includes(token.token?.type))
+    .flatMap((token) =>
+      (token.token?.stack || [])
+        .map((stack) => stack.value)
+        .filter((value) => typeof value === 'string'),
+    ),
+  ...tokens.flatMap((token) => pluckIncludes(token.token?.output || [])),
+];
+
+const unique = (items) => [...new Set(items.filter(Boolean))];
+
+const fileCandidates = (baseDir, templatePath) => {
+  const normalizedTemplatePath = toPosixPath(templatePath);
+  const withoutTwigExt = normalizedTemplatePath.replace(/\.twig$/i, '');
+  const stem = basename(withoutTwigExt);
+
+  return unique([
+    resolve(baseDir, normalizedTemplatePath),
+    resolve(baseDir, `${normalizedTemplatePath}.twig`),
+    resolve(baseDir, `${normalizedTemplatePath}.html.twig`),
+    resolve(baseDir, withoutTwigExt, `${stem}.twig`),
+    resolve(baseDir, withoutTwigExt, `${stem}.html.twig`),
+  ]);
+};
+
+const resolveExistingFile = (paths) =>
+  paths.filter(Boolean).find((filePath) => {
+    try {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      return statSync(filePath).isFile();
+    } catch {
+      return false;
+    }
+  });
+
+const namespaceReference = (templatePath, namespaces = {}) => {
+  const namespaceNames = Object.keys(namespaces);
+  const atNamespace = templatePath.match(/^@([^/]+)\/(.+)$/);
+  if (atNamespace && namespaces[atNamespace[1]]) {
+    return { root: namespaces[atNamespace[1]], path: atNamespace[2] };
+  }
+
+  const doubleColon = templatePath.match(/^([^:]+)::(.+)$/);
+  if (doubleColon && namespaces[doubleColon[1]]) {
+    return { root: namespaces[doubleColon[1]], path: doubleColon[2] };
+  }
+
+  const singleColon = templatePath.match(/^([^:/.]+):(.+)$/);
+  if (singleColon && namespaces[singleColon[1]]) {
+    return { root: namespaces[singleColon[1]], path: singleColon[2] };
+  }
+
+  const slashNamespace = namespaceNames.find((namespace) =>
+    templatePath.startsWith(`${namespace}/`),
+  );
+  if (slashNamespace) {
+    return {
+      root: namespaces[slashNamespace],
+      path: templatePath.slice(slashNamespace.length + 1),
+    };
+  }
+
+  return null;
+};
+
+const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
+  if (!componentRoot || templatePath.startsWith('.')) return null;
+
+  const shorthandPath =
+    templatePath.startsWith('@') && !templatePath.includes('/')
+      ? templatePath.slice(1)
+      : templatePath;
+  const directComponentPath = resolveExistingFile(
+    fileCandidates(componentRoot, shorthandPath),
+  );
+  if (directComponentPath) {
+    return directComponentPath;
+  }
+
+  const genericNamespace = templatePath.match(/^@?[^/:]+[:/](.+)$/);
+  if (!genericNamespace) {
+    return null;
+  }
+
+  return resolveExistingFile(
+    fileCandidates(componentRoot, genericNamespace[1]),
+  );
+};
+
+const resolveTwigTemplate = (templatePath, fromDir, options) => {
+  if (templatePath === '_self') return null;
+
+  const namespaced = namespaceReference(templatePath, options.namespaces);
+  if (namespaced) {
+    return resolveExistingFile(
+      fileCandidates(namespaced.root, namespaced.path),
+    );
+  }
+
+  const relativeTemplate = resolveExistingFile([
+    ...fileCandidates(fromDir, templatePath),
+    ...fileCandidates(options.root, templatePath),
+  ]);
+
+  return (
+    relativeTemplate ||
+    resolveComponentNamespaceFallback(
+      templatePath,
+      options.namespaces?.components,
+    )
+  );
+};
+
+const compileTwigTemplate = (templateId, filePath, options) => {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  const source = readFileSync(filePath, 'utf8');
+  const compileOptions = {
+    allowInlineIncludes: true,
+    namespaces: options.namespaces,
+    rethrow: true,
+    ...(options.options?.compileOptions || {}),
+  };
+  const template = Twig.twig({
+    ...compileOptions,
+    data: source,
+    id: templateId,
+    path: filePath,
+  });
+  const includes = unique(pluckIncludes(template.tokens));
+
+  return {
+    code: template.compile(compileOptions),
+    includes,
+  };
+};
+
+/**
+ * Build platform-neutral Twig namespaces for the resolved project structure.
+ *
+ * @param {{
+ *   projectDir: string,
+ *   srcDir: string,
+ *   srcExists: boolean,
+ *   structureOverrides?: boolean,
+ *   structureRoots?: string[]
+ * }} env
+ * @returns {Record<string, string>}
+ */
+export function makeTwigNamespaces(env) {
+  const {
+    projectDir,
+    srcDir,
+    srcExists,
+    structureOverrides,
+    structureRoots = [],
+  } = env;
+  const namespaces = {};
+  const overrideRoots = structureOverrides ? structureRoots : [];
+  const componentRoot =
+    basename(srcDir) === 'components' ? srcDir : resolve(srcDir, 'components');
+  const componentsNamespace = firstExistingPath([
+    ...new Set([
+      ...overrideRoots,
+      componentRoot,
+      resolve(projectDir, 'src/components'),
+      resolve(projectDir, 'components'),
+    ]),
+  ]);
+  const layoutNamespace = firstExistingPath([
+    ...new Set([
+      ...(srcExists ? [resolve(srcDir, 'layout')] : []),
+      resolve(projectDir, 'src/layout'),
+      resolve(projectDir, 'layout'),
+    ]),
+  ]);
+  const tokensNamespace = firstExistingPath([
+    ...new Set([
+      ...(srcExists ? [resolve(srcDir, 'tokens')] : []),
+      resolve(projectDir, 'src/tokens'),
+      resolve(projectDir, 'tokens'),
+    ]),
+  ]);
+
+  if (componentsNamespace) {
+    namespaces.components = componentsNamespace;
+  }
+  if (layoutNamespace) {
+    namespaces.layout = layoutNamespace;
+  }
+  if (tokensNamespace) {
+    namespaces.tokens = tokensNamespace;
+  }
+
+  return namespaces;
+}
+
+/**
+ * Build the generic Twig plugin options shared by Vite and Storybook.
+ *
+ * @param {{
+ *   projectDir: string,
+ *   srcDir: string,
+ *   structureOverrides?: boolean,
+ *   structureRoots?: string[]
+ * }} env
+ * @returns {import('@vituum/vite-plugin-twig/types').PluginUserConfig}
+ */
+export function makeTwigPluginOptions(env) {
+  const { projectDir, srcDir, structureOverrides, structureRoots = [] } = env;
+  const overrideRoots = structureOverrides ? structureRoots : [];
+  const root = firstExistingPath([srcDir, ...overrideRoots, projectDir]);
+
+  return {
+    root: root || srcDir || projectDir,
+    namespaces: makeTwigNamespaces(env),
+    reload: (filePath) => /\.(twig|json)$/i.test(filePath),
+  };
+}
+
+/**
+ * Instantiate Vituum's Twig renderer without its entry-renaming build hooks.
+ *
+ * Emulsify builds use an object-shaped Rollup input map for deterministic
+ * JS/CSS output paths. Vituum's rename/bundle helpers expect array inputs and
+ * only apply when Twig files are Rollup entries, so keep the Twig rendering,
+ * middleware, and reload behavior without those incompatible hooks.
+ *
+ * @param {Parameters<typeof makeTwigPluginOptions>[0]} env
+ * @returns {import('vite').PluginOption[]}
+ */
+function makeTwigPlugins(env, options = makeTwigPluginOptions(env)) {
+  const twigPlugins = twig(options);
+  return (Array.isArray(twigPlugins) ? twigPlugins : [twigPlugins])
+    .filter(
+      (pluginOption) =>
+        pluginOption?.name !== '@vituum/vite-plugin-core:bundle',
+    )
+    .map((pluginOption) => {
+      if (pluginOption?.name !== '@vituum/vite-plugin-twig') {
+        return pluginOption;
+      }
+
+      const renderPlugin = { ...pluginOption };
+      delete renderPlugin.buildStart;
+      delete renderPlugin.buildEnd;
+      return renderPlugin;
+    });
+}
+
+/**
+ * Transform Twig imports into render functions for Storybook and Vite consumers.
+ *
+ * Vituum renders Twig page entries to HTML, but Emulsify stories import Twig
+ * component files as JavaScript modules. This keeps that component-module
+ * contract platform-neutral after removing the Drupal-specific Twig plugin.
+ *
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options
+ * @returns {import('vite').PluginOption}
+ */
+function emulsifyTwigModulePlugin(options) {
+  const dependencyImporters = new Map();
+  const addDependencyImporter = (dependency, importer) => {
+    const importers = dependencyImporters.get(dependency) || new Set();
+    importers.add(importer);
+    dependencyImporters.set(dependency, importers);
+  };
+  const clearDependencyImporter = (importer) => {
+    for (const importers of dependencyImporters.values()) {
+      importers.delete(importer);
+    }
+  };
+
+  return {
+    name: 'emulsify-twig-module',
+    enforce: 'pre',
+    transform(...args) {
+      const [, id] = args;
+      if (!isTwigModuleRequest(id)) {
+        return null;
+      }
+
+      const filePath = stripRequestQuery(id);
+      const compiledIncludes = new Map();
+      clearDependencyImporter(filePath);
+
+      const compileIncludes = (includes, fromDir) => {
+        for (const templatePath of includes) {
+          const includePath = resolveTwigTemplate(
+            templatePath,
+            fromDir,
+            options,
+          );
+          if (!includePath || compiledIncludes.has(includePath)) continue;
+
+          addDependencyImporter(includePath, filePath);
+          this.addWatchFile(includePath);
+
+          const compiled = compileTwigTemplate(
+            templatePath,
+            includePath,
+            options,
+          );
+          compiledIncludes.set(includePath, compiled);
+          compileIncludes(compiled.includes, dirname(includePath));
+        }
+      };
+
+      try {
+        const compiled = compileTwigTemplate(filePath, filePath, options);
+        compileIncludes(compiled.includes, dirname(filePath));
+
+        const includeCode = Array.from(compiledIncludes.values())
+          .reverse()
+          .map((include) => `${include.code};`)
+          .join('\n');
+        const renderErrorPrefix = JSON.stringify(
+          `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
+        );
+        const moduleCode = `
+          import Twig from 'twig';
+
+          const { twig } = Twig;
+
+          Twig.cache(false);
+
+          ${includeCode}
+
+          export default (context = {}) => {
+            try {
+              const template = ${compiled.code};
+              template.options.allowInlineIncludes = true;
+              return template.render(context);
+            } catch (error) {
+              return ${renderErrorPrefix} + error.toString();
+            }
+          };
+        `;
+
+        return {
+          code: moduleCode,
+          map: null,
+        };
+      } catch (error) {
+        const message = `An error occurred whilst compiling ${toPosixPath(
+          filePath,
+        )}: ${error.toString()}`;
+
+        return {
+          code: `export default () => ${JSON.stringify(message)};`,
+          map: null,
+        };
+      }
+    },
+    handleHotUpdate({ file, server }) {
+      if (!file.endsWith('.twig')) {
+        return undefined;
+      }
+
+      const importers = dependencyImporters.get(file);
+      if (!importers?.size) {
+        return undefined;
+      }
+
+      const modules = new Set(server.moduleGraph.getModulesByFile(file) || []);
+      for (const importer of importers) {
+        const importerModules =
+          server.moduleGraph.getModulesByFile(importer) || [];
+
+        for (const module of importerModules) {
+          server.moduleGraph.invalidateModule(module);
+          modules.add(module);
+        }
+      }
+
+      return Array.from(modules);
+    },
+  };
+}
 
 /**
  * Depth-first walk to list **all files** (no directories) under a given root.
@@ -477,17 +886,13 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
  */
 export function makePlugins(env) {
   const { projectDir, platform, srcDir, srcExists, structureOverrides } = env;
+  const twigOptions = makeTwigPluginOptions(env);
 
   const basePlugins = [
-    // Twig in dev/preview
-    twig({
-      framework: 'react',
-      namespaces: {
-        components: resolve(projectDir, './src/components'),
-        layout: resolve(projectDir, './src/layout'),
-        tokens: resolve(projectDir, './src/tokens'),
-      },
-    }),
+    emulsifyTwigModulePlugin(twigOptions),
+
+    // Generic Twig rendering for dev/preview.
+    ...makeTwigPlugins(env, twigOptions),
 
     // Emit a physical `dist/assets/icons.svg`
     svgSpriteFilePlugin({
