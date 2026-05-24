@@ -5,13 +5,11 @@
  * It copies Twig templates, component metadata, and non-code assets with the
  * same routing rules as JS/CSS:
  *   - `src/components/**`         -> `dist/components/**`
+ *   - `components/**`             -> `dist/components/**`
  *   - `src/!(components|util)/**` -> `dist/global/**`
+ *   - structure implementation roots -> `dist/<implementation-name>/**`
  *
  * It also builds a physical SVG spritemap at `dist/assets/icons.svg`.
- *
- * Component Structure Overrides behavior:
- *  - When `env.structureOverrides === true`, copying and platform-specific
- *    mirroring are skipped because only JS/CSS compilation is needed.
  */
 
 import { resolve, join, dirname, basename, posix as pathPosix } from 'path';
@@ -34,6 +32,15 @@ import {
   getTwigFunctionMap,
   registerTwigExtensions,
 } from '../../src/extensions/twig/index.js';
+import { getPlatformAdapter } from './platforms.js';
+import {
+  copiedComponentOutputPath,
+  copiedGlobalOutputPath,
+  findSourceRoot,
+  relativeFrom,
+  resolveProjectStructure,
+  toPosixPath as toStructurePosixPath,
+} from './project-structure.js';
 
 /* ============================================================================
  * Small, focused helpers
@@ -294,6 +301,14 @@ const compileTwigTemplate = (templateId, filePath, options) => {
  * @returns {Record<string, string>}
  */
 export function makeTwigNamespaces(env) {
+  const structure = env.projectStructure || resolveProjectStructure(env);
+  if (
+    structure.namespaceRoots &&
+    typeof structure.namespaceRoots === 'object'
+  ) {
+    return { ...structure.namespaceRoots };
+  }
+
   const {
     projectDir,
     srcDir,
@@ -301,6 +316,7 @@ export function makeTwigNamespaces(env) {
     structureOverrides,
     structureRoots = [],
   } = env;
+
   const namespaces = {};
   const overrideRoots = structureOverrides ? structureRoots : [];
   const componentRoot =
@@ -354,8 +370,15 @@ export function makeTwigNamespaces(env) {
  */
 export function makeTwigPluginOptions(env) {
   const { projectDir, srcDir, structureOverrides, structureRoots = [] } = env;
+  const structure = env.projectStructure || resolveProjectStructure(env);
   const overrideRoots = structureOverrides ? structureRoots : [];
-  const root = firstExistingPath([srcDir, ...overrideRoots, projectDir]);
+  const root = firstExistingPath(
+    structure.twigRoots?.length
+      ? [...structure.twigRoots, srcDir, projectDir]
+      : structureOverrides
+        ? [...overrideRoots, srcDir, projectDir]
+        : [srcDir, ...overrideRoots, projectDir],
+  );
 
   return {
     root: root || srcDir || projectDir,
@@ -601,15 +624,25 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
  * ========================================================================== */
 
 /**
- * Copy Twig templates and component metadata from `src/` to `dist/`,
+ * Copy Twig templates and component metadata to `dist/`,
  * respecting the same routing used for JS/CSS.
  *
- * @param {{ srcDir: string }} opts
+ * @param {{ structure: object }} opts
  * @returns {import('vite').PluginOption}
  */
-function copyTwigFilesPlugin({ srcDir }) {
+function copyTwigFilesPlugin({ structure }) {
   let outDir = 'dist';
-  const posix = (p) => p.replace(/\\/g, '/');
+
+  const copyToOutDir = (absPath, relDest) => {
+    if (!relDest) return;
+    const destPath = join(outDir, relDest);
+    mkdirSync(dirname(destPath), { recursive: true });
+    try {
+      copyFileSync(absPath, destPath);
+    } catch {
+      /* noop */
+    }
+  };
 
   return {
     name: 'emulsify-copy-twig-files',
@@ -623,60 +656,50 @@ function copyTwigFilesPlugin({ srcDir }) {
 
     /** Perform the copying after the bundle has been written. */
     closeBundle() {
-      // components/**/*.twig
-      const componentTwigs = globSync(
-        posix(join(srcDir, 'components/**/*.twig')),
-      );
-      for (const absPath of componentTwigs) {
-        const relFromSrc = posix(absPath).split(posix(srcDir) + '/')[1]; // "components/x/y.twig"
-        const withinComponents = relFromSrc.replace(/^components\//, '');
-        if (isPartial(withinComponents)) continue; // skip `_*.twig`
-        const destPath = join(outDir, 'components', withinComponents);
-        mkdirSync(dirname(destPath), { recursive: true });
-        try {
-          copyFileSync(absPath, destPath);
-        } catch {
-          /* noop */
+      // Component Twig files from every resolved component source root.
+      for (const root of structure.componentRootRecords) {
+        const componentTwigs = globSync(
+          toStructurePosixPath(join(root.directory, '**/*.twig')),
+        );
+        for (const absPath of componentTwigs) {
+          if (isPartial(relativeFrom(absPath, root.directory))) continue;
+          copyToOutDir(absPath, copiedComponentOutputPath(absPath, structure));
         }
       }
 
-      // components/**/*.component.(yml|yaml|json)
+      // Component metadata files from every resolved component source root.
       for (const pattern of [
-        'components/**/*.component.@(yml|yaml)',
-        'components/**/*.component.json',
+        '**/*.component.@(yml|yaml)',
+        '**/*.component.json',
       ]) {
-        const metaFiles = globSync(posix(join(srcDir, pattern)));
-        for (const absPath of metaFiles) {
-          const rel = posix(absPath)
-            .split(posix(srcDir) + '/')[1]
-            .replace(/^components\//, '');
-          const destPath = join(outDir, 'components', rel);
-          mkdirSync(dirname(destPath), { recursive: true });
-          try {
-            copyFileSync(absPath, destPath);
-          } catch {
-            /* noop */
+        for (const root of structure.componentRootRecords) {
+          const metaFiles = globSync(
+            toStructurePosixPath(join(root.directory, pattern)),
+          );
+          for (const absPath of metaFiles) {
+            copyToOutDir(
+              absPath,
+              copiedComponentOutputPath(absPath, structure),
+            );
           }
         }
       }
 
-      // global Twig: everything under src except components/, util/, and partials
-      const globalTwigs = globSync(posix(join(srcDir, '**/*.twig')), {
-        ignore: [
-          posix(join(srcDir, 'components/**')),
-          posix(join(srcDir, 'util/**')),
-          posix(join(srcDir, '**/_*.twig')),
-        ],
-      });
+      // Global Twig files from every resolved global source root.
+      for (const root of structure.globalRootRecords) {
+        const globalTwigs = globSync(
+          toStructurePosixPath(join(root.directory, '**/*.twig')),
+          {
+            ignore: [
+              toStructurePosixPath(join(root.directory, 'components/**')),
+              toStructurePosixPath(join(root.directory, 'util/**')),
+              toStructurePosixPath(join(root.directory, '**/_*.twig')),
+            ],
+          },
+        );
 
-      for (const absPath of globalTwigs) {
-        const rel = posix(absPath).split(posix(srcDir) + '/')[1];
-        const destPath = join(outDir, 'global', rel);
-        mkdirSync(dirname(destPath), { recursive: true });
-        try {
-          copyFileSync(absPath, destPath);
-        } catch {
-          /* noop */
+        for (const absPath of globalTwigs) {
+          copyToOutDir(absPath, copiedGlobalOutputPath(absPath, structure));
         }
       }
     },
@@ -688,17 +711,27 @@ function copyTwigFilesPlugin({ srcDir }) {
  * ========================================================================== */
 
 /**
- * Copies anything in `src/` that is not a code/template file into
+ * Copies anything in resolved source roots that is not a code/template file into
  * either `dist/components/**` or `dist/global/**`, preserving relative paths.
  *
  * Excludes: .js, .scss, .twig, source maps, and `*.component.(yml|yaml|json)`.
  *
- * @param {{ srcDir: string }} opts
+ * @param {{ structure: object }} opts
  * @returns {import('vite').PluginOption}
  */
-function copyAllSrcAssetsPlugin({ srcDir }) {
+function copyAllSrcAssetsPlugin({ structure }) {
   let outDir = 'dist';
-  const posix = (p) => p.replace(/\\/g, '/');
+
+  const copyToOutDir = (absPath, relDest) => {
+    if (!relDest) return;
+    const destPath = join(outDir, relDest);
+    mkdirSync(dirname(destPath), { recursive: true });
+    try {
+      copyFileSync(absPath, destPath);
+    } catch {
+      /* noop */
+    }
+  };
 
   return {
     name: 'emulsify-copy-all-src-assets',
@@ -712,51 +745,50 @@ function copyAllSrcAssetsPlugin({ srcDir }) {
 
     /** Copy component/global assets. */
     closeBundle() {
-      // Component-side assets emit under dist/components.
-      const componentAssets = globSync(posix(join(srcDir, 'components/**/*')), {
-        nodir: true,
-        ignore: [
-          posix(join(srcDir, 'components/**/*.js')),
-          posix(join(srcDir, 'components/**/*.scss')),
-          posix(join(srcDir, 'components/**/*.twig')),
-          posix(join(srcDir, 'components/**/*.component.@(yml|yaml|json)')),
-          posix(join(srcDir, 'components/**/*.map')),
-        ],
-      });
-      for (const absPath of componentAssets) {
-        const rel = posix(absPath)
-          .split(posix(srcDir) + '/')[1]
-          .replace(/^components\//, '');
-        const destPath = join(outDir, 'components', rel);
-        mkdirSync(dirname(destPath), { recursive: true });
-        try {
-          copyFileSync(absPath, destPath);
-        } catch {
-          /* noop */
+      // Component-side assets emit under the component root output path.
+      for (const root of structure.componentRootRecords) {
+        const componentAssets = globSync(
+          toStructurePosixPath(join(root.directory, '**/*')),
+          {
+            nodir: true,
+            ignore: [
+              toStructurePosixPath(join(root.directory, '**/*.js')),
+              toStructurePosixPath(join(root.directory, '**/*.scss')),
+              toStructurePosixPath(join(root.directory, '**/*.twig')),
+              toStructurePosixPath(
+                join(root.directory, '**/*.component.@(yml|yaml|json)'),
+              ),
+              toStructurePosixPath(join(root.directory, '**/*.map')),
+            ],
+          },
+        );
+        for (const absPath of componentAssets) {
+          copyToOutDir(absPath, copiedComponentOutputPath(absPath, structure));
         }
       }
 
       // Global-side assets emit under dist/global.
-      const globalAssets = globSync(posix(join(srcDir, '**/*')), {
-        nodir: true,
-        ignore: [
-          posix(join(srcDir, 'components/**')),
-          posix(join(srcDir, 'util/**')),
-          posix(join(srcDir, '**/*.js')),
-          posix(join(srcDir, '**/*.scss')),
-          posix(join(srcDir, '**/*.twig')),
-          posix(join(srcDir, '**/*.component.@(yml|yaml|json)')),
-          posix(join(srcDir, '**/*.map')),
-        ],
-      });
-      for (const absPath of globalAssets) {
-        const rel = posix(absPath).split(posix(srcDir) + '/')[1];
-        const destPath = join(outDir, 'global', rel);
-        mkdirSync(dirname(destPath), { recursive: true });
-        try {
-          copyFileSync(absPath, destPath);
-        } catch {
-          /* noop */
+      for (const root of structure.globalRootRecords) {
+        const globalAssets = globSync(
+          toStructurePosixPath(join(root.directory, '**/*')),
+          {
+            nodir: true,
+            ignore: [
+              toStructurePosixPath(join(root.directory, 'components/**')),
+              toStructurePosixPath(join(root.directory, 'util/**')),
+              toStructurePosixPath(join(root.directory, '**/*.js')),
+              toStructurePosixPath(join(root.directory, '**/*.scss')),
+              toStructurePosixPath(join(root.directory, '**/*.twig')),
+              toStructurePosixPath(
+                join(root.directory, '**/*.component.@(yml|yaml|json)'),
+              ),
+              toStructurePosixPath(join(root.directory, '**/*.map')),
+            ],
+          },
+        );
+        for (const absPath of globalAssets) {
+          if (findSourceRoot(absPath, structure.componentRootRecords)) continue;
+          copyToOutDir(absPath, copiedGlobalOutputPath(absPath, structure));
         }
       }
     },
@@ -966,7 +998,14 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
  * @returns {import('vite').PluginOption[]}
  */
 export function makePlugins(env) {
-  const { projectDir, platform, srcDir, srcExists, structureOverrides } = env;
+  const { projectDir, platform } = env;
+  const platformAdapter = env.platformAdapter || getPlatformAdapter(platform);
+  const structure =
+    env.projectStructure ||
+    resolveProjectStructure({
+      ...env,
+      platformAdapter,
+    });
   const twigOptions = makeTwigPluginOptions(env);
 
   const basePlugins = [
@@ -996,23 +1035,18 @@ export function makePlugins(env) {
     cssAssetUrlRelativizer({ assetsRoot: 'assets' }),
   ];
 
-  // If component structure overrides are in play, skip copy/mirror plugins.
-  if (structureOverrides) {
-    return basePlugins;
-  }
-
   return [
     ...basePlugins,
 
     // Copy Twig templates and component metadata beside compiled assets.
-    copyTwigFilesPlugin({ srcDir }),
+    copyTwigFilesPlugin({ structure }),
 
     // Copy every non-code asset under src with the same routing.
-    copyAllSrcAssetsPlugin({ srcDir }),
+    copyAllSrcAssetsPlugin({ structure }),
 
     // Drupal projects with src mirror dist/components back to ./components.
     mirrorComponentsToRoot({
-      enabled: srcExists && platform === 'drupal',
+      enabled: structure.mirrorComponentOutput,
       projectDir,
     }),
   ];

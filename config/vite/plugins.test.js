@@ -10,6 +10,7 @@ import {
   makeTwigNamespaces,
   makeTwigPluginOptions,
 } from './plugins.js';
+import { resolveProjectConfig } from './project-config.js';
 
 jest.mock('vite-plugin-sass-glob-import', () => ({
   __esModule: true,
@@ -50,6 +51,13 @@ const makeEnv = (projectDir, overrides = {}) => {
 
 const pluginNames = (plugins) =>
   plugins.flat(Number.POSITIVE_INFINITY).map((plugin) => plugin?.name);
+
+const writeProjectConfig = (projectDir, config) => {
+  writeFileSync(
+    join(projectDir, 'project.emulsify.json'),
+    JSON.stringify(config, null, 2),
+  );
+};
 
 describe('Vite Twig plugins', () => {
   let projectDir;
@@ -109,6 +117,32 @@ describe('Vite Twig plugins', () => {
       ),
     ).toEqual({
       components: overrideRoot,
+    });
+  });
+
+  it('builds Twig namespaces for multiple named structure roots', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'generic',
+      },
+      variant: {
+        structureImplementations: [
+          { name: 'components', directory: './src/components/' },
+          { name: 'foundation', directory: './src/foundation/' },
+          { name: 'layout', directory: './src/layout/' },
+          { name: 'tokens', directory: './src/tokens/' },
+        ],
+      },
+    });
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+    mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
+    mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
+    mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
+
+    expect(makeTwigNamespaces(resolveProjectConfig(projectDir, {}))).toEqual({
+      components: join(projectDir, 'src/components'),
+      foundation: join(projectDir, 'src/foundation'),
       layout: join(projectDir, 'src/layout'),
       tokens: join(projectDir, 'src/tokens'),
     });
@@ -135,7 +169,7 @@ describe('Vite Twig plugins', () => {
     ).toEqual(['add_attributes', 'bem']);
   });
 
-  it('keeps copy plugins for normal projects and omits them for structure overrides', () => {
+  it('keeps copy plugins for normal projects and structure overrides', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'src/components'), { recursive: true });
 
@@ -156,11 +190,94 @@ describe('Vite Twig plugins', () => {
         ),
       ),
     ).toEqual(
-      expect.not.arrayContaining([
+      expect.arrayContaining([
         'emulsify-copy-twig-files',
         'emulsify-copy-all-src-assets',
       ]),
     );
+  });
+
+  it('copies static assets from root component directories to dist/components', () => {
+    projectDir = makeTempProject();
+    const componentDir = join(projectDir, 'components/card');
+    const outDir = join(projectDir, 'dist');
+    mkdirSync(componentDir, { recursive: true });
+    writeFileSync(join(componentDir, 'card.twig'), '<article></article>');
+    writeFileSync(join(componentDir, '_partial.twig'), '<span></span>');
+    writeFileSync(join(componentDir, 'card.component.yml'), 'name: Card');
+    writeFileSync(join(componentDir, 'image.png'), 'image');
+    writeFileSync(join(componentDir, 'card.js'), 'console.log("skip");');
+    writeFileSync(join(componentDir, 'card.scss'), '.skip {}');
+
+    const plugins = makePlugins(
+      makeEnv(projectDir, {
+        srcDir: join(projectDir, 'components'),
+        srcExists: false,
+      }),
+    );
+    const copyTwigPlugin = plugins.find(
+      (plugin) => plugin?.name === 'emulsify-copy-twig-files',
+    );
+    const copyAssetsPlugin = plugins.find(
+      (plugin) => plugin?.name === 'emulsify-copy-all-src-assets',
+    );
+
+    copyTwigPlugin.configResolved({ build: { outDir } });
+    copyAssetsPlugin.configResolved({ build: { outDir } });
+    copyTwigPlugin.closeBundle();
+    copyAssetsPlugin.closeBundle();
+
+    expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
+    expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
+      false,
+    );
+    expect(existsSync(join(outDir, 'components/card/card.component.yml'))).toBe(
+      true,
+    );
+    expect(existsSync(join(outDir, 'components/card/image.png'))).toBe(true);
+    expect(existsSync(join(outDir, 'components/card/card.js'))).toBe(false);
+    expect(existsSync(join(outDir, 'components/card/card.scss'))).toBe(false);
+  });
+
+  it('copies assets from named structure roots to matching dist folders', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'generic',
+      },
+      variant: {
+        structureImplementations: [
+          { name: 'components', directory: './src/components/' },
+          { name: 'foundation', directory: './src/foundation/' },
+        ],
+      },
+    });
+    mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
+    mkdirSync(join(projectDir, 'src/foundation/icons'), { recursive: true });
+    writeFileSync(
+      join(projectDir, 'src/components/card/card.twig'),
+      '<article></article>',
+    );
+    writeFileSync(join(projectDir, 'src/components/card/image.png'), 'image');
+    writeFileSync(join(projectDir, 'src/foundation/icons/icon.svg'), '<svg />');
+
+    const plugins = makePlugins(resolveProjectConfig(projectDir, {}));
+    const copyTwigPlugin = plugins.find(
+      (plugin) => plugin?.name === 'emulsify-copy-twig-files',
+    );
+    const copyAssetsPlugin = plugins.find(
+      (plugin) => plugin?.name === 'emulsify-copy-all-src-assets',
+    );
+
+    copyTwigPlugin.configResolved({ build: { outDir } });
+    copyAssetsPlugin.configResolved({ build: { outDir } });
+    copyTwigPlugin.closeBundle();
+    copyAssetsPlugin.closeBundle();
+
+    expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
+    expect(existsSync(join(outDir, 'components/card/image.png'))).toBe(true);
+    expect(existsSync(join(outDir, 'foundation/icons/icon.svg'))).toBe(true);
   });
 
   it('only enables Drupal component mirroring for Drupal projects with src', () => {

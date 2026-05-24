@@ -36,7 +36,8 @@ export default defineConfig(async () => {
    * @property {string} platform - Deployment platform (e.g., `"drupal"`).
    * @property {boolean} [SDC] - Single Directory Components toggle, if available.
    * @property {boolean} [structureOverrides] - Whether component structure overrides are enabled.
-   * @property {Record<string,string[]>} [structureRoots] - Override roots map, if provided.
+   * @property {string[]} [structureRoots] - Override roots, if provided.
+   * @property {object} [platformAdapter] - Active platform behavior adapter.
    */
 
   /** @type {EmulsifyEnv} */
@@ -52,6 +53,8 @@ export default defineConfig(async () => {
     SDC: env.SDC,
     structureOverrides: env.structureOverrides,
     structureRoots: env.structureRoots,
+    structureImplementations: env.structureImplementations,
+    projectStructure: env.projectStructure,
   });
 
   // Build the Rollup/Vite entry map: keys encode output paths, values source files.
@@ -65,6 +68,8 @@ export default defineConfig(async () => {
       SDC: env.SDC,
       structureOverrides: env.structureOverrides,
       structureRoots: env.structureRoots,
+      structureImplementations: env.structureImplementations,
+      projectStructure: env.projectStructure,
     },
     patterns,
   );

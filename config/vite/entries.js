@@ -13,13 +13,18 @@
  *   - Only compile JS/SCSS.
  *   - JS  -> "js/<relative-without-ext>"
  *   - CSS -> "css/<relative-without-ext>"
- *   - No Twig/assets copying here (handled in plugins and disabled for Component Structure Overrides).
+ *   - Twig/assets copying is handled by plugins using the same structure model.
  *   - cl-* / sb-* SCSS -> "storybook/<path-without-ext>"
  */
 
 import fs from 'fs';
 import { resolve, sep } from 'path';
 import { globSync } from 'glob';
+import {
+  compiledAssetOutputPath,
+  resolveProjectStructure,
+  storybookStyleOutputPath,
+} from './project-structure.js';
 
 /** Normalize filesystem paths to POSIX for Rollup keys. */
 export const toPosix = (p) => p.split(sep).join('/');
@@ -114,25 +119,42 @@ function safeSetKey(map, key, value) {
 }
 
 /**
- * Relativize path from base directory (POSIX).
- * @param {string} abs
- * @param {string} base
+ * Return unique file paths while preserving first-seen order.
+ *
+ * @param {string[]} files - File paths.
+ * @returns {string[]} Unique file paths.
  */
-function relFrom(abs, base) {
-  const posixAbs = toPosix(abs);
-  const posixBase = toPosix(base).replace(/\/$/, '');
-  const needle = `${posixBase}/`;
-  return posixAbs.startsWith(needle) ? posixAbs.slice(needle.length) : posixAbs;
+function uniqueFiles(files) {
+  return Array.from(new Set(files.filter(Boolean)));
 }
 
-/** Insert "/css|js" bucket unless SDC=true; strip extension. */
-function injectBucket(rel, bucket, SDC) {
-  const withoutExt = rel.replace(/\.(scss|js)$/i, '');
-  if (SDC) {
-    // When SDC=true we avoid a bucket folder. Add a suffix for CSS to avoid collisions with JS.
-    return bucket === 'css' ? `${withoutExt}__style` : withoutExt;
-  }
-  return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
+/**
+ * Glob a pattern below each source root.
+ *
+ * @param {{directory: string}[]} roots - Source root records.
+ * @param {string} pattern - Glob pattern relative to each root.
+ * @param {object} [options={}] - Glob options.
+ * @returns {string[]} Matching files.
+ */
+function globFromRoots(roots, pattern, options = {}) {
+  return uniqueFiles(
+    roots.flatMap((root) =>
+      globSync(toPosix(resolve(root.directory, pattern)), options),
+    ),
+  );
+}
+
+/**
+ * Build ignored global paths for a global source root.
+ *
+ * @param {string} rootDir - Absolute global source root.
+ * @returns {string[]} Ignore globs.
+ */
+function globalIgnorePatterns(rootDir) {
+  return [
+    toPosix(resolve(rootDir, 'components/**')),
+    toPosix(resolve(rootDir, 'util/**')),
+  ];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -154,23 +176,19 @@ function injectBucket(rel, bucket, SDC) {
  * @returns {Record<string, string>}
  */
 export function buildInputs(ctx, patterns) {
-  const {
-    projectDir,
-    srcDir,
-    SDC,
-    structureOverrides,
-    structureRoots = [],
-  } = ctx;
+  void patterns;
+  const structure = ctx.projectStructure || resolveProjectStructure(ctx);
 
   /** @type {Record<string, string>} */
   const inputs = {};
 
   /**
    * Add a key/file pair into the inputs map safely (sanitized + POSIX).
-   * @param {string} key
+   * @param {string|null} key
    * @param {string} abs
    */
   const add = (key, abs) => {
+    if (!key) return;
     const clean = sanitizePath(toPosix(key)).replace(/^\/+/, '');
     if (!clean) return;
     safeSetKey(inputs, clean, abs);
@@ -179,54 +197,34 @@ export function buildInputs(ctx, patterns) {
   /* ------------------------------------------------------------------------ */
   /* STRUCTURE OVERRIDES BRANCH                                               */
   /* ------------------------------------------------------------------------ */
-  if (structureOverrides && structureRoots.length) {
+  if (structure.structureOverrides) {
     // Gather *.js and *.scss from each declared variant root directory.
-    const jsFiles = [];
-    const scssFiles = [];
-    const storybookScss = [];
-
-    for (const rootAbs of structureRoots) {
-      const jsGlob = resolve(
-        rootAbs,
-        '**/!(*.stories|*.component|*.min|*.test).js',
-      );
-      const scssGlob = resolve(rootAbs, '**/!(_*|cl-*|sb-*).scss');
-      const clSbGlob = resolve(rootAbs, '**/*{cl-*,sb-*}.scss');
-
-      jsFiles.push(...globSync(toPosix(jsGlob)));
-      scssFiles.push(...globSync(toPosix(scssGlob)));
-      storybookScss.push(...globSync(toPosix(clSbGlob)));
-    }
+    const jsFiles = globFromRoots(
+      structure.componentRootRecords,
+      '**/!(*.stories|*.component|*.min|*.test).js',
+    );
+    const scssFiles = globFromRoots(
+      structure.componentRootRecords,
+      '**/!(_*|cl-*|sb-*).scss',
+    );
+    const storybookScss = globFromRoots(
+      structure.componentRootRecords,
+      '**/*{cl-*,sb-*}.scss',
+    );
 
     // JS files emit under dist/js using the path below components when possible.
     for (const file of jsFiles) {
-      // Compute path relative to the top-level `components/` folder if present,
-      // else relative to the project root as a fallback.
-      const relFromProj = relFrom(file, projectDir);
-      const relFromComponents = relFromProj.includes('components/')
-        ? relFromProj.split('components/')[1]
-        : relFromProj;
-
-      const outKey = `js/${relFromComponents.replace(/\.js$/i, '')}`;
-      add(outKey, file);
+      add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
     }
 
     // SCSS files emit under dist/css using the same relative path rules.
     for (const file of scssFiles) {
-      const relFromProj = relFrom(file, projectDir);
-      const relFromComponents = relFromProj.includes('components/')
-        ? relFromProj.split('components/')[1]
-        : relFromProj;
-
-      const outKey = `css/${relFromComponents.replace(/\.scss$/i, '')}`;
-      add(outKey, file);
+      add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
     }
 
     // Storybook and component-library styles stay under dist/storybook.
     for (const file of storybookScss) {
-      const relFromProj = relFrom(file, projectDir).replace(/\.scss$/i, '');
-      const outKey = `storybook/${relFromProj}`;
-      add(outKey, file);
+      add(storybookStyleOutputPath(file, structure, ctx), file);
     }
 
     return inputs;
@@ -235,62 +233,60 @@ export function buildInputs(ctx, patterns) {
   /* ------------------------------------------------------------------------ */
   /* MODERN BRANCH (existing behavior preserved)                              */
   /* ------------------------------------------------------------------------ */
-  const {
-    BaseJsPattern,
-    ComponentJsPattern,
-    BaseScssPattern,
-    ComponentScssPattern,
-    ComponentLibraryScssPattern,
-  } = patterns;
-
-  const componentRoot = 'components'; // keys are under "components/..." (plugins may mirror)
-
   // Global JS
-  if (BaseJsPattern) {
-    for (const file of globSync(toPosix(BaseJsPattern))) {
-      const rel = relFrom(file, srcDir);
-      const key = `global/${injectBucket(rel, 'js', SDC)}`;
-      add(key, file);
+  for (const globalRoot of structure.globalRootRecords) {
+    const files = globSync(
+      toPosix(
+        resolve(
+          globalRoot.directory,
+          '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
+        ),
+      ),
+      { ignore: globalIgnorePatterns(globalRoot.directory) },
+    );
+    for (const file of files) {
+      add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
     }
   }
 
   // Component JS
-  for (const file of globSync(toPosix(ComponentJsPattern))) {
-    const posix = toPosix(file);
-    const idx = posix.indexOf('/components/');
-    const after =
-      idx !== -1
-        ? posix.slice(idx + '/components/'.length)
-        : relFrom(file, srcDir);
-    const key = `${componentRoot}/${injectBucket(`components/${after}`, 'js', SDC).replace(/^components\//, '')}`;
-    add(key, file);
+  for (const file of globFromRoots(
+    structure.componentRootRecords,
+    '**/!(*.stories|*.component|*.min|*.test).js',
+  )) {
+    add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
   }
 
   // Global SCSS
-  if (BaseScssPattern) {
-    for (const file of globSync(toPosix(BaseScssPattern))) {
-      const rel = relFrom(file, srcDir);
-      const key = `global/${injectBucket(rel, 'css', SDC)}`;
-      add(key, file);
+  for (const globalRoot of structure.globalRootRecords) {
+    const files = globSync(
+      toPosix(
+        resolve(
+          globalRoot.directory,
+          '!(components|util)/**/!(_*|cl-*|sb-*).scss',
+        ),
+      ),
+      { ignore: globalIgnorePatterns(globalRoot.directory) },
+    );
+    for (const file of files) {
+      add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
     }
   }
 
   // Component SCSS
-  for (const file of globSync(toPosix(ComponentScssPattern))) {
-    const posix = toPosix(file);
-    const idx = posix.indexOf('/components/');
-    const after =
-      idx !== -1
-        ? posix.slice(idx + '/components/'.length)
-        : relFrom(file, srcDir);
-    const key = `${componentRoot}/${injectBucket(`components/${after}`, 'css', SDC).replace(/^components\//, '')}`;
-    add(key, file);
+  for (const file of globFromRoots(
+    structure.componentRootRecords,
+    '**/!(_*|cl-*|sb-*).scss',
+  )) {
+    add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
   }
 
   // Storybook/CL SCSS
-  for (const file of globSync(toPosix(ComponentLibraryScssPattern))) {
-    const rel = relFrom(file, srcDir).replace(/\.scss$/i, '');
-    add(`storybook/${rel}`, file);
+  for (const file of globFromRoots(
+    structure.sourceRootRecords,
+    '**/*{cl-*,sb-*}.scss',
+  )) {
+    add(storybookStyleOutputPath(file, structure, ctx), file);
   }
 
   return inputs;
