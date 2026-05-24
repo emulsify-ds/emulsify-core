@@ -13,16 +13,21 @@ const namespace = getProjectMachineName();
  */
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
-// Determine candidate roots: prefer structure overrides, otherwise the primary
-// source root resolved for the project.
+// Determine candidate roots from the shared project structure model, then
+// retain the older fallback fields for compatibility with pre-normalized envs.
 const candidateRoots =
-  Array.isArray(ENV?.structureRoots) &&
-  ENV?.structureOverrides &&
-  ENV.structureRoots.length
-    ? ENV.structureRoots
-    : ENV?.srcDir
-      ? [ENV.srcDir]
-      : [];
+  Array.isArray(ENV?.projectStructure?.twigRoots) &&
+  ENV.projectStructure.twigRoots.length
+    ? ENV.projectStructure.twigRoots
+    : Array.isArray(ENV?.structureRoots) &&
+        ENV?.structureOverrides &&
+        ENV.structureRoots.length
+      ? ENV.structureRoots
+      : Array.isArray(ENV?.componentRoots) && ENV.componentRoots.length
+        ? ENV.componentRoots
+        : ENV?.srcDir
+          ? [ENV.srcDir]
+          : [];
 
 /**
  * Convert an absolute path to a Vite project-root-relative path, prefixed with "/".

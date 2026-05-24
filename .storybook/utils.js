@@ -2,41 +2,37 @@
  * @file Shared Storybook runtime helpers.
  */
 
-import twigDrupal from 'twig-drupal-filters';
 import { registerTwigExtensions } from '../src/extensions/twig/index.js';
+import {
+  attachStorybookBehaviors,
+  genericStorybookAdapter,
+  normalizeStorybookPlatformAdapter,
+} from '../src/storybook/platform-behaviors.js';
 import twigInclude from './polyfills/twig-include';
 import twigSource from './polyfills/twig-source';
 
-const projectConfigModules = import.meta.glob(
-  '../../../../project.emulsify.json',
-  {
-    eager: true,
-  },
-);
-const emulsifyConfig =
-  Object.values(projectConfigModules)[0]?.default ||
-  Object.values(projectConfigModules)[0] ||
-  {};
+const emulsifyEnv =
+  (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
 /**
- * Fetches project-based variant configuration. If no such configuration
- * exists, returns default values as a flat component structure.
+ * Get the normalized Emulsify environment injected by Storybook's Vite config.
  *
- * @returns {Array} project-based variant configuration, or default config.
+ * @returns {object} Normalized Emulsify environment.
  */
-const fetchVariantConfig = () => {
-  try {
-    return emulsifyConfig.variant.structureImplementations;
-  } catch (e) {
-    // Legacy projects without config use the top-level components directory.
-    return [
-      {
-        name: 'components',
-        directory: '../../../../components',
-      },
-    ];
-  }
-};
+export function getEmulsifyEnvironment() {
+  return emulsifyEnv;
+}
+
+/**
+ * Get Storybook platform behavior flags from the active adapter.
+ *
+ * @returns {object} Storybook adapter flags.
+ */
+export function getStorybookPlatformAdapter() {
+  return normalizeStorybookPlatformAdapter(
+    emulsifyEnv.platformAdapter?.storybook,
+  );
+}
 
 /**
  * Fetches and loads all CSS files from the specified directories based on the project's configuration.
@@ -46,21 +42,23 @@ const fetchVariantConfig = () => {
  */
 const fetchCSSFiles = () => {
   try {
+    const adapter = getStorybookPlatformAdapter();
+
     // Load compiled CSS from dist for both development and static previews.
     const cssFiles = import.meta.glob('../../../../dist/**/*.css', {
       eager: true,
     });
     Object.values(cssFiles).forEach((css) => css);
 
-    // Drupal builds mirror component CSS to the root components directory.
-    if (emulsifyConfig.project?.platform === 'drupal') {
+    // Platform adapters decide whether root component CSS is expected.
+    if (adapter.loadMirroredComponentCss) {
       const drupalCSSFiles = import.meta.glob(
         '../../../../components/**/*.css',
         { eager: true },
       );
       Object.values(drupalCSSFiles).forEach((css) => css);
     }
-  } catch (e) {
+  } catch {
     return undefined;
   }
 };
@@ -72,11 +70,9 @@ const fetchCSSFiles = () => {
  * @returns {string|undefined} Project machine name string, or undefined if not available
  */
 export function getProjectMachineName() {
-  try {
-    return emulsifyConfig.project.machineName;
-  } catch (e) {
-    return undefined;
-  }
+  return typeof emulsifyEnv.machineName === 'string'
+    ? emulsifyEnv.machineName
+    : undefined;
 }
 
 /**
@@ -87,16 +83,24 @@ export function getProjectMachineName() {
  * renderer configured in Vite.
  *
  * @param {Object} twig - Twig object that should be configured and extended.
+ * @param {{ twigDrupal?: Function }} [options={}] - Optional platform extensions.
  * @returns {Object} Configured Twig object.
  */
-export function setupTwig(twig) {
+export function setupTwig(twig, options = {}) {
   twig.cache();
-  twigDrupal(twig);
+  if (typeof options.twigDrupal === 'function') {
+    options.twigDrupal(twig);
+  }
   registerTwigExtensions(twig);
   twigInclude(twig);
   twigSource(twig);
   return twig;
 }
 
-// Keep this named export stable for preview.js and downstream overrides.
-export { fetchCSSFiles };
+// Keep these named exports stable for preview.js and downstream overrides.
+export {
+  attachStorybookBehaviors,
+  fetchCSSFiles,
+  genericStorybookAdapter,
+  normalizeStorybookPlatformAdapter,
+};

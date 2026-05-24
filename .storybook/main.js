@@ -24,6 +24,8 @@ import { resolveEnvironment } from '../config/vite/environment.js';
  * @property {string} projectDir - Absolute path to the consuming project root.
  * @property {boolean} [structureOverrides] - Whether custom structure roots are enabled.
  * @property {string[]} [structureRoots] - Absolute component root paths when overrides are active.
+ * @property {string[]} [componentRoots] - Absolute component roots in resolution order.
+ * @property {Record<string, string>} [namespaceRoots] - Twig namespace roots.
  * @property {string} [srcDir] - Absolute path to the project's `src` directory when present.
  */
 
@@ -127,17 +129,26 @@ async function loadConfigOverrides() {
  * @returns {string[]} Absolute candidate roots.
  */
 function buildTwigCandidateRoots(env) {
+  if (Array.isArray(env.projectStructure?.twigRoots)) {
+    return env.projectStructure.twigRoots;
+  }
+
+  const namespaceRoots =
+    env.namespaceRoots && typeof env.namespaceRoots === 'object'
+      ? Object.values(env.namespaceRoots)
+      : [];
   const rawRoots =
     env.structureOverrides &&
     Array.isArray(env.structureRoots) &&
     env.structureRoots.length
       ? env.structureRoots
-      : env.srcDir
-        ? [env.srcDir]
-        : [];
+      : [
+          ...(env.srcDir ? [env.srcDir] : []),
+          ...(Array.isArray(env.componentRoots) ? env.componentRoots : []),
+        ];
   const roots = new Set();
 
-  for (const root of rawRoots) {
+  for (const root of [...rawRoots, ...namespaceRoots]) {
     roots.add(root);
     if (path.basename(root) !== 'components') {
       roots.add(path.resolve(root, 'components'));
@@ -176,10 +187,54 @@ function buildTwigGlobImports(env) {
 }
 
 /**
+ * Builds Storybook story globs from normalized project roots.
+ *
+ * Stories remain colocated with components, whether the project uses the
+ * recommended `src/components` layout, legacy root `components`, or explicit
+ * structure implementation directories.
+ *
+ * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
+ * @returns {string[]} Storybook story globs.
+ */
+function buildStoryGlobs(env) {
+  if (Array.isArray(env.projectStructure?.storyRoots)) {
+    return env.projectStructure.storyRoots.map((root) =>
+      path
+        .resolve(root, '**/*.stories.@(js|jsx|ts|tsx)')
+        .split(path.sep)
+        .join('/'),
+    );
+  }
+
+  const roots =
+    env.structureOverrides &&
+    Array.isArray(env.structureRoots) &&
+    env.structureRoots.length
+      ? env.structureRoots
+      : [
+          path.resolve(env.projectDir, 'src'),
+          path.resolve(env.projectDir, 'components'),
+        ];
+
+  return Array.from(new Set(roots.filter(Boolean))).map((root) =>
+    path
+      .resolve(root, '**/*.stories.@(js|jsx|ts|tsx)')
+      .split(path.sep)
+      .join('/'),
+  );
+}
+
+/**
  * Safely apply any user-provided overrides or fall back to an empty object.
  * @type {object}
  */
 const safeConfigOverrides = await loadConfigOverrides();
+
+/**
+ * Environment details shared across this Storybook config load.
+ * @type {StorybookEnvironment}
+ */
+const resolvedStorybookEnv = resolveEnvironment();
 
 /**
  * Primary Storybook configuration object.
@@ -194,12 +249,7 @@ const config = {
    *
    * @type {string[]}
    */
-  stories: [
-    path
-      .resolve(process.cwd(), '@(src|components)/**/*.stories.@(js|jsx|ts|tsx)')
-      .split(path.sep)
-      .join('/'),
-  ],
+  stories: buildStoryGlobs(resolvedStorybookEnv),
 
   /**
    * Mount shared assets into Storybook's static file server.
@@ -414,7 +464,7 @@ const config = {
   async viteFinal(config) {
     const { mergeConfig } = await import('vite');
     /** @type {StorybookEnvironment} */
-    const env = resolveEnvironment();
+    const env = resolvedStorybookEnv;
 
     // Keep using the `serve` branch of the shared Vite config here. Storybook
     // has historically consumed that branch, while `mode` still reflects
@@ -435,6 +485,14 @@ const config = {
       path.resolve(env.projectDir, 'src'),
       path.resolve(env.projectDir, 'components'),
       path.resolve(env.projectDir, 'dist'),
+      ...(Array.isArray(env.projectStructure?.sourceRoots)
+        ? env.projectStructure.sourceRoots
+        : []),
+      ...(Array.isArray(env.componentRoots) ? env.componentRoots : []),
+      ...(Array.isArray(env.structureRoots) ? env.structureRoots : []),
+      ...(env.namespaceRoots && typeof env.namespaceRoots === 'object'
+        ? Object.values(env.namespaceRoots)
+        : []),
     ]);
 
     // Twig files are loaded through custom resolvers/plugins, so they need to
@@ -447,6 +505,14 @@ const config = {
       ]),
     );
     const twigGlobImports = buildTwigGlobImports(env);
+    const optimizeDepsInclude = [
+      'react',
+      'path',
+      'twig',
+      ...(env.platformAdapter?.storybook?.registerDrupalTwigFilters
+        ? ['twig-drupal-filters']
+        : []),
+    ];
 
     return mergeConfig(config, {
       ...baseViteConfig,
@@ -456,6 +522,7 @@ const config = {
         ...viteDefine,
         ...existingDefine,
         __EMULSIFY_ENV__: JSON.stringify(env),
+        'globalThis.__EMULSIFY_ENV__': JSON.stringify(env),
       },
       server: {
         ...(baseViteConfig?.server || {}),
@@ -494,7 +561,7 @@ const config = {
         exclude: [],
       },
       optimizeDeps: {
-        include: ['react', 'path', 'twig', 'twig-drupal-filters'],
+        include: optimizeDepsInclude,
         esbuildOptions: {
           loader: {
             // Pre-bundle `.js` dependencies with the JSX loader for packages

@@ -6,7 +6,9 @@
  * Global Drupal namespace stub for Storybook environment.
  * @namespace Drupal
  */
-window.Drupal = { behaviors: {} };
+window.drupalSettings = window.drupalSettings || {};
+window.Drupal = window.Drupal || {};
+window.Drupal.behaviors = window.Drupal.behaviors || {};
 
 /**
  * Immediately-Invoked Function Expression to scope Drupal behavior attachment logic.
@@ -48,4 +50,4 @@ window.Drupal = { behaviors: {} };
       }
     });
   };
-})(Drupal, window.drupalSettings);
+})(window.Drupal, window.drupalSettings);

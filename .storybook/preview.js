@@ -5,29 +5,38 @@
 import { getRules } from 'axe-core';
 import { useEffect } from 'storybook/preview-api';
 import Twig from 'twig';
-import { fetchCSSFiles, setupTwig } from './utils.js';
+import {
+  mergePreviewParameters,
+  normalizePreviewOverrideModule,
+} from '../src/storybook/preview-parameters.js';
+import {
+  attachStorybookBehaviors,
+  fetchCSSFiles,
+  getStorybookPlatformAdapter,
+  setupTwig,
+} from './utils.js';
 
-/**
- * External override parameters loaded from project config file, if present.
- * @type {object}
- */
-let externalOverrides = {};
+const previewOverrideModules = import.meta.glob(
+  [
+    // Installed package path: node_modules/@emulsify/core/.storybook -> project root.
+    '../../../../config/emulsify-core/storybook/preview.js',
+    // Local development path: repo .storybook -> repo root.
+    '../config/emulsify-core/storybook/preview.js',
+  ],
+  { eager: true },
+);
+const [previewOverrideModule] = Object.values(previewOverrideModules);
+const externalOverrides = normalizePreviewOverrideModule(
+  previewOverrideModule,
+);
 
-// Load optional project preview overrides without requiring every consumer to define them.
-try {
-  /**
-   * Dynamically require external preview overrides.
-   * @module '../../../../config/emulsify-core/storybook/preview.js'
-   */
-  externalOverrides =
-    require('../../../../config/emulsify-core/storybook/preview.js').default;
-} catch (err) {
-  // Missing override files are expected for package-level smoke tests.
-  externalOverrides = {};
-}
-
-// Register the Drupal behavior shim before stories render.
-import './_drupal.js';
+const platformAdapter = getStorybookPlatformAdapter();
+const drupalBehaviorShimReady = platformAdapter.loadDrupalBehaviorShim
+  ? import('./_drupal.js')
+  : Promise.resolve();
+const twigDrupal = platformAdapter.registerDrupalTwigFilters
+  ? (await import('twig-drupal-filters')).default
+  : undefined;
 
 /**
  * Filters accessibility rules by matching tags.
@@ -57,23 +66,26 @@ const AxeRules = enableRulesByTag([
 ]);
 
 // Initialize Twig compatibility helpers and eager-load story CSS.
-setupTwig(Twig);
+setupTwig(Twig, { twigDrupal });
 fetchCSSFiles();
 
 /**
- * Storybook decorators to apply Drupal behaviors before rendering each story.
+ * Storybook decorators to apply platform-specific behavior after each story render.
  * @type {Array<import('@storybook/react').Decorator>}
  */
 export const decorators = [
   /**
-   * Decorator that attaches Drupal behaviors on story mount.
+   * Decorator that attaches platform behavior on story mount and args updates.
    * @param {Function} Story The story component to render.
    * @param {object} context Story context including args.
    * @returns {Function} Rendered story.
    */
   (Story, { args }) => {
     useEffect(() => {
-      Drupal.attachBehaviors();
+      void attachStorybookBehaviors({
+        adapter: platformAdapter,
+        behaviorShimReady: drupalBehaviorShimReady,
+      });
     }, [args]);
     return Story();
   },
@@ -99,7 +111,7 @@ const defaultParams = {
  * Merged Storybook parameters including external overrides.
  * @type {object}
  */
-export const parameters = {
-  ...defaultParams,
-  ...externalOverrides,
-};
+export const parameters = mergePreviewParameters(
+  defaultParams,
+  externalOverrides,
+);
