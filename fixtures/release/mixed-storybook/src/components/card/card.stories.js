@@ -11,6 +11,7 @@ export const TwigCard = {
   args: {
     heading: 'Twig fixture',
     body: 'Rendered through the public Storybook helper.',
+    variant: 'featured',
   },
 };
 

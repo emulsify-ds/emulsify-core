@@ -15,6 +15,7 @@ export const TwigCard = {
   args: {
     heading: 'Twig card',
     body: 'Rendered through @emulsify/core/storybook.',
+    variant: 'featured',
   },
 };
 

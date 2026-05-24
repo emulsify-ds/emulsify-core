@@ -400,6 +400,8 @@ export function makeTwigPluginOptions(env) {
  * @returns {import('vite').PluginOption[]}
  */
 function makeTwigPlugins(env, options = makeTwigPluginOptions(env)) {
+  registerTwigExtensions(Twig);
+
   const twigPlugins = twig(options);
   return (Array.isArray(twigPlugins) ? twigPlugins : [twigPlugins])
     .filter(
@@ -489,9 +491,11 @@ function emulsifyTwigModulePlugin(options) {
         );
         const moduleCode = `
           import Twig from 'twig';
+          import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 
           const { twig } = Twig;
 
+          registerTwigExtensions(Twig);
           Twig.cache(false);
 
           ${includeCode}

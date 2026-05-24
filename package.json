@@ -70,6 +70,8 @@
     "src/extensions/twig/functions/bem.js",
     "src/extensions/twig/index.js",
     "src/extensions/twig/register.js",
+    "src/extensions/twig/tag-map.js",
+    "src/extensions/twig/tags/switch.js",
     "src/storybook/index.js",
     "src/storybook/platform-behaviors.js",
     "src/storybook/preview-parameters.js",

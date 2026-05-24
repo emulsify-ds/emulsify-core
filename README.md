@@ -473,11 +473,11 @@ Runs the Vite build for compiled JS, CSS, copied Twig templates, component metad
 
 ## Native extensions
 
-Emulsify Core includes native Twig.js implementations for the Emulsify `bem()` and `add_attributes()` helpers. These are registered through one shared extension registry so Storybook, Vite Twig rendering, and imported Twig component modules use the same behavior.
+Emulsify Core includes native Twig.js implementations for the Emulsify `bem()` and `add_attributes()` helpers, plus `switch`, `case`, `default`, and `endswitch` logic tags compatible with Emulsify Tools 2.x templates. These are registered through one shared extension registry so Storybook, Vite Twig rendering, and imported Twig component modules use the same behavior.
 
 The extension source lives under `src/extensions/`:
 
-- `src/extensions/twig/` contains Twig functions and registration helpers.
+- `src/extensions/twig/` contains Twig functions, logic tags, and registration helpers.
 - `src/extensions/shared/` contains reusable HTML attribute and list utilities.
 - `src/extensions/react/` contains React extension registry helpers.
 
@@ -507,6 +507,17 @@ It also supports object syntax:
 } %}
 
 <h1 {{ add_attributes(additional_attributes) }}></h1>
+```
+
+`switch` statements support PHP-style scalar matching and multiple values per `case` with `or`:
+
+```twig
+{% switch variant %}
+  {% case 'primary' or 'secondary' %}
+    <span class="badge badge--strong">{{ label }}</span>
+  {% default %}
+    <span class="badge">{{ label }}</span>
+{% endswitch %}
 ```
 
 ## Code comment conventions
