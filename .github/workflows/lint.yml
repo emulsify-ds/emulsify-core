@@ -1,16 +1,16 @@
-# Runs the project lint task on pushes and pull requests that target release branches.
-name: Lint
+# Runs release-readiness checks on pushes and pull requests that target release branches.
+name: CI
 on:
   push:
-    branches: [develop, main]
+    branches: [4.x, develop, main]
   pull_request:
-    branches: [develop, main]
+    branches: [4.x, develop, main]
 jobs:
-  build:
+  release-readiness:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Install Node.js
@@ -22,3 +22,9 @@ jobs:
         run: npm install
       - name: Lint
         run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Storybook build
+        run: npm run storybook-build
+      - name: Fixture builds
+        run: npm run fixtures:release

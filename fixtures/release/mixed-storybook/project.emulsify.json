@@ -1,0 +1,7 @@
+{
+  "project": {
+    "platform": "generic",
+    "name": "mixed-storybook",
+    "machineName": "mixed_storybook"
+  }
+}

@@ -1,0 +1,8 @@
+{% set attrs = {
+  class: bem('card', ['featured']),
+  'data-fixture': 'drupal-sdc'
+} %}
+<article {{ add_attributes(attrs) }}>
+  <h2>{{ heading }}</h2>
+  {% include './_content.twig' %}
+</article>
