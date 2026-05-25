@@ -17,6 +17,10 @@ Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.
 | Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `generic` and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                              | Non-Drupal projects should use `generic` unless a dedicated adapter exists.                           |
 | Extension configuration | Vite extension files live under `.config/emulsify-core/vite/plugins.*`.                                          | Storybook overrides still live under `config/emulsify-core/storybook/...`.                                | Projects with old Webpack override files should replace them with Vite extensions.                    |
 
+## Known Limitations
+
+Review the [Known Limitations](../README.md#known-limitations) before upgrading. The key points are that only `generic` and `drupal` adapters are implemented today, large Twig libraries should account for eager Storybook Twig imports, production sourcemaps are enabled unless overridden, Webpack customizations need manual Vite migration, and Drupal SDC mirroring applies only when the Drupal adapter and SDC settings are enabled.
+
 ## What Changed
 
 - Webpack has been replaced with Vite.

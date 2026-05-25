@@ -37,6 +37,4 @@ export default create({
   // Branding links the manager back to the public Emulsify site.
   brandTitle: 'Emulsify',
   brandUrl: 'https://emulsify.info',
-  brandImage:
-    'https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/emulsify-logo-sb.svg',
 });

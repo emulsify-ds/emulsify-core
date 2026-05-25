@@ -366,7 +366,7 @@ const baseConfig = {
         --colors-purple: #8B1E7E;
       }
       .sidebar-container {
-        background: url('https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/corner-bkg.png?token=GHSAT0AAAAAACIEXLVDMX56QK3ZIZWHWHTEZNYFYIA') no-repeat top left;
+        background-color: var(--colors-emulsify-blue-900);
       }
       .sidebar-container .sidebar-subheading {
         color: var(--colors-emulsify-blue-200);
