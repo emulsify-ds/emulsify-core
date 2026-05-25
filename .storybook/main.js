@@ -16,6 +16,10 @@ import path, { resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import viteConfig from '../config/vite/vite.config.js';
 import { resolveEnvironment } from '../config/vite/environment.js';
+import {
+  applyStorybookConfigOverrides,
+  normalizeStorybookConfigOverrideModule,
+} from '../src/storybook/main-config.js';
 
 /**
  * Minimal subset of the resolved Emulsify environment used by this file.
@@ -102,7 +106,8 @@ function toRootRelativePath(projectDir, absolutePath) {
  * Downstream projects can provide this file, but the shared config also needs
  * to load in package-level smoke tests where that project file is absent.
  *
- * @returns {Promise<object>} Consumer overrides, or an empty object.
+ * @returns {Promise<{ config: object|Function, extendConfig?: Function, replaceAddons: boolean }>}
+ * Consumer overrides.
  */
 async function loadConfigOverrides() {
   const overridePath = resolve(
@@ -111,11 +116,11 @@ async function loadConfigOverrides() {
   );
 
   if (!fs.existsSync(overridePath)) {
-    return {};
+    return normalizeStorybookConfigOverrideModule();
   }
 
   const configOverrides = await import(pathToFileURL(overridePath).href);
-  return configOverrides.default || {};
+  return normalizeStorybookConfigOverrideModule(configOverrides);
 }
 
 /**
@@ -262,7 +267,7 @@ const resolvedStorybookEnv = resolveEnvironment();
  * Primary Storybook configuration object.
  * @type {StorybookConfig}
  */
-const config = {
+const baseConfig = {
   /**
    * Discover stories from both supported component roots.
    *
@@ -597,9 +602,18 @@ const config = {
       },
     });
   },
-
-  // Spread consumer overrides last so local projects can replace defaults above.
-  ...safeConfigOverrides,
 };
+
+/**
+ * Primary Storybook configuration after project overrides have been applied.
+ * Project `addons` append to Emulsify defaults unless replacement is requested.
+ *
+ * @type {StorybookConfig}
+ */
+const config = await applyStorybookConfigOverrides(
+  baseConfig,
+  safeConfigOverrides,
+  { env: resolvedStorybookEnv },
+);
 
 export default config;

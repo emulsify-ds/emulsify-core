@@ -106,6 +106,67 @@ Other Vite-based framework integrations follow the same pattern:
 
 Emulsify Core should not carry optional framework dependencies for every consuming project. Keep those dependencies local to the project that uses them.
 
+## Storybook Main Overrides And Addons
+
+Projects can provide `config/emulsify-core/storybook/main.js` to extend the shared Storybook main configuration. Use this for Storybook features that belong in Node-side config, such as addons, additional static directories, or final config shaping.
+
+Project addons are appended to the Emulsify Core defaults, so a project can add one addon without repeating `@storybook/addon-a11y`, `@storybook/addon-links`, or `@storybook/addon-themes`.
+
+```sh
+npm install @storybook/addon-viewport
+```
+
+```js
+// config/emulsify-core/storybook/main.js
+export default {
+  addons: ['@storybook/addon-viewport'],
+};
+```
+
+Addon objects are also supported. If a project provides the same addon package name as a default addon, the project entry replaces the default entry so options can be customized without creating duplicates.
+
+```js
+// config/emulsify-core/storybook/main.js
+export default {
+  addons: [
+    {
+      name: '@storybook/addon-a11y',
+      options: {
+        manual: true,
+      },
+    },
+  ],
+};
+```
+
+When a project intentionally wants to replace the full addon list, export `replaceAddons`.
+
+```js
+// config/emulsify-core/storybook/main.js
+export const replaceAddons = true;
+
+export default {
+  addons: ['@storybook/addon-viewport'],
+};
+```
+
+For advanced cases, export `extendConfig()`. It receives the already-merged Storybook config and the resolved Emulsify environment.
+
+```js
+// config/emulsify-core/storybook/main.js
+export function extendConfig(config, { env }) {
+  const staticDirs = [...(config.staticDirs || [])];
+  if (env.platform === 'generic') {
+    staticDirs.push('public');
+  }
+
+  return {
+    ...config,
+    staticDirs,
+  };
+}
+```
+
 ## Storybook Preview Overrides
 
 Projects can provide `config/emulsify-core/storybook/preview.js` to override or extend Storybook preview parameters. Missing override files are ignored. Default a11y parameters remain in place unless explicitly overridden.
