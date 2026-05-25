@@ -20,6 +20,9 @@
     "node": ">=24"
   },
   "type": "module",
+  "bin": {
+    "emulsify-audit-twig-stories": "./scripts/audit-twig-stories.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/emulsify-ds/emulsify-core.git"
@@ -54,6 +57,7 @@
     "config/vite/vite.config.js",
     "docs/**/*",
     "scripts/a11y.js",
+    "scripts/audit-twig-stories.js",
     "scripts/check-node-version.js",
     "scripts/loadYaml.js",
     "src/extensions/index.js",
@@ -98,6 +102,7 @@
   },
   "scripts": {
     "check-node-version": "node scripts/check-node-version.js",
+    "audit:twig-stories": "npm run check-node-version && node scripts/audit-twig-stories.js",
     "coverage": "npm run check-node-version && npm run test && open-cli .coverage/lcov-report/index.html",
     "format": "npm run check-node-version && npm run lint-fix && npm run prettier-fix",
     "fixtures:release": "npm run check-node-version && node scripts/release-fixtures.js",

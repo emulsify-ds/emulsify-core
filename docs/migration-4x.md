@@ -8,14 +8,14 @@ Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.
 
 ## Upgrade Summary
 
-| Area                    | What Changed                                                                                                     | What Did Not Change                                                                                       | What May Require Changes                                                                              |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Build tool              | Vite replaces the Webpack build.                                                                                 | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.   | Webpack-specific customizations should move to `.config/emulsify-core/vite/plugins.*`.                |
-| Storybook               | Storybook uses `@storybook/react-vite`.                                                                          | Twig stories and React stories can live in the same Storybook instance.                                   | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook`.         |
-| Runtime                 | Node.js 24 is the supported floor.                                                                               | Project scripts still run through npm and the shared Emulsify Core config.                                | Local developer machines and CI images must use Node.js 24 or later.                                  |
-| Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                         | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain. | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior. |
-| Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `generic` and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                              | Non-Drupal projects should use `generic` unless a dedicated adapter exists.                           |
-| Extension configuration | Vite extension files live under `.config/emulsify-core/vite/plugins.*`.                                          | Storybook overrides still live under `config/emulsify-core/storybook/...`.                                | Projects with old Webpack override files should replace them with Vite extensions.                    |
+| Area                    | What Changed                                                                                                     | What Did Not Change                                                                                                                                   | What May Require Changes                                                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Build tool              | Vite replaces the Webpack build.                                                                                 | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `.config/emulsify-core/vite/plugins.*`.                                           |
+| Storybook               | Storybook uses `@storybook/react-vite`.                                                                          | Twig stories and React stories can live in the same Storybook instance. Existing Twig stories that return HTML strings are wrapped for compatibility. | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook` when stories are actively migrated. |
+| Runtime                 | Node.js 24 is the supported floor.                                                                               | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Local developer machines and CI images must use Node.js 24 or later.                                                             |
+| Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                         | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
+| Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `generic` and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | Non-Drupal projects should use `generic` unless a dedicated adapter exists.                                                      |
+| Extension configuration | Vite extension files live under `.config/emulsify-core/vite/plugins.*`.                                          | Storybook overrides still live under `config/emulsify-core/storybook/...`.                                                                            | Projects with old Webpack override files should replace them with Vite extensions.                                               |
 
 ## Known Limitations
 
@@ -43,7 +43,7 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 
 - Update CI and local development to Node.js 24 or later.
 - Move custom Webpack configuration to Vite plugins or `extendConfig()`.
-- Update Twig stories that import `.twig` files to use `renderTwig()`.
+- Existing Twig stories that return HTML strings can continue working during the upgrade. Use `npx --no-install emulsify-audit-twig-stories` to find stories that should move to `renderTwig()`.
 - Review any project code that assumed Drupal behavior in Storybook. Drupal behavior now comes from the Drupal adapter.
 - Review Storybook-only Twig file volume for very large libraries. See [Performance](performance.md) for the eager Twig import tradeoff.
 
@@ -80,6 +80,16 @@ export const Default = {
 ```
 
 React stories can be added alongside existing Twig components without changing the Twig components.
+
+For older function stories that return `template(args)` directly, Emulsify Core wraps string results as HTML in the shared preview. That compatibility layer is intended to reduce upgrade churn; `renderTwig()` is still the clearer pattern for stories you are editing.
+
+Run the audit script to list likely legacy Twig stories:
+
+```sh
+npx --no-install emulsify-audit-twig-stories
+```
+
+Use `--fail-on-found` if you want to make the audit enforce migration progress in CI.
 
 ## Twig Runtime
 
@@ -119,6 +129,6 @@ See [Extension Points](extension-points.md) for Vite plugins, Tailwind CSS, Stor
 2. Keep existing component roots unless you are intentionally restructuring.
 3. Add or verify `project.emulsify.json`.
 4. Move Webpack-specific customization to Vite extension files.
-5. Update Twig stories to use `renderTwig()` for imported Twig templates.
+5. Run `npx --no-install emulsify-audit-twig-stories` and update actively maintained Twig stories to use `renderTwig()`.
 6. Keep Drupal SDC settings in `project.singleDirectoryComponents` when needed.
 7. Add React stories directly where useful; no Twig refactor is required.

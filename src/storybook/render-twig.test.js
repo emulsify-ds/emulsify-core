@@ -4,7 +4,11 @@
 
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { renderTwig } from '@emulsify/core/storybook';
+import {
+  renderHtmlStoryResult,
+  renderTwig,
+  renderTwigHtml,
+} from '@emulsify/core/storybook';
 
 describe('renderTwig', () => {
   let container;
@@ -99,6 +103,34 @@ describe('renderTwig', () => {
 
     expect(window.Drupal).toBeUndefined();
     expect(container.textContent).toBe('Generic');
+  });
+
+  it('renders legacy Twig HTML strings through the shared wrapper', () => {
+    act(() => {
+      root.render(renderTwigHtml('<article><h2>Legacy Twig</h2></article>'));
+    });
+
+    expect(container.querySelector('h2').textContent).toBe('Legacy Twig');
+    expect(
+      container
+        .querySelector('[data-emulsify-twig-story]')
+        .hasAttribute('data-emulsify-twig-story'),
+    ).toBe(true);
+  });
+
+  it('converts string story results while preserving React story results', () => {
+    const ReactResult = React.createElement(
+      'button',
+      { type: 'button' },
+      'React story',
+    );
+
+    act(() => {
+      root.render(renderHtmlStoryResult('<p>Legacy string</p>'));
+    });
+
+    expect(container.querySelector('p').textContent).toBe('Legacy string');
+    expect(renderHtmlStoryResult(ReactResult)).toBe(ReactResult);
   });
 
   it('does not interfere with normal React story rendering', () => {

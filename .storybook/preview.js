@@ -9,6 +9,7 @@ import {
   mergePreviewParameters,
   normalizePreviewOverrideModule,
 } from '../src/storybook/preview-parameters.js';
+import { renderHtmlStoryResult } from '../src/storybook/render-twig.js';
 import {
   attachStorybookBehaviors,
   fetchCSSFiles,
@@ -75,9 +76,12 @@ fetchCSSFiles();
 export const decorators = [
   /**
    * Decorator that attaches platform behavior on story mount and args updates.
+   * Legacy Twig stories that return HTML strings are wrapped so React
+   * Storybook renders them as markup while projects migrate to renderTwig().
+   *
    * @param {Function} Story The story component to render.
    * @param {object} context Story context including args.
-   * @returns {Function} Rendered story.
+   * @returns {*} Rendered story.
    */
   (Story, { args }) => {
     useEffect(() => {
@@ -86,7 +90,10 @@ export const decorators = [
         behaviorShimReady: platformBehaviorShimReady,
       });
     }, [args]);
-    return Story();
+
+    return renderHtmlStoryResult(Story(), {
+      platformAdapter,
+    });
   },
 ];
 

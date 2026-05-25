@@ -78,23 +78,15 @@ export function renderTwigToHtml(
 }
 
 /**
- * React component that renders Twig HTML into a stable wrapper element.
+ * React component that renders an HTML string into a stable wrapper element.
  *
  * @param {object} props - Component props.
- * @param {Function} props.template - Twig render function.
- * @param {object} [props.args] - Storybook args.
+ * @param {string} [props.html] - Rendered HTML string.
  * @param {object} [props.options] - Render options.
- * @param {object} [props.storyContext] - Storybook story context.
  * @returns {React.ReactElement} React element.
  */
-export function TwigStory({
-  template,
-  args = {},
-  options = {},
-  storyContext = {},
-}) {
+export function TwigHtmlStory({ html = '', options = {} }) {
   const wrapperRef = useRef(null);
-  const html = renderTwigToHtml(template, args, options, storyContext);
   const adapter = getActiveStorybookAdapter(options);
   const Wrapper = options.wrapper || 'div';
 
@@ -112,6 +104,58 @@ export function TwigStory({
     'data-emulsify-twig-story': '',
     dangerouslySetInnerHTML: { __html: html },
   });
+}
+
+/**
+ * React component that renders Twig HTML into a stable wrapper element.
+ *
+ * @param {object} props - Component props.
+ * @param {Function} props.template - Twig render function.
+ * @param {object} [props.args] - Storybook args.
+ * @param {object} [props.options] - Render options.
+ * @param {object} [props.storyContext] - Storybook story context.
+ * @returns {React.ReactElement} React element.
+ */
+export function TwigStory({
+  template,
+  args = {},
+  options = {},
+  storyContext = {},
+}) {
+  return React.createElement(TwigHtmlStory, {
+    html: renderTwigToHtml(template, args, options, storyContext),
+    options,
+  });
+}
+
+/**
+ * Render a raw HTML string through the same wrapper used by Twig stories.
+ *
+ * This supports legacy Storybook stories that return Twig HTML strings
+ * directly while projects migrate to `renderTwig()`.
+ *
+ * @param {string} html - Rendered HTML.
+ * @param {object} [options={}] - Render options.
+ * @returns {React.ReactElement} React element.
+ */
+export function renderTwigHtml(html, options = {}) {
+  return React.createElement(TwigHtmlStory, {
+    html: html == null ? '' : String(html),
+    options,
+  });
+}
+
+/**
+ * Convert legacy string-returning Storybook results into React elements.
+ *
+ * React stories and other non-string results pass through unchanged.
+ *
+ * @param {*} result - Story render result.
+ * @param {object} [options={}] - Render options for string results.
+ * @returns {*} React element for strings, otherwise the original result.
+ */
+export function renderHtmlStoryResult(result, options = {}) {
+  return typeof result === 'string' ? renderTwigHtml(result, options) : result;
 }
 
 /**

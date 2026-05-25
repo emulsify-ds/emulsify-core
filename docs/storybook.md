@@ -24,6 +24,53 @@ export const Default = {};
 
 `renderTwig()` passes Storybook args as Twig context, re-renders when args change, and attaches platform behavior only when the active platform adapter enables it.
 
+## Legacy Twig Story Compatibility
+
+Older Emulsify stories often export functions that call an imported Twig template directly and return the rendered HTML string:
+
+```js
+import template from './accordion.twig';
+
+export const Accordion = (args) =>
+  template({
+    accordion__heading: args.heading,
+  });
+```
+
+Those stories still render in Emulsify Core. The shared Storybook preview wraps plain string results as HTML so projects can upgrade without rewriting every component immediately. React stories and stories that already return React elements pass through unchanged.
+
+`renderTwig()` remains the preferred pattern for new or actively migrated Twig stories because it makes the Twig/React Storybook boundary explicit:
+
+```js
+import template from './accordion.twig';
+import { renderTwig } from '@emulsify/core/storybook';
+
+const context = (args) => ({
+  accordion__heading: args.heading,
+});
+
+export default {
+  title: 'Components/Accordion',
+  render: renderTwig(template, { context }),
+};
+
+export const Accordion = {};
+```
+
+To find legacy stories that should be reviewed from an Emulsify Core checkout, run:
+
+```sh
+npm run audit:twig-stories
+```
+
+Projects with `@emulsify/core` installed can call the package binary directly:
+
+```sh
+npx --no-install emulsify-audit-twig-stories
+```
+
+Add `--fail-on-found` when using the audit in CI during a migration push.
+
 ## React Stories
 
 React stories use standard Storybook React patterns.

@@ -17,7 +17,10 @@ describe('@emulsify/core package exports', () => {
         '@emulsify/core/extensions/react',
         ['createReactExtensionRegistry', 'defineReactExtension'],
       ],
-      ['@emulsify/core/storybook', ['renderTwig', 'TwigStory']],
+      [
+        '@emulsify/core/storybook',
+        ['renderHtmlStoryResult', 'renderTwig', 'TwigHtmlStory', 'TwigStory'],
+      ],
       ['@emulsify/core/vite', ['default']],
       [
         '@emulsify/core/vite/plugins',

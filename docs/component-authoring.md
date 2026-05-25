@@ -68,7 +68,7 @@ src/
       badge.scss
 ```
 
-Both stories appear in the same Storybook instance. Twig stories should use `renderTwig()` for imported Twig templates. React stories use standard Storybook React component or render-function patterns.
+Both stories appear in the same Storybook instance. Twig stories should use `renderTwig()` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview. React stories use standard Storybook React component or render-function patterns.
 
 ## Twig Button Example
 

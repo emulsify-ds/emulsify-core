@@ -28,3 +28,16 @@ export const ReactCard = {
     body: 'Rendered as a regular React story.',
   },
 };
+
+export const LegacyTwigCard = ({ heading, body, variant }) =>
+  template({
+    heading,
+    body,
+    variant,
+  });
+
+LegacyTwigCard.args = {
+  heading: 'Legacy Twig fixture',
+  body: 'Rendered through the compatibility decorator.',
+  variant: 'standard',
+};
