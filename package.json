@@ -108,6 +108,7 @@
     "prettier": "npm run check-node-version && prettier --config config/.prettierrc.json --ignore-unknown \"**/*.{js,yml,scss,md}\"",
     "prettier-fix": "npm run check-node-version && prettier --config config/.prettierrc.json --write --ignore-unknown \"**/*.{js,yml,scss,md}\"",
     "semantic-release": "npm run check-node-version && semantic-release --config ./release.config.cjs",
+    "version:develop": "npm run check-node-version && node scripts/bump-version-from-commits.js",
     "storybook": "npm run check-node-version && NODE_OPTIONS=--no-deprecation storybook dev -p 6006 --no-open --exact-port",
     "storybook-build": "npm run check-node-version && storybook build -o .out",
     "storybook-deploy": "npm run check-node-version && storybook-to-ghpages -o .out",
