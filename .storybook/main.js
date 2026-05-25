@@ -187,6 +187,28 @@ function buildTwigGlobImports(env) {
 }
 
 /**
+ * Builds the `import.meta.glob()` expression used for raw Twig source().
+ *
+ * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
+ * @returns {string} JavaScript source that eagerly imports raw Twig source.
+ */
+function buildTwigSourceGlobImports(env) {
+  const rootRelativePaths = buildTwigCandidateRoots(env).map((root) =>
+    toRootRelativePath(env.projectDir, root),
+  );
+  const globBases = rootRelativePaths.length
+    ? rootRelativePaths
+    : ['/src', '/src/components', '/components'];
+
+  return `mergeGlobMaps([\n${globBases
+    .map(
+      (base) =>
+        `  import.meta.glob('${base}/**/*.twig', { query: '?raw', import: 'default', eager: true })`,
+    )
+    .join(',\n')}\n])`;
+}
+
+/**
  * Builds Storybook story globs from normalized project roots.
  *
  * Stories remain colocated with components, whether the project uses the
@@ -505,6 +527,7 @@ const config = {
       ]),
     );
     const twigGlobImports = buildTwigGlobImports(env);
+    const twigSourceGlobImports = buildTwigSourceGlobImports(env);
     const optimizeDepsInclude = [
       'react',
       'path',
@@ -538,17 +561,19 @@ const config = {
           enforce: 'pre',
           transform(code, id) {
             const cleanId = id.split('?')[0];
-            if (!cleanId.endsWith('/.storybook/polyfills/twig-resolver.js')) {
+            if (!cleanId.endsWith('/src/storybook/twig/resolver.js')) {
               return null;
             }
 
-            // Replace the placeholder token in the Twig resolver polyfill with
+            // Replace the placeholder tokens in the Twig resolver runtime with
             // the project-specific import list computed above.
-            const replaced = code.replace(
-              /__EMULSIFY_TWIG_GLOB_IMPORTS__/g,
-              twigGlobImports,
-            );
-            return replaced === code ? null : replaced;
+            const replaced = code
+              .replace(/__EMULSIFY_TWIG_GLOB_IMPORTS__/g, twigGlobImports)
+              .replace(
+                /__EMULSIFY_TWIG_SOURCE_GLOB_IMPORTS__/g,
+                twigSourceGlobImports,
+              );
+            return replaced === code ? null : { code: replaced, map: null };
           },
         },
       ],

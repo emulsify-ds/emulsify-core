@@ -26,17 +26,16 @@ const previewOverrideModules = import.meta.glob(
   { eager: true },
 );
 const [previewOverrideModule] = Object.values(previewOverrideModules);
-const externalOverrides = normalizePreviewOverrideModule(
-  previewOverrideModule,
-);
+const externalOverrides = normalizePreviewOverrideModule(previewOverrideModule);
 
 const platformAdapter = getStorybookPlatformAdapter();
-const drupalBehaviorShimReady = platformAdapter.loadDrupalBehaviorShim
+const platformBehaviorShimReady = platformAdapter.loadDrupalBehaviorShim
   ? import('./_drupal.js')
   : Promise.resolve();
-const twigDrupal = platformAdapter.registerDrupalTwigFilters
-  ? (await import('twig-drupal-filters')).default
-  : undefined;
+const platformTwigExtensions = [];
+if (platformAdapter.registerDrupalTwigFilters) {
+  platformTwigExtensions.push((await import('twig-drupal-filters')).default);
+}
 
 /**
  * Filters accessibility rules by matching tags.
@@ -65,8 +64,8 @@ const AxeRules = enableRulesByTag([
   'best-practice',
 ]);
 
-// Initialize Twig compatibility helpers and eager-load story CSS.
-setupTwig(Twig, { twigDrupal });
+// Initialize platform-agnostic Twig helpers and eager-load story CSS.
+setupTwig(Twig, { extensions: platformTwigExtensions });
 fetchCSSFiles();
 
 /**
@@ -84,7 +83,7 @@ export const decorators = [
     useEffect(() => {
       void attachStorybookBehaviors({
         adapter: platformAdapter,
-        behaviorShimReady: drupalBehaviorShimReady,
+        behaviorShimReady: platformBehaviorShimReady,
       });
     }, [args]);
     return Story();

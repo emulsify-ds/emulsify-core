@@ -34,9 +34,6 @@
     ".storybook/emulsifyTheme.js",
     ".storybook/main.js",
     ".storybook/manager.js",
-    ".storybook/polyfills/twig-include.js",
-    ".storybook/polyfills/twig-resolver.js",
-    ".storybook/polyfills/twig-source.js",
     ".storybook/preview.js",
     ".storybook/utils.js",
     "assets/**/*",
@@ -75,7 +72,11 @@
     "src/storybook/index.js",
     "src/storybook/platform-behaviors.js",
     "src/storybook/preview-parameters.js",
-    "src/storybook/render-twig.js"
+    "src/storybook/render-twig.js",
+    "src/storybook/twig/include.js",
+    "src/storybook/twig/resolver.js",
+    "src/storybook/twig/setup.js",
+    "src/storybook/twig/source.js"
   ],
   "exports": {
     ".": "./src/extensions/index.js",

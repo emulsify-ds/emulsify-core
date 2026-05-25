@@ -53,7 +53,7 @@ export const Default = {
 };
 ```
 
-Emulsify Core registers native Twig.js implementations for `bem()` and `add_attributes()`. Storybook also includes compatibility helpers for Twig `include()` and `source()` usage. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior.
+Emulsify Core registers native Twig.js implementations for `bem()` and `add_attributes()`. Storybook's Twig runtime also supports Twig `include()` and `source()` usage through the normalized project structure model. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior.
 
 ### React component libraries
 
@@ -398,6 +398,61 @@ export const extendConfig = (config, { env }) => ({
 });
 ```
 
+### Tailwind CSS and framework integrations
+
+Emulsify Core owns the shared Vite and Storybook conventions. Project-specific framework tooling should stay in the consuming project and be connected through the Vite extension point above.
+
+For Tailwind CSS v4, install Tailwind in the project:
+
+```sh
+npm install tailwindcss @tailwindcss/vite
+```
+
+Add the Tailwind Vite plugin from the project extension file:
+
+```js
+// .config/emulsify-core/vite/plugins.mjs
+import tailwindcss from '@tailwindcss/vite';
+
+export default () => [tailwindcss()];
+```
+
+Create a CSS file that imports Tailwind. This example places it under `src/global`, but the file can live anywhere that makes sense for the project:
+
+```css
+/* src/global/tailwind.css */
+@import 'tailwindcss';
+
+/* Choose the source roots your project uses. */
+@source "../components";
+@source "../../components";
+@source "../foundation";
+@source "../layout";
+@source "../tokens";
+```
+
+The `@source` lines are optional when Tailwind's automatic detection already sees the right files, but they make multi-root Emulsify projects explicit. Use `../components` for `src/components`, `../../components` for root `./components`, and add one line for each `variant.structureImplementations` root that should be scanned.
+
+For production builds, import the Tailwind CSS file from a discovered JavaScript entry:
+
+```js
+// src/global/tailwind.js
+import './tailwind.css';
+```
+
+For Storybook development, import the same CSS file from the project preview override so Twig and React stories see the same utility classes:
+
+```js
+// config/emulsify-core/storybook/preview.js
+import '../../../src/global/tailwind.css';
+
+export const parameters = {};
+```
+
+Tailwind detects complete class names in Twig, React, and other templates. Avoid constructing utility class fragments dynamically, such as `text-${color}-600`; map variants to complete class strings instead.
+
+Other Vite-based framework integrations follow the same pattern: install the framework package in the consuming project, return its Vite plugin from `.config/emulsify-core/vite/plugins.*`, and use `extendConfig()` only when the framework needs additional Vite config.
+
 ### Storybook preview overrides
 
 Projects can provide `config/emulsify-core/storybook/preview.js` to override or extend Storybook preview parameters. Missing override files are ignored. Default a11y parameters remain in place unless explicitly overridden.
@@ -480,6 +535,29 @@ The extension source lives under `src/extensions/`:
 - `src/extensions/twig/` contains Twig functions, logic tags, and registration helpers.
 - `src/extensions/shared/` contains reusable HTML attribute and list utilities.
 - `src/extensions/react/` contains React extension registry helpers.
+- `src/storybook/twig/` contains Storybook-only Twig runtime helpers for template resolution, `include()`, and `source()`.
+
+### Storybook Twig runtime
+
+Twig support in Storybook is optional and platform-agnostic. When Twig stories are used, Emulsify Core configures Twig.js with Emulsify's native Twig helpers plus Storybook runtime support for `include()` and `source()`.
+
+`include()` resolves templates through the normalized project structure model. References can use configured Twig namespaces such as `@components`, `@foundation`, `@layout`, or `@tokens` when those roots exist in `project.emulsify.json`.
+
+```twig
+{{ include('@components/icon/icon.twig', {
+  name: 'arrow-right'
+}) }}
+```
+
+`source()` can return raw Twig source from the same normalized template roots. It also supports the Storybook asset alias `@assets` for static assets served from the project asset directory.
+
+```twig
+<pre>{{ source('@components/button/button.twig') }}</pre>
+
+{{ source('@assets/icons/arrow.svg') }}
+```
+
+Drupal-specific Twig filters are not part of the generic Twig runtime. They are registered only when the active platform adapter enables them.
 
 `bem()` remains backward-compatible with the existing positional API:
 
