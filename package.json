@@ -52,6 +52,7 @@
     "config/vite/project-extensions.js",
     "config/vite/project-structure.js",
     "config/vite/vite.config.js",
+    "docs/**/*",
     "scripts/a11y.js",
     "scripts/check-node-version.js",
     "scripts/loadYaml.js",

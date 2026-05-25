@@ -1,0 +1,75 @@
+# Native Twig Extensions
+
+Emulsify Core includes native Twig.js implementations for the Emulsify `bem()` and `add_attributes()` helpers, plus `switch`, `case`, `default`, and `endswitch` logic tags compatible with Emulsify Tools 2.x templates. These are registered through one shared extension registry so Storybook, Vite Twig rendering, and imported Twig component modules use the same behavior.
+
+The extension source lives under `src/extensions/`:
+
+- `src/extensions/twig/` contains Twig functions, logic tags, and registration helpers.
+- `src/extensions/shared/` contains reusable HTML attribute and list utilities.
+- `src/extensions/react/` contains React extension registry helpers.
+
+Storybook-only Twig runtime helpers live under `src/storybook/twig/`; see [Storybook](storybook.md) for `include()` and `source()`.
+
+## `bem()`
+
+`bem()` remains backward-compatible with the existing positional API:
+
+```twig
+<h1 {{ bem('title', ['small', 'red'], 'card', ['js-click']) }}></h1>
+```
+
+It also supports object syntax:
+
+```twig
+<h1 {{ bem({
+  block: 'card',
+  element: 'title',
+  modifiers: ['small', 'red'],
+  extra: ['js-click']
+}) }}></h1>
+```
+
+The helper normalizes class values and supports arrays for modifiers and extra classes. It can be used directly in an attribute position or composed into `add_attributes()`.
+
+## `add_attributes()`
+
+`add_attributes()` renders HTML attributes from an object and can compose with `bem()` output:
+
+```twig
+{% set additional_attributes = {
+  class: bem('title', ['small'], 'card'),
+  disabled: true
+} %}
+
+<h1 {{ add_attributes(additional_attributes) }}></h1>
+```
+
+Boolean `true` attributes render without a value, Boolean `false` and nullish values are omitted, and class-like values are normalized for predictable output.
+
+## `switch`, `case`, `default`, And `endswitch`
+
+`switch` statements support PHP-style scalar matching and multiple values per `case` with `or`:
+
+```twig
+{% switch variant %}
+  {% case 'primary' or 'secondary' %}
+    <span class="badge badge--strong">{{ label }}</span>
+  {% default %}
+    <span class="badge">{{ label }}</span>
+{% endswitch %}
+```
+
+The implementation is designed for Twig.js templates that need parity with Emulsify Tools 2.x switch templates. It validates that `case` and `default` are used inside `switch` and supports nested expressions in case values.
+
+## Registering Extensions
+
+Most projects do not need to call the registration APIs directly; Emulsify Core's Vite and Storybook integrations register them. Direct consumers can register Twig extensions explicitly:
+
+```js
+import Twig from 'twig';
+import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
+
+registerTwigExtensions(Twig);
+```
+
+Registration is idempotent per Twig instance.
