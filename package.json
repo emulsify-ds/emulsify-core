@@ -21,6 +21,7 @@
   },
   "type": "module",
   "bin": {
+    "emulsify-audit": "./scripts/audit.js",
     "emulsify-audit-twig-stories": "./scripts/audit-twig-stories.js"
   },
   "repository": {
@@ -57,6 +58,7 @@
     "config/vite/vite.config.js",
     "docs/**/*",
     "scripts/a11y.js",
+    "scripts/audit.js",
     "scripts/audit-twig-stories.js",
     "scripts/check-node-version.js",
     "scripts/loadYaml.js",
@@ -102,6 +104,7 @@
   },
   "scripts": {
     "check-node-version": "node scripts/check-node-version.js",
+    "audit": "npm run check-node-version && node scripts/audit.js",
     "audit:twig-stories": "npm run check-node-version && node scripts/audit-twig-stories.js",
     "coverage": "npm run check-node-version && npm run test && open-cli .coverage/lcov-report/index.html",
     "format": "npm run check-node-version && npm run lint-fix && npm run prettier-fix",

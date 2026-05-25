@@ -43,7 +43,7 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 
 - Update CI and local development to Node.js 24 or later.
 - Move custom Webpack configuration to Vite plugins or `extendConfig()`.
-- Existing Twig stories that return HTML strings can continue working during the upgrade. Use `npx --no-install emulsify-audit-twig-stories` to find stories that should move to `renderTwig()`.
+- Existing Twig stories that return HTML strings can continue working during the upgrade. Use `npx --no-install emulsify-audit` to find stories that should move to `renderTwig()` and other upgrade-readiness items.
 - Review any project code that assumed Drupal behavior in Storybook. Drupal behavior now comes from the Drupal adapter.
 - Review Storybook-only Twig file volume for very large libraries. See [Performance](performance.md) for the eager Twig import tradeoff.
 
@@ -83,13 +83,19 @@ React stories can be added alongside existing Twig components without changing t
 
 For older function stories that return `template(args)` directly, Emulsify Core wraps string results as HTML in the shared preview. That compatibility layer is intended to reduce upgrade churn; `renderTwig()` is still the clearer pattern for stories you are editing.
 
-Run the audit script to list likely legacy Twig stories:
+Run the audit script to list likely legacy Twig stories and other upgrade-readiness items:
 
 ```sh
-npx --no-install emulsify-audit-twig-stories
+npx --no-install emulsify-audit
 ```
 
-Use `--fail-on-found` if you want to make the audit enforce migration progress in CI.
+The audit checks for Storybook files outside normalized source roots, unresolved
+Twig `include()` or `source()` references, Webpack-era patterns, direct imports
+of Emulsify Core internals, Drupal assumptions in non-Drupal projects, missing
+configured structure roots, large Twig Storybook roots, and Twig stories that
+should move to `renderTwig()`.
+
+Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
 
 ## Twig Runtime
 
@@ -129,6 +135,6 @@ See [Extension Points](extension-points.md) for Vite plugins, Tailwind CSS, Stor
 2. Keep existing component roots unless you are intentionally restructuring.
 3. Add or verify `project.emulsify.json`.
 4. Move Webpack-specific customization to Vite extension files.
-5. Run `npx --no-install emulsify-audit-twig-stories` and update actively maintained Twig stories to use `renderTwig()`.
+5. Run `npx --no-install emulsify-audit` and update actively maintained Twig stories to use `renderTwig()`.
 6. Keep Drupal SDC settings in `project.singleDirectoryComponents` when needed.
 7. Add React stories directly where useful; no Twig refactor is required.

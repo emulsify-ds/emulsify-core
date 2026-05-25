@@ -57,17 +57,30 @@ export default {
 export const Accordion = {};
 ```
 
-To find legacy stories that should be reviewed from an Emulsify Core checkout, run:
+Generated projects can include legacy Twig story checks in the full project
+readiness audit with:
 
 ```sh
-npm run audit:twig-stories
+npm run audit
 ```
+
+The full audit also checks source-root discovery, Twig `include()` and
+`source()` references, Webpack-era patterns, platform assumptions, and public
+Emulsify Core import paths.
 
 Projects with `@emulsify/core` installed can call the package binary directly:
 
 ```sh
-npx --no-install emulsify-audit-twig-stories
+npx --no-install emulsify-audit
 ```
+
+From an Emulsify Core checkout, pass the project root explicitly:
+
+```sh
+node scripts/audit.js --root /path/to/project
+```
+
+For only the Twig story migration report, use `npm run audit:twig-stories` from this repo or `npx --no-install emulsify-audit-twig-stories` from a consuming project.
 
 Add `--fail-on-found` when using the audit in CI during a migration push.
 

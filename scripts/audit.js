@@ -1,0 +1,1027 @@
+#!/usr/bin/env node
+
+/**
+ * @file Combined Emulsify project readiness audit.
+ */
+
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
+import { globSync } from 'glob';
+import { resolveProjectConfig } from '../config/vite/project-config.js';
+import { candidateKeysForReference } from '../src/storybook/twig/resolver.js';
+import { auditTwigStories, collectStoryFiles } from './audit-twig-stories.js';
+
+const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
+const CODE_GLOB = '**/*.{js,jsx,ts,tsx,mjs,cjs}';
+const TWIG_GLOB = '**/*.twig';
+const DEFAULT_IGNORES = [
+  '**/.coverage/**',
+  '**/.git/**',
+  '**/.github/**',
+  '**/.out/**',
+  '**/dist/**',
+  '**/*.test.{js,jsx,ts,tsx,mjs,cjs}',
+  '**/node_modules/**',
+  '**/scripts/audit.js',
+  '**/vendor/**',
+];
+const PUBLIC_CORE_IMPORTS = new Set([
+  '@emulsify/core',
+  '@emulsify/core/extensions',
+  '@emulsify/core/extensions/react',
+  '@emulsify/core/extensions/twig',
+  '@emulsify/core/package.json',
+  '@emulsify/core/storybook',
+  '@emulsify/core/vite',
+  '@emulsify/core/vite/plugins',
+]);
+const DEFAULT_TWIG_THRESHOLD = 250;
+
+/**
+ * Normalize filesystem paths to POSIX separators.
+ *
+ * @param {string} filePath - Filesystem path.
+ * @returns {string} POSIX path.
+ */
+function toPosixPath(filePath) {
+  return filePath.split(sep).join('/');
+}
+
+/**
+ * Return a project-relative path for report output.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string} filePath - Absolute file path.
+ * @returns {string} Project-relative POSIX path.
+ */
+function displayPath(projectDir, filePath) {
+  return toPosixPath(relative(projectDir, filePath));
+}
+
+/**
+ * Determine whether a file exists without throwing.
+ *
+ * @param {string} filePath - Absolute file path.
+ * @returns {boolean} TRUE when the file exists.
+ */
+function safeExists(filePath) {
+  try {
+    return existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Determine whether a candidate is a directory.
+ *
+ * @param {string} filePath - Absolute path.
+ * @returns {boolean} TRUE when the path is a directory.
+ */
+function safeIsDirectory(filePath) {
+  try {
+    return lstatSync(filePath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read a file as UTF-8, returning an empty string on failure.
+ *
+ * @param {string} filePath - Absolute file path.
+ * @returns {string} File contents.
+ */
+function safeReadFile(filePath) {
+  try {
+    return readFileSync(filePath, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Find the 1-based line number for a character index.
+ *
+ * @param {string} source - File source.
+ * @param {number} index - Character index.
+ * @returns {number} 1-based line number.
+ */
+function lineNumberAt(source, index) {
+  return source.slice(0, index).split('\n').length;
+}
+
+/**
+ * Build a report finding.
+ *
+ * @param {object} finding - Finding details.
+ * @returns {object} Normalized finding.
+ */
+function makeFinding(finding) {
+  return {
+    severity: 'warn',
+    docs: undefined,
+    ...finding,
+  };
+}
+
+/**
+ * Collect files from a project.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string|string[]} patterns - Glob pattern or patterns.
+ * @returns {string[]} Absolute file paths.
+ */
+export function collectProjectFiles(projectDir, patterns) {
+  return globSync(patterns, {
+    cwd: projectDir,
+    nodir: true,
+    absolute: true,
+    ignore: DEFAULT_IGNORES,
+  })
+    .map((filePath) => resolve(filePath))
+    .sort();
+}
+
+/**
+ * Determine whether a file is inside one of the roots.
+ *
+ * @param {string} filePath - Absolute file path.
+ * @param {string[]} roots - Absolute roots.
+ * @returns {boolean} TRUE when inside a root.
+ */
+function isInsideAnyRoot(filePath, roots = []) {
+  return roots.some((root) => {
+    const rel = relative(root, filePath);
+    return Boolean(rel) && !rel.startsWith('..') && !rel.includes(`..${sep}`);
+  });
+}
+
+/**
+ * Normalize the project config, retaining any resolution failure.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @returns {{env: object, configExists: boolean, error?: Error}}
+ */
+function resolveAuditEnvironment(projectDir) {
+  const configExists = safeExists(resolve(projectDir, 'project.emulsify.json'));
+
+  try {
+    return {
+      env: resolveProjectConfig(projectDir, process.env),
+      configExists,
+    };
+  } catch (error) {
+    return {
+      env: {
+        projectDir,
+        platform: 'generic',
+        namespaceRoots: {},
+        projectStructure: {},
+      },
+      configExists,
+      error,
+    };
+  }
+}
+
+/**
+ * Audit basic project configuration and structure root health.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditProjectConfig(context) {
+  const { configExists, env, error, projectDir } = context;
+  const findings = [];
+
+  if (!configExists) {
+    findings.push(
+      makeFinding({
+        id: 'missing-project-config',
+        severity: 'error',
+        message:
+          'project.emulsify.json is missing, so platform and structure defaults may not match the project.',
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md',
+      }),
+    );
+  }
+
+  if (error) {
+    findings.push(
+      makeFinding({
+        id: 'project-config-resolution-failed',
+        severity: 'error',
+        message: `Unable to resolve project.emulsify.json: ${error.message || error}`,
+      }),
+    );
+  }
+
+  for (const implementation of env.structureImplementations || []) {
+    if (!safeIsDirectory(implementation.directory)) {
+      findings.push(
+        makeFinding({
+          id: 'missing-structure-implementation',
+          severity: 'error',
+          filePath: resolve(projectDir, 'project.emulsify.json'),
+          message: `Configured structureImplementation "${implementation.name}" does not exist: ${displayPath(
+            projectDir,
+            implementation.directory,
+          )}`,
+          docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md',
+        }),
+      );
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Audit story files that will not be discovered by Storybook.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditStoryDiscovery(context) {
+  const { projectDir, storyFiles } = context;
+  const discovered = new Set(collectStoryFiles(projectDir));
+  const findings = [];
+
+  for (const storyFile of storyFiles) {
+    if (discovered.has(storyFile)) continue;
+
+    findings.push(
+      makeFinding({
+        id: 'story-outside-discovered-roots',
+        severity: 'error',
+        filePath: storyFile,
+        message:
+          'Story file is outside the normalized Storybook roots and will not be discovered.',
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md',
+      }),
+    );
+  }
+
+  return findings;
+}
+
+/**
+ * Add legacy Twig story migration findings.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditLegacyTwigStories(context) {
+  const { projectDir } = context;
+  const result = auditTwigStories({ projectDir });
+
+  return result.findings.map((finding) =>
+    makeFinding({
+      id: 'legacy-twig-story',
+      severity: 'warn',
+      filePath: finding.filePath,
+      line: finding.directTemplateReturns[0]?.line,
+      message:
+        'Twig story appears to return an HTML string directly. This remains compatible, but renderTwig() is preferred for active migrations.',
+      details: finding.reasons,
+      docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility',
+    }),
+  );
+}
+
+/**
+ * Extract string arguments passed to include() or source().
+ *
+ * @param {string} source - Twig source.
+ * @returns {{type: string, value: string, line: number}[]} References.
+ */
+export function findTwigIncludeSourceReferences(source) {
+  const references = [];
+  const callPattern = /\b(include|source)\s*\(([\s\S]*?)\)/g;
+
+  for (const callMatch of source.matchAll(callPattern)) {
+    const type = callMatch[1];
+    const args = firstArgumentText(callMatch[2]);
+    const argsOffset = (callMatch.index || 0) + callMatch[0].indexOf(args);
+    const stringPattern = /['"]([^'"]+)['"]/g;
+
+    for (const stringMatch of args.matchAll(stringPattern)) {
+      references.push({
+        type,
+        value: stringMatch[1],
+        line: lineNumberAt(source, argsOffset + (stringMatch.index || 0)),
+      });
+    }
+  }
+
+  return references;
+}
+
+/**
+ * Extract the first function argument, including array syntax.
+ *
+ * Twig include()/source() only use the first argument as the template/source
+ * reference. Later object values may also be strings, but they are context
+ * values and should not be treated as template references.
+ *
+ * @param {string} args - Function argument source.
+ * @returns {string} First argument source.
+ */
+function firstArgumentText(args) {
+  let quote = '';
+  let depth = 0;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const char = args[index];
+    const prev = args[index - 1];
+
+    if (quote) {
+      if (char === quote && prev !== '\\') {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char.charCodeAt(0) === 39) {
+      quote = char;
+      continue;
+    }
+    if (char === '[' || char === '{' || char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ']' || char === '}' || char === ')') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (char === ',' && depth === 0) {
+      return args.slice(0, index);
+    }
+  }
+
+  return args;
+}
+
+/**
+ * Extract Twig namespace references such as @components/card/card.twig.
+ *
+ * @param {string} source - Twig source.
+ * @returns {{namespace: string, value: string, line: number}[]} Namespace refs.
+ */
+export function findTwigNamespaceReferences(source) {
+  const references = [];
+  const pattern = /@([A-Za-z][\w-]*)\/[A-Za-z0-9_./-]+/g;
+
+  for (const match of source.matchAll(pattern)) {
+    references.push({
+      namespace: match[1],
+      value: match[0],
+      line: lineNumberAt(source, match.index || 0),
+    });
+  }
+
+  return references;
+}
+
+/**
+ * Build candidate paths for a relative Twig reference.
+ *
+ * @param {string} filePath - Referencing file.
+ * @param {string} reference - Twig reference.
+ * @returns {string[]} Absolute candidate paths.
+ */
+function relativeTwigCandidates(filePath, reference) {
+  const base = resolve(dirname(filePath), reference);
+  if (/\.[A-Za-z0-9]+$/.test(reference)) {
+    return [base];
+  }
+
+  return [`${base}.twig`, `${base}.html.twig`];
+}
+
+/**
+ * Convert resolver candidate keys into absolute filesystem paths.
+ *
+ * @param {string[]} keys - Root-relative Vite keys.
+ * @param {object} env - Normalized environment.
+ * @returns {string[]} Absolute candidate paths.
+ */
+function candidateKeysToFiles(keys, env) {
+  const projectDir = env.projectDir || process.cwd();
+
+  return keys.map((key) =>
+    key.startsWith('/') ? resolve(projectDir, key.slice(1)) : resolve(key),
+  );
+}
+
+/**
+ * Determine whether a Twig include/source reference resolves.
+ *
+ * @param {string} reference - Twig reference.
+ * @param {string} filePath - Referencing file path.
+ * @param {object} env - Normalized environment.
+ * @returns {boolean} TRUE when a candidate exists.
+ */
+export function resolvesTwigReference(reference, filePath, env) {
+  if (!reference || /^https?:\/\//i.test(reference)) return true;
+
+  if (reference.startsWith('@assets/')) {
+    const relAsset = reference.replace(/^@assets\//, '');
+    return safeExists(resolve(env.projectDir, 'assets', relAsset));
+  }
+
+  const candidates =
+    reference.startsWith('./') || reference.startsWith('../')
+      ? relativeTwigCandidates(filePath, reference)
+      : candidateKeysToFiles(candidateKeysForReference(reference, env), env);
+
+  return candidates.some(safeExists);
+}
+
+/**
+ * Audit Twig namespace and include/source resolution.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditTwigReferences(context) {
+  const { env, projectDir, twigFiles } = context;
+  const namespaceRoots = env.namespaceRoots || {};
+  const knownNamespaces = new Set([...Object.keys(namespaceRoots), 'assets']);
+  const findings = [];
+  const seen = new Set();
+
+  for (const twigFile of twigFiles) {
+    const source = safeReadFile(twigFile);
+
+    for (const ref of findTwigNamespaceReferences(source)) {
+      if (knownNamespaces.has(ref.namespace)) continue;
+
+      const key = `${twigFile}:${ref.line}:unknown:${ref.namespace}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      findings.push(
+        makeFinding({
+          id: 'unknown-twig-namespace',
+          severity: 'warn',
+          filePath: twigFile,
+          line: ref.line,
+          message: `Twig namespace "@${ref.namespace}" is not configured in the normalized project structure.`,
+          docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md#twig-namespaces',
+        }),
+      );
+    }
+
+    for (const ref of findTwigIncludeSourceReferences(source)) {
+      if (!resolvesTwigReference(ref.value, twigFile, env)) {
+        findings.push(
+          makeFinding({
+            id: 'unresolved-twig-reference',
+            severity: 'warn',
+            filePath: twigFile,
+            line: ref.line,
+            message: `${ref.type}() reference "${ref.value}" could not be resolved from the normalized Twig roots.`,
+            docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#include',
+          }),
+        );
+      }
+    }
+  }
+
+  return findings.map((finding) => ({
+    ...finding,
+    filePath: finding.filePath || resolve(projectDir, 'project.emulsify.json'),
+  }));
+}
+
+/**
+ * Audit Webpack-era files and code patterns.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditWebpackPatterns(context) {
+  const { codeFiles, projectDir } = context;
+  const findings = [];
+  const webpackConfig = resolve(projectDir, '.storybook/webpack.config.js');
+  const webpackDir = resolve(projectDir, 'config/webpack');
+
+  if (safeExists(webpackConfig)) {
+    findings.push(
+      makeFinding({
+        id: 'webpack-config-file',
+        severity: 'warn',
+        filePath: webpackConfig,
+        message:
+          'Webpack-specific Storybook config is present and should be migrated to Vite/Storybook overrides.',
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#vite-customization',
+      }),
+    );
+  }
+
+  if (safeIsDirectory(webpackDir)) {
+    findings.push(
+      makeFinding({
+        id: 'webpack-config-directory',
+        severity: 'warn',
+        filePath: webpackDir,
+        message:
+          'config/webpack exists. Webpack-specific customization should move to Vite plugins or extendConfig().',
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/extension-points.md#vite-plugins-and-config-patches',
+      }),
+    );
+  }
+
+  const patterns = [
+    {
+      regex: /\brequire\.context\s*\(/,
+      message: 'require.context() is Webpack-specific and should be migrated.',
+    },
+    {
+      regex:
+        /\b(raw-loader|twig-loader|style-loader|file-loader|sass-loader)\b/,
+      message: 'Webpack loader references should be migrated to Vite plugins.',
+    },
+    {
+      regex: /from\s+['"][^'"]+![^'"]+['"]|import\s+['"][^'"]+![^'"]+['"]/,
+      message: 'Inline Webpack loader import syntax should be removed.',
+    },
+  ];
+
+  for (const filePath of codeFiles) {
+    const source = safeReadFile(filePath);
+
+    for (const pattern of patterns) {
+      const match = pattern.regex.exec(source);
+      if (!match) continue;
+
+      findings.push(
+        makeFinding({
+          id: 'webpack-era-pattern',
+          severity: 'warn',
+          filePath,
+          line: lineNumberAt(source, match.index || 0),
+          message: pattern.message,
+          docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#vite-customization',
+        }),
+      );
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Extract import specifiers from JavaScript source.
+ *
+ * @param {string} source - JavaScript source.
+ * @returns {{specifier: string, index: number}[]} Import specifiers.
+ */
+function findImportSpecifiers(source) {
+  const imports = [];
+  const patterns = [
+    /(?:import|export)\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
+    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      imports.push({
+        specifier: match[1],
+        index: match.index || 0,
+      });
+    }
+  }
+
+  return imports;
+}
+
+/**
+ * Audit direct imports of Emulsify Core internals.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditCoreImports(context) {
+  const { codeFiles } = context;
+  const findings = [];
+
+  for (const filePath of codeFiles) {
+    const source = safeReadFile(filePath);
+
+    for (const item of findImportSpecifiers(source)) {
+      const { specifier } = item;
+      if (!specifier.startsWith('@emulsify/core/')) continue;
+      if (PUBLIC_CORE_IMPORTS.has(specifier)) continue;
+
+      findings.push(
+        makeFinding({
+          id: 'internal-core-import',
+          severity: 'warn',
+          filePath,
+          line: lineNumberAt(source, item.index),
+          message: `Import "${specifier}" uses an internal Emulsify Core path. Prefer a public package export.`,
+          docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/README.md#public-imports',
+        }),
+      );
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Audit Drupal assumptions in non-Drupal projects.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditDrupalAssumptions(context) {
+  const { codeFiles, env } = context;
+  if (env.platform === 'drupal') return [];
+
+  const findings = [];
+  const patterns = [
+    /\bDrupal\.attachBehaviors\b/,
+    /\bwindow\.Drupal\b/,
+    /\bglobalThis\.Drupal\b/,
+    /['"][^'"]*_drupal\.js['"]/,
+    /['"]twig-drupal-filters['"]/,
+  ];
+
+  for (const filePath of codeFiles) {
+    const source = safeReadFile(filePath);
+    const match = patterns.map((pattern) => pattern.exec(source)).find(Boolean);
+
+    if (!match) continue;
+
+    findings.push(
+      makeFinding({
+        id: 'drupal-assumption-non-drupal',
+        severity: 'warn',
+        filePath,
+        line: lineNumberAt(source, match.index || 0),
+        message:
+          'Drupal-specific Storybook/runtime code was found, but the active platform is not drupal.',
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/platform-adapters.md',
+      }),
+    );
+  }
+
+  return findings;
+}
+
+/**
+ * Audit files that look like component Twig files outside source roots.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditFilesOutsideRoots(context) {
+  const { env, projectDir, twigFiles } = context;
+  const roots = [
+    ...(env.projectStructure?.twigRoots || []),
+    ...(env.projectStructure?.sourceRoots || []),
+  ];
+
+  if (!roots.length) return [];
+
+  return twigFiles
+    .filter((filePath) => !isInsideAnyRoot(filePath, roots))
+    .map((filePath) =>
+      makeFinding({
+        id: 'twig-file-outside-source-roots',
+        severity: 'info',
+        filePath,
+        message:
+          'Twig file is outside normalized source roots and will not be available to Storybook include()/source() unless another integration loads it.',
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md',
+      }),
+    )
+    .filter((finding) => !isNonComponentTwigFile(projectDir, finding.filePath));
+}
+
+/**
+ * Determine whether a Twig file is intentionally outside component roots.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string} filePath - Absolute Twig file path.
+ * @returns {boolean} TRUE when the file should not be treated as component source.
+ */
+function isNonComponentTwigFile(projectDir, filePath) {
+  const relPath = displayPath(projectDir, filePath);
+
+  return (
+    relPath.startsWith('docs/') ||
+    relPath.startsWith('templates/') ||
+    relPath.includes('/templates/')
+  );
+}
+
+/**
+ * Recursively measure a directory size.
+ *
+ * @param {string} directory - Directory path.
+ * @returns {number} Size in bytes.
+ */
+function directorySize(directory) {
+  let total = 0;
+
+  try {
+    for (const entry of readdirSync(directory)) {
+      const entryPath = resolve(directory, entry);
+      const stats = statSync(entryPath);
+      total += stats.isDirectory() ? directorySize(entryPath) : stats.size;
+    }
+  } catch {
+    return total;
+  }
+
+  return total;
+}
+
+/**
+ * Audit Twig volume under Storybook roots.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditTwigVolume(context) {
+  const { env, twigThreshold } = context;
+  const roots = Array.from(new Set(env.projectStructure?.twigRoots || []));
+  const twigFiles = new Set();
+
+  for (const root of roots) {
+    if (!safeIsDirectory(root)) continue;
+    for (const filePath of globSync(TWIG_GLOB, {
+      cwd: root,
+      absolute: true,
+      nodir: true,
+      ignore: DEFAULT_IGNORES,
+    })) {
+      twigFiles.add(resolve(filePath));
+    }
+  }
+
+  if (twigFiles.size <= twigThreshold) return [];
+
+  const totalBytes = roots.reduce(
+    (total, root) => total + directorySize(root),
+    0,
+  );
+
+  return [
+    makeFinding({
+      id: 'large-twig-storybook-roots',
+      severity: 'info',
+      message: `${twigFiles.size} Twig files are under Storybook Twig roots. Eager Twig imports are reliable but can increase Storybook startup/build cost for large libraries.`,
+      details: [
+        `Approximate Twig root size: ${Math.round(totalBytes / 1024)} KB.`,
+      ],
+      docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/performance.md#storybook-twig-imports',
+    }),
+  ];
+}
+
+/**
+ * Run the combined Emulsify audit.
+ *
+ * @param {{projectDir?: string, twigThreshold?: number}} [options={}] - Options.
+ * @returns {{projectDir: string, summary: object, findings: object[]}} Audit result.
+ */
+export function auditProject(options = {}) {
+  const projectDir = resolve(options.projectDir || process.cwd());
+  const envResult = resolveAuditEnvironment(projectDir);
+  const storyFiles = collectProjectFiles(projectDir, STORY_GLOB);
+  const codeFiles = collectProjectFiles(projectDir, CODE_GLOB);
+  const twigFiles = collectProjectFiles(projectDir, TWIG_GLOB);
+  const context = {
+    ...envResult,
+    projectDir,
+    storyFiles,
+    codeFiles,
+    twigFiles,
+    twigThreshold: Number.isFinite(options.twigThreshold)
+      ? options.twigThreshold
+      : DEFAULT_TWIG_THRESHOLD,
+  };
+  const findings = [
+    ...auditProjectConfig(context),
+    ...auditStoryDiscovery(context),
+    ...auditLegacyTwigStories(context),
+    ...auditTwigReferences(context),
+    ...auditWebpackPatterns(context),
+    ...auditCoreImports(context),
+    ...auditDrupalAssumptions(context),
+    ...auditFilesOutsideRoots(context),
+    ...auditTwigVolume(context),
+  ];
+  const summary = findings.reduce(
+    (totals, finding) => ({
+      ...totals,
+      [finding.severity]: (totals[finding.severity] || 0) + 1,
+    }),
+    {
+      error: 0,
+      warn: 0,
+      info: 0,
+    },
+  );
+
+  return {
+    projectDir,
+    summary,
+    files: {
+      stories: storyFiles.length,
+      twig: twigFiles.length,
+      code: codeFiles.length,
+    },
+    findings,
+  };
+}
+
+/**
+ * Format one finding for terminal output.
+ *
+ * @param {object} finding - Finding to format.
+ * @param {string} projectDir - Project root.
+ * @returns {string[]} Output lines.
+ */
+function formatFinding(finding, projectDir) {
+  const location = finding.filePath
+    ? `${displayPath(projectDir, finding.filePath)}${
+        finding.line ? `:${finding.line}` : ''
+      }`
+    : 'project';
+  const lines = [
+    `[${finding.severity}] ${finding.id}`,
+    `  ${location}`,
+    `  ${finding.message}`,
+  ];
+
+  for (const detail of finding.details || []) {
+    lines.push(`  ${detail}`);
+  }
+  if (finding.docs) {
+    lines.push(`  Docs: ${finding.docs}`);
+  }
+
+  return lines;
+}
+
+/**
+ * Format the combined audit report.
+ *
+ * @param {{projectDir: string, summary: object, files: object, findings: object[]}} result
+ * Audit result.
+ * @returns {string} Human-readable report.
+ */
+export function formatAuditReport(result) {
+  const lines = [
+    'Emulsify project audit',
+    `Project: ${result.projectDir}`,
+    `Scanned ${result.files.stories} story file(s), ${result.files.twig} Twig file(s), and ${result.files.code} code file(s).`,
+    `Findings: ${result.summary.error} error(s), ${result.summary.warn} warning(s), ${result.summary.info} info item(s).`,
+  ];
+
+  if (!result.findings.length) {
+    lines.push('No audit findings found.');
+    return lines.join('\n');
+  }
+
+  for (const finding of result.findings) {
+    lines.push('', ...formatFinding(finding, result.projectDir));
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * CLI usage text.
+ *
+ * @returns {string} Usage text.
+ */
+function usage() {
+  return [
+    'Usage: emulsify-audit [--root <dir>] [--json] [--fail-on-found] [--twig-threshold <count>]',
+    '',
+    'Options:',
+    '  --root <dir>              Project root to scan. Defaults to the current directory.',
+    '  --json                    Print machine-readable JSON.',
+    '  --fail-on-found           Exit with code 1 when any finding is reported.',
+    `  --twig-threshold <count>  Warn when Storybook roots contain more than this many Twig files. Default: ${DEFAULT_TWIG_THRESHOLD}.`,
+    '  --help                    Print this help text.',
+  ].join('\n');
+}
+
+/**
+ * Parse command-line arguments.
+ *
+ * @param {string[]} argv - CLI arguments.
+ * @returns {object} Parsed options.
+ */
+function parseArgs(argv) {
+  const options = {
+    projectDir: process.cwd(),
+    failOnFound: false,
+    json: false,
+    help: false,
+    twigThreshold: DEFAULT_TWIG_THRESHOLD,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+
+    if (arg === '--help' || arg === '-h') {
+      options.help = true;
+      continue;
+    }
+    if (arg === '--fail-on-found') {
+      options.failOnFound = true;
+      continue;
+    }
+    if (arg === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (arg === '--root') {
+      const value = argv[index + 1];
+      if (!value || value.startsWith('--')) {
+        throw new Error('--root requires a project directory.');
+      }
+      options.projectDir = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--root=')) {
+      options.projectDir = arg.slice('--root='.length);
+      continue;
+    }
+    if (arg === '--twig-threshold') {
+      const value = Number(argv[index + 1]);
+      if (!Number.isFinite(value)) {
+        throw new Error('--twig-threshold requires a number.');
+      }
+      options.twigThreshold = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--twig-threshold=')) {
+      const value = Number(arg.slice('--twig-threshold='.length));
+      if (!Number.isFinite(value)) {
+        throw new Error('--twig-threshold requires a number.');
+      }
+      options.twigThreshold = value;
+      continue;
+    }
+
+    throw new Error(`Unknown option: ${arg}`);
+  }
+
+  return options;
+}
+
+/**
+ * Run the CLI.
+ *
+ * @param {string[]} argv - CLI arguments.
+ * @returns {number} Exit code.
+ */
+export function runCli(argv = process.argv.slice(2)) {
+  const options = parseArgs(argv);
+
+  if (options.help) {
+    console.log(usage());
+    return 0;
+  }
+
+  const result = auditProject(options);
+
+  if (options.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(formatAuditReport(result));
+  }
+
+  return options.failOnFound && result.findings.length ? 1 : 0;
+}
+
+if (process.argv[1]?.split(/[\\/]/).pop() === 'audit.js') {
+  try {
+    process.exitCode = runCli();
+  } catch (error) {
+    console.error(error.message || error);
+    console.error('');
+    console.error(usage());
+    process.exitCode = 1;
+  }
+}
