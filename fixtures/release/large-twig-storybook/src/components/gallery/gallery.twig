@@ -1,0 +1,8 @@
+<section class="large-gallery">
+  <h2>{{ heading }}</h2>
+  {{ include('@components/item-001/item-001.twig', {
+    label: 'Included via normalized namespace',
+    variant: 'featured'
+  }) }}
+  <pre data-source-check>{{ source('@components/item-002/item-002.twig') }}</pre>
+</section>

@@ -100,6 +100,7 @@
     "coverage": "npm run check-node-version && npm run test && open-cli .coverage/lcov-report/index.html",
     "format": "npm run check-node-version && npm run lint-fix && npm run prettier-fix",
     "fixtures:release": "npm run check-node-version && node scripts/release-fixtures.js",
+    "fixtures:release:list": "npm run check-node-version && node scripts/release-fixtures.js --list",
     "husky:commit-msg": "npm run check-node-version && commitlint --edit $1",
     "husky:pre-commit": "npm run check-node-version && npm run lint",
     "lint": "npm run check-node-version && npm run lint-js",

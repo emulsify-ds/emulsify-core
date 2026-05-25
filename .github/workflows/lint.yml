@@ -17,6 +17,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24.x'
+          cache: 'npm'
       - name: Install
         # npm install validates the package the same way consumers install it.
         run: npm install
@@ -26,5 +27,31 @@ jobs:
         run: npm test
       - name: Storybook build
         run: npm run storybook-build
-      - name: Fixture builds
-        run: npm run fixtures:release
+  fixture-builds:
+    name: Fixture / ${{ matrix.fixture }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - drupal-sdc-src-components
+          - generic-src-components
+          - legacy-components
+          - structure-implementations
+          - mixed-storybook
+          - large-twig-storybook
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+      - name: Install
+        # npm install validates the package the same way consumers install it.
+        run: npm install
+      - name: Fixture build
+        run: npm run fixtures:release -- --fixture ${{ matrix.fixture }}

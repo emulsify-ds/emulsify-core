@@ -135,6 +135,9 @@ describe('Storybook Twig resolver', () => {
           default: paletteTemplate,
         },
       },
+      sources: {
+        '/src/tokens/color/color.twig': '<span>{{ color }}</span>',
+      },
     });
 
     expect(resolver.resolveTemplate('@foundation/colors/palette.twig')).toBe(
@@ -143,5 +146,8 @@ describe('Storybook Twig resolver', () => {
     expect(
       candidateKeysForReference('@tokens/color/color.twig', env),
     ).toContain('/src/tokens/color/color.twig');
+    expect(resolver.resolveTemplateSource('@tokens/color/color.twig')).toBe(
+      '<span>{{ color }}</span>',
+    );
   });
 });
