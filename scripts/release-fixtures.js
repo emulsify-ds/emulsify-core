@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { globSync } from 'glob';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const fixturesRoot = join(repoRoot, 'fixtures/release');
+const fixturesRoot = join(repoRoot, '.github/fixtures/release');
 const viteBin = join(repoRoot, 'node_modules/vite/bin/vite.js');
 const storybookBin = join(repoRoot, 'node_modules/.bin/storybook');
 const viteConfig = join(repoRoot, 'config/vite/vite.config.js');

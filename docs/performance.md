@@ -72,6 +72,10 @@ Use these commands to compare release-readiness behavior:
 npm run fixtures:release
 ```
 
+Release fixtures live under `.github/fixtures/release/`. They are repository
+development assets for CI and local validation, and are not included in the npm
+package installed by consuming projects.
+
 Run one fixture when debugging a specific project shape:
 
 ```sh
