@@ -1,8 +1,8 @@
-# Runs release-readiness checks on pushes and pull requests that target release branches.
+# Runs release-readiness checks once for PR updates and after integration merges.
 name: CI
 on:
   push:
-    branches: [4.x, develop, main]
+    branches: [develop, main]
   pull_request:
     branches: [4.x, develop, main]
 jobs:
