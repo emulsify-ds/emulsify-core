@@ -122,7 +122,7 @@ Use preview head for markup needed inside the story iframe, such as fonts, meta 
 
 ## Public Imports
 
-Emulsify Core 4.x exposes stable public package paths:
+Emulsify Core exposes stable public package paths:
 
 ```js
 import { renderTwig } from '@emulsify/core/storybook';

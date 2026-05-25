@@ -34,7 +34,7 @@ Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()
 
 ## React Component Libraries
 
-React components render through Storybook's React/Vite support. Storybook discovers React stories from the same normalized story roots as Twig stories. The shared Storybook globs include `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`; current release fixture coverage validates JavaScript/JSX stories.
+React components render through Storybook's React/Vite support. Storybook discovers React stories from the same normalized story roots as Twig stories. The shared Storybook globs include `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`; fixture coverage validates JavaScript/JSX stories.
 
 ```jsx
 import { Button } from './Button';

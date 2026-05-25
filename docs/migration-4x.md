@@ -1,15 +1,15 @@
-# Migration To 4.x
+# Migration To The Current Release
 
-Emulsify Core 4.x moves the build and component library stack from Webpack-era assumptions to Vite and React/Vite Storybook while preserving existing component structures.
+Emulsify Core now runs on Vite and React/Vite Storybook while preserving existing component structures. This guide is for projects upgrading from earlier Webpack-based versions.
 
 ## Requirements
 
 Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.js` before doing work.
 
-## What Changed
+## What Changed From Earlier Versions
 
 - Webpack has been replaced with Vite.
-- Storybook now uses `@storybook/react-vite`.
+- Storybook uses `@storybook/react-vite`.
 - Twig rendering remains supported through Emulsify's Twig integration.
 - React components are supported directly through Storybook's React/Vite setup.
 - Twig and React stories can coexist in the same Storybook instance.
@@ -30,7 +30,7 @@ Projects with `variant.structureImplementations` should keep that configuration 
 
 ## Storybook Migration
 
-Storybook now runs on React/Vite. Twig stories still work, but imported Twig templates should be rendered with `renderTwig()` from `@emulsify/core/storybook`.
+Storybook runs on React/Vite. Twig stories still work, but imported Twig templates should be rendered with `renderTwig()` from `@emulsify/core/storybook`.
 
 ```js
 import template from './button.twig';
@@ -63,7 +63,7 @@ Drupal-specific Twig filters are only loaded when the Drupal adapter enables the
 
 ## Drupal Behavior
 
-Drupal-specific Storybook behavior now comes from the Drupal platform adapter. Generic and unknown platforms do not create or require a Drupal global by default.
+Drupal-specific Storybook behavior comes from the Drupal platform adapter. Generic and unknown platforms do not create or require a Drupal global by default.
 
 Drupal SDC mirroring remains supported for Drupal projects that enable `singleDirectoryComponents`.
 

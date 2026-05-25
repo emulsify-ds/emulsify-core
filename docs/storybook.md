@@ -1,6 +1,6 @@
 # Storybook
 
-Emulsify Core 4.x uses `@storybook/react-vite`. React components render directly through Storybook's React framework, and Twig templates render through Emulsify's Twig story helper.
+Emulsify Core uses `@storybook/react-vite`. React components render directly through Storybook's React framework, and Twig templates render through Emulsify's Twig story helper.
 
 ## Twig Stories
 

@@ -31,7 +31,7 @@ components/
     button.scss
 ```
 
-Projects using this structure do not need to create `src/` just to upgrade to 4.x. Generic builds emit into `dist/`; Drupal SDC mirroring happens only when the Drupal adapter enables it.
+Projects using this structure do not need to create `src/` just to use the current build system. Generic builds emit into `dist/`; Drupal SDC mirroring happens only when the Drupal adapter enables it.
 
 ### `variant.structureImplementations`
 

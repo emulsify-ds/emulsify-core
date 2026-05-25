@@ -4,18 +4,31 @@
 
 An open-source toolset for creating and implementing design systems.
 
-**Emulsify Core** provides shared [Vite](https://vite.dev/) build configuration and a [Storybook](https://storybook.js.org/) component library setup for component-driven development. In 4.x, Twig-based components and React components are both supported authoring models. A project can be Twig-first, React-first, or intentionally mixed.
+**Emulsify Core** provides shared [Vite](https://vite.dev/) build configuration and a [Storybook](https://storybook.js.org/) component library setup for component-driven development. Twig-based components and React components are both supported authoring models. A project can be Twig-first, React-first, or intentionally mixed.
 
-## 4.x At A Glance
+## How Emulsify Core Works
 
-- Webpack has been replaced with Vite.
-- Storybook uses `@storybook/react-vite`.
+- Vite builds project JavaScript, Sass/CSS, Twig templates, component metadata, and static component assets.
+- Storybook uses the React/Vite framework.
 - Twig files can render in React-based Storybook through `renderTwig()`.
 - React components render through Storybook's React/Vite support.
 - Twig and React stories can coexist in the same Storybook instance.
 - `project.emulsify.json` is the source of truth for platform and structure configuration.
 - Platform-specific behavior is controlled by adapters instead of being assumed globally.
 - Node.js 24 or later is required.
+
+## Project Evolution
+
+Emulsify Core has grown through each major release while keeping the same practical goal: make component-library tooling easier to share across real projects.
+
+- `1.x` established Emulsify Core as a reusable package for Storybook, Webpack, linting, a11y checks, project overrides, and asset handling.
+- `2.x` expanded component structure support, improved Drupal SDC compatibility, upgraded Storybook, and made more project files configurable from consuming projects.
+- `3.x` modernized the runtime around ESM and Node 24, continued Storybook and dependency upgrades, improved component asset copying, and strengthened compatibility for existing Drupal-oriented builds.
+- The current release moves the build system to Vite, runs Storybook on React/Vite, supports Twig and React stories side by side, and normalizes platform and project-structure behavior through `project.emulsify.json`.
+
+The latest version is the next evolution of that work: faster builds, clearer public APIs, less global Drupal assumption, and a broader foundation for CMS themes, standalone UI libraries, and mixed component systems.
+
+See [Version Evolution](docs/version-evolution.md) for more release history.
 
 ## Authoring Models
 
@@ -56,21 +69,22 @@ Common project scripts call the shared Emulsify Core Vite and Storybook config:
 
 ## Documentation
 
-The full 4.x documentation is split by task:
+The documentation is split by task:
 
 | Topic                                                     | Use This When                                                                                                         |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [Version Evolution](docs/version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |
 | [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
 | [Storybook](docs/storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
 | [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
 | [Platform Adapters](docs/platform-adapters.md)            | Understanding `generic`, `drupal`, platform resolution order, and Drupal SDC behavior.                                |
 | [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
-| [Migration To 4.x](docs/migration-4x.md)                  | Upgrading from 3.x, preserving existing structures, and adopting Vite/React Storybook.                                |
+| [Migration](docs/migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                                 |
 
 ## Supported Project Shapes
 
-Current release-readiness coverage validates:
+Release-readiness coverage validates:
 
 - Drupal SDC projects using `src/components`.
 - Generic Twig projects using `src/components`.
@@ -82,7 +96,7 @@ Craft CMS and WordPress + Timber are documented as Twig-based project use cases 
 
 ## Public Imports
 
-Emulsify Core 4.x exposes stable public package paths:
+Emulsify Core exposes stable public package paths:
 
 ```js
 import { renderTwig } from '@emulsify/core/storybook';
