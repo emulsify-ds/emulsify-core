@@ -121,8 +121,7 @@ Do not add comments to JSON files, lockfiles, binary assets, generated output, l
 Please also follow the issue template and pull request templates provided. See below for the correct places to post issues:
 
 1. [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/issues)
-2. [Emulsify Twig Extensions](https://github.com/emulsify-ds/emulsify-twig-extensions/issues)
-3. [Emulsify Tools (Drupal module)](https://www.drupal.org/project/issues/emulsify_tools)
+2. [Emulsify Tools (Drupal module)](https://www.drupal.org/project/issues/emulsify_tools)
 
 ## Links
 
