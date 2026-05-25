@@ -12,7 +12,15 @@
  * It also builds a physical SVG spritemap at `dist/assets/icons.svg`.
  */
 
-import { resolve, join, dirname, basename, posix as pathPosix } from 'path';
+import {
+  resolve,
+  join,
+  dirname,
+  basename,
+  relative,
+  sep,
+  posix as pathPosix,
+} from 'path';
 import {
   mkdirSync,
   copyFileSync,
@@ -39,7 +47,6 @@ import {
   findSourceRoot,
   relativeFrom,
   resolveProjectStructure,
-  toPosixPath as toStructurePosixPath,
 } from './project-structure.js';
 
 /* ============================================================================
@@ -556,9 +563,10 @@ function emulsifyTwigModulePlugin(options) {
  * Depth-first walk to list every file under a given root.
  *
  * @param {string} rootDir
+ * @param {{ shouldSkipDir?: (dir: string) => boolean }} [options]
  * @returns {string[]}
  */
-const walkFiles = (rootDir) => {
+const walkFiles = (rootDir, { shouldSkipDir = () => false } = {}) => {
   const files = [];
   const stack = [rootDir];
 
@@ -568,7 +576,7 @@ const walkFiles = (rootDir) => {
 
     let entryNames = [];
     try {
-      entryNames = readdirSync(currentDir);
+      entryNames = readdirSync(currentDir).sort();
     } catch {
       // Skip unreadable directories and keep walking the remaining stack.
       continue;
@@ -578,8 +586,9 @@ const walkFiles = (rootDir) => {
       const fullPath = join(currentDir, name);
       try {
         const stats = statSync(fullPath);
-        if (stats.isDirectory()) stack.push(fullPath);
-        else files.push(fullPath);
+        if (stats.isDirectory()) {
+          if (!shouldSkipDir(fullPath)) stack.push(fullPath);
+        } else files.push(fullPath);
       } catch {
         // Ignore unreadable entries so one file does not stop the copy pass.
       }
@@ -587,6 +596,114 @@ const walkFiles = (rootDir) => {
   }
   return files;
 };
+
+/**
+ * Determine whether a directory is the same as, or nested inside, another one.
+ *
+ * @param {string} candidateDir
+ * @param {string} rootDir
+ * @returns {boolean}
+ */
+const isSameOrInsideDir = (candidateDir, rootDir) => {
+  const rel = relative(rootDir, candidateDir);
+  return !rel || (!rel.startsWith('..') && !rel.includes(`..${sep}`));
+};
+
+/**
+ * Determine whether a file is component metadata copied beside Twig templates.
+ *
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+const isComponentMetadataFile = (filePath) =>
+  /\.component\.(yml|yaml|json)$/.test(filePath);
+
+/**
+ * Determine whether a file should be copied by the static asset pass.
+ *
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+const isStaticSourceAsset = (filePath) =>
+  !/\.(js|scss|twig|map)$/.test(filePath) && !isComponentMetadataFile(filePath);
+
+/**
+ * Build the roots that should not be crawled during a global source pass.
+ *
+ * @param {{ directory: string }} globalRoot
+ * @param {{ directory: string }[]} componentRoots
+ * @returns {string[]}
+ */
+const globalTraversalSkipRoots = (globalRoot, componentRoots) => {
+  const configuredSkips = [
+    join(globalRoot.directory, 'components'),
+    join(globalRoot.directory, 'util'),
+  ];
+  const nestedComponentRoots = componentRoots
+    .map((root) => root.directory)
+    .filter(
+      (directory) =>
+        directory !== globalRoot.directory &&
+        isSameOrInsideDir(directory, globalRoot.directory),
+    );
+
+  return [...configuredSkips, ...nestedComponentRoots];
+};
+
+/**
+ * Create a lazy, shared index of files under the resolved project source roots.
+ *
+ * Copy plugins use this index so Twig, component metadata, and static assets
+ * filter the same file list instead of running separate glob passes over the
+ * same directories.
+ *
+ * @param {object} structure
+ * @returns {{
+ *   all: () => Array<object>,
+ *   componentFiles: () => Array<object>,
+ *   globalFiles: () => Array<object>
+ * }}
+ */
+function createSourceFileIndex(structure) {
+  let indexedFiles = null;
+
+  const indexRoot = (root, rootType, options = {}) =>
+    walkFiles(root.directory, options).map((absPath) => ({
+      absPath,
+      relPath: relativeFrom(absPath, root.directory),
+      root,
+      rootType,
+    }));
+
+  const build = () => {
+    if (indexedFiles) return indexedFiles;
+
+    const componentFiles = structure.componentRootRecords.flatMap((root) =>
+      indexRoot(root, 'component'),
+    );
+    const globalFiles = structure.globalRootRecords.flatMap((root) => {
+      const skipRoots = globalTraversalSkipRoots(
+        root,
+        structure.componentRootRecords,
+      );
+
+      return indexRoot(root, 'global', {
+        shouldSkipDir: (directory) =>
+          skipRoots.some((skipRoot) => isSameOrInsideDir(directory, skipRoot)),
+      });
+    });
+
+    indexedFiles = [...componentFiles, ...globalFiles];
+    return indexedFiles;
+  };
+
+  return {
+    all: build,
+    componentFiles: () =>
+      build().filter((entry) => entry.rootType === 'component'),
+    globalFiles: () => build().filter((entry) => entry.rootType === 'global'),
+  };
+}
 
 /**
  * Remove empty parent directories from a start directory up to, but not including,
@@ -623,6 +740,31 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
   }
 };
 
+/**
+ * Determine whether two files already contain the same bytes.
+ *
+ * Drupal SDC mirroring can avoid rewriting unchanged root component files, but
+ * it must not skip a changed same-size file. Compare size first, then bytes only
+ * when the cheap stat check says a match is possible.
+ *
+ * @param {string} sourceFile
+ * @param {string} destinationFile
+ * @returns {boolean}
+ */
+const filesHaveSameBytes = (sourceFile, destinationFile) => {
+  try {
+    const sourceStats = statSync(sourceFile);
+    const destinationStats = statSync(destinationFile);
+    if (!destinationStats.isFile()) return false;
+    if (sourceStats.size !== destinationStats.size) return false;
+    if (sourceStats.size === 0) return true;
+
+    return readFileSync(sourceFile).equals(readFileSync(destinationFile));
+  } catch {
+    return false;
+  }
+};
+
 /* ============================================================================
  * Plugin: Copy Twig files (+ component metadata) using JS/CSS-like routing
  * ========================================================================== */
@@ -631,10 +773,13 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
  * Copy Twig templates and component metadata to `dist/`,
  * respecting the same routing used for JS/CSS.
  *
- * @param {{ structure: object }} opts
+ * @param {{ structure: object, sourceFileIndex?: object }} opts
  * @returns {import('vite').PluginOption}
  */
-function copyTwigFilesPlugin({ structure }) {
+function copyTwigFilesPlugin({
+  structure,
+  sourceFileIndex = createSourceFileIndex(structure),
+}) {
   let outDir = 'dist';
 
   const copyToOutDir = (absPath, relDest) => {
@@ -660,51 +805,28 @@ function copyTwigFilesPlugin({ structure }) {
 
     /** Perform the copying after the bundle has been written. */
     closeBundle() {
-      // Component Twig files from every resolved component source root.
-      for (const root of structure.componentRootRecords) {
-        const componentTwigs = globSync(
-          toStructurePosixPath(join(root.directory, '**/*.twig')),
-        );
-        for (const absPath of componentTwigs) {
-          if (isPartial(relativeFrom(absPath, root.directory))) continue;
-          copyToOutDir(absPath, copiedComponentOutputPath(absPath, structure));
-        }
-      }
-
-      // Component metadata files from every resolved component source root.
-      for (const pattern of [
-        '**/*.component.@(yml|yaml)',
-        '**/*.component.json',
-      ]) {
-        for (const root of structure.componentRootRecords) {
-          const metaFiles = globSync(
-            toStructurePosixPath(join(root.directory, pattern)),
+      for (const file of sourceFileIndex.componentFiles()) {
+        if (file.absPath.endsWith('.twig')) {
+          if (isPartial(file.relPath)) continue;
+          copyToOutDir(
+            file.absPath,
+            copiedComponentOutputPath(file.absPath, structure),
           );
-          for (const absPath of metaFiles) {
-            copyToOutDir(
-              absPath,
-              copiedComponentOutputPath(absPath, structure),
-            );
-          }
+        } else if (isComponentMetadataFile(file.absPath)) {
+          copyToOutDir(
+            file.absPath,
+            copiedComponentOutputPath(file.absPath, structure),
+          );
         }
       }
 
-      // Global Twig files from every resolved global source root.
-      for (const root of structure.globalRootRecords) {
-        const globalTwigs = globSync(
-          toStructurePosixPath(join(root.directory, '**/*.twig')),
-          {
-            ignore: [
-              toStructurePosixPath(join(root.directory, 'components/**')),
-              toStructurePosixPath(join(root.directory, 'util/**')),
-              toStructurePosixPath(join(root.directory, '**/_*.twig')),
-            ],
-          },
+      for (const file of sourceFileIndex.globalFiles()) {
+        if (!file.absPath.endsWith('.twig')) continue;
+        if (isPartial(file.relPath)) continue;
+        copyToOutDir(
+          file.absPath,
+          copiedGlobalOutputPath(file.absPath, structure),
         );
-
-        for (const absPath of globalTwigs) {
-          copyToOutDir(absPath, copiedGlobalOutputPath(absPath, structure));
-        }
       }
     },
   };
@@ -720,10 +842,13 @@ function copyTwigFilesPlugin({ structure }) {
  *
  * Excludes: .js, .scss, .twig, source maps, and `*.component.(yml|yaml|json)`.
  *
- * @param {{ structure: object }} opts
+ * @param {{ structure: object, sourceFileIndex?: object }} opts
  * @returns {import('vite').PluginOption}
  */
-function copyAllSrcAssetsPlugin({ structure }) {
+function copyAllSrcAssetsPlugin({
+  structure,
+  sourceFileIndex = createSourceFileIndex(structure),
+}) {
   let outDir = 'dist';
 
   const copyToOutDir = (absPath, relDest) => {
@@ -749,51 +874,23 @@ function copyAllSrcAssetsPlugin({ structure }) {
 
     /** Copy component/global assets. */
     closeBundle() {
-      // Component-side assets emit under the component root output path.
-      for (const root of structure.componentRootRecords) {
-        const componentAssets = globSync(
-          toStructurePosixPath(join(root.directory, '**/*')),
-          {
-            nodir: true,
-            ignore: [
-              toStructurePosixPath(join(root.directory, '**/*.js')),
-              toStructurePosixPath(join(root.directory, '**/*.scss')),
-              toStructurePosixPath(join(root.directory, '**/*.twig')),
-              toStructurePosixPath(
-                join(root.directory, '**/*.component.@(yml|yaml|json)'),
-              ),
-              toStructurePosixPath(join(root.directory, '**/*.map')),
-            ],
-          },
+      for (const file of sourceFileIndex.componentFiles()) {
+        if (!isStaticSourceAsset(file.absPath)) continue;
+        copyToOutDir(
+          file.absPath,
+          copiedComponentOutputPath(file.absPath, structure),
         );
-        for (const absPath of componentAssets) {
-          copyToOutDir(absPath, copiedComponentOutputPath(absPath, structure));
-        }
       }
 
-      // Global-side assets emit under dist/global.
-      for (const root of structure.globalRootRecords) {
-        const globalAssets = globSync(
-          toStructurePosixPath(join(root.directory, '**/*')),
-          {
-            nodir: true,
-            ignore: [
-              toStructurePosixPath(join(root.directory, 'components/**')),
-              toStructurePosixPath(join(root.directory, 'util/**')),
-              toStructurePosixPath(join(root.directory, '**/*.js')),
-              toStructurePosixPath(join(root.directory, '**/*.scss')),
-              toStructurePosixPath(join(root.directory, '**/*.twig')),
-              toStructurePosixPath(
-                join(root.directory, '**/*.component.@(yml|yaml|json)'),
-              ),
-              toStructurePosixPath(join(root.directory, '**/*.map')),
-            ],
-          },
-        );
-        for (const absPath of globalAssets) {
-          if (findSourceRoot(absPath, structure.componentRootRecords)) continue;
-          copyToOutDir(absPath, copiedGlobalOutputPath(absPath, structure));
+      for (const file of sourceFileIndex.globalFiles()) {
+        if (!isStaticSourceAsset(file.absPath)) continue;
+        if (findSourceRoot(file.absPath, structure.componentRootRecords)) {
+          continue;
         }
+        copyToOutDir(
+          file.absPath,
+          copiedGlobalOutputPath(file.absPath, structure),
+        );
       }
     },
   };
@@ -816,6 +913,18 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
 
   /** @type {string[]} */
   let patterns = [];
+  /** @type {string[]} */
+  let iconFiles = [];
+  let iconFilesResolved = false;
+
+  const collectIconFiles = () => {
+    if (iconFilesResolved) return iconFiles;
+    iconFiles = unique(patterns.flatMap((p) => globSync(p))).sort((a, b) =>
+      posix(a).localeCompare(posix(b)),
+    );
+    iconFilesResolved = true;
+    return iconFiles;
+  };
 
   return {
     name: 'emulsify-svg-sprite-file',
@@ -824,8 +933,8 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
     /** Register icons for watch. */
     buildStart() {
       patterns = toArray(include).map(posix);
-      const files = patterns.flatMap((p) => globSync(p));
-      for (const f of files) {
+      iconFilesResolved = false;
+      for (const f of collectIconFiles()) {
         try {
           this.addWatchFile(f);
         } catch {
@@ -836,9 +945,7 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
 
     /** Concatenate all matched SVGs into a single sprite. */
     generateBundle() {
-      const files = patterns
-        .flatMap((p) => globSync(p))
-        .sort((a, b) => posix(a).localeCompare(posix(b)));
+      const files = collectIconFiles();
 
       if (!files.length) return;
 
@@ -923,8 +1030,8 @@ function cssAssetUrlRelativizer({ assetsRoot = 'assets' } = {}) {
         const fromDir = pathPosix.dirname(fileName);
 
         chunk.source = chunk.source.replace(
-          /url\((['"]?)(\/?)assets\/([^)'"]+)\1\)/g,
-          (match, quote = '', _leadingSlash = '', rest) => {
+          /url\((['"]?)\/?assets\/([^)'"]+)\1\)/g,
+          (match, quote = '', rest) => {
             const target = pathPosix.join(assetsRoot, rest);
             const rel = pathPosix.relative(fromDir, target);
             return `url(${quote}${rel}${quote})`;
@@ -967,7 +1074,9 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
         const destFile = join(projectDir, relFromOutDir);
         mkdirSync(dirname(destFile), { recursive: true });
         try {
-          copyFileSync(srcFile, destFile);
+          if (!filesHaveSameBytes(srcFile, destFile)) {
+            copyFileSync(srcFile, destFile);
+          }
           try {
             unlinkSync(srcFile);
             pruneEmptyDirsUpTo(dirname(srcFile), distComponents);
@@ -1011,6 +1120,7 @@ export function makePlugins(env) {
       platformAdapter,
     });
   const twigOptions = makeTwigPluginOptions(env);
+  const sourceFileIndex = createSourceFileIndex(structure);
 
   const basePlugins = [
     emulsifyTwigModulePlugin(twigOptions),
@@ -1043,10 +1153,10 @@ export function makePlugins(env) {
     ...basePlugins,
 
     // Copy Twig templates and component metadata beside compiled assets.
-    copyTwigFilesPlugin({ structure }),
+    copyTwigFilesPlugin({ structure, sourceFileIndex }),
 
     // Copy every non-code asset under src with the same routing.
-    copyAllSrcAssetsPlugin({ structure }),
+    copyAllSrcAssetsPlugin({ structure, sourceFileIndex }),
 
     // Drupal projects with src mirror dist/components back to ./components.
     mirrorComponentsToRoot({

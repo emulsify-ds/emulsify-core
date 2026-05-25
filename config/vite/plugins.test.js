@@ -2,7 +2,15 @@
  * @file Tests for Emulsify Vite plugin assembly and Twig namespace behavior.
  */
 
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -259,8 +267,24 @@ describe('Vite Twig plugins', () => {
       join(projectDir, 'src/components/card/card.twig'),
       '<article></article>',
     );
+    writeFileSync(
+      join(projectDir, 'src/components/card/_partial.twig'),
+      '<span></span>',
+    );
+    writeFileSync(
+      join(projectDir, 'src/components/card/card.component.yml'),
+      'name: Card',
+    );
     writeFileSync(join(projectDir, 'src/components/card/image.png'), 'image');
     writeFileSync(join(projectDir, 'src/foundation/icons/icon.svg'), '<svg />');
+    writeFileSync(
+      join(projectDir, 'src/foundation/icons/_partial.twig'),
+      '<span></span>',
+    );
+    writeFileSync(
+      join(projectDir, 'src/foundation/icons/icon.component.json'),
+      '{"name":"Icon"}',
+    );
 
     const plugins = makePlugins(resolveProjectConfig(projectDir, {}));
     const copyTwigPlugin = plugins.find(
@@ -276,8 +300,20 @@ describe('Vite Twig plugins', () => {
     copyAssetsPlugin.closeBundle();
 
     expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
+    expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
+      false,
+    );
+    expect(existsSync(join(outDir, 'components/card/card.component.yml'))).toBe(
+      true,
+    );
     expect(existsSync(join(outDir, 'components/card/image.png'))).toBe(true);
     expect(existsSync(join(outDir, 'foundation/icons/icon.svg'))).toBe(true);
+    expect(existsSync(join(outDir, 'foundation/icons/_partial.twig'))).toBe(
+      false,
+    );
+    expect(
+      existsSync(join(outDir, 'foundation/icons/icon.component.json')),
+    ).toBe(true);
   });
 
   it('only enables Drupal component mirroring for Drupal projects with src', () => {
@@ -316,6 +352,18 @@ describe('Vite Twig plugins', () => {
     expect(drupalMirror.closeBundle()).toBeUndefined();
     expect(existsSync(distComponentFile)).toBe(false);
     expect(existsSync(rootComponentFile)).toBe(true);
+
+    mkdirSync(join(projectDir, 'dist/components/card'), { recursive: true });
+    writeFileSync(distComponentFile, '<article>{{ title }}</article>');
+    utimesSync(
+      rootComponentFile,
+      new Date('2000-01-01T00:00:00Z'),
+      new Date('2000-01-01T00:00:00Z'),
+    );
+    const rootMtimeBefore = statSync(rootComponentFile).mtimeMs;
+    expect(drupalMirror.closeBundle()).toBeUndefined();
+    expect(existsSync(distComponentFile)).toBe(false);
+    expect(statSync(rootComponentFile).mtimeMs).toBe(rootMtimeBefore);
 
     rmSync(join(projectDir, 'components'), { recursive: true, force: true });
     mkdirSync(join(projectDir, 'dist/components/card'), { recursive: true });
