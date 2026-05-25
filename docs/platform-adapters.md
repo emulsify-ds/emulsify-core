@@ -2,6 +2,13 @@
 
 Platform adapters keep CMS-specific or framework-specific behavior out of the global defaults. Generic projects should not inherit Drupal behavior, and Drupal projects should keep SDC support when they opt into it.
 
+The implemented adapters are currently:
+
+- `generic`
+- `drupal`
+
+Emulsify Core supports Twig-based authoring for CMS-oriented projects, but WordPress + Timber and Craft CMS do not have dedicated adapters in this package yet. Those projects can use `generic` behavior today when they do not need platform-specific Storybook behavior or output mirroring.
+
 ## Platform Resolution
 
 The active platform is resolved in this order:
@@ -11,13 +18,13 @@ The active platform is resolved in this order:
 3. `variant.platform`
 4. `generic`
 
-Unknown platform names currently use generic adapter behavior while preserving the resolved platform string. This lets future integrations such as WordPress + Timber or Craft CMS add their own adapters without forcing Drupal behavior onto every project.
+Unknown platform names currently use generic adapter behavior while preserving the resolved platform string. This lets future integrations add their own adapters without forcing Drupal behavior onto every project.
 
 ## `generic`
 
 The generic adapter keeps output in `dist/`. It does not load Drupal behavior shims, does not call `Drupal.attachBehaviors()`, and does not register Drupal Twig filters by default.
 
-Use `generic` for standalone Twig libraries, React libraries, mixed Storybook libraries, or non-Drupal projects that do not need platform-specific output behavior.
+Use `generic` for standalone Twig libraries, React libraries, mixed Storybook libraries, Craft CMS projects, WordPress + Timber projects, or any non-Drupal project that does not need platform-specific output behavior. For CMS projects without a dedicated adapter, `generic` means Emulsify Core provides Twig Storybook/runtime support and normal `dist/` output, but it does not add CMS-specific filters, behavior hooks, or mirroring.
 
 ```json
 {
@@ -69,4 +76,4 @@ Future adapters should own their platform-specific behavior instead of changing 
 - Static asset handling.
 - CMS-specific mirroring or copy behavior.
 
-WordPress + Timber and Craft CMS can use generic Twig behavior today. Dedicated adapters can be added later when those integrations need platform-specific defaults.
+WordPress + Timber and Craft CMS can use generic Twig behavior today. Dedicated adapters can be added later when those integrations need platform-specific defaults such as CMS filters, behavior hooks, asset handling, or output conventions.

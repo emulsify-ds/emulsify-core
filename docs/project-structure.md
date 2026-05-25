@@ -2,6 +2,16 @@
 
 Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, and copy behavior.
 
+## Which Structure Should I Use?
+
+| Project Type                                 | Recommended Structure                        | Platform Setting      | Notes                                                                                                                         |
+| -------------------------------------------- | -------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| New generic design system                    | `src/components`                             | `generic`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                     |
+| Existing root `./components` project         | Keep `./components`                          | `generic` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                       |
+| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`              | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                  |
+| Multi-root design system                     | `variant.structureImplementations`           | `generic` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                          |
+| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `generic`             | Use this for Craft CMS, WordPress + Timber, or similar Twig-based projects today. Dedicated adapters are not implemented yet. |
+
 ## Supported Project Structures
 
 ### `src/components`
@@ -65,7 +75,7 @@ Stories remain colocated with components. Storybook discovers stories from the n
 - root `./components`
 - one or more `variant.structureImplementations` directories
 
-Supported story extensions are `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`. Current release fixture coverage validates JavaScript/JSX stories.
+Supported story extensions are `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`. Release fixture coverage validates JavaScript/JSX stories.
 
 ## Twig Namespace Roots
 

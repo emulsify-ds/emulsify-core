@@ -2,6 +2,18 @@
 
 Emulsify Core provides shared Vite and Storybook conventions. Project-specific framework tooling should live in the consuming project and connect through documented extension points.
 
+## Directory Conventions
+
+There are two project-level extension locations:
+
+| Extension Type              | Directory                                           | Why                                                                                  |
+| --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Vite plugins/config patches | `.config/emulsify-core/vite/plugins.(mjs\|js\|cjs)` | Build-time Vite extensions are hidden config files and are loaded only by Node/Vite. |
+| Storybook overrides         | `config/emulsify-core/storybook/...`                | Storybook preview/head overrides are project-facing assets that Storybook imports.   |
+| A11y config                 | `config/emulsify-core/a11y.config.js`               | The a11y script keeps the existing project config path for compatibility.            |
+
+That difference is intentional in the current release. New Vite extensions should use `.config/emulsify-core/vite/`. Storybook overrides should continue using `config/emulsify-core/storybook/`.
+
 ## Vite Plugins And Config Patches
 
 Projects can extend the shared Vite config with one of these files:
@@ -63,7 +75,7 @@ Create a CSS file that imports Tailwind. This example places it under `src/globa
 @source "../tokens";
 ```
 
-The `@source` lines are optional when Tailwind's automatic detection already sees the right files, but they make multi-root Emulsify projects explicit. Use `../components` for `src/components`, `../../components` for root `./components`, and add one line for each `variant.structureImplementations` root that should be scanned.
+The `@source` lines are optional when Tailwind's automatic detection already sees the right files, but they make multi-root Emulsify projects explicit. Use `../components` for `src/components`, `../../components` for root `./components`, and add one line for each `variant.structureImplementations` root that should be scanned. Keep `@source` paths focused on active component source directories so Tailwind does not scan generated output, archived templates, or dependency folders.
 
 For production builds, import the Tailwind CSS file from a discovered JavaScript entry:
 

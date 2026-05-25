@@ -34,7 +34,7 @@ See [Version Evolution](docs/version-evolution.md) for more release history.
 
 Twig and React are equally valid ways to build component libraries with Emulsify Core. The right authoring model depends on the consuming project:
 
-- Use Twig for CMS themes and server-rendered template systems such as Drupal, Craft CMS, or WordPress + Timber.
+- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today; Craft CMS and WordPress + Timber can use the generic adapter unless a project adds platform-specific behavior.
 - Use React for standalone UI libraries, application components, or projects that already use React.
 - Use mixed Twig and React when a design system needs to document both CMS-rendered and JavaScript-rendered components in the same Storybook instance.
 
@@ -79,6 +79,7 @@ The documentation is split by task:
 | [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
 | [Platform Adapters](docs/platform-adapters.md)            | Understanding `generic`, `drupal`, platform resolution order, and Drupal SDC behavior.                                |
 | [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
+| [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
 | [Migration](docs/migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                                 |
 
@@ -92,7 +93,7 @@ Release-readiness coverage validates:
 - Projects using multiple `variant.structureImplementations`.
 - Mixed Twig + React Storybook projects.
 
-Craft CMS and WordPress + Timber are documented as Twig-based project use cases and future platform-adapter directions. The implemented adapters in this package are currently `generic` and `drupal`.
+WordPress + Timber and Craft CMS are Twig-based project use cases that can use the `generic` adapter today. Dedicated adapters for those platforms are future opportunities. The implemented adapters in this package are currently `generic` and `drupal`.
 
 ## Public Imports
 
