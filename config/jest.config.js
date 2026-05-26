@@ -15,6 +15,10 @@ export default {
       },
     ],
   },
+  moduleNameMapper: {
+    '^virtual:emulsify-twig-globs$':
+      '<rootDir>/config/vite/test-utils/virtual-twig-globs.js',
+  },
   coverageDirectory: '.coverage',
   coverageProvider: 'v8',
   // TODO: Raise these thresholds once coverage exists for every maintained file.

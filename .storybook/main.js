@@ -25,6 +25,8 @@ import {
   normalizeStorybookConfigOverrideModule,
 } from '../src/storybook/main-config.js';
 
+// Twig glob maps are provided by config/vite/plugins/virtual-twig-globs.js.
+
 /**
  * Minimal subset of the resolved Emulsify environment used by this file.
  *
@@ -87,24 +89,6 @@ function existingStaticDirs(staticDirs) {
 }
 
 /**
- * Converts an absolute path inside the project into the root-relative format
- * Vite expects for `import.meta.glob()` patterns.
- *
- * The path separator normalization matters because Storybook may run on
- * Windows as well as POSIX systems.
- *
- * @param {string} projectDir - Absolute path to the consuming project root.
- * @param {string} absolutePath - Absolute path that should become root-relative.
- * @returns {string} Vite-compatible root-relative path.
- */
-function toRootRelativePath(projectDir, absolutePath) {
-  const rel = path.relative(projectDir, absolutePath);
-  const normalized = rel.split(path.sep).join('/');
-
-  return `/${normalized}`.replace(/\/{2,}/g, '/');
-}
-
-/**
  * Reads optional project-level Storybook overrides.
  *
  * Downstream projects can provide this file, but the shared config also needs
@@ -125,96 +109,6 @@ async function loadConfigOverrides() {
 
   const configOverrides = await import(pathToFileURL(overridePath).href);
   return normalizeStorybookConfigOverrideModule(configOverrides);
-}
-
-/**
- * Builds candidate roots whose Twig files should be importable in Storybook.
- *
- * Modern projects usually resolve `srcDir` to `src`, while component templates
- * live under `src/components`. Legacy projects may resolve directly to a
- * top-level `components` directory. Keep both shapes importable.
- *
- * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
- * @returns {string[]} Absolute candidate roots.
- */
-function buildTwigCandidateRoots(env) {
-  if (Array.isArray(env.projectStructure?.twigRoots)) {
-    return env.projectStructure.twigRoots;
-  }
-
-  const namespaceRoots =
-    env.namespaceRoots && typeof env.namespaceRoots === 'object'
-      ? Object.values(env.namespaceRoots)
-      : [];
-  const rawRoots =
-    env.structureOverrides &&
-    Array.isArray(env.structureRoots) &&
-    env.structureRoots.length
-      ? env.structureRoots
-      : [
-          ...(env.srcDir ? [env.srcDir] : []),
-          ...(Array.isArray(env.componentRoots) ? env.componentRoots : []),
-        ];
-  const roots = new Set();
-
-  for (const root of [...rawRoots, ...namespaceRoots]) {
-    roots.add(root);
-    if (path.basename(root) !== 'components') {
-      roots.add(path.resolve(root, 'components'));
-    }
-  }
-
-  if (!roots.size) {
-    roots.add(path.resolve(env.projectDir, 'src'));
-    roots.add(path.resolve(env.projectDir, 'src/components'));
-    roots.add(path.resolve(env.projectDir, 'components'));
-  }
-
-  return Array.from(roots);
-}
-
-/**
- * Builds the `import.meta.glob()` expression injected into the Twig resolver.
- *
- * The component roots can move when a project enables structure overrides, so
- * the import list is generated at runtime instead of hard-coded.
- *
- * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
- * @returns {string} JavaScript source that eagerly imports Twig templates.
- */
-function buildTwigGlobImports(env) {
-  const rootRelativePaths = buildTwigCandidateRoots(env).map((root) =>
-    toRootRelativePath(env.projectDir, root),
-  );
-  const globBases = rootRelativePaths.length
-    ? rootRelativePaths
-    : ['/src', '/src/components', '/components'];
-
-  return `mergeGlobMaps([\n${globBases
-    .map((base) => `  import.meta.glob('${base}/**/*.twig', { eager: true })`)
-    .join(',\n')}\n])`;
-}
-
-/**
- * Builds the `import.meta.glob()` expression used for raw Twig source().
- *
- * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
- * @returns {string} JavaScript source that eagerly imports raw Twig source.
- */
-function buildTwigSourceGlobImports(env) {
-  const rootRelativePaths = buildTwigCandidateRoots(env).map((root) =>
-    toRootRelativePath(env.projectDir, root),
-  );
-  const globBases = rootRelativePaths.length
-    ? rootRelativePaths
-    : ['/src', '/src/components', '/components'];
-
-  return `mergeGlobMaps([\n${globBases
-    .map(
-      (base) =>
-        `  import.meta.glob('${base}/**/*.twig', { query: '?raw', import: 'default', eager: true })`,
-    )
-    .join(',\n')}\n])`;
 }
 
 /**
@@ -486,8 +380,8 @@ const baseConfig = {
    * Merges Storybook's generated Vite config with Emulsify's shared Vite config.
    *
    * Storybook supplies a baseline config, but Emulsify still needs to expose
-   * the resolved environment, expand filesystem access, and inject the Twig
-   * template globs used by the runtime resolver.
+   * the resolved environment, expand filesystem access, and expose the Twig
+   * virtual glob module used by the runtime resolver.
    *
    * @param {import('vite').UserConfig} config - Storybook's generated Vite config.
    * @returns {Promise<import('vite').UserConfig>} Final Vite config used by Storybook.
@@ -535,8 +429,6 @@ const baseConfig = {
         '**/*.twig',
       ]),
     );
-    const twigGlobImports = buildTwigGlobImports(env);
-    const twigSourceGlobImports = buildTwigSourceGlobImports(env);
     const optimizeDepsInclude = mergeReactSingletonOptimizeDeps(
       baseViteConfig?.optimizeDeps?.include,
       config?.optimizeDeps?.include,
@@ -567,29 +459,7 @@ const baseConfig = {
         },
       },
       assetsInclude,
-      plugins: [
-        ...(baseViteConfig?.plugins || []),
-        {
-          name: 'emulsify-inject-twig-globs',
-          enforce: 'pre',
-          transform(code, id) {
-            const cleanId = id.split('?')[0];
-            if (!cleanId.endsWith('/src/storybook/twig/resolver.js')) {
-              return null;
-            }
-
-            // Replace the placeholder tokens in the Twig resolver runtime with
-            // the project-specific import list computed above.
-            const replaced = code
-              .replace(/__EMULSIFY_TWIG_GLOB_IMPORTS__/g, twigGlobImports)
-              .replace(
-                /__EMULSIFY_TWIG_SOURCE_GLOB_IMPORTS__/g,
-                twigSourceGlobImports,
-              );
-            return replaced === code ? null : { code: replaced, map: null };
-          },
-        },
-      ],
+      plugins: [...(baseViteConfig?.plugins || [])],
       esbuild: {
         // Some downstream code is authored as `.js` files containing JSX, so
         // keep Storybook's esbuild settings aligned with the shared Vite config.

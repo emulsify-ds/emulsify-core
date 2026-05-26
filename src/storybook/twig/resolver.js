@@ -3,30 +3,12 @@
  */
 
 import { unique } from '../../extensions/shared/lists.js';
+import {
+  modules as twigModules,
+  sources as twigSources,
+} from 'virtual:emulsify-twig-globs';
 
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
-
-const twigModules =
-  typeof __EMULSIFY_TWIG_GLOB_IMPORTS__ !== 'undefined'
-    ? __EMULSIFY_TWIG_GLOB_IMPORTS__
-    : {};
-
-const twigSources =
-  typeof __EMULSIFY_TWIG_SOURCE_GLOB_IMPORTS__ !== 'undefined'
-    ? __EMULSIFY_TWIG_SOURCE_GLOB_IMPORTS__
-    : {};
-
-/**
- * Merge Vite glob maps into one lookup object.
- *
- * This function is referenced by source generated in `.storybook/main.js`.
- *
- * @param {Record<string, *>[]} maps - Vite glob maps.
- * @returns {Record<string, *>} Merged map.
- */
-export function mergeGlobMaps(maps) {
-  return Object.assign({}, ...maps);
-}
 
 const normalizeGlobPath = (filePath) => filePath.replace(/\\/g, '/');
 
