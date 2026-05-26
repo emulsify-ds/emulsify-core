@@ -3,13 +3,18 @@
  */
 
 import { getRules } from 'axe-core';
-import { useEffect } from 'storybook/preview-api';
+import React from 'react';
+import { defaultDecorateStory, useEffect } from 'storybook/preview-api';
 import Twig from 'twig';
 import {
   mergePreviewParameters,
   normalizePreviewOverrideModule,
 } from '../src/storybook/preview-parameters.js';
-import { renderHtmlStoryResult } from '../src/storybook/render-twig.js';
+import {
+  renderHtmlStoryResult,
+  StoryHtmlBoundary,
+  withLegacyStoryToString,
+} from '../src/storybook/render-twig.js';
 import {
   attachStorybookBehaviors,
   fetchCSSFiles,
@@ -70,6 +75,24 @@ setupTwig(Twig, { extensions: platformTwigExtensions });
 fetchCSSFiles();
 
 /**
+ * Storybook React wraps story functions in React elements before decorators run.
+ * Preserve that React-safe behavior while giving old stringifying decorators a
+ * useful string result for legacy Twig stories.
+ *
+ * @param {Function} storyFn Storybook story function.
+ * @param {Function[]} decorators Storybook decorators.
+ * @returns {Function} Decorated story function.
+ */
+export const applyDecorators = (storyFn, decorators) =>
+  defaultDecorateStory(
+    (context) =>
+      withLegacyStoryToString(React.createElement(storyFn, context), () =>
+        storyFn(context),
+      ),
+    decorators,
+  );
+
+/**
  * Storybook decorators to apply platform-specific behavior after each story render.
  * @type {Array<import('@storybook/react').Decorator>}
  */
@@ -91,9 +114,13 @@ export const decorators = [
       });
     }, [args]);
 
-    return renderHtmlStoryResult(Story(), {
-      platformAdapter,
-    });
+    return React.createElement(
+      StoryHtmlBoundary,
+      {},
+      renderHtmlStoryResult(Story(), {
+        platformAdapter,
+      }),
+    );
   },
 ];
 

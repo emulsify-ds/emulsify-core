@@ -2,7 +2,7 @@
  * @file React Storybook renderer for imported Twig template modules.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import {
   attachStorybookBehaviors,
   normalizeStorybookPlatformAdapter,
@@ -46,6 +46,81 @@ function buildTwigContext(args = {}, options = {}, storyContext = {}) {
     ...(options.context || {}),
     ...(args || {}),
   };
+}
+
+/**
+ * Check whether a string looks like rendered HTML markup.
+ *
+ * @param {*} value - Candidate story result.
+ * @returns {boolean} TRUE when the value appears to be an HTML string.
+ */
+function isLikelyHtmlString(value) {
+  return (
+    typeof value === 'string' &&
+    /^\s*<(?:!doctype|!--|[a-z][\w:-]*)(?:\s|>|\/)/i.test(value)
+  );
+}
+
+/**
+ * Convert a wrapper containing one raw HTML text node into real DOM markup.
+ *
+ * Storybook React may render string-returning legacy Twig stories as escaped
+ * text before decorators can inspect the string. This keeps those stories
+ * working without changing how normal React stories render.
+ *
+ * @param {HTMLElement} wrapper - Story wrapper element.
+ * @returns {boolean} TRUE when raw HTML text was converted.
+ */
+export function normalizeHtmlTextStory(wrapper) {
+  if (!wrapper || wrapper.childNodes.length !== 1) {
+    return false;
+  }
+
+  const [onlyChild] = wrapper.childNodes;
+  if (onlyChild.nodeType !== Node.TEXT_NODE) {
+    return false;
+  }
+
+  const html = onlyChild.textContent || '';
+  if (!isLikelyHtmlString(html)) {
+    return false;
+  }
+
+  wrapper.innerHTML = html;
+  wrapper.setAttribute('data-emulsify-twig-story', '');
+  return true;
+}
+
+/**
+ * Give Storybook's React element wrapper a useful string representation.
+ *
+ * Some legacy stories include decorators like `(story) => `${story()}``.
+ * Storybook React now passes those decorators a React element, which normally
+ * stringifies to `[object Object]`. This preserves the old behavior for Twig
+ * string stories while leaving the element renderable by React.
+ *
+ * @param {*} result - Candidate React story element.
+ * @param {Function} getStoryResult - Function returning the raw story result.
+ * @returns {*} Original or cloned story result.
+ */
+export function withLegacyStoryToString(result, getStoryResult) {
+  if (!React.isValidElement(result) || typeof getStoryResult !== 'function') {
+    return result;
+  }
+
+  const element = { ...result };
+  Object.defineProperty(element, 'toString', {
+    value: () => {
+      try {
+        const storyResult = getStoryResult();
+        return storyResult == null ? '' : String(storyResult);
+      } catch {
+        return Object.prototype.toString.call(result);
+      }
+    },
+  });
+
+  return element;
 }
 
 /**
@@ -104,6 +179,31 @@ export function TwigHtmlStory({ html = '', options = {} }) {
     'data-emulsify-twig-story': '',
     dangerouslySetInnerHTML: { __html: html },
   });
+}
+
+/**
+ * Boundary that repairs legacy string-returning stories rendered as React text.
+ *
+ * @param {object} props - Component props.
+ * @param {*} props.children - Rendered Storybook story result.
+ * @returns {React.ReactElement} React element.
+ */
+export function StoryHtmlBoundary({ children }) {
+  const wrapperRef = useRef(null);
+
+  useLayoutEffect(() => {
+    normalizeHtmlTextStory(wrapperRef.current);
+  }, [children]);
+
+  return React.createElement(
+    'div',
+    {
+      ref: wrapperRef,
+      'data-emulsify-story-boundary': '',
+      style: { display: 'contents' },
+    },
+    children,
+  );
 }
 
 /**

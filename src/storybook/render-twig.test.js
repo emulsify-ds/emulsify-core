@@ -9,6 +9,7 @@ import {
   renderTwig,
   renderTwigHtml,
 } from '@emulsify/core/storybook';
+import { StoryHtmlBoundary, withLegacyStoryToString } from './render-twig.js';
 
 describe('renderTwig', () => {
   let container;
@@ -131,6 +132,53 @@ describe('renderTwig', () => {
 
     expect(container.querySelector('p').textContent).toBe('Legacy string');
     expect(renderHtmlStoryResult(ReactResult)).toBe(ReactResult);
+  });
+
+  it('converts legacy HTML text rendered through a React story element', () => {
+    const LegacyStringStory = () =>
+      '<article><h2>Legacy React text</h2></article>';
+
+    act(() => {
+      root.render(
+        React.createElement(
+          StoryHtmlBoundary,
+          {},
+          React.createElement(LegacyStringStory),
+        ),
+      );
+    });
+
+    expect(container.querySelector('h2').textContent).toBe('Legacy React text');
+    expect(container.textContent).toBe('Legacy React text');
+  });
+
+  it('preserves HTML for legacy decorators that stringify story results', () => {
+    const storyElement = withLegacyStoryToString(
+      React.createElement('div', null, 'React wrapper'),
+      () => '<p>Stringified Twig</p>',
+    );
+
+    act(() => {
+      root.render(renderHtmlStoryResult(`${storyElement}`));
+    });
+
+    expect(container.querySelector('p').textContent).toBe('Stringified Twig');
+  });
+
+  it('keeps legacy string-compatible story elements renderable by React', () => {
+    const LegacyStringStory = () => '<strong>Renderable clone</strong>';
+    const storyElement = withLegacyStoryToString(
+      React.createElement(LegacyStringStory),
+      () => '<strong>Renderable clone</strong>',
+    );
+
+    act(() => {
+      root.render(React.createElement(StoryHtmlBoundary, {}, storyElement));
+    });
+
+    expect(container.querySelector('strong').textContent).toBe(
+      'Renderable clone',
+    );
   });
 
   it('does not interfere with normal React story rendering', () => {

@@ -37,7 +37,7 @@ export const Accordion = (args) =>
   });
 ```
 
-Those stories still render in Emulsify Core. The shared Storybook preview wraps plain string results as HTML so projects can upgrade without rewriting every component immediately. React stories and stories that already return React elements pass through unchanged.
+Those stories still render in Emulsify Core. The shared Storybook preview wraps plain string results as HTML so projects can upgrade without rewriting every component immediately. It also tolerates older decorators that stringify `story()` for Twig stories. React stories and stories that already return React elements pass through unchanged.
 
 `renderTwig()` remains the preferred pattern for new or actively migrated Twig stories because it makes the Twig/React Storybook boundary explicit:
 
