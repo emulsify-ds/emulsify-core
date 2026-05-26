@@ -45,58 +45,6 @@ export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
  */
 
 /* -------------------------------------------------------------------------- */
-/* Patterns                                                                   */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Create all glob patterns for modern (non-legacy) flow.
- * @param {BuildContext} ctx
- * @returns {{
- *   BaseScssPattern: string,
- *   ComponentScssPattern: string,
- *   ComponentLibraryScssPattern: string,
- *   BaseJsPattern: string,
- *   ComponentJsPattern: string,
- *   SpritePattern: string
- * }}
- */
-export function makePatterns(ctx) {
-  const { projectDir, srcDir, srcExists } = ctx;
-
-  // SCSS patterns separate global styles, component styles, and Storybook styles.
-  const BaseScssPattern = srcExists
-    ? resolve(srcDir, '!(components|util)/**/!(_*|cl-*|sb-*).scss')
-    : '';
-  const ComponentScssPattern = srcExists
-    ? resolve(srcDir, 'components/**/!(_*|cl-*|sb-*).scss')
-    : resolve(srcDir, '**/!(_*|cl-*|sb-*).scss');
-  const ComponentLibraryScssPattern = resolve(srcDir, '**/*{cl-*,sb-*}.scss');
-
-  // JS patterns exclude stories, component metadata, minified files, and tests.
-  const BaseJsPattern = srcExists
-    ? resolve(
-        srcDir,
-        '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
-      )
-    : '';
-  const ComponentJsPattern = srcExists
-    ? resolve(srcDir, 'components/**/!(*.stories|*.component|*.min|*.test).js')
-    : resolve(srcDir, '**/!(*.stories|*.component|*.min|*.test).js');
-
-  // Preserve the icon pattern for compatibility with older consumers.
-  const SpritePattern = resolve(projectDir, 'assets/icons/**/*.svg');
-
-  return {
-    BaseScssPattern,
-    ComponentScssPattern,
-    ComponentLibraryScssPattern,
-    BaseJsPattern,
-    ComponentJsPattern,
-    SpritePattern,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -158,11 +106,9 @@ function globalIgnorePatterns(rootDir) {
  * only JS/CSS keys are produced under "js/**" and "css/**".
  *
  * @param {BuildContext} ctx
- * @param {ReturnType<makePatterns>} patterns
  * @returns {Record<string, string>}
  */
-export function buildInputs(ctx, patterns) {
-  void patterns;
+export function buildInputs(ctx) {
   const structure = ctx.projectStructure || resolveProjectStructure(ctx);
 
   /** @type {Record<string, string>} */
@@ -303,6 +249,5 @@ export function buildInputsFromProject(
     structureOverrides: false,
     structureRoots: [],
   };
-  const patterns = makePatterns(ctx);
-  return buildInputs(ctx, patterns);
+  return buildInputs(ctx);
 }

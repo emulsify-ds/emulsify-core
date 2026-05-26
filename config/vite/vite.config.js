@@ -6,11 +6,10 @@
  * This configuration wires Emulsify's Vite build in a few clear steps:
  *
  *  1. Resolve the build environment (paths, platform flags) via {@link resolveEnvironment}.
- *  2. Create the glob patterns used to discover inputs with {@link makePatterns}.
- *  3. Build the Rollup/Vite entries map with {@link buildInputs}.
- *  4. Load optional project extensions (extra plugins and/or a config patcher)
+ *  2. Build the Rollup/Vite entries map with {@link buildInputs}.
+ *  3. Load optional project extensions (extra plugins and/or a config patcher)
  *     from `.config/emulsify-core/vite/plugins.*` via {@link loadProjectExtensions}.
- *  5. Assemble a base Vite config and optionally let the project extend/override
+ *  4. Assemble a base Vite config and optionally let the project extend/override
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *
  * Notes:
@@ -23,7 +22,7 @@ import path from 'node:path';
 
 import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
-import { buildInputs, makePatterns } from './entries.js';
+import { buildInputs } from './entries.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
@@ -44,9 +43,9 @@ export default defineConfig(async () => {
   /** @type {EmulsifyEnv} */
   const env = resolveEnvironment();
 
-  // Build input discovery patterns separately for readability and testing.
-  /** @type {ReturnType<typeof makePatterns>} */
-  const patterns = makePatterns({
+  // Build the Rollup/Vite entry map: keys encode output paths, values source files.
+  /** @type {Record<string, string>} */
+  const entries = buildInputs({
     projectDir: env.projectDir,
     srcDir: env.srcDir,
     srcExists: env.srcExists,
@@ -57,23 +56,6 @@ export default defineConfig(async () => {
     structureImplementations: env.structureImplementations,
     projectStructure: env.projectStructure,
   });
-
-  // Build the Rollup/Vite entry map: keys encode output paths, values source files.
-  /** @type {Record<string, string>} */
-  const entries = buildInputs(
-    {
-      projectDir: env.projectDir,
-      srcDir: env.srcDir,
-      srcExists: env.srcExists,
-      isDrupal: env.platform === 'drupal',
-      SDC: env.SDC,
-      structureOverrides: env.structureOverrides,
-      structureRoots: env.structureRoots,
-      structureImplementations: env.structureImplementations,
-      projectStructure: env.projectStructure,
-    },
-    patterns,
-  );
 
   // Load optional project-provided plugins and config patches.
   /**

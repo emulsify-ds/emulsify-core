@@ -5,7 +5,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { tmpdir } from 'os';
-import { buildInputs, makePatterns } from './entries.js';
+import { buildInputs } from './entries.js';
 import { resolveProjectConfig } from './project-config.js';
 import { toPosixPath } from './utils/paths.js';
 
@@ -26,7 +26,7 @@ const writeSourceFile = (projectDir, relPath, contents = '') => {
 
 const buildRelativeInputs = (projectDir) => {
   const env = resolveProjectConfig(projectDir, {});
-  const inputs = buildInputs(env, makePatterns(env));
+  const inputs = buildInputs(env);
 
   return Object.fromEntries(
     Object.entries(inputs)
