@@ -30,8 +30,8 @@ describe('source copy plugins', () => {
 
     copyTwigPlugin.configResolved({ build: { outDir } });
     copyAssetsPlugin.configResolved({ build: { outDir } });
-    copyTwigPlugin.closeBundle();
-    copyAssetsPlugin.closeBundle();
+    copyTwigPlugin.writeBundle();
+    copyAssetsPlugin.writeBundle();
   };
 
   it('copies static assets from root component directories to dist/components', () => {

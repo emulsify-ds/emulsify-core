@@ -51,8 +51,8 @@ export function copyAllSrcAssetsPlugin({
       outDir = cfg.build?.outDir || 'dist';
     },
 
-    /** Copy component/global assets. */
-    closeBundle() {
+    /** Copy before the mirror plugin moves dist/components to the project root. */
+    writeBundle() {
       for (const file of sourceFileIndex.componentFiles()) {
         if (!isStaticSourceAsset(file.absPath)) continue;
         copyToOutDir(

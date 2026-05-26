@@ -91,14 +91,14 @@ describe('Vite plugin public barrel', () => {
     genericMirror.configResolved({
       build: { outDir: join(projectDir, 'dist') },
     });
-    expect(genericMirror.closeBundle()).toBeUndefined();
+    expect(genericMirror.writeBundle()).toBeUndefined();
     expect(existsSync(distComponentFile)).toBe(true);
     expect(existsSync(rootComponentFile)).toBe(false);
 
     drupalMirror.configResolved({
       build: { outDir: join(projectDir, 'dist') },
     });
-    expect(drupalMirror.closeBundle()).toBeUndefined();
+    expect(drupalMirror.writeBundle()).toBeUndefined();
     expect(existsSync(distComponentFile)).toBe(false);
     expect(existsSync(rootComponentFile)).toBe(true);
 
@@ -108,7 +108,7 @@ describe('Vite plugin public barrel', () => {
     legacyDrupalMirror.configResolved({
       build: { outDir: join(projectDir, 'dist') },
     });
-    expect(legacyDrupalMirror.closeBundle()).toBeUndefined();
+    expect(legacyDrupalMirror.writeBundle()).toBeUndefined();
     expect(existsSync(distComponentFile)).toBe(true);
     expect(existsSync(rootComponentFile)).toBe(false);
   });

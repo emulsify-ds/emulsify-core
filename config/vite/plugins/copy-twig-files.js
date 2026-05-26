@@ -54,8 +54,8 @@ export function copyTwigFilesPlugin({
       outDir = cfg.build?.outDir || 'dist';
     },
 
-    /** Perform the copying after the bundle has been written. */
-    closeBundle() {
+    /** Copy before the mirror plugin moves dist/components to the project root. */
+    writeBundle() {
       for (const file of sourceFileIndex.componentFiles()) {
         if (file.absPath.endsWith('.twig')) {
           if (isPartial(file.relPath)) continue;
