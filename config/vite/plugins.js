@@ -346,6 +346,10 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
 const compileTwigTemplate = (templateId, filePath, options) => {
   registerTwigExtensions(Twig);
 
+  // Vite/Storybook can transform the same Twig module more than once during
+  // startup or HMR. Disable Twig.js' global duplicate-id guard while parsing.
+  Twig.cache(false);
+
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const source = readFileSync(filePath, 'utf8');
   const compileOptions = {

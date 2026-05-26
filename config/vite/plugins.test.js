@@ -13,12 +13,14 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import Twig from 'twig';
 import {
   makePlugins,
   makeTwigNamespaces,
   makeTwigPluginOptions,
 } from './plugins.js';
 import { resolveProjectConfig } from './project-config.js';
+import { registerTwigExtensions } from '../../src/extensions/twig/index.js';
 
 jest.mock('vite-plugin-sass-glob-import', () => ({
   __esModule: true,
@@ -55,6 +57,37 @@ const makeEnv = (projectDir, overrides = {}) => {
 
 const pluginNames = (plugins) =>
   plugins.flat(Number.POSITIVE_INFINITY).map((plugin) => plugin?.name);
+
+const getTwigModulePlugin = (env) =>
+  makePlugins(env).find((plugin) => plugin?.name === 'emulsify-twig-module');
+
+const transformTwigModule = (plugin, filePath) =>
+  plugin.transform.call({ addWatchFile: jest.fn() }, '', filePath);
+
+const twigInclude = (templatePath) =>
+  `{% include ${JSON.stringify(templatePath)} %}`;
+
+const twigEmbed = (templatePath) =>
+  `{% embed ${JSON.stringify(templatePath)} %}`;
+
+const renderGeneratedTwigModule = (code, context = {}) => {
+  const executable = code
+    .replace(/^\s*import Twig from 'twig';\s*/m, '')
+    .replace(
+      /^\s*import \{ registerTwigExtensions \} from '@emulsify\/core\/extensions\/twig';\s*/m,
+      '',
+    )
+    .replace(
+      /export default \(context = \{\}\) => \{/,
+      'return (context = {}) => {',
+    );
+  const render = new Function('Twig', 'registerTwigExtensions', executable)(
+    Twig,
+    registerTwigExtensions,
+  );
+
+  return render(context);
+};
 
 const writeProjectConfig = (projectDir, config) => {
   writeFileSync(
@@ -171,6 +204,98 @@ describe('Vite Twig plugins', () => {
     expect(
       Object.keys(makeTwigPluginOptions(makeEnv(projectDir)).functions),
     ).toEqual(['add_attributes', 'bem']);
+  });
+
+  it('can transform the same Twig module more than once', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
+    writeFileSync(cardFile, '<article>{{ title }}</article>');
+
+    const twigPlugin = getTwigModulePlugin(makeEnv(projectDir));
+    const first = transformTwigModule(twigPlugin, cardFile);
+    const second = transformTwigModule(twigPlugin, cardFile);
+
+    expect(first.code).not.toContain('An error occurred whilst compiling');
+    expect(second.code).not.toContain('An error occurred whilst compiling');
+    expect(second.code).not.toContain(
+      'There is already a template with the ID',
+    );
+    expect(renderGeneratedTwigModule(second.code, { title: 'Card' })).toContain(
+      '<article>Card</article>',
+    );
+  });
+
+  it('can transform a child Twig module before a parent includes it', () => {
+    projectDir = makeTempProject();
+    const headingFile = join(projectDir, 'src/components/heading/heading.twig');
+    const accordionFile = join(
+      projectDir,
+      'src/components/accordion/accordion.twig',
+    );
+    mkdirSync(join(projectDir, 'src/components/heading'), {
+      recursive: true,
+    });
+    mkdirSync(join(projectDir, 'src/components/accordion'), {
+      recursive: true,
+    });
+    writeFileSync(headingFile, '<h2>{{ title }}</h2>');
+    writeFileSync(accordionFile, twigInclude(headingFile));
+
+    const twigPlugin = getTwigModulePlugin(makeEnv(projectDir));
+    const child = transformTwigModule(twigPlugin, headingFile);
+    const parent = transformTwigModule(twigPlugin, accordionFile);
+
+    expect(child.code).not.toContain('An error occurred whilst compiling');
+    expect(parent.code).not.toContain('An error occurred whilst compiling');
+    expect(parent.code).not.toContain(
+      'There is already a template with the ID',
+    );
+    expect(
+      renderGeneratedTwigModule(parent.code, { title: 'Included' }),
+    ).toContain('<h2>Included</h2>');
+  });
+
+  it('renders nested include and embed dependencies through namespaces', () => {
+    projectDir = makeTempProject();
+    const accordionDir = join(projectDir, 'src/components/accordion');
+    const headingDir = join(projectDir, 'src/components/heading');
+    const layoutDir = join(projectDir, 'src/layout/container');
+    const accordionFile = join(accordionDir, 'accordion.twig');
+    mkdirSync(accordionDir, { recursive: true });
+    mkdirSync(headingDir, { recursive: true });
+    mkdirSync(layoutDir, { recursive: true });
+    writeFileSync(join(headingDir, 'heading.twig'), '<h2>{{ title }}</h2>');
+    writeFileSync(
+      join(layoutDir, 'container.twig'),
+      '<section class="container">{% block content %}{% endblock %}</section>',
+    );
+    writeFileSync(join(accordionDir, '_body.twig'), '<p>{{ body }}</p>');
+    writeFileSync(
+      accordionFile,
+      [
+        twigInclude('@components/heading/heading.twig'),
+        twigEmbed('@layout/container/container.twig'),
+        '  {% block content %}',
+        `    ${twigInclude('./_body.twig')}`,
+        '  {% endblock %}',
+        '{% endembed %}',
+      ].join('\n'),
+    );
+
+    const twigPlugin = getTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, accordionFile);
+    const output = renderGeneratedTwigModule(transformed.code, {
+      title: 'Accordion',
+      body: 'Panel body',
+    });
+
+    expect(transformed.code).not.toContain(
+      'An error occurred whilst compiling',
+    );
+    expect(output).toContain('<h2>Accordion</h2>');
+    expect(output).toContain('<section class="container">');
+    expect(output).toContain('<p>Panel body</p>');
   });
 
   it('transforms YAML imports into JavaScript modules with default and named exports', () => {

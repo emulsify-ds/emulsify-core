@@ -112,6 +112,7 @@ Twig support in Storybook is optional and platform-agnostic. When Twig stories a
 - Native Emulsify Twig helpers such as `bem()` and `add_attributes()`.
 - Native Emulsify Twig logic tags such as `switch`, `case`, `default`, and `endswitch`.
 - Storybook runtime support for `include()` and `source()`.
+- Compiled template dependency support for `{% include %}`, `{% embed %}`, `{% extends %}`, `{% import %}`, and `{% from %}`.
 - Optional platform Twig extensions supplied by the active adapter.
 
 Drupal-specific Twig filters are not part of the generic Twig runtime. They are registered only when the active platform adapter enables them.
@@ -120,7 +121,7 @@ Drupal-specific Twig filters are not part of the generic Twig runtime. They are 
 
 Storybook's Twig resolver uses Vite `import.meta.glob()` calls generated from the normalized project structure model. It eagerly imports both compiled Twig template modules and raw Twig source strings:
 
-- Template modules support `include()`.
+- Template modules support `{% include %}`, `{% embed %}`, `{% extends %}`, `{% import %}`, and `{% from %}` dependencies.
 - Raw source imports support `source()`.
 
 The eager strategy is intentionally simple and stable for the current Storybook integration. It makes all configured Twig namespaces available at render time without asynchronous resolver plumbing, so Twig stories can render predictably beside React stories. For small and medium component libraries, this is acceptable and keeps the release behavior easy to reason about.
