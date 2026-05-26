@@ -133,6 +133,10 @@ Emulsify Core's Storybook Twig runtime supports:
 
 Drupal-specific Twig filters are only loaded when the Drupal adapter enables them.
 
+## Vituum Twig Integration
+
+Emulsify treats `@vituum/vite-plugin-twig` as a pinned integration point. The internal `vituum-patch.js` adapter removes Vituum build hooks that conflict with Emulsify's output model and fails fast if a future Vituum release changes the expected plugin shape, so projects should pin to a known-good Vituum version or update the adapter instead of accepting a silent rendering break.
+
 ## Drupal Behavior
 
 Drupal-specific Storybook behavior comes from the Drupal platform adapter. Generic and unknown platforms do not create or require a Drupal global by default.
