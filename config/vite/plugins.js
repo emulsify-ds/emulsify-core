@@ -33,9 +33,9 @@ import {
 } from 'fs';
 import { globSync } from 'glob';
 import sassGlobImports from 'vite-plugin-sass-glob-import';
-import yml from '@modyfi/vite-plugin-yaml';
 import twig from '@vituum/vite-plugin-twig';
 import Twig from 'twig';
+import { load as loadYaml } from 'js-yaml';
 import {
   getTwigFunctionMap,
   registerTwigExtensions,
@@ -124,6 +124,18 @@ const pluckIncludes = (tokens = []) => [
  * @returns {*[]} Unique truthy values.
  */
 const unique = (items) => [...new Set(items.filter(Boolean))];
+
+/**
+ * Determine whether a Vite request should compile as a YAML module.
+ *
+ * @param {string} id - Vite module id, including an optional query string.
+ * @returns {boolean} TRUE when the request is a YAML data import.
+ */
+const isYamlModuleRequest = (id) => {
+  const [filePath, query = ''] = id.split('?');
+  if (!/\.ya?ml$/i.test(filePath)) return false;
+  return !/(^|&)(raw|url)\b/.test(query);
+};
 
 /**
  * Build likely filesystem candidates for a Twig template reference.
@@ -555,6 +567,40 @@ function emulsifyTwigModulePlugin(options) {
       }
 
       return Array.from(modules);
+    },
+  };
+}
+
+/**
+ * Transform YAML imports into JavaScript modules without depending on a
+ * third-party Vite YAML plugin.
+ *
+ * @returns {import('vite').PluginOption}
+ */
+function yamlModulePlugin() {
+  return {
+    name: 'emulsify-yaml',
+    enforce: 'pre',
+    transform(source, id) {
+      if (!isYamlModuleRequest(id)) {
+        return null;
+      }
+
+      try {
+        const data = loadYaml(source) ?? null;
+        return {
+          code: `export default ${JSON.stringify(data)};\n`,
+          map: null,
+        };
+      } catch (error) {
+        this.error(
+          `Unable to parse YAML module ${stripRequestQuery(id)}: ${
+            error?.message || error
+          }`,
+        );
+      }
+
+      return null;
     },
   };
 }
@@ -1143,7 +1189,7 @@ export function makePlugins(env) {
     sassGlobImports(),
 
     // YAML support lets component metadata import into Vite modules.
-    yml(),
+    yamlModulePlugin(),
 
     // Keep CSS asset URLs relative to the emitted CSS location.
     cssAssetUrlRelativizer({ assetsRoot: 'assets' }),

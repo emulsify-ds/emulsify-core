@@ -117,6 +117,72 @@ describe('audit', () => {
     );
   });
 
+  it('reports missing recommended package overrides for Core consumers', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'package.json',
+      JSON.stringify({
+        name: 'consumer-theme',
+        dependencies: {
+          '@emulsify/core': '^4.0.0',
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+    const finding = result.findings.find(
+      (item) => item.id === 'recommended-package-overrides-missing',
+    );
+
+    expect(finding.details).toEqual([
+      'Add overrides.glob: ^13.0.6.',
+      'Add overrides.locutus: ^3.0.36.',
+      'Add overrides.minimatch@3.0.x: ^3.1.5.',
+    ]);
+  });
+
+  it('accepts recommended package overrides for Core consumers', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'package.json',
+      JSON.stringify({
+        name: 'consumer-theme',
+        dependencies: {
+          '@emulsify/core': '^4.0.0',
+        },
+        overrides: {
+          glob: '^13.0.6',
+          locutus: '^3.0.36',
+          'minimatch@3.0.x': '^3.1.5',
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+
+    expect(result.findings.map((finding) => finding.id)).not.toContain(
+      'recommended-package-overrides-missing',
+    );
+  });
+
   it('only treats first include/source argument strings as template references', () => {
     const quote = String.fromCharCode(39);
 

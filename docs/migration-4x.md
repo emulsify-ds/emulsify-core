@@ -98,6 +98,30 @@ to `renderTwig()`.
 
 Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
 
+## Install Warning Controls
+
+npm applies `overrides` only from the root package being installed. Overrides
+inside `@emulsify/core` help this repository, but they do not automatically
+apply when Core is installed as a dependency in a generated Drupal theme.
+
+Generated or consuming themes should include these root-level overrides to pick
+up compatible transitive dependency patches used by Core's tooling:
+
+```json
+{
+  "overrides": {
+    "glob": "^13.0.6",
+    "locutus": "^3.0.36",
+    "minimatch@3.0.x": "^3.1.5"
+  }
+}
+```
+
+These overrides are intentionally narrow. They do not replace the older Twig
+integration packages; they only pin compatible transitive packages that reduce
+known install warnings and audit noise while the Twig integration remains on the
+current feature set.
+
 ## Twig Runtime
 
 Emulsify Core's Storybook Twig runtime supports:

@@ -48,6 +48,23 @@ const PUBLIC_CORE_IMPORTS = new Set([
   '@emulsify/core/vite/plugins',
 ]);
 const DEFAULT_TWIG_THRESHOLD = 250;
+const RECOMMENDED_PACKAGE_OVERRIDES = [
+  {
+    label: 'glob',
+    value: '^13.0.6',
+    paths: [['glob']],
+  },
+  {
+    label: 'locutus',
+    value: '^3.0.36',
+    paths: [['locutus']],
+  },
+  {
+    label: 'minimatch@3.0.x',
+    value: '^3.1.5',
+    paths: [['minimatch@3.0.x']],
+  },
+];
 
 /**
  * Normalize filesystem paths to POSIX separators.
@@ -109,6 +126,25 @@ function safeReadFile(filePath) {
     return readFileSync(filePath, 'utf8');
   } catch {
     return '';
+  }
+}
+
+/**
+ * Read a JSON file, returning parse errors instead of throwing.
+ *
+ * @param {string} filePath - Absolute file path.
+ * @returns {{data?: object, error?: Error}} Parsed result.
+ */
+function safeReadJson(filePath) {
+  const source = safeReadFile(filePath);
+  if (!source) {
+    return {};
+  }
+
+  try {
+    return { data: JSON.parse(source) };
+  } catch (error) {
+    return { error };
   }
 }
 
@@ -230,6 +266,58 @@ function isSameOrInside(filePath, root) {
 }
 
 /**
+ * Return a nested object value.
+ *
+ * @param {object} obj - Object to inspect.
+ * @param {string[]} pathParts - Nested object path.
+ * @returns {*} Nested value.
+ */
+function valueAtPath(obj, pathParts) {
+  return pathParts.reduce(
+    (current, key) =>
+      current && typeof current === 'object' ? current[key] : undefined,
+    obj,
+  );
+}
+
+/**
+ * Determine whether a package manifest depends on Emulsify Core.
+ *
+ * @param {object} packageJson - Parsed package.json.
+ * @returns {boolean} TRUE when package.json is Core or consumes Core.
+ */
+function packageUsesEmulsifyCore(packageJson = {}) {
+  if (packageJson.name === '@emulsify/core') {
+    return true;
+  }
+
+  return [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ].some((section) =>
+    Object.prototype.hasOwnProperty.call(
+      packageJson[section] || {},
+      '@emulsify/core',
+    ),
+  );
+}
+
+/**
+ * Determine whether a recommended override is already present.
+ *
+ * @param {object} overrides - package.json overrides object.
+ * @param {{paths: string[][]}} recommendation - Override recommendation.
+ * @returns {boolean} TRUE when any equivalent override path exists.
+ */
+function hasRecommendedOverride(overrides = {}, recommendation) {
+  return recommendation.paths.some(
+    (pathParts) => valueAtPath(overrides, pathParts) !== undefined,
+  );
+}
+
+/**
  * Normalize the project config, retaining any resolution failure.
  *
  * @param {string} projectDir - Absolute project root.
@@ -307,6 +395,65 @@ function auditProjectConfig(context) {
   }
 
   return findings;
+}
+
+/**
+ * Audit package-level dependency override policy for installed projects.
+ *
+ * npm only applies `overrides` from the root package being installed. When
+ * Emulsify Core is installed into a generated theme, Core's own overrides do
+ * not protect that theme's transitive dependency graph.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditPackageOverrides(context) {
+  const { projectDir } = context;
+  const packagePath = resolve(projectDir, 'package.json');
+
+  if (!safeExists(packagePath)) {
+    return [];
+  }
+
+  const { data: packageJson, error } = safeReadJson(packagePath);
+  if (error) {
+    return [
+      makeFinding({
+        id: 'package-json-unreadable',
+        severity: 'warn',
+        filePath: packagePath,
+        message: `Unable to parse package.json: ${error.message || error}`,
+      }),
+    ];
+  }
+
+  if (!packageUsesEmulsifyCore(packageJson)) {
+    return [];
+  }
+
+  const overrides = packageJson.overrides || {};
+  const missing = RECOMMENDED_PACKAGE_OVERRIDES.filter(
+    (recommendation) => !hasRecommendedOverride(overrides, recommendation),
+  );
+
+  if (!missing.length) {
+    return [];
+  }
+
+  return [
+    makeFinding({
+      id: 'recommended-package-overrides-missing',
+      severity: 'warn',
+      filePath: packagePath,
+      message:
+        'package.json is missing recommended root npm overrides for Emulsify Core transitive install warnings.',
+      details: missing.map(
+        (recommendation) =>
+          `Add overrides.${recommendation.label}: ${recommendation.value}.`,
+      ),
+      docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#install-warning-controls',
+    }),
+  ];
 }
 
 /**
@@ -1162,6 +1309,7 @@ export function auditProject(options = {}) {
   };
   const findings = [
     ...auditProjectConfig(context),
+    ...auditPackageOverrides(context),
     ...auditStoryDiscovery(context),
     ...auditLegacyTwigStories(context),
     ...auditTwigReferences(context),

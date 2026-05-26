@@ -24,10 +24,6 @@ jest.mock('vite-plugin-sass-glob-import', () => ({
   __esModule: true,
   default: jest.fn(() => ({ name: 'vite-plugin-sass-glob-import' })),
 }));
-jest.mock('@modyfi/vite-plugin-yaml', () => ({
-  __esModule: true,
-  default: jest.fn(() => ({ name: '@modyfi/vite-plugin-yaml' })),
-}));
 jest.mock('@vituum/vite-plugin-twig', () => ({
   __esModule: true,
   default: jest.fn(() => [
@@ -175,6 +171,30 @@ describe('Vite Twig plugins', () => {
     expect(
       Object.keys(makeTwigPluginOptions(makeEnv(projectDir)).functions),
     ).toEqual(['add_attributes', 'bem']);
+  });
+
+  it('transforms YAML imports into JavaScript modules', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    const yamlPlugin = makePlugins(makeEnv(projectDir)).find(
+      (plugin) => plugin?.name === 'emulsify-yaml',
+    );
+    const result = yamlPlugin.transform(
+      ['name: Card', 'items:', '  - one'].join('\n'),
+      join(projectDir, 'src/components/card/card.component.yml'),
+    );
+
+    expect(result).toEqual({
+      code: 'export default {"name":"Card","items":["one"]};\n',
+      map: null,
+    });
+    expect(
+      yamlPlugin.transform(
+        'name: Raw',
+        `${join(projectDir, 'src/components/card/card.component.yml')}?raw`,
+      ),
+    ).toBeNull();
   });
 
   it('keeps copy plugins for normal projects and structure overrides', () => {
