@@ -1,6 +1,9 @@
 <article {{ add_attributes({ class: bem('card', ['storybook']) }) }}>
   <h2>{{ heading }}</h2>
   <p>{{ body }}</p>
+  {% if renderedBy %}
+    <span data-rendered-by="{{ renderedBy }}">{{ renderedBy }}</span>
+  {% endif %}
   {% switch variant|default('standard') %}
     {% case 'featured' or 'highlight' %}
       <span data-variant="featured">Featured</span>

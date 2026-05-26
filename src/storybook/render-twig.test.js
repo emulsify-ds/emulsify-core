@@ -46,6 +46,24 @@ describe('renderTwig', () => {
     expect(container.querySelector('h2').textContent).toBe('Example');
   });
 
+  it('supports default-level Storybook render functions with context mapping', () => {
+    const template = ({ heading, renderedBy }) =>
+      `<article data-rendered-by="${renderedBy}"><h2>${heading}</h2></article>`;
+    const storyRender = renderTwig(template, {
+      context: (args, storyContext) => ({
+        ...args,
+        renderedBy: storyContext.name,
+      }),
+    });
+
+    act(() => {
+      root.render(storyRender({ heading: 'Default render' }, { name: 'CSF3' }));
+    });
+
+    expect(container.querySelector('h2').textContent).toBe('Default render');
+    expect(container.querySelector('article').dataset.renderedBy).toBe('CSF3');
+  });
+
   it('re-renders when args change', () => {
     const template = ({ heading }) => `<h2>${heading}</h2>`;
     const storyRender = renderTwig(template);

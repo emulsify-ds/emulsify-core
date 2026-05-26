@@ -17,6 +17,10 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import viteConfig from '../config/vite/vite.config.js';
 import { resolveEnvironment } from '../config/vite/environment.js';
 import {
+  mergeReactSingletonOptimizeDeps,
+  mergeReactSingletonResolve,
+} from '../config/vite/utils/react-singleton.js';
+import {
   applyStorybookConfigOverrides,
   normalizeStorybookConfigOverrideModule,
 } from '../src/storybook/main-config.js';
@@ -533,17 +537,21 @@ const baseConfig = {
     );
     const twigGlobImports = buildTwigGlobImports(env);
     const twigSourceGlobImports = buildTwigSourceGlobImports(env);
-    const optimizeDepsInclude = [
-      'react',
-      'twig',
-      '@emulsify/core/extensions/twig',
-      ...(env.platformAdapter?.storybook?.registerDrupalTwigFilters
-        ? ['twig-drupal-filters']
-        : []),
-    ];
+    const optimizeDepsInclude = mergeReactSingletonOptimizeDeps(
+      baseViteConfig?.optimizeDeps?.include,
+      config?.optimizeDeps?.include,
+      [
+        'twig',
+        '@emulsify/core/extensions/twig',
+        ...(env.platformAdapter?.storybook?.registerDrupalTwigFilters
+          ? ['twig-drupal-filters']
+          : []),
+      ],
+    );
 
-    return mergeConfig(config, {
+    const mergedConfig = mergeConfig(config, {
       ...baseViteConfig,
+      resolve: mergeReactSingletonResolve(baseViteConfig, config),
       define: {
         // Preserve shared and Storybook-provided constants, then publish the
         // resolved Emulsify environment to client-side code.
@@ -591,9 +599,15 @@ const baseConfig = {
         exclude: [],
       },
       optimizeDeps: {
+        ...(baseViteConfig?.optimizeDeps || {}),
+        ...(config?.optimizeDeps || {}),
         include: optimizeDepsInclude,
         esbuildOptions: {
+          ...(baseViteConfig?.optimizeDeps?.esbuildOptions || {}),
+          ...(config?.optimizeDeps?.esbuildOptions || {}),
           loader: {
+            ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.loader || {}),
+            ...(config?.optimizeDeps?.esbuildOptions?.loader || {}),
             // Pre-bundle `.js` dependencies with the JSX loader for packages
             // that ship JSX without a `.jsx` extension.
             '.js': 'jsx',
@@ -601,6 +615,24 @@ const baseConfig = {
         },
       },
     });
+
+    return {
+      ...mergedConfig,
+      resolve: mergeReactSingletonResolve(mergedConfig),
+      optimizeDeps: {
+        ...(mergedConfig.optimizeDeps || {}),
+        include: mergeReactSingletonOptimizeDeps(
+          mergedConfig.optimizeDeps?.include,
+        ),
+        esbuildOptions: {
+          ...(mergedConfig.optimizeDeps?.esbuildOptions || {}),
+          loader: {
+            ...(mergedConfig.optimizeDeps?.esbuildOptions?.loader || {}),
+            '.js': 'jsx',
+          },
+        },
+      },
+    };
   },
 };
 

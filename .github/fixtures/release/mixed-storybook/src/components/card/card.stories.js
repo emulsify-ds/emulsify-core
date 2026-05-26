@@ -4,10 +4,15 @@ import template from './card.twig';
 
 export default {
   title: 'Fixtures/Mixed Storybook',
+  render: renderTwig(template, {
+    context: (args) => ({
+      ...args,
+      renderedBy: 'default-render',
+    }),
+  }),
 };
 
 export const TwigCard = {
-  render: renderTwig(template),
   args: {
     heading: 'Twig fixture',
     body: 'Rendered through the public Storybook helper.',

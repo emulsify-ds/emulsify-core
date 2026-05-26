@@ -25,6 +25,7 @@ import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
 import { buildInputs, makePatterns } from './entries.js';
 import { loadProjectExtensions } from './project-extensions.js';
+import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
 export default defineConfig(async () => {
   /**
@@ -91,6 +92,9 @@ export default defineConfig(async () => {
 
     // Core plugin set + project-provided plugins (if any).
     plugins: [...makePlugins(env), ...projectPlugins],
+
+    // Keep React-based story helpers on the consumer project's React singleton.
+    resolve: mergeReactSingletonResolve(),
 
     // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
     css: {
