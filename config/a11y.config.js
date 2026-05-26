@@ -5,7 +5,7 @@
  * consuming projects through their local Emulsify config.
  */
 
-module.exports = {
+export default {
   storybookBuildDir: '../../../../.out',
   pa11y: {
     includeNotices: false,

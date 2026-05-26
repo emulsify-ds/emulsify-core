@@ -3,38 +3,25 @@
  */
 
 import 'regenerator-runtime/runtime';
+import path from 'path';
+import pa11y from 'pa11y';
 
-const mockExit = jest
-  .spyOn(global.process, 'exit')
-  .mockImplementation(() => {});
-jest.mock('pa11y', () => jest.fn());
-jest.mock(
-  '../../../config/emulsify-core/a11y.config.js',
-  () => ({
-    components: [],
-    ignore: {
-      codes: ['landmark-one-main', 'page-has-heading-one'],
-      descriptions: ['Ensures all page content is contained by landmarks'],
-    },
-  }),
-  { virtual: true },
-);
-jest.spyOn(global.console, 'log').mockImplementation(() => {});
-const pa11y = require('pa11y');
-const path = require('path');
-const {
+import a11yConfig from '../config/a11y.config.js';
+import {
   severityToColor,
   issueIsValid,
   logIssue,
   logReport,
   lintComponent,
   lintReportAndExit,
-} = require('./a11y');
-const {
-  ignore,
-  storybookBuildDir,
-  pa11y: pa11yConfig,
-} = require('../config/a11y.config');
+} from './a11y.js';
+
+const mockExit = jest
+  .spyOn(global.process, 'exit')
+  .mockImplementation(() => {});
+jest.mock('pa11y', () => jest.fn());
+jest.spyOn(global.console, 'log').mockImplementation(() => {});
+const { ignore, storybookBuildDir, pa11y: pa11yConfig } = a11yConfig;
 
 const STORYBOOK_BUILD_DIR = path.resolve(__dirname, '../', storybookBuildDir);
 const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');

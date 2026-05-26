@@ -5,25 +5,74 @@
  * and reports issues.
  */
 
-const R = require('ramda');
-const path = require('path');
-const pa11y = require('pa11y');
+import { existsSync } from 'fs';
+import path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+import * as R from 'ramda';
+import pa11y from 'pa11y';
 
-const {
-  storybookBuildDir,
-  pa11y: pa11yConfig,
-} = require('../config/a11y.config.js');
+import a11yConfig from '../config/a11y.config.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const { storybookBuildDir, pa11y: pa11yConfig } = a11yConfig;
 
 // Project-specific configuration.
-const {
-  ignore,
-  components,
-} = require('../../../config/emulsify-core/a11y.config.js');
+let { ignore = {}, components = [] } = a11yConfig;
 
 /** Absolute path to Storybook build directory. */
 const STORYBOOK_BUILD_DIR = path.resolve(__dirname, '../', storybookBuildDir);
 /** Absolute path to Storybook iframe file used for per-story rendering. */
 const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
+/** Project-specific accessibility config path used by generated themes. */
+const PROJECT_A11Y_CONFIG = path.resolve(
+  __dirname,
+  '../../../config/emulsify-core/a11y.config.js',
+);
+
+/**
+ * Load project-specific accessibility config when a consuming project provides one.
+ *
+ * @returns {Promise<object>} Project accessibility config, when present.
+ */
+const loadProjectA11yConfig = async () => {
+  if (!existsSync(PROJECT_A11Y_CONFIG)) {
+    return {};
+  }
+
+  const configModule = await import(pathToFileURL(PROJECT_A11Y_CONFIG).href);
+  return configModule.default || configModule;
+};
+
+/**
+ * Apply project-specific a11y config values over shared defaults.
+ *
+ * @param {{ignore?: object, components?: string[]}} config - Project config.
+ * @returns {void}
+ */
+const applyProjectA11yConfig = (config = {}) => {
+  ignore = config.ignore || ignore;
+  components = config.components || components;
+};
+
+/**
+ * Print CLI help.
+ *
+ * @returns {void}
+ */
+const printHelp = () => {
+  // eslint-disable-next-line no-console
+  console.log(
+    [
+      'Usage: node scripts/a11y.js [options]',
+      '',
+      'Options:',
+      '  -r           Run pa11y against configured Storybook component IDs.',
+      '  -h, --help   Print this help text.',
+    ].join('\n'),
+  );
+};
 
 /**
  * Map pa11y/axe severity to a label (historically a color name).
@@ -138,11 +187,16 @@ const lintReportAndExit = R.pipe(
 
 // Only perform linting/reporting when instructed via "-r".
 /* istanbul ignore next */
-if (R.pathEq(['argv', 2], '-r')(process)) {
-  lintReportAndExit(components);
+if (R.includes(process.argv[2], ['-h', '--help'])) {
+  printHelp();
+} else if (R.pathEq(['argv', 2], '-r')(process)) {
+  loadProjectA11yConfig().then((projectConfig) => {
+    applyProjectA11yConfig(projectConfig);
+    return lintReportAndExit(components);
+  });
 }
 
-module.exports = {
+export {
   severityToColor,
   issueIsValid,
   logIssue,
