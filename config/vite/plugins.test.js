@@ -173,7 +173,7 @@ describe('Vite Twig plugins', () => {
     ).toEqual(['add_attributes', 'bem']);
   });
 
-  it('transforms YAML imports into JavaScript modules', () => {
+  it('transforms YAML imports into JavaScript modules with default and named exports', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'src/components'), { recursive: true });
 
@@ -181,20 +181,65 @@ describe('Vite Twig plugins', () => {
       (plugin) => plugin?.name === 'emulsify-yaml',
     );
     const result = yamlPlugin.transform(
-      ['name: Card', 'items:', '  - one'].join('\n'),
-      join(projectDir, 'src/components/card/card.component.yml'),
+      [
+        'name: Accordion',
+        'props:',
+        '  type: object',
+        'slots:',
+        '  content:',
+        '    title: Content',
+        '$schema: https://example.com/schema.json',
+        'invalid-key: omitted',
+        'default: reserved',
+      ].join('\n'),
+      `${join(projectDir, 'src/components/accordion/accordion.component.yml')}?import`,
     );
 
     expect(result).toEqual({
-      code: 'export default {"name":"Card","items":["one"]};\n',
+      code: [
+        'export const name = "Accordion";',
+        'export const props = {"type":"object"};',
+        'export const slots = {"content":{"title":"Content"}};',
+        'export default {"name":"Accordion","props":{"type":"object"},"slots":{"content":{"title":"Content"}},"$schema":"https://example.com/schema.json","invalid-key":"omitted","default":"reserved"};',
+        '',
+      ].join('\n'),
       map: null,
     });
+    expect(result.code).not.toContain('export const $schema');
+    expect(result.code).not.toContain('export const invalid-key');
+    expect(result.code).not.toContain('export const default');
+  });
+
+  it('preserves default-only YAML modules for non-object values', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    const yamlPlugin = makePlugins(makeEnv(projectDir)).find(
+      (plugin) => plugin?.name === 'emulsify-yaml',
+    );
+
     expect(
       yamlPlugin.transform(
-        'name: Raw',
-        `${join(projectDir, 'src/components/card/card.component.yml')}?raw`,
+        ['- one', '- two'].join('\n'),
+        join(projectDir, 'src/components/list/list.component.yml'),
       ),
-    ).toBeNull();
+    ).toEqual({
+      code: 'export default ["one","two"];\n',
+      map: null,
+    });
+  });
+
+  it('ignores raw and URL YAML requests', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    const yamlPlugin = makePlugins(makeEnv(projectDir)).find(
+      (plugin) => plugin?.name === 'emulsify-yaml',
+    );
+    const id = join(projectDir, 'src/components/card/card.component.yml');
+
+    expect(yamlPlugin.transform('name: Raw', `${id}?raw`)).toBeNull();
+    expect(yamlPlugin.transform('name: Url', `${id}?url`)).toBeNull();
   });
 
   it('keeps copy plugins for normal projects and structure overrides', () => {

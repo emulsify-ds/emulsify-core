@@ -137,6 +137,67 @@ const isYamlModuleRequest = (id) => {
   return !/(^|&)(raw|url)\b/.test(query);
 };
 
+const reservedYamlExportIdentifiers = new Set([
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'export',
+  'extends',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'let',
+  'new',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+]);
+
+/**
+ * Determine whether a YAML key can be emitted as a named ESM export.
+ *
+ * @param {string} key - Top-level YAML object key.
+ * @returns {boolean} TRUE when the key is safe to emit as a named export.
+ */
+const isValidYamlExportIdentifier = (key) =>
+  /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(key) &&
+  !key.startsWith('$') &&
+  !reservedYamlExportIdentifiers.has(key);
+
+/**
+ * Determine whether a parsed YAML value is a plain object.
+ *
+ * @param {*} value - Parsed YAML value.
+ * @returns {boolean} TRUE when the value is a plain object.
+ */
+const isPlainObject = (value) =>
+  value !== null &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  [Object.prototype, null].includes(Object.getPrototypeOf(value));
+
 /**
  * Build likely filesystem candidates for a Twig template reference.
  *
@@ -588,8 +649,19 @@ function yamlModulePlugin() {
 
       try {
         const data = loadYaml(source) ?? null;
+        const namedExports = isPlainObject(data)
+          ? Object.entries(data)
+              .filter(([key]) => isValidYamlExportIdentifier(key))
+              .map(
+                ([key, value]) =>
+                  `export const ${key} = ${JSON.stringify(value)};`,
+              )
+              .join('\n')
+          : '';
+        const defaultExport = `export default ${JSON.stringify(data)};`;
+
         return {
-          code: `export default ${JSON.stringify(data)};\n`,
+          code: `${namedExports}${namedExports ? '\n' : ''}${defaultExport}\n`,
           map: null,
         };
       } catch (error) {

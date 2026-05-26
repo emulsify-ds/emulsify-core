@@ -32,6 +32,21 @@ export const Default = {
 
 Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()` and `source()` through the normalized project structure model. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior.
 
+## Component Metadata Imports
+
+Component metadata files such as `*.component.yml` can be imported from stories
+and Vite-side modules. YAML imports provide a default export with the full
+parsed metadata object. Top-level keys that are valid JavaScript export names
+are also available as named exports:
+
+```js
+import metadata, { props } from './accordion.component.yml';
+```
+
+Keys that are not safe JavaScript export names, such as `$schema` or
+`display-name`, are not emitted as named exports. They remain available from the
+default metadata object.
+
 ## React Component Libraries
 
 React components render through Storybook's React/Vite support. Storybook discovers React stories from the same normalized story roots as Twig stories. The shared Storybook globs include `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`; fixture coverage validates JavaScript/JSX stories.
