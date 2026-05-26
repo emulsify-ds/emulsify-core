@@ -114,6 +114,8 @@ import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 import { defineReactExtension } from '@emulsify/core/extensions/react';
 ```
 
+`defineReactExtension` is reserved for future React extension support. It currently returns the input unchanged. Adopting the import path is safe; the runtime is intentionally a no-op until the registry lands. See [Extension Points](docs/extension-points.md#public-imports).
+
 Vite consumers can import the shared config from `@emulsify/core/vite` and public Vite plugin helpers from `@emulsify/core/vite/plugins`.
 
 ## Contributing

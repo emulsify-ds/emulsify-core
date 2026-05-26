@@ -197,6 +197,8 @@ Use preview head for markup needed inside the story iframe, such as fonts, meta 
 
 Emulsify Core exposes stable public package paths:
 
+`defineReactExtension` is reserved for future React extension support. It currently returns the input unchanged. Adopting the import path is safe; the runtime is intentionally a no-op until the registry lands.
+
 ```js
 import { renderTwig } from '@emulsify/core/storybook';
 import { registerTwigExtensions } from '@emulsify/core/extensions/twig';

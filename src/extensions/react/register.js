@@ -4,10 +4,17 @@
  */
 
 /**
- * Return a React extension definition unchanged.
+ * Return the provided React extension definition unchanged.
  *
- * This mirrors common `defineConfig()` APIs and gives future React extension
- * authors a stable import before the runtime registry grows.
+ * @reserved Registry behavior is not yet implemented and may change in a
+ * future minor release.
+ * @example
+ * const extension = defineReactExtension({
+ *   name: 'project-react-components',
+ *   components: {},
+ * });
+ * // Safe today: use `extension` directly instead of relying on registry side
+ * // effects.
  *
  * @param {Object} extension - React extension definition.
  * @returns {Object} The provided extension definition.
@@ -18,7 +25,16 @@ export function defineReactExtension(extension) {
 }
 
 /**
- * Normalize React extension values into a registry list.
+ * Return React extension definitions after filtering falsy values.
+ *
+ * @reserved Registry behavior is not yet implemented and may change in a
+ * future minor release.
+ * @example
+ * const registry = createReactExtensionRegistry([
+ *   maybeExtension && defineReactExtension(maybeExtension),
+ * ]);
+ * // Safe today: read from `registry` directly instead of relying on runtime
+ * // registration.
  *
  * @param {Object[]} [extensions=[]] - Candidate extension definitions.
  * @returns {Object[]} Filtered extension definitions.
