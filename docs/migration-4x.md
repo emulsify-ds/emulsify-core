@@ -10,12 +10,12 @@ Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.
 
 | Area                    | What Changed                                                                                                     | What Did Not Change                                                                                                                                   | What May Require Changes                                                                                                         |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Build tool              | Vite replaces the Webpack build.                                                                                 | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `.config/emulsify-core/vite/plugins.*`.                                           |
+| Build tool              | Vite replaces the Webpack build.                                                                                 | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `config/emulsify-core/vite/plugins.*`.                                            |
 | Storybook               | Storybook uses `@storybook/react-vite`.                                                                          | Twig stories and React stories can live in the same Storybook instance. Existing Twig stories that return HTML strings are wrapped for compatibility. | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook` when stories are actively migrated. |
 | Runtime                 | Node.js 24 is the supported floor.                                                                               | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Local developer machines and CI images must use Node.js 24 or later.                                                             |
 | Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                         | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
 | Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `generic` and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | Non-Drupal projects should use `generic` unless a dedicated adapter exists.                                                      |
-| Extension configuration | Vite extension files live under `.config/emulsify-core/vite/plugins.*`.                                          | Storybook overrides still live under `config/emulsify-core/storybook/...`.                                                                            | Projects with old Webpack override files should replace them with Vite extensions.                                               |
+| Extension configuration | Vite extension files live under `config/emulsify-core/vite/plugins.*`.                                           | Storybook overrides still live under `config/emulsify-core/storybook/...`; a11y config still lives at `config/emulsify-core/a11y.config.js`.          | Projects with old Webpack override files should replace them with Vite extensions.                                               |
 
 ## Known Limitations
 
@@ -141,10 +141,10 @@ Drupal SDC mirroring remains supported for Drupal projects that enable `singleDi
 
 ## Vite Customization
 
-Replace Webpack-specific customizations with Vite configuration or `.config/emulsify-core/vite/plugins.*` extensions.
+Replace Webpack-specific customizations with Vite configuration or `config/emulsify-core/vite/plugins.*` extensions.
 
 ```js
-// .config/emulsify-core/vite/plugins.mjs
+// config/emulsify-core/vite/plugins.mjs
 export default ({ env }) => [
   myVitePlugin({
     projectName: env.machineName,

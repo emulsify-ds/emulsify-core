@@ -12,10 +12,10 @@ build: {
 }
 ```
 
-CSS dev sourcemaps are also enabled. Sourcemaps are useful during the release and migration window because they make compiled output easier to debug. They do increase `dist/` size. Projects that need a different production sourcemap policy can patch Vite config from `.config/emulsify-core/vite/plugins.*`:
+CSS dev sourcemaps are also enabled. Sourcemaps are useful during the release and migration window because they make compiled output easier to debug. They do increase `dist/` size. Projects that need a different production sourcemap policy can patch Vite config from `config/emulsify-core/vite/plugins.*`:
 
 ```js
-// .config/emulsify-core/vite/plugins.mjs
+// config/emulsify-core/vite/plugins.mjs
 export const extendConfig = () => ({
   build: {
     sourcemap: false,

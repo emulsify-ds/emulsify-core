@@ -4,23 +4,23 @@ Emulsify Core provides shared Vite and Storybook conventions. Project-specific f
 
 ## Directory Conventions
 
-There are two project-level extension locations:
+Project-level extension locations live under `config/emulsify-core`:
 
-| Extension Type              | Directory                                           | Why                                                                                  |
-| --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Vite plugins/config patches | `.config/emulsify-core/vite/plugins.(mjs\|js\|cjs)` | Build-time Vite extensions are hidden config files and are loaded only by Node/Vite. |
-| Storybook overrides         | `config/emulsify-core/storybook/...`                | Storybook preview/head overrides are project-facing assets that Storybook imports.   |
-| A11y config                 | `config/emulsify-core/a11y.config.js`               | The a11y script keeps the existing project config path for compatibility.            |
+| Extension Type              | Directory                                          | Why                                                                                |
+| --------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Vite plugins/config patches | `config/emulsify-core/vite/plugins.(mjs\|js\|cjs)` | Build-time Vite extensions are loaded only by Node/Vite.                           |
+| Storybook overrides         | `config/emulsify-core/storybook/...`               | Storybook preview/head overrides are project-facing assets that Storybook imports. |
+| A11y config                 | `config/emulsify-core/a11y.config.js`              | The a11y script keeps the existing project config path for compatibility.          |
 
-That difference is intentional in the current release. New Vite extensions should use `.config/emulsify-core/vite/`. Storybook overrides should continue using `config/emulsify-core/storybook/`.
+Vite extensions should use `config/emulsify-core/vite/`. Storybook overrides should continue using `config/emulsify-core/storybook/`, and the a11y script continues to read `config/emulsify-core/a11y.config.js`.
 
 ## Vite Plugins And Config Patches
 
 Projects can extend the shared Vite config with one of these files:
 
-- `.config/emulsify-core/vite/plugins.mjs`
-- `.config/emulsify-core/vite/plugins.js`
-- `.config/emulsify-core/vite/plugins.cjs`
+- `config/emulsify-core/vite/plugins.mjs`
+- `config/emulsify-core/vite/plugins.js`
+- `config/emulsify-core/vite/plugins.cjs`
 
 Supported plugin shapes:
 
@@ -55,7 +55,7 @@ npm install tailwindcss @tailwindcss/vite
 Add the Tailwind Vite plugin from the project extension file:
 
 ```js
-// .config/emulsify-core/vite/plugins.mjs
+// config/emulsify-core/vite/plugins.mjs
 import tailwindcss from '@tailwindcss/vite';
 
 export default () => [tailwindcss()];
@@ -100,7 +100,7 @@ Tailwind detects complete class names in Twig, React, and other templates. Avoid
 Other Vite-based framework integrations follow the same pattern:
 
 1. Install the framework package in the consuming project.
-2. Return its Vite plugin from `.config/emulsify-core/vite/plugins.*`.
+2. Return its Vite plugin from `config/emulsify-core/vite/plugins.*`.
 3. Import any required framework CSS or setup files from a discovered project entry or Storybook preview override.
 4. Use `extendConfig()` only when the framework needs additional Vite config.
 

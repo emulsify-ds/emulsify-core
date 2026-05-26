@@ -8,7 +8,7 @@
  *  1. Resolve the build environment (paths, platform flags) via {@link resolveEnvironment}.
  *  2. Build the Rollup/Vite entries map with {@link buildInputs}.
  *  3. Load optional project extensions (extra plugins and/or a config patcher)
- *     from `.config/emulsify-core/vite/plugins.*` via {@link loadProjectExtensions}.
+ *     from `config/emulsify-core/vite/plugins.*` via {@link loadProjectExtensions}.
  *  4. Assemble a base Vite config and optionally let the project extend/override
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *

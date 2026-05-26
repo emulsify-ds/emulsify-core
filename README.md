@@ -87,8 +87,8 @@ The documentation is split by task:
 
 - Implemented platform adapters are currently `generic` and `drupal`. WordPress + Timber and Craft CMS are supported as Twig-oriented use cases through the generic adapter today; dedicated adapters are future opportunities. See [Platform Adapters](docs/platform-adapters.md).
 - Storybook's Twig resolver eagerly imports Twig modules and raw Twig source. This is reliable for `include()` and `source()`, but large Twig libraries should keep Storybook source roots intentional. See [Performance](docs/performance.md).
-- Production sourcemaps are enabled by default unless a project overrides Vite config through `.config/emulsify-core/vite/plugins.*`. See [Performance](docs/performance.md).
-- Vite extensions and Storybook overrides intentionally use different project directories: `.config/emulsify-core/vite/plugins.*` for Vite and `config/emulsify-core/storybook/...` for Storybook. See [Extension Points](docs/extension-points.md).
+- Production sourcemaps are enabled by default unless a project overrides Vite config through `config/emulsify-core/vite/plugins.*`. See [Performance](docs/performance.md).
+- Project extensions use the public `config/emulsify-core` directory: `config/emulsify-core/vite/plugins.*` for Vite, `config/emulsify-core/storybook/...` for Storybook, and `config/emulsify-core/a11y.config.js` for a11y. See [Extension Points](docs/extension-points.md).
 - Webpack-specific customizations must be migrated manually to Vite plugins or `extendConfig()`. See [Migration](docs/migration-4x.md).
 - Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are enabled. Generic projects should expect output to remain in `dist/`. See [Platform Adapters](docs/platform-adapters.md).
 

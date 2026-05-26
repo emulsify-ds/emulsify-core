@@ -50,6 +50,7 @@ const releaseFixtures = [
       'dist/components/card/card.asset.txt',
       'dist/global/base/js/base.js',
       'dist/global/base/css/base.css',
+      'dist/extension-marker.txt',
     ],
     reject: ['components/card/card.js'],
   },
@@ -199,7 +200,7 @@ function setupLargeTwigStorybookFixture(projectDir) {
     writeFileSync(
       join(componentDir, `${componentName}.twig`),
       [
-        `<article class="large-item large-item--{{ variant|default('standard') }}">`,
+        '<article class="large-item large-item--{{ variant|default(\'standard\') }}">',
         `  {{ include('@components/${componentName}/_content.twig', {`,
         `    label: label|default('Item ${id}'),`,
         `    index: ${index}`,
