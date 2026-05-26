@@ -64,9 +64,9 @@ readiness audit with:
 npm run audit
 ```
 
-The full audit also checks source-root discovery, Twig `include()` and
-`source()` references, Webpack-era patterns, platform assumptions, and public
-Emulsify Core import paths.
+The full audit scans normalized Emulsify source roots and checks Twig
+`include()` and `source()` references, CSS asset URLs, Webpack-era patterns,
+platform assumptions, and public Emulsify Core import paths.
 
 Projects with `@emulsify/core` installed can call the package binary directly:
 

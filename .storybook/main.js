@@ -535,8 +535,8 @@ const baseConfig = {
     const twigSourceGlobImports = buildTwigSourceGlobImports(env);
     const optimizeDepsInclude = [
       'react',
-      'path',
       'twig',
+      '@emulsify/core/extensions/twig',
       ...(env.platformAdapter?.storybook?.registerDrupalTwigFilters
         ? ['twig-drupal-filters']
         : []),

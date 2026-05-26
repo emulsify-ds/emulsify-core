@@ -11,21 +11,27 @@ import {
   readdirSync,
   statSync,
 } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { globSync } from 'glob';
 import { resolveProjectConfig } from '../config/vite/project-config.js';
+import {
+  compiledAssetOutputPath,
+  storybookStyleOutputPath,
+} from '../config/vite/project-structure.js';
 import { candidateKeysForReference } from '../src/storybook/twig/resolver.js';
-import { auditTwigStories, collectStoryFiles } from './audit-twig-stories.js';
+import { analyzeStorySource, collectStoryFiles } from './audit-twig-stories.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
 const CODE_GLOB = '**/*.{js,jsx,ts,tsx,mjs,cjs}';
 const TWIG_GLOB = '**/*.twig';
+const STYLE_GLOB = '**/*.{css,scss,sass}';
 const DEFAULT_IGNORES = [
   '**/.coverage/**',
   '**/.git/**',
   '**/.github/**',
   '**/.out/**',
   '**/dist/**',
+  '**/*.min.css',
   '**/*.test.{js,jsx,ts,tsx,mjs,cjs}',
   '**/node_modules/**',
   '**/scripts/audit.js',
@@ -150,6 +156,54 @@ export function collectProjectFiles(projectDir, patterns) {
 }
 
 /**
+ * Return a normalized, project-contained root list.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string[]} roots - Absolute candidate roots.
+ * @returns {string[]} Existing roots inside the project.
+ */
+function normalizeAuditRoots(projectDir, roots = []) {
+  const resolvedProject = resolve(projectDir);
+
+  return Array.from(
+    new Set(
+      roots
+        .filter(Boolean)
+        .map((root) => resolve(root))
+        .filter(
+          (root) =>
+            isSameOrInside(root, resolvedProject) && safeIsDirectory(root),
+        ),
+    ),
+  ).sort();
+}
+
+/**
+ * Collect files from normalized audit roots only.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string|string[]} patterns - Glob pattern or patterns.
+ * @param {string[]} roots - Absolute roots to scan.
+ * @returns {string[]} Absolute file paths.
+ */
+function collectRootedProjectFiles(projectDir, patterns, roots = []) {
+  const files = new Set();
+
+  for (const root of normalizeAuditRoots(projectDir, roots)) {
+    for (const filePath of globSync(patterns, {
+      cwd: root,
+      nodir: true,
+      absolute: true,
+      ignore: DEFAULT_IGNORES,
+    })) {
+      files.add(resolve(filePath));
+    }
+  }
+
+  return Array.from(files).sort();
+}
+
+/**
  * Determine whether a file is inside one of the roots.
  *
  * @param {string} filePath - Absolute file path.
@@ -161,6 +215,18 @@ function isInsideAnyRoot(filePath, roots = []) {
     const rel = relative(root, filePath);
     return Boolean(rel) && !rel.startsWith('..') && !rel.includes(`..${sep}`);
   });
+}
+
+/**
+ * Determine whether a path is the same as, or inside, a root directory.
+ *
+ * @param {string} filePath - Absolute file path.
+ * @param {string} root - Absolute root path.
+ * @returns {boolean} TRUE when the path is inside or equal to the root.
+ */
+function isSameOrInside(filePath, root) {
+  const rel = relative(root, filePath);
+  return !rel || (!rel.startsWith('..') && !rel.includes(`..${sep}`));
 }
 
 /**
@@ -279,10 +345,12 @@ function auditStoryDiscovery(context) {
  * @returns {object[]} Findings.
  */
 function auditLegacyTwigStories(context) {
-  const { projectDir } = context;
-  const result = auditTwigStories({ projectDir });
+  const { storyFiles } = context;
+  const findings = storyFiles
+    .map((filePath) => analyzeStorySource(safeReadFile(filePath), filePath))
+    .filter((result) => result.shouldUpgrade);
 
-  return result.findings.map((finding) =>
+  return findings.map((finding) =>
     makeFinding({
       id: 'legacy-twig-story',
       severity: 'warn',
@@ -500,6 +568,254 @@ function auditTwigReferences(context) {
     ...finding,
     filePath: finding.filePath || resolve(projectDir, 'project.emulsify.json'),
   }));
+}
+
+/**
+ * Extract simple same-file Sass string variables.
+ *
+ * @param {string} source - Stylesheet source.
+ * @returns {Map<string, string>} Variable value map.
+ */
+function findSassStringVariables(source) {
+  const variables = new Map();
+  const pattern = /^\s*\$([\w-]+)\s*:\s*(['"])(.*?)\2\s*;?/gm;
+
+  for (const match of source.matchAll(pattern)) {
+    variables.set(match[1], match[3]);
+  }
+
+  return variables;
+}
+
+/**
+ * Resolve same-file Sass variable interpolation in a URL value.
+ *
+ * This intentionally handles only simple string variables. It is enough to make
+ * common asset roots such as `#{$font-url}/Avenir.woff2` auditable without
+ * pretending to be a Sass compiler.
+ *
+ * @param {string} value - Raw URL value.
+ * @param {Map<string, string>} variables - Sass variable map.
+ * @returns {string} URL value with known interpolations expanded.
+ */
+function resolveSassUrlValue(value, variables) {
+  return value.replace(/#\{\$([\w-]+)\}/g, (match, name) =>
+    variables.has(name) ? variables.get(name) : match,
+  );
+}
+
+/**
+ * Mask style comments while preserving line and character positions.
+ *
+ * @param {string} source - Stylesheet source.
+ * @returns {string} Source with comments replaced by whitespace.
+ */
+function maskStyleComments(source) {
+  const blank = (match) => match.replace(/[^\n]/g, ' ');
+
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/^[\t ]*\/\/.*$/gm, blank);
+}
+
+/**
+ * Extract URL references from CSS or Sass source.
+ *
+ * @param {string} source - Stylesheet source.
+ * @returns {{value: string, raw: string, line: number}[]} URL references.
+ */
+export function findCssUrlReferences(source) {
+  const scanSource = maskStyleComments(source);
+  const variables = findSassStringVariables(scanSource);
+  const references = [];
+  const pattern = /url\(\s*(?:(['"])(.*?)\1|([^'")][^)]*?))\s*\)/g;
+
+  for (const match of scanSource.matchAll(pattern)) {
+    const raw = (match[2] ?? match[3] ?? '').trim();
+    const value = resolveSassUrlValue(raw, variables).trim();
+
+    references.push({
+      value,
+      raw,
+      line: lineNumberAt(source, match.index || 0),
+    });
+  }
+
+  return references;
+}
+
+/**
+ * Determine whether a CSS URL should be skipped by filesystem checks.
+ *
+ * @param {string} value - URL value.
+ * @returns {boolean} TRUE when the URL is not a local relative asset path.
+ */
+function isNonFilesystemCssUrl(value) {
+  return (
+    !value ||
+    value.startsWith('#') ||
+    value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.startsWith('$') ||
+    value.startsWith('#{') ||
+    /^[a-z][a-z0-9+.-]*:/i.test(value) ||
+    /^var\(/i.test(value) ||
+    /^env\(/i.test(value)
+  );
+}
+
+/**
+ * Remove query string and hash suffixes from a URL path.
+ *
+ * @param {string} value - URL value.
+ * @returns {string} Path portion.
+ */
+function cssUrlPath(value) {
+  return value.split(/[?#]/)[0];
+}
+
+/**
+ * Resolve an emitted CSS output key to the actual CSS file path.
+ *
+ * Vite entry keys use `__style` internally to avoid JS/CSS collisions. The
+ * shared Vite config removes that suffix from emitted CSS file names.
+ *
+ * @param {string} key - Output key without extension.
+ * @returns {string} Emitted CSS file path relative to output root.
+ */
+function emittedCssRelativePath(key) {
+  return `${key.replace(/__style$/i, '')}.css`;
+}
+
+/**
+ * Return possible runtime directories for a style file's emitted CSS.
+ *
+ * @param {string} filePath - Source stylesheet.
+ * @param {object} env - Normalized environment.
+ * @param {string} projectDir - Project root.
+ * @returns {string[]} Absolute runtime directories.
+ */
+function styleRuntimeDirectories(filePath, env, projectDir) {
+  if (!/\.(scss|sass|css)$/i.test(filePath)) return [];
+  if (basename(filePath).startsWith('_')) return [];
+
+  const structure = env.projectStructure || {};
+  if (!structure.output) return [];
+
+  const ctx = {
+    projectDir,
+    srcDir: env.srcDir || resolve(projectDir, 'src'),
+    SDC: Boolean(env.SDC),
+  };
+  const fileName = basename(filePath);
+  const isStorybookStyle = /^(cl-|sb-)/.test(fileName);
+  const key = isStorybookStyle
+    ? storybookStyleOutputPath(filePath, structure, ctx)
+    : compiledAssetOutputPath(filePath, 'css', structure, ctx);
+
+  if (!key) return [];
+
+  const relCss = emittedCssRelativePath(key);
+  const directories = [dirname(resolve(projectDir, 'dist', relCss))];
+
+  if (structure.mirrorComponentOutput && relCss.startsWith('components/')) {
+    directories.push(dirname(resolve(projectDir, relCss)));
+  }
+
+  return Array.from(new Set(directories));
+}
+
+/**
+ * Resolve a URL path against a list of directories.
+ *
+ * @param {string} assetPath - Local relative asset path.
+ * @param {string[]} directories - Candidate base directories.
+ * @returns {string|null} Existing absolute asset path.
+ */
+function firstExistingAssetPath(assetPath, directories) {
+  for (const directory of directories) {
+    const candidate = resolve(directory, assetPath);
+    if (safeExists(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+/**
+ * Audit local CSS/Sass asset URLs that Vite may leave to runtime resolution.
+ *
+ * @param {object} context - Audit context.
+ * @returns {object[]} Findings.
+ */
+function auditCssAssetReferences(context) {
+  const { env, projectDir, styleFiles } = context;
+  const findings = [];
+  const projectAssetsDir = resolve(projectDir, 'assets');
+  const styleSourceRoots = env.projectStructure?.sourceRoots || [];
+
+  for (const filePath of styleFiles) {
+    if (
+      styleSourceRoots.length &&
+      !isInsideAnyRoot(filePath, styleSourceRoots)
+    ) {
+      continue;
+    }
+
+    const source = safeReadFile(filePath);
+    const runtimeDirs = styleRuntimeDirectories(filePath, env, projectDir);
+
+    for (const ref of findCssUrlReferences(source)) {
+      if (isNonFilesystemCssUrl(ref.value)) continue;
+
+      const assetPath = cssUrlPath(ref.value);
+      if (!assetPath) continue;
+
+      const sourceAsset = firstExistingAssetPath(assetPath, [
+        dirname(filePath),
+      ]);
+      const runtimeAsset = firstExistingAssetPath(assetPath, runtimeDirs);
+      const resolvedAsset = sourceAsset || runtimeAsset;
+
+      if (!resolvedAsset) {
+        findings.push(
+          makeFinding({
+            id: 'unresolved-css-asset-reference',
+            severity: 'warn',
+            filePath,
+            line: ref.line,
+            message: `CSS asset URL "${ref.raw}" could not be resolved from the source file or expected emitted CSS location.`,
+            details: [
+              'Check for a typo, move the asset into a source-root-relative location Vite can resolve, or rewrite the URL to a stable Drupal/theme public path.',
+            ],
+            docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#css-asset-urls',
+          }),
+        );
+        continue;
+      }
+
+      if (
+        isSameOrInside(resolvedAsset, projectAssetsDir) &&
+        (!sourceAsset || runtimeAsset || assetPath.startsWith('..'))
+      ) {
+        findings.push(
+          makeFinding({
+            id: 'css-runtime-asset-reference',
+            severity: 'info',
+            filePath,
+            line: ref.line,
+            message: `CSS asset URL "${ref.raw}" resolves to project-level assets and may be left unchanged by Vite for runtime resolution.`,
+            details: [
+              `Resolved asset: ${displayPath(projectDir, resolvedAsset)}.`,
+              'This is acceptable when Drupal serves the asset at that runtime URL. To make Vite bundle or rebase it, move the asset under a source root and reference it from the authored stylesheet.',
+            ],
+            docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#css-asset-urls',
+          }),
+        );
+      }
+    }
+  }
+
+  return findings;
 }
 
 /**
@@ -801,15 +1117,45 @@ function auditTwigVolume(context) {
 export function auditProject(options = {}) {
   const projectDir = resolve(options.projectDir || process.cwd());
   const envResult = resolveAuditEnvironment(projectDir);
-  const storyFiles = collectProjectFiles(projectDir, STORY_GLOB);
-  const codeFiles = collectProjectFiles(projectDir, CODE_GLOB);
-  const twigFiles = collectProjectFiles(projectDir, TWIG_GLOB);
+  const structure = envResult.env.projectStructure || {};
+  const sourceRoots = normalizeAuditRoots(
+    projectDir,
+    structure.sourceRoots || [],
+  );
+  const storyRoots = normalizeAuditRoots(
+    projectDir,
+    structure.storyRoots || sourceRoots,
+  );
+  const twigRoots = normalizeAuditRoots(
+    projectDir,
+    structure.twigRoots || sourceRoots,
+  );
+  const storyFiles = collectRootedProjectFiles(
+    projectDir,
+    STORY_GLOB,
+    storyRoots,
+  );
+  const codeFiles = collectRootedProjectFiles(
+    projectDir,
+    CODE_GLOB,
+    sourceRoots,
+  );
+  const twigFiles = collectRootedProjectFiles(projectDir, TWIG_GLOB, twigRoots);
+  const styleFiles = collectRootedProjectFiles(
+    projectDir,
+    STYLE_GLOB,
+    sourceRoots,
+  );
   const context = {
     ...envResult,
     projectDir,
+    sourceRoots,
+    storyRoots,
+    twigRoots,
     storyFiles,
     codeFiles,
     twigFiles,
+    styleFiles,
     twigThreshold: Number.isFinite(options.twigThreshold)
       ? options.twigThreshold
       : DEFAULT_TWIG_THRESHOLD,
@@ -819,6 +1165,7 @@ export function auditProject(options = {}) {
     ...auditStoryDiscovery(context),
     ...auditLegacyTwigStories(context),
     ...auditTwigReferences(context),
+    ...auditCssAssetReferences(context),
     ...auditWebpackPatterns(context),
     ...auditCoreImports(context),
     ...auditDrupalAssumptions(context),
@@ -844,6 +1191,7 @@ export function auditProject(options = {}) {
       stories: storyFiles.length,
       twig: twigFiles.length,
       code: codeFiles.length,
+      styles: styleFiles.length,
     },
     findings,
   };
@@ -889,7 +1237,7 @@ export function formatAuditReport(result) {
   const lines = [
     'Emulsify project audit',
     `Project: ${result.projectDir}`,
-    `Scanned ${result.files.stories} story file(s), ${result.files.twig} Twig file(s), and ${result.files.code} code file(s).`,
+    `Scanned ${result.files.stories} story file(s), ${result.files.twig} Twig file(s), ${result.files.code} code file(s), and ${result.files.styles} style file(s).`,
     `Findings: ${result.summary.error} error(s), ${result.summary.warn} warning(s), ${result.summary.info} info item(s).`,
   ];
 

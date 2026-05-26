@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   auditProject,
+  findCssUrlReferences,
   findTwigIncludeSourceReferences,
   formatAuditReport,
 } from './audit.js';
@@ -77,7 +78,6 @@ describe('audit', () => {
 
     expect(ids).toEqual(
       expect.arrayContaining([
-        'story-outside-discovered-roots',
         'legacy-twig-story',
         'unknown-twig-namespace',
         'unresolved-twig-reference',
@@ -88,7 +88,7 @@ describe('audit', () => {
       ]),
     );
     expect(report).toContain('Emulsify project audit');
-    expect(report).toContain('stories/outside.stories.js');
+    expect(report).not.toContain('stories/outside.stories.js');
   });
 
   it('reports missing project config and missing configured roots', () => {
@@ -133,6 +133,117 @@ describe('audit', () => {
     ]);
   });
 
+  it('expands simple Sass variables in CSS URL references', () => {
+    const quote = String.fromCharCode(39);
+
+    expect(
+      findCssUrlReferences(
+        [
+          '$font-url: ' + quote + '../../../assets/fonts' + quote + ';',
+          '@font-face { src: url(' +
+            quote +
+            '#{$font-url}/Avenir.woff2' +
+            quote +
+            '); }',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        value: '../../../assets/fonts/Avenir.woff2',
+        raw: '#{$font-url}/Avenir.woff2',
+        line: 2,
+      },
+    ]);
+  });
+
+  it('ignores CSS URL references in comments', () => {
+    expect(
+      findCssUrlReferences(
+        [
+          '// mask-image: url("../icons/commented.svg");',
+          '/* background: url("../icons/blocked.svg"); */',
+          '.real { background: url("../icons/real.svg"); }',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        value: '../icons/real.svg',
+        raw: '../icons/real.svg',
+        line: 3,
+      },
+    ]);
+  });
+
+  it('reports CSS asset references that rely on runtime project assets', () => {
+    const quote = String.fromCharCode(39);
+
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'drupal',
+          singleDirectoryComponents: true,
+        },
+      }),
+    );
+    writeFile(projectDir, 'assets/fonts/Avenir.woff2', 'font');
+    writeFile(projectDir, 'assets/icons/search.svg', '<svg />');
+    writeFile(
+      projectDir,
+      'src/foundation/typography/_fonts.scss',
+      [
+        '$font-url: ' + quote + '../../../assets/fonts' + quote + ';',
+        '@font-face { src: url(' +
+          quote +
+          '#{$font-url}/Avenir.woff2' +
+          quote +
+          '); }',
+      ].join('\n'),
+    );
+    writeFile(
+      projectDir,
+      'src/components/search/search.scss',
+      '.search { mask-image: url("../../assets/icons/search.svg"); }',
+    );
+
+    const result = auditProject({ projectDir });
+    const findings = result.findings.filter(
+      (finding) => finding.id === 'css-runtime-asset-reference',
+    );
+
+    expect(findings).toHaveLength(2);
+    expect(findings.map((finding) => finding.filePath)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('src/foundation/typography/_fonts.scss'),
+        expect.stringContaining('src/components/search/search.scss'),
+      ]),
+    );
+  });
+
+  it('reports unresolved CSS asset references', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("./missing.svg"); }',
+    );
+
+    const result = auditProject({ projectDir });
+
+    expect(result.findings.map((finding) => finding.id)).toContain(
+      'unresolved-css-asset-reference',
+    );
+  });
+
   it('does not report conventional template override files as component source roots', () => {
     writeFile(
       projectDir,
@@ -150,5 +261,42 @@ describe('audit', () => {
     expect(result.findings.map((finding) => finding.id)).not.toContain(
       'twig-file-outside-source-roots',
     );
+  });
+
+  it('scans canonical source roots instead of generated components or Drupal templates', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'drupal',
+          singleDirectoryComponents: true,
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'src/components/card/card.twig',
+      '{{ include("@missing/source.twig") }}',
+    );
+    writeFile(
+      projectDir,
+      'components/card/card.twig',
+      '{{ include("@missing/generated.twig") }}',
+    );
+    writeFile(
+      projectDir,
+      'templates/layout/page.html.twig',
+      '{{ include("@missing/template.twig") }}',
+    );
+
+    const result = auditProject({ projectDir });
+    const unresolved = result.findings.filter(
+      (finding) => finding.id === 'unresolved-twig-reference',
+    );
+
+    expect(unresolved).toHaveLength(1);
+    expect(unresolved[0].message).toContain('@missing/source.twig');
+    expect(result.files.twig).toBe(1);
   });
 });

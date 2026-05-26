@@ -89,11 +89,12 @@ Run the audit script to list likely legacy Twig stories and other upgrade-readin
 npx --no-install emulsify-audit
 ```
 
-The audit checks for Storybook files outside normalized source roots, unresolved
-Twig `include()` or `source()` references, Webpack-era patterns, direct imports
-of Emulsify Core internals, Drupal assumptions in non-Drupal projects, missing
-configured structure roots, large Twig Storybook roots, and Twig stories that
-should move to `renderTwig()`.
+The audit scans normalized Emulsify source roots and checks for unresolved Twig
+`include()` or `source()` references, CSS asset URLs that are missing or left to
+runtime resolution, Webpack-era patterns, direct imports of Emulsify Core
+internals, Drupal assumptions in non-Drupal projects, missing configured
+structure roots, large Twig Storybook roots, and Twig stories that should move
+to `renderTwig()`.
 
 Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
 
@@ -128,6 +129,25 @@ export default ({ env }) => [
 ```
 
 See [Extension Points](extension-points.md) for Vite plugins, Tailwind CSS, Storybook preview overrides, and framework integrations.
+
+## CSS Asset URLs
+
+Vite resolves `url(...)` values relative to the stylesheet it is compiling.
+When a stylesheet points outside the normalized Emulsify source roots, Vite may
+leave the URL unchanged and print a message such as:
+
+```text
+../../../assets/fonts/Avenir-Regular.woff2 referenced in ../../../assets/fonts/Avenir-Regular.woff2 didn't resolve at build time, it will remain unchanged to be resolved at runtime
+```
+
+That can be intentional in Drupal projects when the URL points at a theme asset
+that Drupal serves directly. Verify that the unchanged URL is valid from the
+compiled CSS file in `dist/` or mirrored `components/` output.
+
+To make Vite resolve and rebase the asset at build time, keep the asset under a
+normalized source root and reference it relative to the authored stylesheet. If
+the asset must remain in a project-level `assets/` directory, use a stable
+runtime URL or add a project Vite extension that copies/rewrites the asset path.
 
 ## Upgrade Checklist
 
