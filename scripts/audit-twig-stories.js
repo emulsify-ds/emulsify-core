@@ -5,9 +5,10 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { globSync } from 'glob';
 import { resolveProjectConfig } from '../config/vite/project-config.js';
+import { toPosixPath } from '../config/vite/utils/paths.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
 const IDENTIFIER_PATTERN = '[A-Za-z_$][\\w$]*';
@@ -26,16 +27,6 @@ const DEFAULT_IGNORES = [
  */
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Convert a filesystem path to POSIX separators for readable output.
- *
- * @param {string} filePath - Filesystem path.
- * @returns {string} POSIX path.
- */
-function toPosixPath(filePath) {
-  return filePath.split(sep).join('/');
 }
 
 /**

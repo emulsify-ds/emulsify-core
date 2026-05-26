@@ -3,14 +3,13 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { dirname, join, relative, sep } from 'path';
+import { dirname, join, relative } from 'path';
 import { tmpdir } from 'os';
 import { buildInputs, makePatterns } from './entries.js';
 import { resolveProjectConfig } from './project-config.js';
+import { toPosixPath } from './utils/paths.js';
 
 const makeTempProject = () => mkdtempSync(join(tmpdir(), 'emulsify-core-'));
-
-const toPosix = (filePath) => filePath.split(sep).join('/');
 
 const writeProjectConfig = (projectDir, config) => {
   writeFileSync(
@@ -32,7 +31,7 @@ const buildRelativeInputs = (projectDir) => {
   return Object.fromEntries(
     Object.entries(inputs)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => [key, toPosix(relative(projectDir, value))]),
+      .map(([key, value]) => [key, toPosixPath(relative(projectDir, value))]),
   );
 };
 

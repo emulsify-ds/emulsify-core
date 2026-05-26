@@ -3,6 +3,10 @@
  * @module extensions/shared/lists
  */
 
+import { unique } from '../../../config/vite/utils/unique.js';
+
+export { unique };
+
 /**
  * Convert scalar or nested array values into a flat list.
  *
@@ -29,15 +33,6 @@ export function flattenList(value) {
  * @returns {*[]} Unique values.
  */
 export function uniqueList(values) {
-  const seen = new Set();
-  const result = [];
-
-  for (const value of values) {
-    // Preserve first-seen order; class order can affect utility CSS output.
-    if (seen.has(value)) continue;
-    seen.add(value);
-    result.push(value);
-  }
-
-  return result;
+  // Preserve first-seen order; class order can affect utility CSS output.
+  return unique(values);
 }

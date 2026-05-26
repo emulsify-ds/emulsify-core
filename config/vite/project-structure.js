@@ -5,24 +5,15 @@
  * destinations, Twig namespaces, and Storybook roots aligned.
  */
 
-import fs from 'fs';
 import { basename, relative, resolve, sep } from 'path';
+import { safeExists } from './utils/fs-safe.js';
+import { replaceLastSlash, toPosixPath } from './utils/paths.js';
+import { unique } from './utils/unique.js';
 
-/** Normalize filesystem paths to POSIX for Rollup keys and Vite globs. */
-export const toPosixPath = (filePath) => filePath.split(sep).join('/');
-
-/** Return truthy values in first-seen order with duplicates removed. */
-const unique = (items) => Array.from(new Set(items.filter(Boolean)));
+export { replaceLastSlash, toPosixPath };
 
 /** Strip a JS or SCSS extension from an output key. */
 const stripAssetExtension = (filePath) => filePath.replace(/\.(scss|js)$/i, '');
-
-/** Replace last slash with an injected subdir (e.g., '/css/' or '/js/'). */
-export function replaceLastSlash(str, replacement) {
-  const i = str.lastIndexOf('/');
-  if (i === -1) return str;
-  return str.slice(0, i) + replacement + str.slice(i + 1);
-}
 
 /** Insert "/css|js" bucket unless SDC=true; strip extension. */
 export function injectBucket(rel, bucket, SDC) {
@@ -31,21 +22,6 @@ export function injectBucket(rel, bucket, SDC) {
     return bucket === 'css' ? `${withoutExt}__style` : withoutExt;
   }
   return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
-}
-
-/**
- * Safe existence check for normalized project paths.
- *
- * @param {string} filePath - Absolute path.
- * @returns {boolean} TRUE when the path exists.
- */
-function exists(filePath) {
-  try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
-    return fs.existsSync(filePath);
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -107,12 +83,12 @@ function fallbackComponentRoots({ projectDir, srcDir, srcExists }) {
   const primary =
     basename(srcDir) === 'components' ? srcDir : resolve(srcDir, 'components');
   const rootComponents = resolve(projectDir, 'components');
-  const candidates = unique([
-    primary,
-    ...(srcExists ? [rootComponents] : []),
-    rootComponents,
-  ]);
-  const selected = candidates.find(exists) || primary;
+  const candidates = unique(
+    [primary, ...(srcExists ? [rootComponents] : []), rootComponents].filter(
+      Boolean,
+    ),
+  );
+  const selected = candidates.find(safeExists) || primary;
 
   return [{ name: 'components', directory: selected }];
 }
@@ -163,20 +139,24 @@ function fallbackNamespaceRoots({
   const namespaceRoots = {};
   const componentRoot = componentRootRecords[0]?.directory;
 
-  if (componentRoot && exists(componentRoot)) {
+  if (componentRoot && safeExists(componentRoot)) {
     namespaceRoots.components = componentRoot;
   }
 
-  const layoutRoot = unique([
-    ...(srcExists ? [resolve(srcDir, 'layout')] : []),
-    resolve(projectDir, 'src/layout'),
-    resolve(projectDir, 'layout'),
-  ]).find(exists);
-  const tokensRoot = unique([
-    ...(srcExists ? [resolve(srcDir, 'tokens')] : []),
-    resolve(projectDir, 'src/tokens'),
-    resolve(projectDir, 'tokens'),
-  ]).find(exists);
+  const layoutRoot = unique(
+    [
+      ...(srcExists ? [resolve(srcDir, 'layout')] : []),
+      resolve(projectDir, 'src/layout'),
+      resolve(projectDir, 'layout'),
+    ].filter(Boolean),
+  ).find(safeExists);
+  const tokensRoot = unique(
+    [
+      ...(srcExists ? [resolve(srcDir, 'tokens')] : []),
+      resolve(projectDir, 'src/tokens'),
+      resolve(projectDir, 'tokens'),
+    ].filter(Boolean),
+  ).find(safeExists);
 
   if (layoutRoot) {
     namespaceRoots.layout = layoutRoot;
@@ -237,19 +217,27 @@ export function resolveProjectStructure(env) {
   const componentRoots = componentRootRecords.map((root) => root.directory);
   const globalRoots = globalRootRecords.map((root) => root.directory);
   const namespaceRootValues = Object.values(namespaceRoots);
-  const sourceRoots = unique([...componentRoots, ...globalRoots]);
+  const sourceRoots = unique(
+    [...componentRoots, ...globalRoots].filter(Boolean),
+  );
   const sourceRootRecords = [...componentRootRecords, ...globalRootRecords];
   const componentStoryRoots = srcExists
     ? componentRoots.filter((root) => !isSameOrInsideRoot(root, srcDir))
     : componentRoots;
   const storyRoots = structureOverrides
     ? componentRoots
-    : unique([...(srcExists ? [srcDir] : []), ...componentStoryRoots]);
-  const twigRoots = unique([
-    ...componentRoots,
-    ...namespaceRootValues,
-    ...(structureOverrides ? [] : [srcDir]),
-  ]);
+    : unique(
+        [...(srcExists ? [srcDir] : []), ...componentStoryRoots].filter(
+          Boolean,
+        ),
+      );
+  const twigRoots = unique(
+    [
+      ...componentRoots,
+      ...namespaceRootValues,
+      ...(structureOverrides ? [] : [srcDir]),
+    ].filter(Boolean),
+  );
   const mirrorComponentOutput = Boolean(
     srcExists &&
     !structureOverrides &&

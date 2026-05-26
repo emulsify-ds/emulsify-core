@@ -6,10 +6,10 @@
  * without reshaping older config files.
  */
 
-import fs from 'fs';
 import { normalize, resolve, sep } from 'path';
 import { getPlatformAdapter } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
+import { safeExists, safeReadJson } from './utils/fs-safe.js';
 
 /**
  * Ensure an absolute path stays inside the project directory.
@@ -26,28 +26,6 @@ export function coerceToProjectPath(projectDir, candidate) {
   const inProject =
     absCandidate.startsWith(absProject + sep) || absCandidate === absProject;
   return inProject ? absCandidate : null;
-}
-
-/**
- * Safe JSON reader for known in-project files.
- *
- * @param {string} projectDir - Absolute project root.
- * @param {string} relFilename - Project-relative JSON filename.
- * @returns {object} Parsed object or empty object when absent/invalid.
- */
-function safeReadJson(projectDir, relFilename) {
-  const safe = coerceToProjectPath(projectDir, relFilename);
-  if (!safe) return {};
-  try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
-    if (!fs.existsSync(safe)) return {};
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
-    const raw = fs.readFileSync(safe, 'utf8');
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 /**
@@ -104,11 +82,15 @@ export function resolveProjectConfig(
   env = process.env,
 ) {
   const root = resolve(projectDir);
-  const rawConfig = safeReadJson(root, 'project.emulsify.json');
+  const configPath = coerceToProjectPath(root, 'project.emulsify.json');
+  const rawConfigResult = configPath ? safeReadJson(configPath) : {};
+  const rawConfig =
+    rawConfigResult?.data && typeof rawConfigResult.data === 'object'
+      ? rawConfigResult.data
+      : {};
 
   const srcCandidate = resolve(root, 'src');
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
-  const srcExists = fs.existsSync(srcCandidate);
+  const srcExists = safeExists(srcCandidate);
   const srcDir = srcExists ? srcCandidate : resolve(root, 'components');
 
   const platform =

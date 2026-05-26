@@ -11,10 +11,10 @@
  *   4) export const extendConfig = (config, ctx) => patchObject
  */
 
-import { existsSync } from 'fs';
 import { resolve, normalize } from 'path';
 import { pathToFileURL } from 'url';
 import { createRequire } from 'module';
+import { firstExistingPath } from './utils/fs-safe.js';
 
 /**
  * Resolve a path inside the current project root.
@@ -36,22 +36,6 @@ function insideCwd(abs) {
   const base = normalize(process.cwd() + '/');
   const target = normalize(abs);
   return target.startsWith(base);
-}
-
-/**
- * Return the first existing candidate path.
- *
- * @param {string[]} paths - Project-relative candidate paths.
- * @returns {string|null} Absolute path when found.
- */
-function firstExisting(paths) {
-  for (const rel of paths) {
-    const abs = inProject(rel);
-    if (!insideCwd(abs)) continue;
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
-    if (existsSync(abs)) return abs;
-  }
-  return null;
 }
 
 /**
@@ -79,11 +63,16 @@ async function loadModule(absPath) {
  * @returns {Promise<{ projectPlugins: import('vite').PluginOption[], extendConfig?: Function }>}
  */
 export async function loadProjectExtensions(ctx = {}) {
-  const candidate = firstExisting([
-    '.config/emulsify-core/vite/plugins.mjs',
-    '.config/emulsify-core/vite/plugins.js',
-    '.config/emulsify-core/vite/plugins.cjs',
-  ]);
+  const candidate =
+    firstExistingPath(
+      [
+        '.config/emulsify-core/vite/plugins.mjs',
+        '.config/emulsify-core/vite/plugins.js',
+        '.config/emulsify-core/vite/plugins.cjs',
+      ]
+        .map(inProject)
+        .filter(insideCwd),
+    ) || null;
 
   if (!candidate) return { projectPlugins: [] };
 

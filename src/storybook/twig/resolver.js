@@ -2,6 +2,8 @@
  * @file Runtime Twig template resolver used by Storybook Twig helpers.
  */
 
+import { unique } from '../../extensions/shared/lists.js';
+
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
 const twigModules =
@@ -26,15 +28,7 @@ export function mergeGlobMaps(maps) {
   return Object.assign({}, ...maps);
 }
 
-/**
- * Normalize path separators for Vite glob keys.
- *
- * @param {string} filePath - Path to normalize.
- * @returns {string} POSIX-like path.
- */
-function toPosixPath(filePath) {
-  return filePath.replace(/\\/g, '/');
-}
+const normalizeGlobPath = (filePath) => filePath.replace(/\\/g, '/');
 
 /**
  * Convert an absolute project path to a Vite root-relative key.
@@ -46,8 +40,8 @@ function toPosixPath(filePath) {
 export function toRootRelativePath(absolutePath, env = ENV) {
   if (!absolutePath) return '';
 
-  const normalizedPath = toPosixPath(absolutePath);
-  const projectDir = toPosixPath(env?.projectDir || '');
+  const normalizedPath = normalizeGlobPath(absolutePath);
+  const projectDir = normalizeGlobPath(env?.projectDir || '');
 
   if (projectDir && normalizedPath.startsWith(projectDir)) {
     const relativePath = normalizedPath.slice(projectDir.length);
@@ -55,16 +49,6 @@ export function toRootRelativePath(absolutePath, env = ENV) {
   }
 
   return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
-}
-
-/**
- * Return unique values in first-seen order.
- *
- * @param {*[]} values - Values to deduplicate.
- * @returns {*[]} Unique values.
- */
-function unique(values) {
-  return Array.from(new Set(values.filter(Boolean)));
 }
 
 /**

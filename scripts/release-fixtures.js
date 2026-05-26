@@ -4,7 +4,6 @@
 
 import {
   cpSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -18,6 +17,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { globSync } from 'glob';
+import { safeExists } from '../config/vite/utils/fs-safe.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixturesRoot = join(repoRoot, '.github/fixtures/release');
@@ -278,7 +278,7 @@ function run(command, args, cwd) {
 function assertExists(projectDir, relPaths) {
   for (const relPath of relPaths) {
     const absPath = join(projectDir, relPath);
-    if (!existsSync(absPath)) {
+    if (!safeExists(absPath)) {
       throw new Error(`Expected fixture output missing: ${relPath}`);
     }
   }
@@ -287,7 +287,7 @@ function assertExists(projectDir, relPaths) {
 function assertMissing(projectDir, relPaths = []) {
   for (const relPath of relPaths) {
     const absPath = join(projectDir, relPath);
-    if (existsSync(absPath)) {
+    if (safeExists(absPath)) {
       throw new Error(`Unexpected fixture output exists: ${relPath}`);
     }
   }

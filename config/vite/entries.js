@@ -18,26 +18,20 @@
  */
 
 import fs from 'fs';
-import { resolve, sep } from 'path';
+import { resolve } from 'path';
 import { globSync } from 'glob';
 import {
   compiledAssetOutputPath,
   resolveProjectStructure,
   storybookStyleOutputPath,
 } from './project-structure.js';
+import { replaceLastSlash, toPosix } from './utils/paths.js';
+import { unique } from './utils/unique.js';
 
-/** Normalize filesystem paths to POSIX for Rollup keys. */
-export const toPosix = (p) => p.split(sep).join('/');
+export { replaceLastSlash, toPosix };
 
 /** Remove characters that would confuse Rollup naming or file systems. */
 export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
-
-/** Replace last slash with an injected subdir (e.g., '/css/' or '/js/'). */
-export function replaceLastSlash(str, replacement) {
-  const i = str.lastIndexOf('/');
-  if (i === -1) return str;
-  return str.slice(0, i) + replacement + str.slice(i + 1);
-}
 
 /**
  * @typedef {Object} BuildContext
@@ -119,16 +113,6 @@ function safeSetKey(map, key, value) {
 }
 
 /**
- * Return unique file paths while preserving first-seen order.
- *
- * @param {string[]} files - File paths.
- * @returns {string[]} Unique file paths.
- */
-function uniqueFiles(files) {
-  return Array.from(new Set(files.filter(Boolean)));
-}
-
-/**
  * Glob a pattern below each source root.
  *
  * @param {{directory: string}[]} roots - Source root records.
@@ -137,10 +121,12 @@ function uniqueFiles(files) {
  * @returns {string[]} Matching files.
  */
 function globFromRoots(roots, pattern, options = {}) {
-  return uniqueFiles(
-    roots.flatMap((root) =>
-      globSync(toPosix(resolve(root.directory, pattern)), options),
-    ),
+  return unique(
+    roots
+      .flatMap((root) =>
+        globSync(toPosix(resolve(root.directory, pattern)), options),
+      )
+      .filter(Boolean),
   );
 }
 

@@ -4,13 +4,7 @@
  * @file Combined Emulsify project readiness audit.
  */
 
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-} from 'node:fs';
+import { lstatSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { globSync } from 'glob';
 import { resolveProjectConfig } from '../config/vite/project-config.js';
@@ -18,6 +12,13 @@ import {
   compiledAssetOutputPath,
   storybookStyleOutputPath,
 } from '../config/vite/project-structure.js';
+import {
+  firstExistingPath,
+  safeExists,
+  safeReadFile,
+  safeReadJson,
+} from '../config/vite/utils/fs-safe.js';
+import { toPosixPath } from '../config/vite/utils/paths.js';
 import { candidateKeysForReference } from '../src/storybook/twig/resolver.js';
 import { analyzeStorySource, collectStoryFiles } from './audit-twig-stories.js';
 
@@ -67,16 +68,6 @@ const RECOMMENDED_PACKAGE_OVERRIDES = [
 ];
 
 /**
- * Normalize filesystem paths to POSIX separators.
- *
- * @param {string} filePath - Filesystem path.
- * @returns {string} POSIX path.
- */
-function toPosixPath(filePath) {
-  return filePath.split(sep).join('/');
-}
-
-/**
  * Return a project-relative path for report output.
  *
  * @param {string} projectDir - Absolute project root.
@@ -85,20 +76,6 @@ function toPosixPath(filePath) {
  */
 function displayPath(projectDir, filePath) {
   return toPosixPath(relative(projectDir, filePath));
-}
-
-/**
- * Determine whether a file exists without throwing.
- *
- * @param {string} filePath - Absolute file path.
- * @returns {boolean} TRUE when the file exists.
- */
-function safeExists(filePath) {
-  try {
-    return existsSync(filePath);
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -112,39 +89,6 @@ function safeIsDirectory(filePath) {
     return lstatSync(filePath).isDirectory();
   } catch {
     return false;
-  }
-}
-
-/**
- * Read a file as UTF-8, returning an empty string on failure.
- *
- * @param {string} filePath - Absolute file path.
- * @returns {string} File contents.
- */
-function safeReadFile(filePath) {
-  try {
-    return readFileSync(filePath, 'utf8');
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Read a JSON file, returning parse errors instead of throwing.
- *
- * @param {string} filePath - Absolute file path.
- * @returns {{data?: object, error?: Error}} Parsed result.
- */
-function safeReadJson(filePath) {
-  const source = safeReadFile(filePath);
-  if (!source) {
-    return {};
-  }
-
-  try {
-    return { data: JSON.parse(source) };
-  } catch (error) {
-    return { error };
   }
 }
 
@@ -873,22 +817,6 @@ function styleRuntimeDirectories(filePath, env, projectDir) {
 }
 
 /**
- * Resolve a URL path against a list of directories.
- *
- * @param {string} assetPath - Local relative asset path.
- * @param {string[]} directories - Candidate base directories.
- * @returns {string|null} Existing absolute asset path.
- */
-function firstExistingAssetPath(assetPath, directories) {
-  for (const directory of directories) {
-    const candidate = resolve(directory, assetPath);
-    if (safeExists(candidate)) return candidate;
-  }
-
-  return null;
-}
-
-/**
  * Audit local CSS/Sass asset URLs that Vite may leave to runtime resolution.
  *
  * @param {object} context - Audit context.
@@ -917,10 +845,12 @@ function auditCssAssetReferences(context) {
       const assetPath = cssUrlPath(ref.value);
       if (!assetPath) continue;
 
-      const sourceAsset = firstExistingAssetPath(assetPath, [
-        dirname(filePath),
+      const sourceAsset = firstExistingPath([
+        resolve(dirname(filePath), assetPath),
       ]);
-      const runtimeAsset = firstExistingAssetPath(assetPath, runtimeDirs);
+      const runtimeAsset = firstExistingPath(
+        runtimeDirs.map((directory) => resolve(directory, assetPath)),
+      );
       const resolvedAsset = sourceAsset || runtimeAsset;
 
       if (!resolvedAsset) {

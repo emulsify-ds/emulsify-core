@@ -28,7 +28,6 @@ import {
   readdirSync,
   rmdirSync,
   statSync,
-  existsSync,
   readFileSync,
 } from 'fs';
 import { globSync } from 'glob';
@@ -48,6 +47,9 @@ import {
   relativeFrom,
   resolveProjectStructure,
 } from './project-structure.js';
+import { firstExistingPath, safeExists } from './utils/fs-safe.js';
+import { toPosixPath } from './utils/paths.js';
+import { unique } from './utils/unique.js';
 
 /* ============================================================================
  * Small, focused helpers
@@ -56,20 +58,6 @@ import {
 /** Determine whether a Twig file is a partial (filename starts with `_`). */
 const isPartial = (filePath) =>
   (filePath.split('/')?.pop() || '').trim().startsWith('_');
-
-/**
- * Return the first existing path in a list.
- * @param {string[]} paths
- * @returns {string|undefined}
- */
-const firstExistingPath = (paths) =>
-  paths.filter(Boolean).find((filePath) => {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
-    return existsSync(filePath);
-  });
-
-/** Normalize Windows separators before paths are used in globs or output keys. */
-const toPosixPath = (filePath) => filePath.replace(/\\/g, '/');
 
 /** Twig token types that can reference another template file. */
 const includeTokenTypes = [
@@ -116,14 +104,6 @@ const pluckIncludes = (tokens = []) => [
     ),
   ...tokens.flatMap((token) => pluckIncludes(token.token?.output || [])),
 ];
-
-/**
- * Return truthy values in first-seen order with duplicates removed.
- *
- * @param {*[]} items - Candidate values.
- * @returns {*[]} Unique truthy values.
- */
-const unique = (items) => [...new Set(items.filter(Boolean))];
 
 /**
  * Determine whether a Vite request should compile as a YAML module.
@@ -210,13 +190,15 @@ const fileCandidates = (baseDir, templatePath) => {
   const withoutTwigExt = normalizedTemplatePath.replace(/\.twig$/i, '');
   const stem = basename(withoutTwigExt);
 
-  return unique([
-    resolve(baseDir, normalizedTemplatePath),
-    resolve(baseDir, `${normalizedTemplatePath}.twig`),
-    resolve(baseDir, `${normalizedTemplatePath}.html.twig`),
-    resolve(baseDir, withoutTwigExt, `${stem}.twig`),
-    resolve(baseDir, withoutTwigExt, `${stem}.html.twig`),
-  ]);
+  return unique(
+    [
+      resolve(baseDir, normalizedTemplatePath),
+      resolve(baseDir, `${normalizedTemplatePath}.twig`),
+      resolve(baseDir, `${normalizedTemplatePath}.html.twig`),
+      resolve(baseDir, withoutTwigExt, `${stem}.twig`),
+      resolve(baseDir, withoutTwigExt, `${stem}.html.twig`),
+    ].filter(Boolean),
+  );
 };
 
 /**
@@ -364,7 +346,7 @@ const compileTwigTemplate = (templateId, filePath, options) => {
     id: templateId,
     path: filePath,
   });
-  const includes = unique(pluckIncludes(template.tokens));
+  const includes = unique(pluckIncludes(template.tokens).filter(Boolean));
 
   return {
     code: template.compile(compileOptions),
@@ -1041,9 +1023,9 @@ function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
 
   const collectIconFiles = () => {
     if (iconFilesResolved) return iconFiles;
-    iconFiles = unique(patterns.flatMap((p) => globSync(p))).sort((a, b) =>
-      posix(a).localeCompare(posix(b)),
-    );
+    iconFiles = unique(
+      patterns.flatMap((p) => globSync(p)).filter(Boolean),
+    ).sort((a, b) => posix(a).localeCompare(posix(b)));
     iconFilesResolved = true;
     return iconFiles;
   };
@@ -1189,7 +1171,7 @@ function mirrorComponentsToRoot({ enabled, projectDir }) {
     closeBundle() {
       if (!enabled) return;
       const distComponents = join(outDir, 'components');
-      if (!existsSync(distComponents)) return;
+      if (!safeExists(distComponents)) return;
 
       for (const srcFile of walkFiles(distComponents)) {
         const relFromOutDir = srcFile.slice(join(outDir, '').length);
