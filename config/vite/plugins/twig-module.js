@@ -400,10 +400,13 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   });
   const includes = unique(pluckIncludes(template.tokens).filter(Boolean));
   const templateParams = {
+    __emulsifyTwigSignature: `${absoluteFilePath}:${mtimeMs}`,
+    allowInlineIncludes: true,
     data: template.tokens,
     namespaces: options.namespaces,
     path: absoluteFilePath,
     precompiled: true,
+    rethrow: true,
   };
   const compiled = {
     code: runtimeTemplateCode(templateId, templateParams),
@@ -644,8 +647,39 @@ export function emulsifyTwigModulePlugin(options) {
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 
           const { twig } = Twig;
-          const __emulsifyTwigTemplate = (id, params) =>
-            Twig.twig({ ref: id }) || twig({ ...params, id });
+          const __emulsifyTwigDeleteTemplate = (id) => {
+            if (typeof Twig.extend !== 'function') return;
+
+            Twig.extend((TwigCore) => {
+              if (TwigCore?.Templates?.registry) {
+                delete TwigCore.Templates.registry[id];
+              }
+            });
+          };
+          const __emulsifyTwigTemplate = (id, params) => {
+            const cached = Twig.twig({ ref: id });
+            const signature = params.__emulsifyTwigSignature;
+
+            if (cached) {
+              cached.options = {
+                ...(cached.options || {}),
+                allowInlineIncludes: true,
+                namespaces: params.namespaces,
+                rethrow: true,
+              };
+
+              if (!signature || cached.__emulsifyTwigSignature === signature) {
+                return cached;
+              }
+
+              // Twig.twig({ ref }) bypasses Twig.cache and can return stale HMR entries.
+              __emulsifyTwigDeleteTemplate(id);
+            }
+
+            const template = twig({ ...params, id });
+            template.__emulsifyTwigSignature = signature;
+            return template;
+          };
 
           registerTwigExtensions(Twig);
 

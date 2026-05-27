@@ -267,6 +267,55 @@ describe('Twig module plugin', () => {
     expect(transformed.code).not.toContain('Twig.cache(false)');
   });
 
+  it('preserves runtime rethrow for precompiled templates', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), {
+      recursive: true,
+    });
+    fs.writeFileSync(cardFile, '<article>{{ title|missing_filter }}</article>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code, {
+      title: 'Card',
+    });
+
+    expect(output).toContain('Unable to find filter missing_filter');
+    expect(output).not.toContain('valueOf');
+  });
+
+  it('refreshes stale runtime registry entries after HMR recompilation', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), {
+      recursive: true,
+    });
+    fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const runtimeTwig = Twig.factory();
+    const first = transformTwigModule(twigPlugin, cardFile);
+
+    expect(
+      renderGeneratedTwigModule(first.code, { title: 'Card' }, runtimeTwig),
+    ).toContain('<article>Card</article>');
+
+    fs.writeFileSync(cardFile, '<section>{{ title }}</section>');
+    fs.utimesSync(
+      cardFile,
+      new Date(Date.now() + 1000),
+      new Date(Date.now() + 1000),
+    );
+    twigPlugin.handleHotUpdate({ file: cardFile, server: {} });
+
+    const second = transformTwigModule(twigPlugin, cardFile);
+
+    expect(
+      renderGeneratedTwigModule(second.code, { title: 'Updated' }, runtimeTwig),
+    ).toContain('<section>Updated</section>');
+  });
+
   it('can transform a child Twig module before a parent includes it', () => {
     projectDir = makeTempProject();
     const headingFile = join(projectDir, 'src/components/heading/heading.twig');
