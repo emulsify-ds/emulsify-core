@@ -2,7 +2,7 @@
  * @file Tests for Drupal component mirror plugin behavior.
  */
 
-import {
+import fs, {
   existsSync,
   mkdirSync,
   readFileSync,
@@ -13,10 +13,14 @@ import {
 } from 'fs';
 import { join } from 'path';
 
-import { mirrorComponentsToRoot } from '../mirror-components.js';
+import {
+  filesHaveSameBytes,
+  mirrorComponentsToRoot,
+} from '../mirror-components.js';
 import { makeTempProject } from '../../test-utils/plugins.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';
+const LARGE_COMPARE_SIZE = 128 * 1024 + 7;
 
 const readMirrorState = (outDir) =>
   JSON.parse(readFileSync(join(outDir, MIRROR_STATE_FILE), 'utf8'));
@@ -28,6 +32,55 @@ describe('component mirror plugin', () => {
     if (projectDir) {
       rmSync(projectDir, { recursive: true, force: true });
     }
+    jest.restoreAllMocks();
+  });
+
+  it('compares equal small files by bytes', () => {
+    projectDir = makeTempProject();
+    const sourceFile = join(projectDir, 'source.twig');
+    const destinationFile = join(projectDir, 'destination.twig');
+    writeFileSync(sourceFile, '<article>{{ title }}</article>');
+    writeFileSync(destinationFile, '<article>{{ title }}</article>');
+
+    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(true);
+  });
+
+  it('compares equal large files by bytes', () => {
+    projectDir = makeTempProject();
+    const sourceFile = join(projectDir, 'source.twig');
+    const destinationFile = join(projectDir, 'destination.twig');
+    const largeContents = Buffer.alloc(LARGE_COMPARE_SIZE, 'a');
+    writeFileSync(sourceFile, largeContents);
+    writeFileSync(destinationFile, largeContents);
+
+    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(true);
+  });
+
+  it('detects large files that differ only in the last byte', () => {
+    projectDir = makeTempProject();
+    const sourceFile = join(projectDir, 'source.twig');
+    const destinationFile = join(projectDir, 'destination.twig');
+    const sourceContents = Buffer.alloc(LARGE_COMPARE_SIZE, 'a');
+    const destinationContents = Buffer.from(sourceContents);
+    destinationContents.write('b', destinationContents.length - 1);
+    writeFileSync(sourceFile, sourceContents);
+    writeFileSync(destinationFile, destinationContents);
+
+    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(false);
+  });
+
+  it('short-circuits different-size files without reading file bodies', () => {
+    projectDir = makeTempProject();
+    const sourceFile = join(projectDir, 'source.twig');
+    const destinationFile = join(projectDir, 'destination.twig');
+    writeFileSync(sourceFile, 'larger');
+    writeFileSync(destinationFile, 'small');
+    const readFileSpy = jest.spyOn(fs, 'readFileSync');
+    const openSpy = jest.spyOn(fs, 'openSync');
+
+    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(false);
+    expect(readFileSpy).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it('mirrors built components when enabled and skips mirroring when disabled', () => {
