@@ -18,15 +18,14 @@
  */
 
 import fs from 'fs';
-import { resolve } from 'path';
-import { globSync } from 'glob';
+import { basename, resolve } from 'path';
 import {
   compiledAssetOutputPath,
   resolveProjectStructure,
   storybookStyleOutputPath,
 } from './project-structure.js';
+import { createSourceFileIndex } from './plugins/source-file-index.js';
 import { replaceLastSlash, toPosix } from './utils/paths.js';
-import { unique } from './utils/unique.js';
 
 export { replaceLastSlash, toPosix };
 
@@ -42,6 +41,7 @@ export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
  * @property {boolean} SDC
  * @property {boolean} structureOverrides
  * @property {string[]} [structureRoots]
+ * @property {object} [sourceFileIndex]
  */
 
 /* -------------------------------------------------------------------------- */
@@ -60,36 +60,36 @@ function safeSetKey(map, key, value) {
   map[key] = value; // eslint-disable-line security/detect-object-injection
 }
 
-/**
- * Glob a pattern below each source root.
- *
- * @param {{directory: string}[]} roots - Source root records.
- * @param {string} pattern - Glob pattern relative to each root.
- * @param {object} [options={}] - Glob options.
- * @returns {string[]} Matching files.
- */
-function globFromRoots(roots, pattern, options = {}) {
-  return unique(
-    roots
-      .flatMap((root) =>
-        globSync(toPosix(resolve(root.directory, pattern)), options),
-      )
-      .filter(Boolean),
-  );
-}
+/** Return an absolute path from a source index entry or string. */
+const entryPath = (entry) =>
+  typeof entry === 'string' ? entry : entry.absPath;
 
-/**
- * Build ignored global paths for a global source root.
- *
- * @param {string} rootDir - Absolute global source root.
- * @returns {string[]} Ignore globs.
- */
-function globalIgnorePatterns(rootDir) {
-  return [
-    toPosix(resolve(rootDir, 'components/**')),
-    toPosix(resolve(rootDir, 'util/**')),
-  ];
-}
+/** Determine whether a file should be compiled as a JS entry. */
+const isJavaScriptEntry = (entry) => {
+  const filePath = entryPath(entry);
+  return (
+    /\.js$/.test(filePath) &&
+    !/\.(stories|component|min|test)\.js$/.test(filePath)
+  );
+};
+
+/** Determine whether a file should be compiled as a regular SCSS entry. */
+const isScssEntry = (entry) => {
+  const filePath = entryPath(entry);
+  const name = basename(filePath);
+  return (
+    /\.scss$/.test(name) &&
+    !name.startsWith('_') &&
+    !name.startsWith('cl-') &&
+    !name.startsWith('sb-')
+  );
+};
+
+/** Determine whether a file should be emitted under the Storybook style path. */
+const isStorybookScssEntry = (entry) => {
+  const filePath = entryPath(entry);
+  return /\.scss$/.test(filePath) && /(?:cl-|sb-)/.test(basename(filePath));
+};
 
 /* -------------------------------------------------------------------------- */
 /* Inputs builder                                                             */
@@ -110,6 +110,8 @@ function globalIgnorePatterns(rootDir) {
  */
 export function buildInputs(ctx) {
   const structure = ctx.projectStructure || resolveProjectStructure(ctx);
+  const sourceFileIndex =
+    ctx.sourceFileIndex || createSourceFileIndex(structure);
 
   /** @type {Record<string, string>} */
   const inputs = {};
@@ -130,32 +132,27 @@ export function buildInputs(ctx) {
   /* STRUCTURE OVERRIDES BRANCH                                               */
   /* ------------------------------------------------------------------------ */
   if (structure.structureOverrides) {
-    // Gather *.js and *.scss from each declared variant root directory.
-    const jsFiles = globFromRoots(
-      structure.componentRootRecords,
-      '**/!(*.stories|*.component|*.min|*.test).js',
-    );
-    const scssFiles = globFromRoots(
-      structure.componentRootRecords,
-      '**/!(_*|cl-*|sb-*).scss',
-    );
-    const storybookScss = globFromRoots(
-      structure.componentRootRecords,
-      '**/*{cl-*,sb-*}.scss',
-    );
+    // Gather JS and SCSS from each declared variant root directory.
+    const componentFiles = sourceFileIndex.componentFiles();
+    const jsFiles = componentFiles.filter(isJavaScriptEntry);
+    const scssFiles = componentFiles.filter(isScssEntry);
+    const storybookScss = componentFiles.filter(isStorybookScssEntry);
 
     // JS files emit under dist/js using the path below components when possible.
-    for (const file of jsFiles) {
+    for (const entry of jsFiles) {
+      const file = entryPath(entry);
       add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
     }
 
     // SCSS files emit under dist/css using the same relative path rules.
-    for (const file of scssFiles) {
+    for (const entry of scssFiles) {
+      const file = entryPath(entry);
       add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
     }
 
     // Storybook and component-library styles stay under dist/storybook.
-    for (const file of storybookScss) {
+    for (const entry of storybookScss) {
+      const file = entryPath(entry);
       add(storybookStyleOutputPath(file, structure, ctx), file);
     }
 
@@ -165,59 +162,36 @@ export function buildInputs(ctx) {
   /* ------------------------------------------------------------------------ */
   /* MODERN BRANCH (existing behavior preserved)                              */
   /* ------------------------------------------------------------------------ */
+  const globalFiles = sourceFileIndex.globalFiles();
+  const componentFiles = sourceFileIndex.componentFiles();
+
   // Global JS
-  for (const globalRoot of structure.globalRootRecords) {
-    const files = globSync(
-      toPosix(
-        resolve(
-          globalRoot.directory,
-          '!(components|util)/**/!(*.stories|*.component|*.min|*.test).js',
-        ),
-      ),
-      { ignore: globalIgnorePatterns(globalRoot.directory) },
-    );
-    for (const file of files) {
-      add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
-    }
+  for (const entry of globalFiles.filter(isJavaScriptEntry)) {
+    const file = entryPath(entry);
+    add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
   }
 
   // Component JS
-  for (const file of globFromRoots(
-    structure.componentRootRecords,
-    '**/!(*.stories|*.component|*.min|*.test).js',
-  )) {
+  for (const entry of componentFiles.filter(isJavaScriptEntry)) {
+    const file = entryPath(entry);
     add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
   }
 
   // Global SCSS
-  for (const globalRoot of structure.globalRootRecords) {
-    const files = globSync(
-      toPosix(
-        resolve(
-          globalRoot.directory,
-          '!(components|util)/**/!(_*|cl-*|sb-*).scss',
-        ),
-      ),
-      { ignore: globalIgnorePatterns(globalRoot.directory) },
-    );
-    for (const file of files) {
-      add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
-    }
+  for (const entry of globalFiles.filter(isScssEntry)) {
+    const file = entryPath(entry);
+    add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
   }
 
   // Component SCSS
-  for (const file of globFromRoots(
-    structure.componentRootRecords,
-    '**/!(_*|cl-*|sb-*).scss',
-  )) {
+  for (const entry of componentFiles.filter(isScssEntry)) {
+    const file = entryPath(entry);
     add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
   }
 
   // Storybook/CL SCSS
-  for (const file of globFromRoots(
-    structure.sourceRootRecords,
-    '**/*{cl-*,sb-*}.scss',
-  )) {
+  for (const entry of sourceFileIndex.all().filter(isStorybookScssEntry)) {
+    const file = entryPath(entry);
     add(storybookStyleOutputPath(file, structure, ctx), file);
   }
 

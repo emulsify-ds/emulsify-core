@@ -23,6 +23,7 @@ import path from 'node:path';
 import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
 import { buildInputs } from './entries.js';
+import { createSourceFileIndex } from './plugins/source-file-index.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
@@ -42,6 +43,8 @@ export default defineConfig(async () => {
 
   /** @type {EmulsifyEnv} */
   const env = resolveEnvironment();
+  const sourceFileIndex = createSourceFileIndex(env.projectStructure);
+  const envWithSourceFileIndex = { ...env, sourceFileIndex };
 
   // Build the Rollup/Vite entry map: keys encode output paths, values source files.
   /** @type {Record<string, string>} */
@@ -55,6 +58,7 @@ export default defineConfig(async () => {
     structureRoots: env.structureRoots,
     structureImplementations: env.structureImplementations,
     projectStructure: env.projectStructure,
+    sourceFileIndex,
   });
 
   // Load optional project-provided plugins and config patches.
@@ -73,7 +77,7 @@ export default defineConfig(async () => {
     root: process.cwd(),
 
     // Core plugin set + project-provided plugins (if any).
-    plugins: [...makePlugins(env), ...projectPlugins],
+    plugins: [...makePlugins(envWithSourceFileIndex), ...projectPlugins],
 
     // Keep React-based story helpers on the consumer project's React singleton.
     resolve: mergeReactSingletonResolve(),

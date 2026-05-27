@@ -2,36 +2,104 @@
  * @file Tests for Vite/Rollup entry key generation.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { dirname, join, relative } from 'path';
+import { mkdtempSync, rmSync } from 'fs';
+import { join, relative, sep } from 'path';
 import { tmpdir } from 'os';
 import { buildInputs } from './entries.js';
-import { resolveProjectConfig } from './project-config.js';
+import { resolveProjectStructure, relativeFrom } from './project-structure.js';
 import { toPosixPath } from './utils/paths.js';
 
 const makeTempProject = () => mkdtempSync(join(tmpdir(), 'emulsify-core-'));
 
-const writeProjectConfig = (projectDir, config) => {
-  writeFileSync(
-    join(projectDir, 'project.emulsify.json'),
-    JSON.stringify(config, null, 2),
+const sourceEntry = (absPath, rootType, roots) => {
+  const root =
+    roots.find((candidate) => {
+      const rel = relative(candidate.directory, absPath);
+      return rel && !rel.startsWith('..') && !rel.includes(`..${sep}`);
+    }) || roots[0];
+
+  return {
+    absPath,
+    relPath: root ? relativeFrom(absPath, root.directory) : absPath,
+    root,
+    rootType,
+  };
+};
+
+const fakeSourceFileIndex = ({ componentFiles = [], globalFiles = [] }) => ({
+  all: () => [...componentFiles, ...globalFiles],
+  componentFiles: () => componentFiles,
+  globalFiles: () => globalFiles,
+});
+
+const buildContext = (
+  projectDir,
+  {
+    platform = 'generic',
+    SDC = false,
+    srcExists = true,
+    structureImplementations = [],
+    componentFilePaths = [],
+    globalFilePaths = [],
+  } = {},
+) => {
+  const srcDir = srcExists
+    ? join(projectDir, 'src')
+    : join(projectDir, 'components');
+  const absoluteStructureImplementations = structureImplementations.map(
+    (implementation) => ({
+      ...implementation,
+      directory: join(projectDir, implementation.directory),
+    }),
   );
+  const structure = resolveProjectStructure({
+    projectDir,
+    srcDir,
+    srcExists,
+    SDC,
+    structureImplementations: absoluteStructureImplementations,
+  });
+  const componentFiles = componentFilePaths.map((relPath) =>
+    sourceEntry(
+      join(projectDir, relPath),
+      'component',
+      structure.componentRootRecords,
+    ),
+  );
+  const globalFiles = globalFilePaths.map((relPath) =>
+    sourceEntry(
+      join(projectDir, relPath),
+      'global',
+      structure.globalRootRecords,
+    ),
+  );
+
+  return {
+    projectDir,
+    srcDir,
+    srcExists,
+    isDrupal: platform === 'drupal',
+    SDC,
+    structureOverrides: structure.structureOverrides,
+    structureRoots: absoluteStructureImplementations.map(
+      (implementation) => implementation.directory,
+    ),
+    structureImplementations: absoluteStructureImplementations,
+    projectStructure: structure,
+    sourceFileIndex: fakeSourceFileIndex({ componentFiles, globalFiles }),
+  };
 };
 
-const writeSourceFile = (projectDir, relPath, contents = '') => {
-  const absPath = join(projectDir, relPath);
-  mkdirSync(dirname(absPath), { recursive: true });
-  writeFileSync(absPath, contents);
-};
-
-const buildRelativeInputs = (projectDir) => {
-  const env = resolveProjectConfig(projectDir, {});
-  const inputs = buildInputs(env);
+const buildRelativeInputs = (ctx) => {
+  const inputs = buildInputs(ctx);
 
   return Object.fromEntries(
     Object.entries(inputs)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => [key, toPosixPath(relative(projectDir, value))]),
+      .map(([key, value]) => [
+        key,
+        toPosixPath(relative(ctx.projectDir, value)),
+      ]),
   );
 };
 
@@ -46,16 +114,16 @@ describe('buildInputs structure outputs', () => {
 
   it('preserves Drupal SDC output for src/components projects', () => {
     projectDir = makeTempProject();
-    writeProjectConfig(projectDir, {
-      project: {
-        platform: 'drupal',
-        singleDirectoryComponents: true,
-      },
+    const ctx = buildContext(projectDir, {
+      platform: 'drupal',
+      SDC: true,
+      componentFilePaths: [
+        'src/components/card/card.js',
+        'src/components/card/card.scss',
+      ],
     });
-    writeSourceFile(projectDir, 'src/components/card/card.js');
-    writeSourceFile(projectDir, 'src/components/card/card.scss');
 
-    expect(buildRelativeInputs(projectDir)).toMatchInlineSnapshot(`
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
 {
   "components/card/card": "src/components/card/card.js",
   "components/card/card__style": "src/components/card/card.scss",
@@ -65,23 +133,21 @@ describe('buildInputs structure outputs', () => {
 
   it('preserves generic output for src/components projects', () => {
     projectDir = makeTempProject();
-    writeProjectConfig(projectDir, {
-      project: {
-        platform: 'generic',
-      },
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: [
+        'src/components/card/card.js',
+        'src/components/card/card.scss',
+        'src/components/card/_partial.scss',
+        'src/components/card/card.stories.js',
+        'src/components/card/card.component.js',
+        'src/components/card/card.min.js',
+        'src/components/card/card.test.js',
+        'src/components/card/cl-card.scss',
+      ],
+      globalFilePaths: ['src/base/base.js', 'src/base/base.scss'],
     });
-    writeSourceFile(projectDir, 'src/base/base.js');
-    writeSourceFile(projectDir, 'src/base/base.scss');
-    writeSourceFile(projectDir, 'src/components/card/card.js');
-    writeSourceFile(projectDir, 'src/components/card/card.scss');
-    writeSourceFile(projectDir, 'src/components/card/_partial.scss');
-    writeSourceFile(projectDir, 'src/components/card/card.stories.js');
-    writeSourceFile(projectDir, 'src/components/card/card.component.js');
-    writeSourceFile(projectDir, 'src/components/card/card.min.js');
-    writeSourceFile(projectDir, 'src/components/card/card.test.js');
-    writeSourceFile(projectDir, 'src/components/card/cl-card.scss');
 
-    expect(buildRelativeInputs(projectDir)).toMatchInlineSnapshot(`
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
 {
   "components/card/css/card": "src/components/card/card.scss",
   "components/card/js/card": "src/components/card/card.js",
@@ -94,16 +160,16 @@ describe('buildInputs structure outputs', () => {
 
   it('supports canonical root components-only projects', () => {
     projectDir = makeTempProject();
-    writeProjectConfig(projectDir, {
-      project: {
-        platform: 'generic',
-      },
+    const ctx = buildContext(projectDir, {
+      srcExists: false,
+      componentFilePaths: [
+        'components/card/card.js',
+        'components/card/card.scss',
+        'components/card/sb-card.scss',
+      ],
     });
-    writeSourceFile(projectDir, 'components/card/card.js');
-    writeSourceFile(projectDir, 'components/card/card.scss');
-    writeSourceFile(projectDir, 'components/card/sb-card.scss');
 
-    expect(buildRelativeInputs(projectDir)).toMatchInlineSnapshot(`
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
 {
   "components/card/css/card": "components/card/card.scss",
   "components/card/js/card": "components/card/card.js",
@@ -114,27 +180,25 @@ describe('buildInputs structure outputs', () => {
 
   it('preserves structureImplementation entry output paths', () => {
     projectDir = makeTempProject();
-    writeProjectConfig(projectDir, {
-      project: {
-        platform: 'drupal',
-      },
-      variant: {
-        structureImplementations: [
-          { name: 'components', directory: './src/components/' },
-          { name: 'foundation', directory: './src/foundation/' },
-          { name: 'layout', directory: './src/layout/' },
-          { name: 'tokens', directory: './src/tokens/' },
-        ],
-      },
+    const ctx = buildContext(projectDir, {
+      platform: 'drupal',
+      structureImplementations: [
+        { name: 'components', directory: 'src/components' },
+        { name: 'foundation', directory: 'src/foundation' },
+        { name: 'layout', directory: 'src/layout' },
+        { name: 'tokens', directory: 'src/tokens' },
+      ],
+      componentFilePaths: [
+        'src/components/button/button.js',
+        'src/components/button/button.scss',
+        'src/components/button/cl-button.scss',
+        'src/foundation/colors/colors.js',
+        'src/foundation/colors/colors.scss',
+        'src/layout/grid/sb-grid.scss',
+      ],
     });
-    writeSourceFile(projectDir, 'src/components/button/button.js');
-    writeSourceFile(projectDir, 'src/components/button/button.scss');
-    writeSourceFile(projectDir, 'src/components/button/cl-button.scss');
-    writeSourceFile(projectDir, 'src/foundation/colors/colors.js');
-    writeSourceFile(projectDir, 'src/foundation/colors/colors.scss');
-    writeSourceFile(projectDir, 'src/layout/grid/sb-grid.scss');
 
-    expect(buildRelativeInputs(projectDir)).toMatchInlineSnapshot(`
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
 {
   "css/button/button": "src/components/button/button.scss",
   "css/src/foundation/colors/colors": "src/foundation/colors/colors.scss",

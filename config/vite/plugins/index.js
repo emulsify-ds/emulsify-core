@@ -48,7 +48,8 @@ export function makePlugins(env) {
     });
   const envWithStructure = { ...env, projectStructure: structure };
   const twigOptions = makeTwigPluginOptions(env);
-  const sourceFileIndex = createSourceFileIndex(structure);
+  const sourceFileIndex =
+    env.sourceFileIndex || createSourceFileIndex(structure);
 
   const basePlugins = [
     virtualTwigGlobsPlugin(envWithStructure),
