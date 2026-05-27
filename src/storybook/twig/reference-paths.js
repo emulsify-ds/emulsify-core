@@ -1,10 +1,19 @@
 /**
  * @file Node-safe Twig reference path helpers shared by audit and Storybook.
+ *
+ * Twig root records are memoized per environment object so repeated runtime
+ * include resolution can reuse the same normalized root list within a session.
  */
 
 import { unique } from '../../extensions/shared/lists.js';
 
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
+
+/** @type {WeakMap<object, object[]>} */
+let rootRecordsCache = new WeakMap();
+
+/** @type {object[]|undefined} */
+let defaultRecords;
 
 const normalizeGlobPath = (filePath) => filePath.replace(/\\/g, '/');
 
@@ -48,13 +57,13 @@ function normalizeRootRecord(root, env) {
 }
 
 /**
- * Build Twig roots from the normalized project structure.
+ * Compute Twig roots from the normalized project structure.
  *
- * @param {object} [env=ENV] - Normalized Emulsify environment.
+ * @param {object} env - Normalized Emulsify environment.
  * @returns {{name: string|undefined, directory: string, rootRel: string}[]}
  *   Twig roots in resolution order.
  */
-export function buildTwigRootRecords(env = ENV) {
+function computeTwigRootRecords(env) {
   const structure = env?.projectStructure || {};
   const namespaceRoots =
     structure.namespaceRoots && typeof structure.namespaceRoots === 'object'
@@ -99,6 +108,53 @@ export function buildTwigRootRecords(env = ENV) {
       ),
     )
     .filter(Boolean);
+}
+
+/**
+ * Build Twig roots from the normalized project structure.
+ *
+ * @param {object} [env=ENV] - Normalized Emulsify environment.
+ * @returns {{name: string|undefined, directory: string, rootRel: string}[]}
+ *   Twig roots in resolution order.
+ */
+export function buildTwigRootRecords(env = ENV) {
+  if (env === ENV) {
+    defaultRecords ||= computeTwigRootRecords(env);
+    return defaultRecords;
+  }
+
+  if (env && typeof env === 'object') {
+    const cached = rootRecordsCache.get(env);
+    if (cached) return cached;
+
+    const records = computeTwigRootRecords(env);
+    rootRecordsCache.set(env, records);
+    return records;
+  }
+
+  return computeTwigRootRecords(env);
+}
+
+/**
+ * Reset memoized Twig root records for tests.
+ *
+ * @param {object} [env] - Optional environment object to clear.
+ */
+export function resetTwigRootRecordsCache(env) {
+  if (arguments.length === 0) {
+    rootRecordsCache = new WeakMap();
+    defaultRecords = undefined;
+    return;
+  }
+
+  if (env === ENV) {
+    defaultRecords = undefined;
+    return;
+  }
+
+  if (env && typeof env === 'object') {
+    rootRecordsCache.delete(env);
+  }
 }
 
 /**

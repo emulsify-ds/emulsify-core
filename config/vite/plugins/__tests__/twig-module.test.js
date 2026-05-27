@@ -2,7 +2,7 @@
  * @file Tests for Twig module plugin compilation and namespace behavior.
  */
 
-import * as fs from 'fs';
+import fs from 'fs';
 import { join } from 'path';
 import Twig from 'twig';
 
@@ -189,6 +189,50 @@ describe('Twig module plugin', () => {
     expect(factorySpy).toHaveBeenCalledTimes(
       new Set([firstFile, secondFile, wrapperFile, sharedFile]).size,
     );
+  });
+
+  it('memoizes filesystem probes for repeated include resolution tuples', () => {
+    projectDir = makeTempProject();
+    const componentDir = join(projectDir, 'src/components/card');
+    const srcDir = join(projectDir, 'src');
+    const firstFile = join(componentDir, 'first.twig');
+    const secondFile = join(componentDir, 'second.twig');
+    const thirdFile = join(componentDir, 'third.twig');
+    fs.mkdirSync(componentDir, { recursive: true });
+    fs.writeFileSync(firstFile, twigInclude('./missing'));
+    fs.writeFileSync(secondFile, twigInclude('./missing'));
+    fs.writeFileSync(thirdFile, twigInclude('./missing'));
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const statSpy = jest.spyOn(fs, 'statSync');
+    const candidatePaths = new Set([
+      join(componentDir, 'missing'),
+      join(componentDir, 'missing.twig'),
+      join(componentDir, 'missing.html.twig'),
+      join(componentDir, 'missing/missing.twig'),
+      join(componentDir, 'missing/missing.html.twig'),
+      join(srcDir, 'missing'),
+      join(srcDir, 'missing.twig'),
+      join(srcDir, 'missing.html.twig'),
+      join(srcDir, 'missing/missing.twig'),
+      join(srcDir, 'missing/missing.html.twig'),
+    ]);
+    const candidateStatCount = () =>
+      statSpy.mock.calls.filter(([filePath]) => candidatePaths.has(filePath))
+        .length;
+
+    transformTwigModule(twigPlugin, firstFile);
+    const afterFirstTransform = candidateStatCount();
+    transformTwigModule(twigPlugin, secondFile);
+    const afterSecondTransform = candidateStatCount();
+
+    expect(afterFirstTransform).toBeLessThanOrEqual(candidatePaths.size);
+    expect(afterSecondTransform).toBe(afterFirstTransform);
+
+    twigPlugin.handleHotUpdate({ file: firstFile, server: {} });
+    transformTwigModule(twigPlugin, thirdFile);
+
+    expect(candidateStatCount()).toBeGreaterThan(afterSecondTransform);
   });
 
   it('does not disable Twig caching in emitted module source', () => {

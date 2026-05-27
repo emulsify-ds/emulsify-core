@@ -3,9 +3,11 @@
  *
  * The plugin turns Twig file imports into render functions for Storybook and
  * Vite consumers while recursively compiling referenced Twig dependencies.
+ * It memoizes template compilation and include-path resolution for the active
+ * build so shared Twig trees do not repeatedly hit the filesystem.
  */
 
-import { readFileSync, statSync } from 'fs';
+import fs from 'fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'path';
 import Twig from 'twig';
 
@@ -34,6 +36,13 @@ const includeTokenTypes = [
  * @type {Map<string, { mtimeMs: number, compiled: { code: string, includes: string[], templateId: string, templateParams: object } }>}
  */
 const compileCache = new Map();
+
+/**
+ * Cache resolved Twig include paths by source directory, reference, and roots.
+ *
+ * @type {Map<string, string|null>}
+ */
+const resolutionCache = new Map();
 
 /**
  * Determine whether a Vite request should compile as a Twig render module.
@@ -105,7 +114,7 @@ const resolveExistingFile = (paths) =>
   paths.filter(Boolean).find((filePath) => {
     try {
       // eslint-disable-next-line security/detect-non-literal-fs-filename
-      return statSync(filePath).isFile();
+      return fs.statSync(filePath).isFile();
     } catch {
       return false;
     }
@@ -259,6 +268,21 @@ const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
 };
 
 /**
+ * Build a stable key segment for include resolution cache entries.
+ *
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @returns {string} Stable root and namespace cache key.
+ */
+const twigResolutionRootKey = (options) => {
+  const namespaceKey = Object.entries(options.namespaces || {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([namespace, root]) => `${namespace}=${root}`)
+    .join(',');
+
+  return `${options.root || ''}|${namespaceKey}`;
+};
+
+/**
  * Resolve a Twig include/import/extends reference from a source directory.
  *
  * @param {string} templatePath - Template reference from Twig source.
@@ -266,7 +290,7 @@ const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
  * @param {{ root: string, namespaces: Record<string, string> }} options - Twig plugin options.
  * @returns {string|null} Existing template path when found.
  */
-const resolveTwigTemplate = (templatePath, fromDir, options) => {
+const resolveTwigTemplateUncached = (templatePath, fromDir, options) => {
   if (templatePath === '_self') return null;
 
   const namespaced = namespaceReference(templatePath, options.namespaces);
@@ -291,6 +315,31 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
 };
 
 /**
+ * Resolve a Twig reference with build-scoped filesystem probe memoization.
+ *
+ * @param {string} templatePath - Template reference from Twig source.
+ * @param {string} fromDir - Directory of the importing template.
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @returns {string|null} Existing template path when found.
+ */
+const resolveTwigTemplate = (templatePath, fromDir, options) => {
+  const cacheKey = [
+    resolve(fromDir),
+    templatePath,
+    twigResolutionRootKey(options),
+  ].join('|');
+
+  if (resolutionCache.has(cacheKey)) {
+    return resolutionCache.get(cacheKey);
+  }
+
+  const resolvedPath =
+    resolveTwigTemplateUncached(templatePath, fromDir, options) || null;
+  resolutionCache.set(cacheKey, resolvedPath);
+  return resolvedPath;
+};
+
+/**
  * Compile a Twig template and collect its nested template references.
  *
  * @param {string} filePath - Absolute template file path.
@@ -301,7 +350,7 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
 const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   const absoluteFilePath = resolve(filePath);
   // eslint-disable-next-line security/detect-non-literal-fs-filename
-  const { mtimeMs } = statSync(absoluteFilePath);
+  const { mtimeMs } = fs.statSync(absoluteFilePath);
   const cached = cache.get(absoluteFilePath);
   if (cached?.mtimeMs === mtimeMs) {
     return cached.compiled;
@@ -311,7 +360,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   registerTwigExtensions(compilerTwig);
 
   // eslint-disable-next-line security/detect-non-literal-fs-filename
-  const source = readFileSync(absoluteFilePath, 'utf8');
+  const source = fs.readFileSync(absoluteFilePath, 'utf8');
   const compileOptions = {
     allowInlineIncludes: true,
     namespaces: options.namespaces,
@@ -473,6 +522,7 @@ export function emulsifyTwigModulePlugin(options) {
     enforce: 'pre',
     buildStart() {
       compileCache.clear();
+      resolutionCache.clear();
     },
     transform(...args) {
       const [, id] = args;
@@ -578,6 +628,11 @@ export function emulsifyTwigModulePlugin(options) {
 
       const filePath = resolve(file);
       compileCache.delete(filePath);
+
+      const projectRoot = options.projectDir || options.root;
+      if (projectRoot && isWithinRoot(resolve(projectRoot), filePath)) {
+        resolutionCache.clear();
+      }
 
       const importers = dependencyImporters.get(filePath);
       if (!importers?.size) {

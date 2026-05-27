@@ -8,6 +8,7 @@ import {
   candidateKeysForRoot,
   createTwigResolver,
 } from './resolver.js';
+import { resetTwigRootRecordsCache } from './reference-paths.js';
 
 const projectDir = '/project';
 
@@ -27,6 +28,10 @@ const createEnv = () => ({
 });
 
 describe('Storybook Twig resolver', () => {
+  beforeEach(() => {
+    resetTwigRootRecordsCache();
+  });
+
   it('builds roots from the normalized project structure', () => {
     expect(buildTwigRootRecords(createEnv())).toEqual([
       {
