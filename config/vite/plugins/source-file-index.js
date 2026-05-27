@@ -5,19 +5,35 @@
  * component and global files so copy plugins share the same filesystem model.
  */
 
-import { readdirSync, statSync } from 'fs';
+import { readdirSync } from 'fs';
 import { join, relative, sep } from 'path';
 
 import { relativeFrom } from '../project-structure.js';
+
+const DEFAULT_SKIP_DIRS = [
+  'node_modules',
+  '.git',
+  '.cache',
+  '.vite',
+  '.out',
+  '.coverage',
+  'dist',
+];
 
 /**
  * Depth-first walk to list every file under a given root.
  *
  * @param {string} rootDir - Directory to traverse.
- * @param {{ shouldSkipDir?: (dir: string) => boolean }} [options] - Traversal options.
+ * @param {{
+ *   shouldSkipDir?: (dir: string) => boolean,
+ *   useDefaultSkips?: boolean
+ * }} [options] - Traversal options.
  * @returns {string[]} Absolute file paths.
  */
-export function walkFiles(rootDir, { shouldSkipDir = () => false } = {}) {
+export function walkFiles(
+  rootDir,
+  { shouldSkipDir = () => false, useDefaultSkips = true } = {},
+) {
   const files = [];
   const stack = [rootDir];
 
@@ -28,22 +44,24 @@ export function walkFiles(rootDir, { shouldSkipDir = () => false } = {}) {
     let entryNames = [];
     try {
       // eslint-disable-next-line security/detect-non-literal-fs-filename
-      entryNames = readdirSync(currentDir).sort();
+      entryNames = readdirSync(currentDir, { withFileTypes: true }).sort(
+        (a, b) => a.name.localeCompare(b.name),
+      );
     } catch {
       // Skip unreadable directories and keep walking the remaining stack.
       continue;
     }
 
-    for (const name of entryNames) {
-      const fullPath = join(currentDir, name);
-      try {
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
-        const stats = statSync(fullPath);
-        if (stats.isDirectory()) {
-          if (!shouldSkipDir(fullPath)) stack.push(fullPath);
-        } else files.push(fullPath);
-      } catch {
-        // Ignore unreadable entries so one file does not stop the copy pass.
+    for (const entry of entryNames) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        if (shouldSkipDir(fullPath)) continue;
+        if (useDefaultSkips && DEFAULT_SKIP_DIRS.includes(entry.name)) {
+          continue;
+        }
+        stack.push(fullPath);
+      } else if (entry.isFile()) {
+        files.push(fullPath);
       }
     }
   }
