@@ -17,6 +17,7 @@ import {
 import {
   makeEnv,
   makeTempProject,
+  createGeneratedTwigModuleRender,
   renderGeneratedTwigModule,
   transformTwigModule,
   twigEmbed,
@@ -266,6 +267,29 @@ describe('Twig module plugin', () => {
     const transformed = transformTwigModule(twigPlugin, cardFile);
 
     expect(transformed.code).not.toContain('Twig.cache(false)');
+  });
+
+  it('renders updated context through the same generated module instance', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      cardFile,
+      '<article data-align="{{ align }}">{{ title }}</article>',
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const render = createGeneratedTwigModuleRender(transformed.code);
+
+    expect(render({ title: 'First', align: 'left' })).toContain(
+      '<article data-align="left">First</article>',
+    );
+    expect(render({ title: 'Second', align: 'center' })).toContain(
+      '<article data-align="center">Second</article>',
+    );
   });
 
   it('preserves runtime rethrow for precompiled templates', () => {

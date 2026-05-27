@@ -113,7 +113,7 @@ export const decorators = [
     return React.createElement(
       StoryHtmlBoundary,
       {},
-      renderHtmlStoryResult(Story(), {
+      renderHtmlStoryResult(Story({ args }), {
         platformAdapter,
       }),
     );

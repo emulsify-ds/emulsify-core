@@ -39,9 +39,8 @@ export const twigInclude = (templatePath) =>
 export const twigEmbed = (templatePath) =>
   `{% embed ${JSON.stringify(templatePath)} %}`;
 
-export const renderGeneratedTwigModule = (
+export const createGeneratedTwigModuleRender = (
   code,
-  context = {},
   runtimeTwig = Twig.factory(),
 ) => {
   const executable = code
@@ -59,8 +58,14 @@ export const renderGeneratedTwigModule = (
     registerTwigExtensions,
   );
 
-  return render(context);
+  return render;
 };
+
+export const renderGeneratedTwigModule = (
+  code,
+  context = {},
+  runtimeTwig = Twig.factory(),
+) => createGeneratedTwigModuleRender(code, runtimeTwig)(context);
 
 export const writeProjectConfig = (projectDir, config) => {
   writeFileSync(
