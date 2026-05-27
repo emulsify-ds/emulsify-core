@@ -39,12 +39,22 @@ export const twigInclude = (templatePath) =>
 export const twigEmbed = (templatePath) =>
   `{% embed ${JSON.stringify(templatePath)} %}`;
 
-export const createGeneratedTwigModuleRender = (
-  code,
-  runtimeTwig = Twig.factory(),
-) => {
+const generatedTwigFactory = (runtimeTwigOrOptions) => {
+  if (typeof runtimeTwigOrOptions === 'function') {
+    return runtimeTwigOrOptions;
+  }
+  if (typeof runtimeTwigOrOptions?.factory === 'function') {
+    return runtimeTwigOrOptions.factory;
+  }
+  if (runtimeTwigOrOptions) {
+    return () => runtimeTwigOrOptions;
+  }
+  return () => Twig.factory();
+};
+
+export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
   const executable = code
-    .replace(/^\s*import Twig from 'twig';\s*/m, '')
+    .replace(/^\s*import (?:Twig|\{ factory \}) from 'twig';\s*/m, '')
     .replace(
       /^\s*import \{ registerTwigExtensions \} from '@emulsify\/core\/extensions\/twig';\s*/m,
       '',
@@ -53,8 +63,8 @@ export const createGeneratedTwigModuleRender = (
       /export default \(context = \{\}\) => \{/,
       'return (context = {}) => {',
     );
-  const render = new Function('Twig', 'registerTwigExtensions', executable)(
-    runtimeTwig,
+  const render = new Function('factory', 'registerTwigExtensions', executable)(
+    generatedTwigFactory(runtimeTwigOrOptions),
     registerTwigExtensions,
   );
 
@@ -64,8 +74,8 @@ export const createGeneratedTwigModuleRender = (
 export const renderGeneratedTwigModule = (
   code,
   context = {},
-  runtimeTwig = Twig.factory(),
-) => createGeneratedTwigModuleRender(code, runtimeTwig)(context);
+  runtimeTwigOrOptions,
+) => createGeneratedTwigModuleRender(code, runtimeTwigOrOptions)(context);
 
 export const writeProjectConfig = (projectDir, config) => {
   writeFileSync(

@@ -37,7 +37,7 @@ export const Accordion = (args) =>
   });
 ```
 
-Those stories still render in Emulsify Core. The shared Storybook preview wraps plain string results as HTML so projects can upgrade without rewriting every component immediately. It also tolerates older decorators that stringify `story()` for Twig stories. React stories and stories that already return React elements pass through unchanged.
+Those stories still render in Emulsify Core. The shared Storybook preview routes plain string results, and legacy React story elements with Twig HTML stringification, through the same `TwigHtmlStory` wrapper used by `renderTwig()`. That wrapper uses React-managed HTML updates, so Storybook control changes update the visible markup without a manual refresh. React stories and stories that already return React elements pass through unchanged.
 
 `renderTwig()` remains the preferred pattern for new or actively migrated Twig stories because it makes the Twig/React Storybook boundary explicit:
 
@@ -116,6 +116,8 @@ Twig support in Storybook is optional and platform-agnostic. When Twig stories a
 - Optional platform Twig extensions supplied by the active adapter.
 
 Drupal-specific Twig filters are not part of the generic Twig runtime. They are registered only when the active platform adapter enables them.
+
+Imported Twig modules are isolated from each other at runtime. Each generated module creates its own Twig.js factory instance, registers Emulsify's Twig extensions, and preloads that module's transitive template dependencies into the local instance. This avoids global Twig template registry collisions without a shared template store or `Twig.Templates` monkey-patches.
 
 ## Twig Import Performance
 

@@ -81,7 +81,7 @@ export const Default = {
 
 React stories can be added alongside existing Twig components without changing the Twig components.
 
-For older function stories that return `template(args)` directly, Emulsify Core wraps string results as HTML in the shared preview. That compatibility layer is intended to reduce upgrade churn; `renderTwig()` is still the clearer pattern for stories you are editing.
+For older function stories that return `template(args)` directly, Emulsify Core wraps string results as HTML in the shared preview. Legacy story elements that stringify to Twig HTML are also routed through the same `TwigHtmlStory` wrapper used by `renderTwig()`, so Storybook controls update through React instead of a DOM normalization step. That compatibility layer is intended to reduce upgrade churn; `renderTwig()` is still the clearer pattern for stories you are editing.
 
 Run the audit script to list likely legacy Twig stories and other upgrade-readiness items:
 
@@ -174,6 +174,8 @@ Emulsify Core's Storybook Twig runtime supports:
 - Optional platform Twig extensions supplied by platform adapters.
 
 Drupal-specific Twig filters are only loaded when the Drupal adapter enables them.
+
+Core 4 no longer uses a browser-global Twig template store or patches `Twig.Templates` to resolve compiled Storybook dependencies. Each emitted Twig module now creates an isolated Twig.js factory instance and registers its own compiled dependency set locally. This keeps duplicate template IDs from colliding while avoiding global runtime cleanup during HMR.
 
 ## Vituum Twig Integration
 

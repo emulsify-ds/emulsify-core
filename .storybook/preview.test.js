@@ -13,5 +13,6 @@ describe('Storybook preview decorators', () => {
     );
 
     expect(source).toMatch(/renderHtmlStoryResult\(Story\(\{\s*args\s*\}\),/);
+    expect(source).not.toContain('StoryHtmlBoundary');
   });
 });

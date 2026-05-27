@@ -9,7 +9,10 @@ import {
   renderTwig,
   renderTwigHtml,
 } from '@emulsify/core/storybook';
-import { StoryHtmlBoundary, withLegacyStoryToString } from './render-twig.js';
+import {
+  legacyStringFromElement,
+  withLegacyStoryToString,
+} from './render-twig.js';
 import { TWIG_SOURCE_LOADED_EVENT } from './twig/source-events.js';
 
 describe('renderTwig', () => {
@@ -170,22 +173,23 @@ describe('renderTwig', () => {
     expect(renderHtmlStoryResult(ReactResult)).toBe(ReactResult);
   });
 
-  it('converts legacy HTML text rendered through a React story element', () => {
-    const LegacyStringStory = () =>
-      '<article><h2>Legacy React text</h2></article>';
+  it('extracts HTML from legacy story elements with custom stringification', () => {
+    const HtmlStoryElement = withLegacyStoryToString(
+      React.createElement('div', null, 'React wrapper'),
+      () => '<article><h2>Legacy React text</h2></article>',
+    );
+    const PlainElement = React.createElement('div', null, 'React wrapper');
+    const NonHtmlElement = withLegacyStoryToString(
+      React.createElement('div', null, 'React wrapper'),
+      () => 'Plain text',
+    );
 
-    act(() => {
-      root.render(
-        React.createElement(
-          StoryHtmlBoundary,
-          {},
-          React.createElement(LegacyStringStory),
-        ),
-      );
-    });
-
-    expect(container.querySelector('h2').textContent).toBe('Legacy React text');
-    expect(container.textContent).toBe('Legacy React text');
+    expect(legacyStringFromElement('<p>Plain string</p>')).toBeUndefined();
+    expect(legacyStringFromElement(PlainElement)).toBeUndefined();
+    expect(legacyStringFromElement(HtmlStoryElement)).toBe(
+      '<article><h2>Legacy React text</h2></article>',
+    );
+    expect(legacyStringFromElement(NonHtmlElement)).toBeUndefined();
   });
 
   it('preserves HTML for legacy decorators that stringify story results', () => {
@@ -201,20 +205,52 @@ describe('renderTwig', () => {
     expect(container.querySelector('p').textContent).toBe('Stringified Twig');
   });
 
-  it('keeps legacy string-compatible story elements renderable by React', () => {
-    const LegacyStringStory = () => '<strong>Renderable clone</strong>';
+  it('renders legacy story elements through the shared HTML wrapper', () => {
     const storyElement = withLegacyStoryToString(
-      React.createElement(LegacyStringStory),
+      React.createElement('div', null, 'React wrapper'),
       () => '<strong>Renderable clone</strong>',
     );
 
     act(() => {
-      root.render(React.createElement(StoryHtmlBoundary, {}, storyElement));
+      root.render(renderHtmlStoryResult(storyElement));
     });
 
     expect(container.querySelector('strong').textContent).toBe(
       'Renderable clone',
     );
+  });
+
+  it('updates legacy string story markup when args change', () => {
+    const LegacyStory = ({ heading }) =>
+      `<article><h2>${heading}</h2></article>`;
+    const PreviewDecoratorResult = ({ heading }) =>
+      renderHtmlStoryResult(
+        withLegacyStoryToString(
+          React.createElement(LegacyStory, { heading }),
+          () => LegacyStory({ heading }),
+        ),
+      );
+
+    act(() => {
+      root.render(
+        React.createElement(PreviewDecoratorResult, {
+          heading: 'First',
+        }),
+      );
+    });
+    const firstHtml = container.innerHTML;
+
+    act(() => {
+      root.render(
+        React.createElement(PreviewDecoratorResult, {
+          heading: 'Second',
+        }),
+      );
+    });
+
+    expect(firstHtml).toContain('First');
+    expect(container.innerHTML).toContain('Second');
+    expect(container.innerHTML).not.toBe(firstHtml);
   });
 
   it('does not interfere with normal React story rendering', () => {
