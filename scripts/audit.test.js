@@ -2,7 +2,7 @@
  * @file Tests for the combined Emulsify audit.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import fs, { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -29,6 +29,7 @@ describe('audit', () => {
 
   afterEach(() => {
     rmSync(projectDir, { recursive: true, force: true });
+    jest.restoreAllMocks();
   });
 
   it('loads in plain Node without Vite virtual modules', () => {
@@ -99,6 +100,66 @@ describe('audit', () => {
     );
     expect(report).toContain('Emulsify project audit');
     expect(report).not.toContain('stories/outside.stories.js');
+  });
+
+  it('reads each source file at most once during a full audit run', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    const twigFile = writeFile(
+      projectDir,
+      'src/components/card/card.twig',
+      '{{ include("./_content.twig") }}',
+    );
+    const twigPartial = writeFile(
+      projectDir,
+      'src/components/card/_content.twig',
+      '<p>{{ label }}</p>',
+    );
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("./card.svg"); }',
+    );
+    writeFile(projectDir, 'src/components/card/card.svg', '<svg></svg>');
+    const storyFile = writeFile(
+      projectDir,
+      'src/components/card/card.stories.js',
+      `
+        import { renderTwig } from '@emulsify/core/storybook';
+        import cardTwig from './card.twig';
+        export const Card = renderTwig(cardTwig);
+      `,
+    );
+    const readFileSpy = jest.spyOn(fs, 'readFileSync');
+
+    const result = auditProject({ projectDir });
+    const readCounts = new Map();
+    const sourceFiles = new Set([twigFile, twigPartial, styleFile, storyFile]);
+
+    for (const [filePath] of readFileSpy.mock.calls) {
+      const normalizedPath = String(filePath);
+      if (!sourceFiles.has(normalizedPath)) continue;
+      readCounts.set(normalizedPath, (readCounts.get(normalizedPath) || 0) + 1);
+    }
+
+    for (const sourceFile of sourceFiles) {
+      expect(readCounts.get(sourceFile)).toBe(1);
+    }
+    expect(formatAuditReport(result).replace(projectDir, '<projectDir>'))
+      .toMatchInlineSnapshot(`
+"Emulsify project audit
+Project: <projectDir>
+Scanned 1 story file(s), 2 Twig file(s), 1 code file(s), and 1 style file(s).
+Findings: 0 error(s), 0 warning(s), 0 info item(s).
+No audit findings found."
+`);
   });
 
   it('reports missing project config and missing configured roots', () => {

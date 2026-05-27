@@ -70,6 +70,44 @@ const GENERATED_PACKAGE_SCRIPT_DOCS =
   'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#manual-packagejson-updates';
 
 /**
+ * Cache source file reads for one top-level audit run.
+ *
+ * @type {Map<string, string|null>}
+ */
+const fileReadCache = new Map();
+
+/**
+ * Clear the per-run source file read cache.
+ *
+ * @returns {void}
+ */
+function resetFileReadCache() {
+  fileReadCache.clear();
+}
+
+/**
+ * Read a text source file once per top-level audit run.
+ *
+ * Missing files are cached as null internally but still return an empty string
+ * to preserve safeReadFile() behavior for existing checks.
+ *
+ * @param {string} filePath - Absolute or relative file path.
+ * @returns {string} File contents, or an empty string when unavailable.
+ */
+function cachedReadFile(filePath) {
+  const absPath = resolve(filePath);
+  if (fileReadCache.has(absPath)) {
+    return fileReadCache.get(absPath) ?? '';
+  }
+
+  const source = safeReadFile(absPath);
+  const cachedSource = source === '' && !safeExists(absPath) ? null : source;
+  fileReadCache.set(absPath, cachedSource);
+
+  return cachedSource ?? '';
+}
+
+/**
  * Return a project-relative path for report output.
  *
  * @param {string} projectDir - Absolute project root.
@@ -538,7 +576,7 @@ function auditStoryDiscovery(context) {
 function auditLegacyTwigStories(context) {
   const { storyFiles } = context;
   const findings = storyFiles
-    .map((filePath) => analyzeStorySource(safeReadFile(filePath), filePath))
+    .map((filePath) => analyzeStorySource(cachedReadFile(filePath), filePath))
     .filter((result) => result.shouldUpgrade);
 
   return findings.map((finding) =>
@@ -718,7 +756,7 @@ function auditTwigReferences(context) {
   const seen = new Set();
 
   for (const twigFile of twigFiles) {
-    const source = safeReadFile(twigFile);
+    const source = cachedReadFile(twigFile);
 
     for (const ref of findTwigNamespaceReferences(source)) {
       if (knownNamespaces.has(ref.namespace)) continue;
@@ -936,7 +974,7 @@ function auditCssAssetReferences(context) {
       continue;
     }
 
-    const source = safeReadFile(filePath);
+    const source = cachedReadFile(filePath);
     const runtimeDirs = styleRuntimeDirectories(filePath, env, projectDir);
 
     for (const ref of findCssUrlReferences(source)) {
@@ -1050,7 +1088,7 @@ function auditWebpackPatterns(context) {
   ];
 
   for (const filePath of codeFiles) {
-    const source = safeReadFile(filePath);
+    const source = cachedReadFile(filePath);
 
     for (const pattern of patterns) {
       const match = pattern.regex.exec(source);
@@ -1109,7 +1147,7 @@ function auditCoreImports(context) {
   const findings = [];
 
   for (const filePath of codeFiles) {
-    const source = safeReadFile(filePath);
+    const source = cachedReadFile(filePath);
 
     for (const item of findImportSpecifiers(source)) {
       const { specifier } = item;
@@ -1152,7 +1190,7 @@ function auditDrupalAssumptions(context) {
   ];
 
   for (const filePath of codeFiles) {
-    const source = safeReadFile(filePath);
+    const source = cachedReadFile(filePath);
     const match = patterns.map((pattern) => pattern.exec(source)).find(Boolean);
 
     if (!match) continue;
@@ -1292,6 +1330,8 @@ function auditTwigVolume(context) {
  * @returns {{projectDir: string, summary: object, findings: object[]}} Audit result.
  */
 export function auditProject(options = {}) {
+  resetFileReadCache();
+
   const projectDir = resolve(options.projectDir || process.cwd());
   const envResult = resolveAuditEnvironment(projectDir);
   const structure = envResult.env.projectStructure || {};
