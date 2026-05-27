@@ -6,13 +6,14 @@
  */
 
 import { readFileSync, statSync } from 'fs';
-import { basename, dirname, resolve } from 'path';
+import { basename, dirname, isAbsolute, relative, resolve } from 'path';
 import Twig from 'twig';
 
 import {
   getTwigFunctionMap,
   registerTwigExtensions,
 } from '../../../src/extensions/twig/index.js';
+import { toRootRelativePath } from '../../../src/storybook/twig/reference-paths.js';
 import { resolveProjectStructure } from '../project-structure.js';
 import { firstExistingPath } from '../utils/fs-safe.js';
 import { toPosixPath } from '../utils/paths.js';
@@ -26,6 +27,13 @@ const includeTokenTypes = [
   'Twig.logic.type.import',
   'Twig.logic.type.include',
 ];
+
+/**
+ * Cache compiled Twig templates by absolute path for the life of one build.
+ *
+ * @type {Map<string, { mtimeMs: number, compiled: { code: string, includes: string[], templateId: string, templateParams: object } }>}
+ */
+const compileCache = new Map();
 
 /**
  * Determine whether a Vite request should compile as a Twig render module.
@@ -102,6 +110,85 @@ const resolveExistingFile = (paths) =>
       return false;
     }
   });
+
+/**
+ * Determine whether a file path is equal to or below a candidate root.
+ *
+ * @param {string} root - Absolute root path.
+ * @param {string} filePath - Absolute file path.
+ * @returns {boolean} TRUE when the file belongs to the root.
+ */
+const isWithinRoot = (root, filePath) => {
+  const rootRelativePath = relative(root, filePath);
+  return (
+    rootRelativePath === '' ||
+    (!!rootRelativePath &&
+      !rootRelativePath.startsWith('..') &&
+      !isAbsolute(rootRelativePath))
+  );
+};
+
+/**
+ * Find the most specific configured Twig root for a template file.
+ *
+ * @param {string} filePath - Absolute template file path.
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @returns {string} Absolute Twig root path.
+ */
+const templateRootForPath = (filePath, options) => {
+  const roots = unique(
+    [options.root, ...Object.values(options.namespaces || {})]
+      .filter(Boolean)
+      .map((root) => resolve(root)),
+  ).sort((left, right) => right.length - left.length);
+
+  return (
+    roots.find((root) => isWithinRoot(root, filePath)) ||
+    options.root ||
+    dirname(filePath)
+  );
+};
+
+/**
+ * Build a stable Twig template id from the configured root and relative path.
+ *
+ * @param {string} filePath - Absolute template file path.
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @returns {string} Stable Twig template id.
+ */
+const templateIdForPath = (filePath, options) => {
+  const templateRoot = templateRootForPath(filePath, options);
+  const rootRel = toRootRelativePath(templateRoot, options);
+  const relPath = toPosixPath(relative(templateRoot, filePath));
+
+  return `${rootRel}::${relPath}`;
+};
+
+/**
+ * Build a generated-module expression that reuses cached Twig templates.
+ *
+ * @param {string} templateId - Stable Twig template id.
+ * @param {object} params - Twig template parameters without the id.
+ * @returns {string} Cache-aware compiled template expression.
+ */
+const runtimeTemplateCode = (templateId, params) =>
+  `__emulsifyTwigTemplate(${JSON.stringify(templateId)}, ${JSON.stringify(
+    params,
+  )})`;
+
+/**
+ * Match the template id Twig.js will request for an inline include.
+ *
+ * @param {string} templatePath - Template reference from Twig source.
+ * @param {string} fromFilePath - Absolute path of the importing template.
+ * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @returns {string} Runtime lookup id used by Twig.js.
+ */
+const runtimeIncludeAlias = (templatePath, fromFilePath, options) =>
+  Twig.path.parsePath(
+    { path: fromFilePath, options: { namespaces: options.namespaces } },
+    templatePath,
+  );
 
 /**
  * Resolve Twig namespace syntax to a namespace root and relative path.
@@ -206,38 +293,54 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
 /**
  * Compile a Twig template and collect its nested template references.
  *
- * @param {string} templateId - Twig template id.
  * @param {string} filePath - Absolute template file path.
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
+ * @param {typeof compileCache} [cache=compileCache] - Shared compile cache.
  * @returns {{ code: string, includes: string[] }} Compiled template code and references.
  */
-const compileTwigTemplate = (templateId, filePath, options) => {
-  registerTwigExtensions(Twig);
+const compileTwigTemplate = (filePath, options, cache = compileCache) => {
+  const absoluteFilePath = resolve(filePath);
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  const { mtimeMs } = statSync(absoluteFilePath);
+  const cached = cache.get(absoluteFilePath);
+  if (cached?.mtimeMs === mtimeMs) {
+    return cached.compiled;
+  }
 
-  // Vite/Storybook can transform the same Twig module more than once during
-  // startup or HMR. Disable Twig.js' global duplicate-id guard while parsing.
-  Twig.cache(false);
+  const compilerTwig = Twig.factory();
+  registerTwigExtensions(compilerTwig);
 
   // eslint-disable-next-line security/detect-non-literal-fs-filename
-  const source = readFileSync(filePath, 'utf8');
+  const source = readFileSync(absoluteFilePath, 'utf8');
   const compileOptions = {
     allowInlineIncludes: true,
     namespaces: options.namespaces,
     rethrow: true,
     ...(options.options?.compileOptions || {}),
   };
-  const template = Twig.twig({
+  const templateId = templateIdForPath(absoluteFilePath, options);
+  const template = compilerTwig.twig({
     ...compileOptions,
     data: source,
     id: templateId,
-    path: filePath,
+    path: absoluteFilePath,
   });
   const includes = unique(pluckIncludes(template.tokens).filter(Boolean));
-
-  return {
-    code: template.compile(compileOptions),
-    includes,
+  const templateParams = {
+    data: template.tokens,
+    namespaces: options.namespaces,
+    path: absoluteFilePath,
+    precompiled: true,
   };
+  const compiled = {
+    code: runtimeTemplateCode(templateId, templateParams),
+    includes,
+    templateId,
+    templateParams,
+  };
+
+  cache.set(absoluteFilePath, { mtimeMs, compiled });
+  return compiled;
 };
 
 /**
@@ -332,12 +435,18 @@ export function makeTwigPluginOptions(env) {
         : [srcDir, ...overrideRoots, projectDir],
   );
 
-  return {
+  const twigOptions = {
     root: root || srcDir || projectDir,
     namespaces: makeTwigNamespaces(env),
     functions: getTwigFunctionMap(),
     reload: (filePath) => /\.(twig|json)$/i.test(filePath),
   };
+
+  Object.defineProperty(twigOptions, 'projectDir', {
+    value: projectDir,
+  });
+
+  return twigOptions;
 }
 
 /**
@@ -362,6 +471,9 @@ export function emulsifyTwigModulePlugin(options) {
   return {
     name: 'emulsify-twig-module',
     enforce: 'pre',
+    buildStart() {
+      compileCache.clear();
+    },
     transform(...args) {
       const [, id] = args;
       if (!isTwigModuleRequest(id)) {
@@ -372,35 +484,51 @@ export function emulsifyTwigModulePlugin(options) {
       const compiledIncludes = new Map();
       clearDependencyImporter(filePath);
 
-      const compileIncludes = (includes, fromDir) => {
+      const compileIncludes = (includes, fromFilePath, cache) => {
         for (const templatePath of includes) {
           const includePath = resolveTwigTemplate(
             templatePath,
-            fromDir,
+            dirname(fromFilePath),
             options,
           );
-          if (!includePath || compiledIncludes.has(includePath)) continue;
+          if (!includePath) continue;
+
+          const aliases = unique([
+            includePath,
+            runtimeIncludeAlias(templatePath, fromFilePath, options),
+          ]);
+          const entry = compiledIncludes.get(includePath);
+          if (entry) {
+            for (const alias of aliases) {
+              entry.aliases.add(alias);
+            }
+            continue;
+          }
 
           addDependencyImporter(includePath, filePath);
           this.addWatchFile(includePath);
 
-          const compiled = compileTwigTemplate(
-            templatePath,
-            includePath,
-            options,
-          );
-          compiledIncludes.set(includePath, compiled);
-          compileIncludes(compiled.includes, dirname(includePath));
+          const compiled = compileTwigTemplate(includePath, options, cache);
+          compiledIncludes.set(includePath, {
+            aliases: new Set(aliases),
+            compiled,
+          });
+          compileIncludes(compiled.includes, includePath, cache);
         }
       };
 
       try {
-        const compiled = compileTwigTemplate(filePath, filePath, options);
-        compileIncludes(compiled.includes, dirname(filePath));
+        const compiled = compileTwigTemplate(filePath, options, compileCache);
+        compileIncludes(compiled.includes, filePath, compileCache);
 
         const includeCode = Array.from(compiledIncludes.values())
           .reverse()
-          .map((include) => `${include.code};`)
+          .flatMap(({ aliases, compiled: include }) =>
+            unique([include.templateId, ...aliases]).map(
+              (templateId) =>
+                `${runtimeTemplateCode(templateId, include.templateParams)};`,
+            ),
+          )
           .join('\n');
         const renderErrorPrefix = JSON.stringify(
           `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
@@ -410,9 +538,10 @@ export function emulsifyTwigModulePlugin(options) {
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 
           const { twig } = Twig;
+          const __emulsifyTwigTemplate = (id, params) =>
+            Twig.twig({ ref: id }) || twig({ ...params, id });
 
           registerTwigExtensions(Twig);
-          Twig.cache(false);
 
           ${includeCode}
 
@@ -447,13 +576,20 @@ export function emulsifyTwigModulePlugin(options) {
         return undefined;
       }
 
-      const importers = dependencyImporters.get(file);
+      const filePath = resolve(file);
+      compileCache.delete(filePath);
+
+      const importers = dependencyImporters.get(filePath);
       if (!importers?.size) {
         return undefined;
       }
 
-      const modules = new Set(server.moduleGraph.getModulesByFile(file) || []);
+      const modules = new Set(
+        server.moduleGraph.getModulesByFile(filePath) || [],
+      );
       for (const importer of importers) {
+        compileCache.delete(importer);
+
         const importerModules =
           server.moduleGraph.getModulesByFile(importer) || [];
 

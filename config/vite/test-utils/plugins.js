@@ -39,7 +39,11 @@ export const twigInclude = (templatePath) =>
 export const twigEmbed = (templatePath) =>
   `{% embed ${JSON.stringify(templatePath)} %}`;
 
-export const renderGeneratedTwigModule = (code, context = {}) => {
+export const renderGeneratedTwigModule = (
+  code,
+  context = {},
+  runtimeTwig = Twig.factory(),
+) => {
   const executable = code
     .replace(/^\s*import Twig from 'twig';\s*/m, '')
     .replace(
@@ -51,7 +55,7 @@ export const renderGeneratedTwigModule = (code, context = {}) => {
       'return (context = {}) => {',
     );
   const render = new Function('Twig', 'registerTwigExtensions', executable)(
-    Twig,
+    runtimeTwig,
     registerTwigExtensions,
   );
 

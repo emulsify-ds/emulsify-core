@@ -2,8 +2,9 @@
  * @file Tests for Twig module plugin compilation and namespace behavior.
  */
 
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import * as fs from 'fs';
 import { join } from 'path';
+import Twig from 'twig';
 
 import { resolveProjectConfig } from '../../project-config.js';
 import {
@@ -26,18 +27,22 @@ describe('Twig module plugin', () => {
 
   afterEach(() => {
     if (projectDir) {
-      rmSync(projectDir, { recursive: true, force: true });
+      fs.rmSync(projectDir, { recursive: true, force: true });
     }
+    jest.restoreAllMocks();
   });
 
-  const makeTwigModulePlugin = (env) =>
-    emulsifyTwigModulePlugin(makeTwigPluginOptions(env));
+  const makeTwigModulePlugin = (env) => {
+    const plugin = emulsifyTwigModulePlugin(makeTwigPluginOptions(env));
+    plugin.buildStart();
+    return plugin;
+  };
 
   it('builds Twig namespaces for src/components projects', () => {
     projectDir = makeTempProject();
-    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
 
     expect(makeTwigNamespaces(makeEnv(projectDir))).toEqual({
       components: join(projectDir, 'src/components'),
@@ -48,9 +53,9 @@ describe('Twig module plugin', () => {
 
   it('builds Twig namespaces for top-level components projects', () => {
     projectDir = makeTempProject();
-    mkdirSync(join(projectDir, 'components'), { recursive: true });
-    mkdirSync(join(projectDir, 'layout'), { recursive: true });
-    mkdirSync(join(projectDir, 'tokens'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'components'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'layout'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'tokens'), { recursive: true });
 
     expect(
       makeTwigNamespaces(
@@ -69,9 +74,9 @@ describe('Twig module plugin', () => {
   it('prefers structure override roots for component namespaces', () => {
     projectDir = makeTempProject();
     const overrideRoot = join(projectDir, 'custom/components');
-    mkdirSync(overrideRoot, { recursive: true });
-    mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
+    fs.mkdirSync(overrideRoot, { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
 
     expect(
       makeTwigNamespaces(
@@ -100,10 +105,10 @@ describe('Twig module plugin', () => {
         ],
       },
     });
-    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/tokens'), { recursive: true });
 
     expect(makeTwigNamespaces(resolveProjectConfig(projectDir, {}))).toEqual({
       components: join(projectDir, 'src/components'),
@@ -115,7 +120,7 @@ describe('Twig module plugin', () => {
 
   it('adds native Emulsify Twig functions to generic Twig rendering options', () => {
     projectDir = makeTempProject();
-    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
 
     expect(
       Object.keys(makeTwigPluginOptions(makeEnv(projectDir)).functions),
@@ -125,8 +130,10 @@ describe('Twig module plugin', () => {
   it('can transform the same Twig module more than once', () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
-    mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
-    writeFileSync(cardFile, '<article>{{ title }}</article>');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), {
+      recursive: true,
+    });
+    fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const first = transformTwigModule(twigPlugin, cardFile);
@@ -142,6 +149,62 @@ describe('Twig module plugin', () => {
     );
   });
 
+  it('compiles each unique Twig path once across shared include trees', () => {
+    projectDir = makeTempProject();
+    const firstFile = join(projectDir, 'src/components/first/first.twig');
+    const secondFile = join(projectDir, 'src/components/second/second.twig');
+    const wrapperFile = join(projectDir, 'src/components/wrapper/wrapper.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/first'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/second'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/wrapper'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+    fs.writeFileSync(
+      wrapperFile,
+      [twigInclude(sharedFile), twigInclude(sharedFile)].join('\n'),
+    );
+    fs.writeFileSync(
+      firstFile,
+      [twigInclude(wrapperFile), twigInclude(sharedFile)].join('\n'),
+    );
+    fs.writeFileSync(
+      secondFile,
+      [twigInclude(wrapperFile), twigInclude(sharedFile)].join('\n'),
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const factorySpy = jest.spyOn(Twig, 'factory');
+    transformTwigModule(twigPlugin, firstFile);
+    transformTwigModule(twigPlugin, secondFile);
+
+    expect(factorySpy).toHaveBeenCalledTimes(
+      new Set([firstFile, secondFile, wrapperFile, sharedFile]).size,
+    );
+  });
+
+  it('does not disable Twig caching in emitted module source', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), {
+      recursive: true,
+    });
+    fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, cardFile);
+
+    expect(transformed.code).not.toContain('Twig.cache(false)');
+  });
+
   it('can transform a child Twig module before a parent includes it', () => {
     projectDir = makeTempProject();
     const headingFile = join(projectDir, 'src/components/heading/heading.twig');
@@ -149,14 +212,14 @@ describe('Twig module plugin', () => {
       projectDir,
       'src/components/accordion/accordion.twig',
     );
-    mkdirSync(join(projectDir, 'src/components/heading'), {
+    fs.mkdirSync(join(projectDir, 'src/components/heading'), {
       recursive: true,
     });
-    mkdirSync(join(projectDir, 'src/components/accordion'), {
+    fs.mkdirSync(join(projectDir, 'src/components/accordion'), {
       recursive: true,
     });
-    writeFileSync(headingFile, '<h2>{{ title }}</h2>');
-    writeFileSync(accordionFile, twigInclude(headingFile));
+    fs.writeFileSync(headingFile, '<h2>{{ title }}</h2>');
+    fs.writeFileSync(accordionFile, twigInclude(headingFile));
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const child = transformTwigModule(twigPlugin, headingFile);
@@ -172,22 +235,99 @@ describe('Twig module plugin', () => {
     ).toContain('<h2>Included</h2>');
   });
 
+  it('clears cached Twig compilations for changed templates and their importers', () => {
+    projectDir = makeTempProject();
+    const parentFile = join(projectDir, 'src/components/parent/parent.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/parent'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(parentFile, twigInclude(sharedFile));
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const factorySpy = jest.spyOn(Twig, 'factory');
+    transformTwigModule(twigPlugin, parentFile);
+    factorySpy.mockClear();
+
+    const changedModule = { id: 'changed-template' };
+    const importerModule = { id: 'importer-template' };
+    const server = {
+      moduleGraph: {
+        getModulesByFile: jest.fn((filePath) => {
+          if (filePath === sharedFile) return [changedModule];
+          if (filePath === parentFile) return [importerModule];
+          return [];
+        }),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    const updatedModules = twigPlugin.handleHotUpdate({
+      file: sharedFile,
+      server,
+    });
+    transformTwigModule(twigPlugin, parentFile);
+
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      importerModule,
+    );
+    expect(updatedModules).toEqual(
+      expect.arrayContaining([changedModule, importerModule]),
+    );
+    expect(factorySpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses cached runtime templates when stories share an included template', () => {
+    projectDir = makeTempProject();
+    const firstFile = join(projectDir, 'src/components/first/first.twig');
+    const secondFile = join(projectDir, 'src/components/second/second.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/first'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/second'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+    fs.writeFileSync(firstFile, twigInclude(sharedFile));
+    fs.writeFileSync(secondFile, twigInclude(sharedFile));
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const first = transformTwigModule(twigPlugin, firstFile);
+    const second = transformTwigModule(twigPlugin, secondFile);
+    const runtimeTwig = Twig.factory();
+
+    expect(
+      renderGeneratedTwigModule(first.code, { label: 'First' }, runtimeTwig),
+    ).toContain('<span>First</span>');
+    expect(
+      renderGeneratedTwigModule(second.code, { label: 'Second' }, runtimeTwig),
+    ).toContain('<span>Second</span>');
+  });
+
   it('renders nested include and embed dependencies through namespaces', () => {
     projectDir = makeTempProject();
     const accordionDir = join(projectDir, 'src/components/accordion');
     const headingDir = join(projectDir, 'src/components/heading');
     const layoutDir = join(projectDir, 'src/layout/container');
     const accordionFile = join(accordionDir, 'accordion.twig');
-    mkdirSync(accordionDir, { recursive: true });
-    mkdirSync(headingDir, { recursive: true });
-    mkdirSync(layoutDir, { recursive: true });
-    writeFileSync(join(headingDir, 'heading.twig'), '<h2>{{ title }}</h2>');
-    writeFileSync(
+    fs.mkdirSync(accordionDir, { recursive: true });
+    fs.mkdirSync(headingDir, { recursive: true });
+    fs.mkdirSync(layoutDir, { recursive: true });
+    fs.writeFileSync(join(headingDir, 'heading.twig'), '<h2>{{ title }}</h2>');
+    fs.writeFileSync(
       join(layoutDir, 'container.twig'),
       '<section class="container">{% block content %}{% endblock %}</section>',
     );
-    writeFileSync(join(accordionDir, '_body.twig'), '<p>{{ body }}</p>');
-    writeFileSync(
+    fs.writeFileSync(join(accordionDir, '_body.twig'), '<p>{{ body }}</p>');
+    fs.writeFileSync(
       accordionFile,
       [
         twigInclude('@components/heading/heading.twig'),
