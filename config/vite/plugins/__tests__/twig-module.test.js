@@ -325,6 +325,70 @@ describe('Twig module plugin', () => {
     expect(factorySpy).toHaveBeenCalledTimes(2);
   });
 
+  it('releases deleted dependency importer entries after unlink', () => {
+    projectDir = makeTempProject();
+    const parentFile = join(projectDir, 'src/components/parent/parent.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    const unrelatedFile = join(
+      projectDir,
+      'src/components/unrelated/unrelated.twig',
+    );
+    fs.mkdirSync(join(projectDir, 'src/components/parent'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/unrelated'), {
+      recursive: true,
+    });
+    fs.writeFileSync(parentFile, twigInclude(sharedFile));
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+    fs.writeFileSync(unrelatedFile, '<article>{{ title }}</article>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    transformTwigModule(twigPlugin, parentFile);
+    fs.unlinkSync(sharedFile);
+
+    const deletedModule = { id: 'deleted-template' };
+    const importerModule = { id: 'importer-template' };
+    const unlinkServer = {
+      moduleGraph: {
+        getModulesByFile: jest.fn((filePath) => {
+          if (filePath === sharedFile) return [deletedModule];
+          if (filePath === parentFile) return [importerModule];
+          return [];
+        }),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    const updatedModules = twigPlugin.handleHotUpdate({
+      file: sharedFile,
+      server: unlinkServer,
+    });
+    transformTwigModule(twigPlugin, unrelatedFile);
+
+    const staleServer = {
+      moduleGraph: {
+        getModulesByFile: jest.fn(),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    expect(unlinkServer.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      importerModule,
+    );
+    expect(updatedModules).toEqual(
+      expect.arrayContaining([deletedModule, importerModule]),
+    );
+    expect(
+      twigPlugin.handleHotUpdate({ file: sharedFile, server: staleServer }),
+    ).toBeUndefined();
+    expect(staleServer.moduleGraph.getModulesByFile).not.toHaveBeenCalled();
+    expect(staleServer.moduleGraph.invalidateModule).not.toHaveBeenCalled();
+  });
+
   it('reuses cached runtime templates when stories share an included template', () => {
     projectDir = makeTempProject();
     const firstFile = join(projectDir, 'src/components/first/first.twig');

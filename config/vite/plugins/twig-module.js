@@ -17,7 +17,7 @@ import {
 } from '../../../src/extensions/twig/index.js';
 import { toRootRelativePath } from '../../../src/storybook/twig/reference-paths.js';
 import { resolveProjectStructure } from '../project-structure.js';
-import { firstExistingPath } from '../utils/fs-safe.js';
+import { firstExistingPath, safeExists } from '../utils/fs-safe.js';
 import { toPosixPath } from '../utils/paths.js';
 import { unique } from '../utils/unique.js';
 
@@ -512,8 +512,11 @@ export function emulsifyTwigModulePlugin(options) {
     dependencyImporters.set(dependency, importers);
   };
   const clearDependencyImporter = (importer) => {
-    for (const importers of dependencyImporters.values()) {
+    for (const [dependency, importers] of dependencyImporters) {
       importers.delete(importer);
+      if (!importers.size) {
+        dependencyImporters.delete(dependency);
+      }
     }
   };
 
@@ -628,13 +631,16 @@ export function emulsifyTwigModulePlugin(options) {
 
       const filePath = resolve(file);
       compileCache.delete(filePath);
+      const importers = dependencyImporters.get(filePath);
+      if (!safeExists(filePath)) {
+        dependencyImporters.delete(filePath);
+      }
 
       const projectRoot = options.projectDir || options.root;
       if (projectRoot && isWithinRoot(resolve(projectRoot), filePath)) {
         resolutionCache.clear();
       }
 
-      const importers = dependencyImporters.get(filePath);
       if (!importers?.size) {
         return undefined;
       }
