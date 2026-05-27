@@ -101,6 +101,7 @@
     "src/storybook/twig/reference-paths.js",
     "src/storybook/twig/resolver.js",
     "src/storybook/twig/setup.js",
+    "src/storybook/twig/source-events.js",
     "src/storybook/twig/source.js"
   ],
   "exports": {

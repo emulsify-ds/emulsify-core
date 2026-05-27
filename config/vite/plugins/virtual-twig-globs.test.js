@@ -39,11 +39,17 @@ describe('virtual Twig glob module plugin', () => {
     expect(source).toContain(
       'modules: import.meta.glob("/src/layout/**/*.twig", { eager: true })',
     );
-    expect(source).toMatch(
-      /sources: import\.meta\.glob\("\/src\/components\/\*\*\/\*\.twig", \{ eager: true, query: '\?raw', import: 'default' \}\)/,
+    expect(source).toContain(
+      'Raw source\n * entries stay lazy and load only when Twig source() requests a template.',
     );
     expect(source).toMatch(
-      /sources: import\.meta\.glob\("\/src\/layout\/\*\*\/\*\.twig", \{ eager: true, query: '\?raw', import: 'default' \}\)/,
+      /sources: import\.meta\.glob\("\/src\/components\/\*\*\/\*\.twig", \{ query: '\?raw', import: 'default' \}\)/,
+    );
+    expect(source).toMatch(
+      /sources: import\.meta\.glob\("\/src\/layout\/\*\*\/\*\.twig", \{ query: '\?raw', import: 'default' \}\)/,
+    );
+    expect(source).not.toContain(
+      'sources: import.meta.glob("/src/components/**/*.twig", { eager: true, query: \'?raw\'',
     );
     expect(source).toContain('export const modules = globMaps.modules;');
     expect(source).toContain('export const sources = globMaps.sources;');

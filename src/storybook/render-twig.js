@@ -2,11 +2,12 @@
  * @file React Storybook renderer for imported Twig template modules.
  */
 
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useReducer, useRef } from 'react';
 import {
   attachStorybookBehaviors,
   normalizeStorybookPlatformAdapter,
 } from './platform-behaviors.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './twig/source-events.js';
 
 /**
  * Read the normalized Emulsify environment injected by Storybook's Vite config.
@@ -222,6 +223,19 @@ export function TwigStory({
   options = {},
   storyContext = {},
 }) {
+  const [, rerender] = useReducer((version) => version + 1, 0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    window.addEventListener(TWIG_SOURCE_LOADED_EVENT, rerender);
+    return () => {
+      window.removeEventListener(TWIG_SOURCE_LOADED_EVENT, rerender);
+    };
+  }, []);
+
   return React.createElement(TwigHtmlStory, {
     html: renderTwigToHtml(template, args, options, storyContext),
     options,

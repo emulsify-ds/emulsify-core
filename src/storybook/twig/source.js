@@ -3,6 +3,7 @@
  */
 
 import { resolveTemplateSource } from './resolver.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './source-events.js';
 
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
@@ -27,6 +28,7 @@ const INLINE_ASSET_EXTS = new Set([
   'md',
 ]);
 const IMAGE_ASSET_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
+const pendingSourceLoads = new Set();
 
 /**
  * Normalize an `@assets` reference to a public asset path.
@@ -86,7 +88,53 @@ export function resolveAssetSource(assetPath) {
 }
 
 /**
+ * Notify Storybook renderers when a lazy Twig source import is available.
+ *
+ * @param {Function} templateSourceResolver - Twig template source resolver.
+ * @param {string} templateName - Twig template reference.
+ */
+function scheduleSourceLoadedEvent(templateSourceResolver, templateName) {
+  const sourceLoad =
+    typeof templateSourceResolver.whenTemplateSourceLoaded === 'function'
+      ? templateSourceResolver.whenTemplateSourceLoaded(templateName)
+      : undefined;
+
+  if (!sourceLoad || typeof sourceLoad.then !== 'function') {
+    return;
+  }
+  if (pendingSourceLoads.has(sourceLoad)) {
+    return;
+  }
+
+  pendingSourceLoads.add(sourceLoad);
+  sourceLoad
+    .then((sourceText) => {
+      if (
+        typeof sourceText !== 'string' ||
+        typeof window === 'undefined' ||
+        typeof window.dispatchEvent !== 'function'
+      ) {
+        return;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(TWIG_SOURCE_LOADED_EVENT, {
+          detail: { templateName },
+        }),
+      );
+    })
+    .catch(() => {})
+    .finally(() => {
+      pendingSourceLoads.delete(sourceLoad);
+    });
+}
+
+/**
  * Create a Twig.js `source()` function for Storybook rendering.
+ *
+ * Lazy Twig source loaders return an empty string on first render while the raw
+ * source import resolves. The source text is cached by the resolver, and the
+ * Storybook Twig renderer re-renders when the load completes.
  *
  * @param {Function} templateSourceResolver - Twig template source resolver.
  * @returns {Function} Twig.js function implementation.
@@ -100,6 +148,13 @@ export function createTwigSourceFunction(
     const templateSource = templateSourceResolver(templateName);
     if (typeof templateSource === 'string') {
       return templateSource;
+    }
+    if (
+      typeof templateSourceResolver.isTemplateSourceLoading === 'function' &&
+      templateSourceResolver.isTemplateSourceLoading(templateName)
+    ) {
+      scheduleSourceLoadedEvent(templateSourceResolver, templateName);
+      return '';
     }
 
     if (

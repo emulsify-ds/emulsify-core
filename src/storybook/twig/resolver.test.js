@@ -114,6 +114,33 @@ describe('Storybook Twig resolver', () => {
     ).toBe('<button>{{ text }}</button>');
   });
 
+  it('loads lazy raw Twig source once and caches it for later sync reads', async () => {
+    const sourceLoader = jest.fn(() =>
+      Promise.resolve('<button>{{ text }}</button>'),
+    );
+    const resolver = createTwigResolver({
+      env: createEnv(),
+      sources: {
+        '/src/components/button/button.twig': sourceLoader,
+      },
+    });
+
+    expect(
+      resolver.resolveTemplateSource('@components/button/button.twig'),
+    ).toBeUndefined();
+    expect(sourceLoader).toHaveBeenCalledTimes(1);
+    expect(
+      resolver.isTemplateSourceLoading('@components/button/button.twig'),
+    ).toBe(true);
+
+    await resolver.whenTemplateSourceLoaded('@components/button/button.twig');
+
+    expect(
+      resolver.resolveTemplateSource('@components/button/button.twig'),
+    ).toBe('<button>{{ text }}</button>');
+    expect(sourceLoader).toHaveBeenCalledTimes(1);
+  });
+
   it('resolves named variant structure roots as Twig namespaces', () => {
     const env = {
       projectDir,

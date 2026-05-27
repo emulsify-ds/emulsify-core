@@ -10,6 +10,7 @@ import {
   renderTwigHtml,
 } from '@emulsify/core/storybook';
 import { StoryHtmlBoundary, withLegacyStoryToString } from './render-twig.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './twig/source-events.js';
 
 describe('renderTwig', () => {
   let container;
@@ -76,6 +77,23 @@ describe('renderTwig', () => {
     });
 
     expect(container.querySelector('h2').textContent).toBe('Second');
+  });
+
+  it('re-renders when lazy Twig source text finishes loading', async () => {
+    let sourceLoaded = false;
+    const template = () =>
+      `<p>${sourceLoaded ? 'Loaded source' : 'Loading source'}</p>`;
+    const storyRender = renderTwig(template);
+
+    await act(async () => {
+      root.render(storyRender({}));
+    });
+    sourceLoaded = true;
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(TWIG_SOURCE_LOADED_EVENT));
+    });
+
+    expect(container.querySelector('p').textContent).toBe('Loaded source');
   });
 
   it('calls Drupal attachBehaviors only when the platform adapter enables it', async () => {

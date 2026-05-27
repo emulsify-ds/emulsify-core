@@ -3,6 +3,7 @@
  */
 
 import { createTwigSourceFunction, resolveAssetSource } from './source.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './source-events.js';
 
 describe('Twig source() Storybook helper', () => {
   let consoleError;
@@ -25,6 +26,34 @@ describe('Twig source() Storybook helper', () => {
     expect(source('@components/button/button.twig')).toBe(
       '<button>{{ text }}</button>',
     );
+  });
+
+  it('returns cached raw Twig source after a lazy source load resolves', async () => {
+    const sourceLoad = Promise.resolve('<button>{{ text }}</button>');
+    const templateSourceResolver = jest
+      .fn()
+      .mockReturnValueOnce(undefined)
+      .mockReturnValue('<button>{{ text }}</button>');
+    templateSourceResolver.isTemplateSourceLoading = jest
+      .fn()
+      .mockReturnValue(true);
+    templateSourceResolver.whenTemplateSourceLoaded = jest
+      .fn()
+      .mockReturnValue(sourceLoad);
+    const source = createTwigSourceFunction(templateSourceResolver);
+    const sourceLoaded = new Promise((resolve) => {
+      window.addEventListener(TWIG_SOURCE_LOADED_EVENT, resolve, {
+        once: true,
+      });
+    });
+
+    expect(source('@components/button/button.twig')).toBe('');
+    await sourceLoaded;
+
+    expect(source('@components/button/button.twig')).toBe(
+      '<button>{{ text }}</button>',
+    );
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('resolves raster assets to public Storybook image markup', () => {

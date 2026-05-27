@@ -25,22 +25,24 @@ export const extendConfig = () => ({
 
 ## Storybook Twig Imports
 
-Storybook's Twig resolver eagerly imports compiled Twig modules and raw Twig source strings with `import.meta.glob(..., { eager: true })`.
+Storybook's Twig resolver eagerly imports compiled Twig modules with `import.meta.glob(..., { eager: true })`, but raw Twig source strings for `source()` are loaded lazily.
 
 This supports:
 
 - `include()` for Twig templates.
-- `source()` for raw Twig source.
+- `source()` for raw Twig source, loaded on demand and cached after the first request.
 - Namespaces derived from `project.emulsify.json`.
 
-The eager strategy is simple and reliable, but every `.twig` file under Storybook's resolved Twig roots is included in the preview build. Large projects with many generated, archived, or CMS-only Twig files can see larger Storybook output and slower builds.
+Compiled Twig modules stay eager because Storybook stories need synchronous render functions. Raw source loading is deferred because most projects call `source()` for only a small subset of templates. The first render that asks for a lazy raw source may render without that source while the dynamic import resolves; Emulsify then re-renders the Twig story and subsequent renders read the cached string synchronously.
+
+Large projects with many generated, archived, or CMS-only Twig files can still see larger Storybook output from compiled module imports, but lazy raw source loading reduces the retained string heap for templates that never call `source()`.
 
 For large libraries:
 
 - Keep only active Storybook-rendered Twig files under Storybook source roots.
 - Move generated or archived Twig files outside `src/components`, root `./components`, or explicit `variant.structureImplementations` roots when Storybook does not need them.
 - Prefer explicit `variant.structureImplementations` roots when a repository has multiple source areas.
-- Avoid storing large raw fixtures under Twig roots unless `source()` needs to read them.
+- Avoid storing large raw fixtures under Twig roots unless stories need to render or `source()` them.
 
 ## Tailwind Scanning
 
