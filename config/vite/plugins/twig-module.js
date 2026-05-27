@@ -659,10 +659,37 @@ export function emulsifyTwigModulePlugin(options) {
               }
             });
           };
-          const __emulsifyTwigCreateTemplate = (id, params) => {
+          const __emulsifyTwigApplyTemplateOptions = (
+            template,
+            params = {},
+            options = {},
+          ) => {
+            template.options = {
+              ...(template.options || {}),
+              ...options,
+              allowInlineIncludes: true,
+              namespaces:
+                params.namespaces ||
+                options.namespaces ||
+                template.options?.namespaces,
+              rethrow: true,
+            };
+            return template;
+          };
+          const __emulsifyTwigCreateTemplate = (id, params, options = {}) => {
             const template = twig({ ...params, id });
             template.__emulsifyTwigSignature = params.__emulsifyTwigSignature;
-            return template;
+            return __emulsifyTwigApplyTemplateOptions(
+              template,
+              params,
+              options,
+            );
+          };
+          const __emulsifyTwigStoredTemplate = (id, options = {}) => {
+            const params = __emulsifyTwigTemplateStore.get(id);
+            return params
+              ? __emulsifyTwigCreateTemplate(id, params, options)
+              : null;
           };
           const __emulsifyTwigTemplate = (id, params) => {
             __emulsifyTwigTemplateStore.set(id, params);
@@ -671,12 +698,7 @@ export function emulsifyTwigModulePlugin(options) {
             const signature = params.__emulsifyTwigSignature;
 
             if (cached) {
-              cached.options = {
-                ...(cached.options || {}),
-                allowInlineIncludes: true,
-                namespaces: params.namespaces,
-                rethrow: true,
-              };
+              __emulsifyTwigApplyTemplateOptions(cached, params);
 
               if (!signature || cached.__emulsifyTwigSignature === signature) {
                 return cached;
@@ -692,19 +714,53 @@ export function emulsifyTwigModulePlugin(options) {
             if (typeof Twig.extend !== 'function') return;
 
             Twig.extend((TwigCore) => {
-              if (TwigCore.__emulsifyTwigTemplateLoadPatched) return;
+              if (!TwigCore.__emulsifyTwigTemplateLoadPatched) {
+                const loadTemplate = TwigCore.Templates.load;
+                TwigCore.Templates.load = (id) => {
+                  const template = loadTemplate(id);
+                  if (template) return template;
 
-              const loadTemplate = TwigCore.Templates.load;
-              TwigCore.Templates.load = (id) => {
-                const template = loadTemplate(id);
-                if (template) return template;
+                  return __emulsifyTwigStoredTemplate(id) || template;
+                };
+                TwigCore.__emulsifyTwigTemplateLoadPatched = true;
+              }
 
-                const params = __emulsifyTwigTemplateStore.get(id);
-                return params
-                  ? __emulsifyTwigCreateTemplate(id, params)
-                  : template;
-              };
-              TwigCore.__emulsifyTwigTemplateLoadPatched = true;
+              if (!TwigCore.__emulsifyTwigImportFilePatched) {
+                const importFile = TwigCore.Template?.prototype?.importFile;
+                if (typeof importFile !== 'function') return;
+
+                TwigCore.Template.prototype.importFile = function (file) {
+                  const loadPrecompiled = (id) => {
+                    const template = TwigCore.Templates.load(id);
+                    if (!template) return null;
+
+                    return __emulsifyTwigApplyTemplateOptions(
+                      template,
+                      __emulsifyTwigTemplateStore.get(id) || {},
+                      this.options || {},
+                    );
+                  };
+                  const candidates = [file];
+
+                  try {
+                    candidates.unshift(
+                      this.path
+                        ? TwigCore.path.parsePath(this, file)
+                        : file,
+                    );
+                  } catch {
+                    // Fall back to Twig's original importFile behavior below.
+                  }
+
+                  for (const id of [...new Set(candidates)]) {
+                    const template = loadPrecompiled(id);
+                    if (template) return template;
+                  }
+
+                  return importFile.call(this, file);
+                };
+                TwigCore.__emulsifyTwigImportFilePatched = true;
+              }
             });
           };
 

@@ -338,7 +338,9 @@ describe('Twig module plugin', () => {
       ].join('\n'),
     );
 
-    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const env = makeEnv(projectDir);
+    const twigPlugin = makeTwigModulePlugin(env);
+    const twigOptions = makeTwigPluginOptions(env);
     const transformed = transformTwigModule(twigPlugin, accordionFile);
     const runtimeTwig = Twig.factory();
     let fsLoaderUsed = false;
@@ -370,6 +372,28 @@ describe('Twig module plugin', () => {
     });
 
     expect(render()).toContain('<section>Embedded</section>');
+    expect(fsLoaderUsed).toBe(false);
+
+    fsLoaderUsed = false;
+    runtimeTwig.extend((TwigCore) => {
+      delete TwigCore.Templates.registry[containerFile];
+    });
+
+    const inlineDisabledTemplate = runtimeTwig.twig({
+      allowInlineIncludes: false,
+      data: [
+        twigEmbed('@layout/container/container.twig'),
+        '  {% block content %}Precompiled{% endblock %}',
+        '{% endembed %}',
+      ].join('\n'),
+      namespaces: twigOptions.namespaces,
+      path: accordionFile,
+      rethrow: true,
+    });
+
+    expect(inlineDisabledTemplate.render()).toContain(
+      '<section>Precompiled</section>',
+    );
     expect(fsLoaderUsed).toBe(false);
   });
 
