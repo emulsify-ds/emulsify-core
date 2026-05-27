@@ -3,6 +3,7 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -28,6 +29,15 @@ describe('audit', () => {
 
   afterEach(() => {
     rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('loads in plain Node without Vite virtual modules', () => {
+    const output = execFileSync(process.execPath, [
+      join(__dirname, 'audit.js'),
+      '--help',
+    ]).toString();
+
+    expect(output).toContain('Usage: emulsify-audit');
   });
 
   it('reports combined readiness findings', () => {

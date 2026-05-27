@@ -19,7 +19,7 @@ import {
   safeReadJson,
 } from '../config/vite/utils/fs-safe.js';
 import { toPosixPath } from '../config/vite/utils/paths.js';
-import { candidateKeysForReference } from '../src/storybook/twig/resolver.js';
+import { candidateKeysForReference } from '../src/storybook/twig/reference-paths.js';
 import { analyzeStorySource, collectStoryFiles } from './audit-twig-stories.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
