@@ -19,6 +19,8 @@ export default {
   moduleNameMapper: {
     '^virtual:emulsify-twig-globs$':
       '<rootDir>/config/vite/test-utils/virtual-twig-globs.js',
+    '^virtual:emulsify-twig-asset-sources$':
+      '<rootDir>/config/vite/test-utils/virtual-twig-asset-sources.js',
   },
   coverageDirectory: '.coverage',
   coverageProvider: 'v8',

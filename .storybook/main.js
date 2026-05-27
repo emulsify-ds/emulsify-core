@@ -418,6 +418,9 @@ const baseConfig = {
       ...(env.namespaceRoots && typeof env.namespaceRoots === 'object'
         ? Object.values(env.namespaceRoots)
         : []),
+      ...(Array.isArray(env.projectStructure?.assetRoots)
+        ? env.projectStructure.assetRoots
+        : []),
     ]);
 
     // Twig files are loaded through custom resolvers/plugins, so they need to

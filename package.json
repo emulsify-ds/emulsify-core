@@ -59,6 +59,7 @@
     "config/vite/plugins/source-file-index.js",
     "config/vite/plugins/svg-sprite.js",
     "config/vite/plugins/twig-module.js",
+    "config/vite/plugins/virtual-twig-asset-sources.js",
     "config/vite/plugins/virtual-twig-globs.js",
     "config/vite/plugins/vituum-patch.js",
     "config/vite/plugins/yaml-module.js",
@@ -102,6 +103,7 @@
     "src/storybook/twig/resolver.js",
     "src/storybook/twig/setup.js",
     "src/storybook/twig/source-events.js",
+    "src/storybook/twig/source-extensions.js",
     "src/storybook/twig/source.js"
   ],
   "exports": {

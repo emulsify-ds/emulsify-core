@@ -20,6 +20,7 @@ import {
   emulsifyTwigModulePlugin,
   makeTwigPluginOptions,
 } from './twig-module.js';
+import { virtualTwigAssetSourcesPlugin } from './virtual-twig-asset-sources.js';
 import { virtualTwigGlobsPlugin } from './virtual-twig-globs.js';
 import { makeTwigPlugins } from './vituum-patch.js';
 import { yamlModulePlugin } from './yaml-module.js';
@@ -51,6 +52,7 @@ export function makePlugins(env) {
 
   const basePlugins = [
     virtualTwigGlobsPlugin(envWithStructure),
+    virtualTwigAssetSourcesPlugin(envWithStructure),
 
     emulsifyTwigModulePlugin(twigOptions),
 

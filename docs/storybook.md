@@ -119,14 +119,15 @@ Drupal-specific Twig filters are not part of the generic Twig runtime. They are 
 
 ## Twig Import Performance
 
-Storybook's Twig resolver uses Vite `import.meta.glob()` calls generated from the normalized project structure model. It eagerly imports both compiled Twig template modules and raw Twig source strings:
+Storybook's Twig resolver uses Vite `import.meta.glob()` calls generated from the normalized project structure model. It eagerly imports compiled Twig template modules, then lazy-loads raw Twig template source and text asset source only when `source()` asks for them:
 
 - Template modules support `{% include %}`, `{% embed %}`, `{% extends %}`, `{% import %}`, and `{% from %}` dependencies.
-- Raw source imports support `source()`.
+- Lazy raw Twig source imports support `source('@components/...')`.
+- Lazy text asset imports support `source('@assets/...')` for SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown files.
 
-The eager strategy is intentionally simple and stable for the current Storybook integration. It makes all configured Twig namespaces available at render time without asynchronous resolver plumbing, so Twig stories can render predictably beside React stories. For small and medium component libraries, this is acceptable and keeps the release behavior easy to reason about.
+Compiled template modules stay eager because Twig stories need synchronous render functions. Raw source and text asset strings are cached after the first request. The first render that asks for a lazy source may render without it while the dynamic import resolves; Emulsify re-renders the Twig story and subsequent renders read the cached string synchronously.
 
-The tradeoff is that every `.twig` file under the resolved Twig roots is included in the Storybook preview bundle, even when only a few stories directly render those templates. Large libraries with many templates, generated Twig files, or archived component variants can see slower Storybook builds and larger preview output.
+This keeps all configured Twig namespaces available at render time without retaining every raw Twig or text asset string in memory. Large libraries can still see Storybook output from compiled module imports, but raw strings are retained only for templates and assets that `source()` actually reads.
 
 Large projects should keep Storybook-facing Twig roots intentional:
 
@@ -189,7 +190,21 @@ It also supports the Storybook asset alias `@assets` for static assets served fr
 {{ source('@assets/images/example.png') }}
 ```
 
-Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are inlined when available. Raster image assets produce image markup. Other assets return a public URL.
+Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Emulsify uses `projectStructure.assetRoots` when available, otherwise existing `src/assets` and `assets` directories. The first call lazy-loads the raw text and triggers a re-render; later calls return the cached text synchronously.
+
+Raster image assets still produce image markup. Other assets return a public URL.
+
+The old synchronous XHR fallback for text assets is disabled by default because it blocks Storybook rendering. It remains available for one release cycle only for assets outside the virtual asset roots:
+
+```js
+export const platformAdapter = {
+  storybook: {
+    allowSyncXhrSource: true,
+  },
+};
+```
+
+Move text assets used by `source('@assets/...')` into `src/assets`, `assets`, or a configured asset root instead. The sync-XHR fallback is deprecated and will be removed in 4.2.
 
 ## Mixed Twig And React Folder Example
 

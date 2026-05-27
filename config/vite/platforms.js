@@ -13,6 +13,7 @@ const genericAdapter = {
     attachDrupalBehaviors: false,
     registerDrupalTwigFilters: false,
     loadMirroredComponentCss: false,
+    allowSyncXhrSource: false,
   },
   build: {
     mirrorDistComponentsToRoot: false,
@@ -27,6 +28,7 @@ const drupalAdapter = {
     attachDrupalBehaviors: true,
     registerDrupalTwigFilters: true,
     loadMirroredComponentCss: true,
+    allowSyncXhrSource: false,
   },
   build: {
     mirrorDistComponentsToRoot: true,

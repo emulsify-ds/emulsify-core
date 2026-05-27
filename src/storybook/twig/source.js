@@ -2,10 +2,22 @@
  * @file Twig source() runtime helper for Storybook-rendered templates.
  */
 
+import {
+  coversAssetPath,
+  getAssetText,
+  isAssetTextLoading,
+  whenAssetTextLoaded,
+} from 'virtual:emulsify-twig-asset-sources';
 import { resolveTemplateSource } from './resolver.js';
+import { IMAGE_ASSET_EXTS, INLINE_ASSET_EXTS } from './source-extensions.js';
 import { TWIG_SOURCE_LOADED_EVENT } from './source-events.js';
 
-const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
+const DEFAULT_ENV =
+  (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
+
+function getRuntimeEnv() {
+  return globalThis.__EMULSIFY_ENV__ || DEFAULT_ENV;
+}
 
 // GitHub Pages serves static assets from a repository-prefixed base path.
 const PUBLIC_ASSET_BASE =
@@ -13,22 +25,18 @@ const PUBLIC_ASSET_BASE =
   window.location &&
   window.location.hostname &&
   window.location.hostname.endsWith('github.io')
-    ? `/${ENV.machineName || ''}/assets/`
+    ? `/${getRuntimeEnv().machineName || ''}/assets/`
     : '/assets/';
 
-// Text assets can be safely inlined; binary assets should remain URL-based.
-const INLINE_ASSET_EXTS = new Set([
-  'svg',
-  'html',
-  'twig',
-  'css',
-  'js',
-  'json',
-  'txt',
-  'md',
-]);
-const IMAGE_ASSET_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif']);
 const pendingSourceLoads = new Set();
+const warnedAssetSources = new Set();
+
+function allowSyncXhrSource() {
+  const adapter = getRuntimeEnv().platformAdapter || {};
+  return Boolean(
+    adapter.storybook?.allowSyncXhrSource || adapter.allowSyncXhrSource,
+  );
+}
 
 /**
  * Normalize an `@assets` reference to a public asset path.
@@ -64,41 +72,29 @@ function fetchTextAsset(relPath) {
 }
 
 /**
- * Resolve an `@assets` reference for Storybook.
+ * Warn once when a text asset cannot use the lazy virtual source map.
  *
- * @param {string} assetPath - Twig asset reference.
- * @returns {string} Raw text, image markup, or URL.
+ * @param {string} relPath - Public asset path below `/assets`.
+ * @param {string} reason - Short explanation of the missing source.
  */
-export function resolveAssetSource(assetPath) {
-  const relPath = normalizeAssetPath(assetPath);
-  const extension = relPath.split('.').pop().toLowerCase();
-
-  if (INLINE_ASSET_EXTS.has(extension)) {
-    const text = fetchTextAsset(relPath);
-    if (typeof text === 'string') {
-      return text;
-    }
+function warnTextAssetSource(relPath, reason) {
+  if (warnedAssetSources.has(relPath)) {
+    return;
   }
 
-  if (IMAGE_ASSET_EXTS.has(extension)) {
-    return `<img src="${PUBLIC_ASSET_BASE}${relPath}" alt="" role="img">`;
-  }
-
-  return `${PUBLIC_ASSET_BASE}${relPath}`;
+  warnedAssetSources.add(relPath);
+  console.warn(
+    `source(): ${reason} for @assets/${relPath}. Synchronous XHR fallback is disabled by default because it blocks Storybook rendering. Move the asset under a configured asset root such as src/assets or assets, or temporarily enable platformAdapter.storybook.allowSyncXhrSource. The sync-XHR fallback is deprecated and will be removed in 4.2.`,
+  );
 }
 
 /**
- * Notify Storybook renderers when a lazy Twig source import is available.
+ * Notify Storybook renderers when any lazy source import is available.
  *
- * @param {Function} templateSourceResolver - Twig template source resolver.
- * @param {string} templateName - Twig template reference.
+ * @param {Promise} sourceLoad - Lazy source import promise.
+ * @param {object} detail - Event detail payload.
  */
-function scheduleSourceLoadedEvent(templateSourceResolver, templateName) {
-  const sourceLoad =
-    typeof templateSourceResolver.whenTemplateSourceLoaded === 'function'
-      ? templateSourceResolver.whenTemplateSourceLoaded(templateName)
-      : undefined;
-
+function scheduleSourceLoadedEvent(sourceLoad, detail) {
   if (!sourceLoad || typeof sourceLoad.then !== 'function') {
     return;
   }
@@ -118,15 +114,85 @@ function scheduleSourceLoadedEvent(templateSourceResolver, templateName) {
       }
 
       window.dispatchEvent(
-        new CustomEvent(TWIG_SOURCE_LOADED_EVENT, {
-          detail: { templateName },
-        }),
+        new CustomEvent(TWIG_SOURCE_LOADED_EVENT, { detail }),
       );
     })
     .catch(() => {})
     .finally(() => {
       pendingSourceLoads.delete(sourceLoad);
     });
+}
+
+/**
+ * Resolve an `@assets` reference for Storybook.
+ *
+ * @param {string} assetPath - Twig asset reference.
+ * @param {{ ignoreMissing?: boolean }} [options={}] - Optional source() flags.
+ * @returns {string|undefined} Raw text, image markup, URL, or undefined while lazy text loads.
+ */
+export function resolveAssetSource(assetPath, { ignoreMissing = false } = {}) {
+  const relPath = normalizeAssetPath(assetPath);
+  const extension = relPath.split('.').pop().toLowerCase();
+
+  if (INLINE_ASSET_EXTS.has(extension)) {
+    const text = getAssetText(assetPath);
+    if (typeof text === 'string') {
+      return text;
+    }
+
+    if (isAssetTextLoading(assetPath)) {
+      scheduleSourceLoadedEvent(whenAssetTextLoaded(assetPath), {
+        assetPath,
+      });
+      return undefined;
+    }
+
+    if (coversAssetPath(assetPath)) {
+      if (!ignoreMissing) {
+        warnTextAssetSource(
+          relPath,
+          'no build-time text asset source was found',
+        );
+      }
+      return undefined;
+    }
+
+    if (allowSyncXhrSource()) {
+      return fetchTextAsset(relPath);
+    }
+
+    if (!ignoreMissing) {
+      warnTextAssetSource(
+        relPath,
+        'no configured build-time asset root covers',
+      );
+    }
+    return undefined;
+  }
+
+  if (IMAGE_ASSET_EXTS.has(extension)) {
+    return `<img src="${PUBLIC_ASSET_BASE}${relPath}" alt="" role="img">`;
+  }
+
+  return `${PUBLIC_ASSET_BASE}${relPath}`;
+}
+
+/**
+ * Notify Storybook renderers when a lazy Twig template source import is available.
+ *
+ * @param {Function} templateSourceResolver - Twig template source resolver.
+ * @param {string} templateName - Twig template reference.
+ */
+function scheduleTemplateSourceLoadedEvent(
+  templateSourceResolver,
+  templateName,
+) {
+  const sourceLoad =
+    typeof templateSourceResolver.whenTemplateSourceLoaded === 'function'
+      ? templateSourceResolver.whenTemplateSourceLoaded(templateName)
+      : undefined;
+
+  scheduleSourceLoadedEvent(sourceLoad, { templateName });
 }
 
 /**
@@ -153,7 +219,7 @@ export function createTwigSourceFunction(
       typeof templateSourceResolver.isTemplateSourceLoading === 'function' &&
       templateSourceResolver.isTemplateSourceLoading(templateName)
     ) {
-      scheduleSourceLoadedEvent(templateSourceResolver, templateName);
+      scheduleTemplateSourceLoadedEvent(templateSourceResolver, templateName);
       return '';
     }
 
@@ -161,7 +227,7 @@ export function createTwigSourceFunction(
       templateName.startsWith('@assets/') ||
       templateName.startsWith('assets/')
     ) {
-      return resolveAssetSource(templateName);
+      return resolveAssetSource(templateName, { ignoreMissing }) || '';
     }
 
     if (!ignoreMissing) {

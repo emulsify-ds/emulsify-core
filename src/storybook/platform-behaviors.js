@@ -7,6 +7,7 @@ export const genericStorybookAdapter = {
   attachDrupalBehaviors: false,
   registerDrupalTwigFilters: false,
   loadMirroredComponentCss: false,
+  allowSyncXhrSource: false,
 };
 
 /**

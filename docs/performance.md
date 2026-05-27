@@ -25,17 +25,18 @@ export const extendConfig = () => ({
 
 ## Storybook Twig Imports
 
-Storybook's Twig resolver eagerly imports compiled Twig modules with `import.meta.glob(..., { eager: true })`, but raw Twig source strings for `source()` are loaded lazily.
+Storybook's Twig resolver eagerly imports compiled Twig modules with `import.meta.glob(..., { eager: true })`, but raw Twig source strings and text asset strings for `source()` are loaded lazily.
 
 This supports:
 
 - `include()` for Twig templates.
 - `source()` for raw Twig source, loaded on demand and cached after the first request.
+- `source('@assets/...')` for inline text assets, loaded on demand from build-time asset source maps.
 - Namespaces derived from `project.emulsify.json`.
 
-Compiled Twig modules stay eager because Storybook stories need synchronous render functions. Raw source loading is deferred because most projects call `source()` for only a small subset of templates. The first render that asks for a lazy raw source may render without that source while the dynamic import resolves; Emulsify then re-renders the Twig story and subsequent renders read the cached string synchronously.
+Compiled Twig modules stay eager because Storybook stories need synchronous render functions. Raw source loading is deferred because most projects call `source()` for only a small subset of templates and assets. The first render that asks for a lazy raw source may render without that source while the dynamic import resolves; Emulsify then re-renders the Twig story and subsequent renders read the cached string synchronously.
 
-Large projects with many generated, archived, or CMS-only Twig files can still see larger Storybook output from compiled module imports, but lazy raw source loading reduces the retained string heap for templates that never call `source()`.
+Large projects with many generated, archived, or CMS-only Twig files can still see larger Storybook output from compiled module imports, but lazy raw source loading reduces the retained string heap for templates and text assets that never call `source()`.
 
 For large libraries:
 
@@ -43,6 +44,24 @@ For large libraries:
 - Move generated or archived Twig files outside `src/components`, root `./components`, or explicit `variant.structureImplementations` roots when Storybook does not need them.
 - Prefer explicit `variant.structureImplementations` roots when a repository has multiple source areas.
 - Avoid storing large raw fixtures under Twig roots unless stories need to render or `source()` them.
+
+## Storybook Text Asset Sources
+
+`source('@assets/foo.svg')` first checks the build-time `virtual:emulsify-twig-asset-sources` map. That map is generated from `projectStructure.assetRoots` when present, otherwise from existing `src/assets` and `assets` directories. SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown files are lazy `?raw` imports.
+
+This removes the common synchronous XHR path for inline assets. A first render that requests a new text asset may render without it while the import resolves; the Storybook Twig renderer re-renders and subsequent reads are synchronous from memory.
+
+The sync-XHR fallback is disabled by default and should only be enabled temporarily for assets outside configured roots:
+
+```js
+platformAdapter: {
+  storybook: {
+    allowSyncXhrSource: true,
+  },
+}
+```
+
+That fallback blocks the main thread, is deprecated, and is scheduled for removal in 4.2.
 
 ## Tailwind Scanning
 

@@ -49,6 +49,8 @@ describe('Vite plugin public barrel', () => {
 
     expect(names).toEqual(
       expect.arrayContaining([
+        'emulsify-virtual-twig-globs',
+        'emulsify-virtual-twig-asset-sources',
         'emulsify-twig-module',
         '@vituum/vite-plugin-twig',
         'emulsify-svg-sprite-file',
