@@ -3,13 +3,21 @@
  *
  * This module is the single Node-side reader for `project.emulsify.json`.
  * Validation is intentionally permissive so existing projects can upgrade
- * without reshaping older config files.
+ * without reshaping older config files. Resolved config objects are memoized
+ * per project directory and relevant environment signature for one process.
  */
 
 import { normalize, resolve, sep } from 'path';
 import { getPlatformAdapter } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
 import { safeExists, safeReadJson } from './utils/fs-safe.js';
+
+/**
+ * Cache normalized project config by project root and relevant env signature.
+ *
+ * @type {Map<string, Map<string, object>>}
+ */
+const projectConfigCache = new Map();
 
 /**
  * Ensure an absolute path stays inside the project directory.
@@ -36,6 +44,18 @@ export function coerceToProjectPath(projectDir, candidate) {
  */
 function normalizeIdentifier(value) {
   return (value || '').toString().toLowerCase().trim();
+}
+
+/**
+ * Build the environment signature for config values that affect resolution.
+ *
+ * @param {NodeJS.ProcessEnv|Record<string,string>} env - Environment values.
+ * @returns {string} Stable cache-key segment.
+ */
+function projectConfigEnvSignature(env = {}) {
+  return JSON.stringify({
+    EMULSIFY_PLATFORM: normalizeIdentifier(env.EMULSIFY_PLATFORM),
+  });
 }
 
 /**
@@ -82,6 +102,12 @@ export function resolveProjectConfig(
   env = process.env,
 ) {
   const root = resolve(projectDir);
+  const envSignature = projectConfigEnvSignature(env);
+  const cachedByEnv = projectConfigCache.get(root);
+  if (cachedByEnv?.has(envSignature)) {
+    return cachedByEnv.get(envSignature);
+  }
+
   const configPath = coerceToProjectPath(root, 'project.emulsify.json');
   const rawConfigResult = configPath ? safeReadJson(configPath) : {};
   const rawConfig =
@@ -121,7 +147,7 @@ export function resolveProjectConfig(
     platformAdapter,
   });
 
-  return {
+  const config = {
     projectDir: root,
     platform,
     machineName:
@@ -145,4 +171,22 @@ export function resolveProjectConfig(
     adapter: platformAdapter,
     projectConfig: rawConfig,
   };
+
+  const rootCache = cachedByEnv || new Map();
+  rootCache.set(envSignature, config);
+  projectConfigCache.set(root, rootCache);
+
+  return config;
+}
+
+/**
+ * Clear the process-local project config memoization cache.
+ *
+ * Tests call this to avoid cross-test pollution when they mutate fixture
+ * projects in the same Node process.
+ *
+ * @returns {void}
+ */
+export function resetProjectConfigCache() {
+  projectConfigCache.clear();
 }

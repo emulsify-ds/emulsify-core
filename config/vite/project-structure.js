@@ -2,7 +2,9 @@
  * @file Shared component structure and output path resolution.
  *
  * The helpers here keep source-root discovery, Rollup entry keys, copied asset
- * destinations, Twig namespaces, and Storybook roots aligned.
+ * destinations, Twig namespaces, and Storybook roots aligned. Resolved
+ * structure objects are memoized by environment object identity for one
+ * process.
  */
 
 import { basename, relative, resolve, sep } from 'path';
@@ -11,6 +13,16 @@ import { replaceLastSlash, toPosixPath } from './utils/paths.js';
 import { unique } from './utils/unique.js';
 
 export { replaceLastSlash, toPosixPath };
+
+/**
+ * Cache resolved structures for environment objects without keeping them alive.
+ *
+ * @type {WeakMap<object, object>}
+ */
+let projectStructureCache = new WeakMap();
+
+/** @type {object|null} */
+let defaultProjectStructureCache = null;
 
 /** Strip a JS or SCSS extension from an output key. */
 const stripAssetExtension = (filePath) => filePath.replace(/\.(scss|js)$/i, '');
@@ -172,29 +184,44 @@ function fallbackNamespaceRoots({
  * Resolve the serializable project structure model.
  *
  * @param {{
- *   projectDir: string,
- *   srcDir: string,
- *   srcExists: boolean,
+ *   projectDir?: string,
+ *   srcDir?: string,
+ *   srcExists?: boolean,
  *   SDC?: boolean,
  *   structureImplementations?: {name: string, directory: string}[],
  *   platformAdapter?: object
- * }} env - Normalized project environment.
+ * }} [env] - Normalized project environment.
  * @returns {object} Project structure model.
  */
 export function resolveProjectStructure(env) {
+  const cacheableEnv = env && typeof env === 'object' ? env : null;
+  if (cacheableEnv?.projectStructure) {
+    return cacheableEnv.projectStructure;
+  }
+  if (cacheableEnv && projectStructureCache.has(cacheableEnv)) {
+    return projectStructureCache.get(cacheableEnv);
+  }
+  if (!cacheableEnv && defaultProjectStructureCache) {
+    return defaultProjectStructureCache;
+  }
+
+  const defaultProjectDir = process.cwd();
+  const defaultSrcDir = resolve(defaultProjectDir, 'src');
+  const resolvedEnv = cacheableEnv || {};
   const {
-    projectDir,
-    srcDir,
-    srcExists,
+    projectDir = defaultProjectDir,
+    srcDir = defaultSrcDir,
+    srcExists = safeExists(defaultSrcDir),
     SDC = false,
     platformAdapter = {},
-  } = env;
+  } = resolvedEnv;
   const structureImplementations =
-    Array.isArray(env.structureImplementations) &&
-    env.structureImplementations.length
-      ? env.structureImplementations
-      : Array.isArray(env.structureRoots) && env.structureOverrides
-        ? env.structureRoots.map((directory, index) => ({
+    Array.isArray(resolvedEnv.structureImplementations) &&
+    resolvedEnv.structureImplementations.length
+      ? resolvedEnv.structureImplementations
+      : Array.isArray(resolvedEnv.structureRoots) &&
+          resolvedEnv.structureOverrides
+        ? resolvedEnv.structureRoots.map((directory, index) => ({
             name: index === 0 ? 'components' : `structure-${index + 1}`,
             directory,
           }))
@@ -244,7 +271,7 @@ export function resolveProjectStructure(env) {
     platformAdapter?.build?.mirrorDistComponentsToRoot,
   );
 
-  return {
+  const structure = {
     structureOverrides,
     componentRootRecords,
     globalRootRecords,
@@ -267,6 +294,24 @@ export function resolveProjectStructure(env) {
     mirrorComponentOutput,
     SDC: Boolean(SDC),
   };
+
+  if (cacheableEnv) {
+    projectStructureCache.set(cacheableEnv, structure);
+  } else {
+    defaultProjectStructureCache = structure;
+  }
+
+  return structure;
+}
+
+/**
+ * Clear the process-local project structure memoization cache.
+ *
+ * @returns {void}
+ */
+export function resetProjectStructureCache() {
+  projectStructureCache = new WeakMap();
+  defaultProjectStructureCache = null;
 }
 
 /**

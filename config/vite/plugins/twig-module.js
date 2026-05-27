@@ -4,7 +4,9 @@
  * The plugin turns Twig file imports into render functions for Storybook and
  * Vite consumers while recursively compiling referenced Twig dependencies.
  * It memoizes template compilation and include-path resolution for the active
- * build so shared Twig trees do not repeatedly hit the filesystem.
+ * build so shared Twig trees do not repeatedly hit the filesystem. Twig option
+ * and namespace lookups are also memoized by environment object identity for
+ * one process.
  */
 
 import fs from 'fs';
@@ -43,6 +45,28 @@ const compileCache = new Map();
  * @type {Map<string, string|null>}
  */
 const resolutionCache = new Map();
+
+/**
+ * Cache Twig namespace maps by environment object identity.
+ *
+ * @type {WeakMap<object, Record<string, string>>}
+ */
+let twigNamespacesCache = new WeakMap();
+
+/**
+ * Cache Twig plugin options by environment object identity.
+ *
+ * @type {WeakMap<object, import('@vituum/vite-plugin-twig/types').PluginUserConfig>}
+ */
+let twigPluginOptionsCache = new WeakMap();
+
+/**
+ * Determine whether a value can be used as a WeakMap key.
+ *
+ * @param {*} env - Candidate environment value.
+ * @returns {boolean} TRUE when env is a non-null object.
+ */
+const isCacheableEnv = (env) => env && typeof env === 'object';
 
 /**
  * Determine whether a Vite request should compile as a Twig render module.
@@ -405,57 +429,68 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
  * @returns {Record<string, string>}
  */
 export function makeTwigNamespaces(env) {
+  if (isCacheableEnv(env) && twigNamespacesCache.has(env)) {
+    return twigNamespacesCache.get(env);
+  }
+
   const structure = env.projectStructure || resolveProjectStructure(env);
+  let namespaces;
   if (
     structure.namespaceRoots &&
     typeof structure.namespaceRoots === 'object'
   ) {
-    return { ...structure.namespaceRoots };
+    namespaces = { ...structure.namespaceRoots };
+  } else {
+    const {
+      projectDir,
+      srcDir,
+      srcExists,
+      structureOverrides,
+      structureRoots = [],
+    } = env;
+
+    namespaces = {};
+    const overrideRoots = structureOverrides ? structureRoots : [];
+    const componentRoot =
+      basename(srcDir) === 'components'
+        ? srcDir
+        : resolve(srcDir, 'components');
+    const componentsNamespace = firstExistingPath([
+      ...new Set([
+        ...overrideRoots,
+        componentRoot,
+        resolve(projectDir, 'src/components'),
+        resolve(projectDir, 'components'),
+      ]),
+    ]);
+    const layoutNamespace = firstExistingPath([
+      ...new Set([
+        ...(srcExists ? [resolve(srcDir, 'layout')] : []),
+        resolve(projectDir, 'src/layout'),
+        resolve(projectDir, 'layout'),
+      ]),
+    ]);
+    const tokensNamespace = firstExistingPath([
+      ...new Set([
+        ...(srcExists ? [resolve(srcDir, 'tokens')] : []),
+        resolve(projectDir, 'src/tokens'),
+        resolve(projectDir, 'tokens'),
+      ]),
+    ]);
+
+    if (componentsNamespace) {
+      namespaces.components = componentsNamespace;
+    }
+    if (layoutNamespace) {
+      namespaces.layout = layoutNamespace;
+    }
+    if (tokensNamespace) {
+      namespaces.tokens = tokensNamespace;
+    }
   }
 
-  const {
-    projectDir,
-    srcDir,
-    srcExists,
-    structureOverrides,
-    structureRoots = [],
-  } = env;
-
-  const namespaces = {};
-  const overrideRoots = structureOverrides ? structureRoots : [];
-  const componentRoot =
-    basename(srcDir) === 'components' ? srcDir : resolve(srcDir, 'components');
-  const componentsNamespace = firstExistingPath([
-    ...new Set([
-      ...overrideRoots,
-      componentRoot,
-      resolve(projectDir, 'src/components'),
-      resolve(projectDir, 'components'),
-    ]),
-  ]);
-  const layoutNamespace = firstExistingPath([
-    ...new Set([
-      ...(srcExists ? [resolve(srcDir, 'layout')] : []),
-      resolve(projectDir, 'src/layout'),
-      resolve(projectDir, 'layout'),
-    ]),
-  ]);
-  const tokensNamespace = firstExistingPath([
-    ...new Set([
-      ...(srcExists ? [resolve(srcDir, 'tokens')] : []),
-      resolve(projectDir, 'src/tokens'),
-      resolve(projectDir, 'tokens'),
-    ]),
-  ]);
-
-  if (componentsNamespace) {
-    namespaces.components = componentsNamespace;
-  }
-  if (layoutNamespace) {
-    namespaces.layout = layoutNamespace;
-  }
-  if (tokensNamespace) {
-    namespaces.tokens = tokensNamespace;
+  if (isCacheableEnv(env)) {
+    twigNamespacesCache.set(env, namespaces);
   }
 
   return namespaces;
@@ -473,6 +508,10 @@ export function makeTwigNamespaces(env) {
  * @returns {import('@vituum/vite-plugin-twig/types').PluginUserConfig}
  */
 export function makeTwigPluginOptions(env) {
+  if (isCacheableEnv(env) && twigPluginOptionsCache.has(env)) {
+    return twigPluginOptionsCache.get(env);
+  }
+
   const { projectDir, srcDir, structureOverrides, structureRoots = [] } = env;
   const structure = env.projectStructure || resolveProjectStructure(env);
   const overrideRoots = structureOverrides ? structureRoots : [];
@@ -495,7 +534,21 @@ export function makeTwigPluginOptions(env) {
     value: projectDir,
   });
 
+  if (isCacheableEnv(env)) {
+    twigPluginOptionsCache.set(env, twigOptions);
+  }
+
   return twigOptions;
+}
+
+/**
+ * Clear process-local Twig namespace and plugin option memoization caches.
+ *
+ * @returns {void}
+ */
+export function resetTwigOptionCaches() {
+  twigNamespacesCache = new WeakMap();
+  twigPluginOptionsCache = new WeakMap();
 }
 
 /**

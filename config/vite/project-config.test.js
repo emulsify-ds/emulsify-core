@@ -5,7 +5,10 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { resolveProjectConfig } from './project-config.js';
+import {
+  resetProjectConfigCache,
+  resolveProjectConfig,
+} from './project-config.js';
 
 const makeTempProject = () => mkdtempSync(join(tmpdir(), 'emulsify-core-'));
 
@@ -19,10 +22,15 @@ const writeProjectConfig = (projectDir, config) => {
 describe('resolveProjectConfig', () => {
   let projectDir;
 
+  beforeEach(() => {
+    resetProjectConfigCache();
+  });
+
   afterEach(() => {
     if (projectDir) {
       rmSync(projectDir, { recursive: true, force: true });
     }
+    resetProjectConfigCache();
   });
 
   it('normalizes Drupal project config with SDC enabled', () => {
@@ -166,6 +174,16 @@ describe('resolveProjectConfig', () => {
       tokens: expectedRoots[3],
     });
     expect(env.projectStructure.storyRoots).toEqual(expectedRoots);
+  });
+
+  it('memoizes normalized config for the same project and env', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    const first = resolveProjectConfig(projectDir, {});
+    const second = resolveProjectConfig(projectDir, {});
+
+    expect(second).toBe(first);
   });
 
   it('lets EMULSIFY_PLATFORM override project and variant platform config', () => {

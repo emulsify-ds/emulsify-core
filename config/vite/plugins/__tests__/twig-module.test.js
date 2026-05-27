@@ -11,6 +11,7 @@ import {
   emulsifyTwigModulePlugin,
   makeTwigNamespaces,
   makeTwigPluginOptions,
+  resetTwigOptionCaches,
 } from '../twig-module.js';
 import {
   makeEnv,
@@ -25,10 +26,15 @@ import {
 describe('Twig module plugin', () => {
   let projectDir;
 
+  beforeEach(() => {
+    resetTwigOptionCaches();
+  });
+
   afterEach(() => {
     if (projectDir) {
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
+    resetTwigOptionCaches();
     jest.restoreAllMocks();
   });
 
@@ -125,6 +131,18 @@ describe('Twig module plugin', () => {
     expect(
       Object.keys(makeTwigPluginOptions(makeEnv(projectDir)).functions),
     ).toEqual(['add_attributes', 'bem']);
+  });
+
+  it('memoizes Twig namespace and plugin options by env identity', () => {
+    projectDir = makeTempProject();
+    fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    const env = makeEnv(projectDir);
+    const namespaces = makeTwigNamespaces(env);
+    const options = makeTwigPluginOptions(env);
+
+    expect(makeTwigNamespaces(env)).toBe(namespaces);
+    expect(makeTwigPluginOptions(env)).toBe(options);
   });
 
   it('can transform the same Twig module more than once', () => {
