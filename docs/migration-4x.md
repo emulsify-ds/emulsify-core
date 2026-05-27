@@ -98,6 +98,48 @@ to `renderTwig()`.
 
 Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
 
+## Manual package.json Updates
+
+Generated themes copy their root `package.json` from the starter theme when the
+theme is created. Updates to Whisk only affect future generated themes, so
+existing projects must update their own `package.json` manually during the Core
+4 migration.
+
+Use the current Whisk package manifest as the reference for generated Drupal
+themes. At minimum:
+
+- Replace Webpack build scripts with Vite scripts.
+- Remove `build-dev` and `webpack` scripts.
+- Add `audit` and `audit:twig-stories` wrappers so project audits can print the
+  relevant migration docs after running.
+- Update `@emulsify/core` to a Core 4-compatible version.
+- Keep the root-level npm `overrides` listed in
+  [Install Warning Controls](#install-warning-controls).
+
+```json
+{
+  "description": "Storybook and a Vite-based build workflow powered by Emulsify Core 4",
+  "engines": {
+    "node": ">=24"
+  },
+  "type": "module",
+  "scripts": {
+    "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\\n\"; exit $status' --",
+    "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\"; exit $status' --",
+    "build": "npm run ensure-dist && vite --config node_modules/@emulsify/core/config/vite/vite.config.js",
+    "develop": "npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook",
+    "vite": "vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js"
+  },
+  "dependencies": {
+    "@emulsify/core": "^4.0.0"
+  }
+}
+```
+
+Projects with custom lint, Prettier, test, or Storybook scripts should keep
+their project-specific behavior, but should still move Core build commands away
+from `config/webpack` and into `config/vite`.
+
 ## Install Warning Controls
 
 npm applies `overrides` only from the root package being installed. Overrides

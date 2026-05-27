@@ -193,6 +193,133 @@ describe('audit', () => {
     );
   });
 
+  it('reports stale generated package scripts for Core consumers', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'package.json',
+      JSON.stringify({
+        name: 'legacy-theme',
+        scripts: {
+          build:
+            'npm run ensure-dist && webpack --config node_modules/@emulsify/core/config/webpack/webpack.prod.js',
+          'build-dev':
+            'npm run ensure-dist && webpack --config node_modules/@emulsify/core/config/webpack/webpack.dev.js',
+          develop:
+            'npm run ensure-dist && concurrently --raw --no-shell npm:webpack npm:storybook',
+          webpack:
+            'webpack --watch --config node_modules/@emulsify/core/config/webpack/webpack.dev.js',
+        },
+        dependencies: {
+          '@emulsify/core': '^3.5.0',
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+    const finding = result.findings.find(
+      (item) => item.id === 'generated-package-json-migration-needed',
+    );
+    const report = formatAuditReport(result);
+
+    expect(finding.details).toEqual(
+      expect.arrayContaining([
+        'Replace scripts.build with the Vite build command.',
+        'Remove scripts.build-dev; the Vite build replaces it.',
+        'Replace scripts.develop with the Vite/Storybook watcher.',
+        'Replace scripts.webpack with scripts.vite.',
+        'Add scripts.audit.',
+        'Add scripts.audit:twig-stories.',
+        'Add scripts.vite.',
+      ]),
+    );
+    expect(finding.docs).toContain('#manual-packagejson-updates');
+    expect(report).toContain('Docs:');
+  });
+
+  it('accepts current generated package scripts for Core consumers', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'package.json',
+      JSON.stringify({
+        name: 'current-theme',
+        scripts: {
+          audit:
+            'sh -c \'node_modules/@emulsify/core/scripts/audit.js "$@"; status=$?; printf "\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\\n"; exit $status\' --',
+          'audit:twig-stories':
+            'sh -c \'node_modules/@emulsify/core/scripts/audit-twig-stories.js "$@"; status=$?; printf "\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n"; exit $status\' --',
+          build:
+            'npm run ensure-dist && vite --config node_modules/@emulsify/core/config/vite/vite.config.js',
+          develop:
+            'npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook',
+          vite: 'vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js',
+        },
+        dependencies: {
+          '@emulsify/core': '^4.0.0',
+        },
+        overrides: {
+          glob: '^13.0.6',
+          locutus: '^3.0.36',
+          'minimatch@3.0.x': '^3.1.5',
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+
+    expect(result.findings.map((finding) => finding.id)).not.toContain(
+      'generated-package-json-migration-needed',
+    );
+  });
+
+  it('does not require generated package scripts for custom Core consumers', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'package.json',
+      JSON.stringify({
+        name: 'custom-core-consumer',
+        scripts: {
+          build: 'vite build',
+        },
+        dependencies: {
+          '@emulsify/core': '^4.0.0',
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+
+    expect(result.findings.map((finding) => finding.id)).not.toContain(
+      'generated-package-json-migration-needed',
+    );
+  });
+
   it('only treats first include/source argument strings as template references', () => {
     const quote = String.fromCharCode(39);
 
