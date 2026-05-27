@@ -20,6 +20,11 @@ describe('renderTwig', () => {
   let root;
 
   beforeAll(() => {
+    /**
+     * Tell React that this jsdom suite intentionally wraps renders in act().
+     *
+     * React 18 prints warnings without this flag when tests use createRoot().
+     */
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
@@ -223,6 +228,10 @@ describe('renderTwig', () => {
   it('updates legacy string story markup when args change', () => {
     const LegacyStory = ({ heading }) =>
       `<article><h2>${heading}</h2></article>`;
+    /**
+     * Exercise the same shape produced by the Storybook preview decorator:
+     * a React story element with legacy stringification, then HTML routing.
+     */
     const PreviewDecoratorResult = ({ heading }) =>
       renderHtmlStoryResult(
         withLegacyStoryToString(

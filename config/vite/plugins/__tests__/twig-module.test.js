@@ -17,7 +17,6 @@ import {
   createGeneratedTwigModuleRender,
   makeEnv,
   makeTempProject,
-  createGeneratedTwigModuleRender,
   renderGeneratedTwigModule,
   transformTwigModule,
   twigEmbed,
@@ -40,6 +39,12 @@ describe('Twig module plugin', () => {
     jest.restoreAllMocks();
   });
 
+  /**
+   * Create a Twig module plugin with fresh build-scoped caches.
+   *
+   * @param {object} env - Emulsify test environment.
+   * @returns {import('vite').PluginOption} Initialized Twig module plugin.
+   */
   const makeTwigModulePlugin = (env) => {
     const plugin = emulsifyTwigModulePlugin(makeTwigPluginOptions(env));
     plugin.buildStart();
@@ -269,6 +274,11 @@ describe('Twig module plugin', () => {
       join(srcDir, 'missing/missing.twig'),
       join(srcDir, 'missing/missing.html.twig'),
     ]);
+    /**
+     * Count only statSync calls for the repeated missing include candidates.
+     *
+     * @returns {number} Number of filesystem probes for the missing include.
+     */
     const candidateStatCount = () =>
       statSpy.mock.calls.filter(([filePath]) => candidatePaths.has(filePath))
         .length;
@@ -597,6 +607,11 @@ describe('Twig module plugin', () => {
     const first = transformTwigModule(twigPlugin, firstFile);
     const second = transformTwigModule(twigPlugin, secondFile);
     const runtimeInstances = [];
+    /**
+     * Return a fresh Twig runtime for each generated module evaluation.
+     *
+     * @returns {object} Isolated Twig.js runtime instance.
+     */
     const runtimeFactory = () => {
       const runtimeTwig = Twig.factory();
       runtimeInstances.push(runtimeTwig);

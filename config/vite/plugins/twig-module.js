@@ -24,7 +24,7 @@ import { toPosixPath } from '../utils/paths.js';
 import { unique } from '../utils/unique.js';
 
 /** Twig token types that can reference another template file. */
-const includeTokenTypes = [
+const templateReferenceTokenTypes = [
   'Twig.logic.type.embed',
   'Twig.logic.type.extends',
   'Twig.logic.type.from',
@@ -77,7 +77,7 @@ let twigPluginOptionsCache = new WeakMap();
  * @param {*} env - Candidate environment value.
  * @returns {boolean} TRUE when env is a non-null object.
  */
-const isCacheableEnv = (env) => env && typeof env === 'object';
+const canMemoizeByEnv = (env) => env && typeof env === 'object';
 
 /**
  * Determine whether a Vite request should compile as a Twig render module.
@@ -105,15 +105,17 @@ const stripRequestQuery = (id) => id.split('?')[0];
  * @param {Array} [tokens=[]] - Twig token tree.
  * @returns {string[]} Referenced template paths.
  */
-const pluckIncludes = (tokens = []) => [
+const collectStaticTemplateReferences = (tokens = []) => [
   ...tokens
-    .filter((token) => includeTokenTypes.includes(token.token?.type))
+    .filter((token) => templateReferenceTokenTypes.includes(token.token?.type))
     .flatMap((token) =>
       (token.token?.stack || [])
         .map((stack) => stack.value)
         .filter((value) => typeof value === 'string'),
     ),
-  ...tokens.flatMap((token) => pluckIncludes(token.token?.output || [])),
+  ...tokens.flatMap((token) =>
+    collectStaticTemplateReferences(token.token?.output || []),
+  ),
 ];
 
 /**
@@ -123,7 +125,7 @@ const pluckIncludes = (tokens = []) => [
  * @param {string} templatePath - Template path from Twig source.
  * @returns {string[]} Candidate absolute paths.
  */
-const fileCandidates = (baseDir, templatePath) => {
+const buildTemplateFileCandidates = (baseDir, templatePath) => {
   const normalizedTemplatePath = toPosixPath(templatePath);
   const withoutTwigExt = normalizedTemplatePath.replace(/\.twig$/i, '');
   const stem = basename(withoutTwigExt);
@@ -145,7 +147,7 @@ const fileCandidates = (baseDir, templatePath) => {
  * @param {string[]} paths - Candidate absolute paths.
  * @returns {string|undefined} Existing file path.
  */
-const resolveExistingFile = (paths) =>
+const findExistingTemplateFile = (paths) =>
   paths.filter(Boolean).find((filePath) => {
     try {
       // eslint-disable-next-line security/detect-non-literal-fs-filename
@@ -215,7 +217,7 @@ const templateIdForPath = (filePath, options) => {
  * @param {object} params - Twig template parameters without the id.
  * @returns {string} Compiled template expression.
  */
-const runtimeTemplateCode = (templateId, params) =>
+const makeTemplateInstantiationCode = (templateId, params) =>
   `Twig.twig(${JSON.stringify({ ...params, id: templateId })})`;
 
 /**
@@ -230,7 +232,7 @@ const runtimeTemplateCode = (templateId, params) =>
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
  * @returns {Array} Cloned token tree with static dependency references rewritten.
  */
-const rewriteRuntimeIncludeReferences = (tokens = [], fromFilePath, options) =>
+const rewriteTemplateReferencesToIds = (tokens = [], fromFilePath, options) =>
   tokens.map((token) => {
     const nextToken = { ...token };
 
@@ -238,7 +240,7 @@ const rewriteRuntimeIncludeReferences = (tokens = [], fromFilePath, options) =>
       nextToken.token = { ...token.token };
 
       if (
-        includeTokenTypes.includes(token.token.type) &&
+        templateReferenceTokenTypes.includes(token.token.type) &&
         Array.isArray(token.token.stack)
       ) {
         nextToken.token.stack = token.token.stack.map((stackToken) => {
@@ -264,7 +266,7 @@ const rewriteRuntimeIncludeReferences = (tokens = [], fromFilePath, options) =>
       }
 
       if (Array.isArray(token.token.output)) {
-        nextToken.token.output = rewriteRuntimeIncludeReferences(
+        nextToken.token.output = rewriteTemplateReferencesToIds(
           token.token.output,
           fromFilePath,
           options,
@@ -282,7 +284,7 @@ const rewriteRuntimeIncludeReferences = (tokens = [], fromFilePath, options) =>
  * @param {Record<string, string>} [namespaces={}] - Namespace root map.
  * @returns {{ root: string, path: string }|null} Namespace lookup result.
  */
-const namespaceReference = (templatePath, namespaces = {}) => {
+const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
   const namespaceNames = Object.keys(namespaces);
   const atNamespace = templatePath.match(/^@([^/]+)\/(.+)$/);
   if (atNamespace && namespaces[atNamespace[1]]) {
@@ -319,15 +321,15 @@ const namespaceReference = (templatePath, namespaces = {}) => {
  * @param {string} componentRoot - Absolute component root path.
  * @returns {string|null} Existing template path when found.
  */
-const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
+const resolveComponentShorthandReference = (templatePath, componentRoot) => {
   if (!componentRoot || templatePath.startsWith('.')) return null;
 
   const shorthandPath =
     templatePath.startsWith('@') && !templatePath.includes('/')
       ? templatePath.slice(1)
       : templatePath;
-  const directComponentPath = resolveExistingFile(
-    fileCandidates(componentRoot, shorthandPath),
+  const directComponentPath = findExistingTemplateFile(
+    buildTemplateFileCandidates(componentRoot, shorthandPath),
   );
   if (directComponentPath) {
     return directComponentPath;
@@ -338,8 +340,8 @@ const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
     return null;
   }
 
-  return resolveExistingFile(
-    fileCandidates(componentRoot, genericNamespace[1]),
+  return findExistingTemplateFile(
+    buildTemplateFileCandidates(componentRoot, genericNamespace[1]),
   );
 };
 
@@ -349,7 +351,7 @@ const resolveComponentNamespaceFallback = (templatePath, componentRoot) => {
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
  * @returns {string} Stable root and namespace cache key.
  */
-const twigResolutionRootKey = (options) => {
+const buildResolutionRootCacheKey = (options) => {
   const namespaceKey = Object.entries(options.namespaces || {})
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([namespace, root]) => `${namespace}=${root}`)
@@ -366,24 +368,27 @@ const twigResolutionRootKey = (options) => {
  * @param {{ root: string, namespaces: Record<string, string> }} options - Twig plugin options.
  * @returns {string|null} Existing template path when found.
  */
-const resolveTwigTemplateUncached = (templatePath, fromDir, options) => {
+const resolveTwigTemplateWithoutCache = (templatePath, fromDir, options) => {
   if (templatePath === '_self') return null;
 
-  const namespaced = namespaceReference(templatePath, options.namespaces);
+  const namespaced = parseTwigNamespaceReference(
+    templatePath,
+    options.namespaces,
+  );
   if (namespaced) {
-    return resolveExistingFile(
-      fileCandidates(namespaced.root, namespaced.path),
+    return findExistingTemplateFile(
+      buildTemplateFileCandidates(namespaced.root, namespaced.path),
     );
   }
 
-  const relativeTemplate = resolveExistingFile([
-    ...fileCandidates(fromDir, templatePath),
-    ...fileCandidates(options.root, templatePath),
+  const relativeTemplate = findExistingTemplateFile([
+    ...buildTemplateFileCandidates(fromDir, templatePath),
+    ...buildTemplateFileCandidates(options.root, templatePath),
   ]);
 
   return (
     relativeTemplate ||
-    resolveComponentNamespaceFallback(
+    resolveComponentShorthandReference(
       templatePath,
       options.namespaces?.components,
     )
@@ -402,7 +407,7 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
   const cacheKey = [
     resolve(fromDir),
     templatePath,
-    twigResolutionRootKey(options),
+    buildResolutionRootCacheKey(options),
   ].join('|');
 
   if (resolutionCache.has(cacheKey)) {
@@ -410,7 +415,7 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
   }
 
   const resolvedPath =
-    resolveTwigTemplateUncached(templatePath, fromDir, options) || null;
+    resolveTwigTemplateWithoutCache(templatePath, fromDir, options) || null;
   resolutionCache.set(cacheKey, resolvedPath);
   if (resolvedPath) {
     knownTwigFiles.add(resolve(resolvedPath));
@@ -474,8 +479,10 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
     id: templateId,
     path: absoluteFilePath,
   });
-  const includes = unique(pluckIncludes(template.tokens).filter(Boolean));
-  const runtimeTokens = rewriteRuntimeIncludeReferences(
+  const includes = unique(
+    collectStaticTemplateReferences(template.tokens).filter(Boolean),
+  );
+  const runtimeTokens = rewriteTemplateReferencesToIds(
     template.tokens,
     absoluteFilePath,
     options,
@@ -488,7 +495,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
     rethrow: true,
   };
   const compiled = {
-    code: runtimeTemplateCode(templateId, templateParams),
+    code: makeTemplateInstantiationCode(templateId, templateParams),
     includes,
     templateId,
     templateParams,
@@ -511,7 +518,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
  * @returns {Record<string, string>}
  */
 export function makeTwigNamespaces(env) {
-  if (isCacheableEnv(env) && twigNamespacesCache.has(env)) {
+  if (canMemoizeByEnv(env) && twigNamespacesCache.has(env)) {
     return twigNamespacesCache.get(env);
   }
 
@@ -571,7 +578,7 @@ export function makeTwigNamespaces(env) {
     }
   }
 
-  if (isCacheableEnv(env)) {
+  if (canMemoizeByEnv(env)) {
     twigNamespacesCache.set(env, namespaces);
   }
 
@@ -590,7 +597,7 @@ export function makeTwigNamespaces(env) {
  * @returns {import('@vituum/vite-plugin-twig/types').PluginUserConfig}
  */
 export function makeTwigPluginOptions(env) {
-  if (isCacheableEnv(env) && twigPluginOptionsCache.has(env)) {
+  if (canMemoizeByEnv(env) && twigPluginOptionsCache.has(env)) {
     return twigPluginOptionsCache.get(env);
   }
 
@@ -619,7 +626,7 @@ export function makeTwigPluginOptions(env) {
     value: projectDir,
   });
 
-  if (isCacheableEnv(env)) {
+  if (canMemoizeByEnv(env)) {
     twigPluginOptionsCache.set(env, twigOptions);
   }
 
@@ -643,12 +650,35 @@ export function resetTwigOptionCaches() {
  * @returns {import('vite').PluginOption} Twig module plugin.
  */
 export function emulsifyTwigModulePlugin(options) {
+  /**
+   * Reverse dependency graph used by HMR.
+   *
+   * Keys are included Twig files, and values are the imported Twig modules that
+   * need recompilation when that dependency changes.
+   *
+   * @type {Map<string, Set<string>>}
+   */
   const dependencyImporters = new Map();
+
+  /**
+   * Remember that one imported Twig module depends on another Twig file.
+   *
+   * @param {string} dependency - Absolute dependency template path.
+   * @param {string} importer - Absolute importing module path.
+   * @returns {void}
+   */
   const addDependencyImporter = (dependency, importer) => {
     const importers = dependencyImporters.get(dependency) || new Set();
     importers.add(importer);
     dependencyImporters.set(dependency, importers);
   };
+
+  /**
+   * Remove stale reverse-dependency links for a module before recompiling it.
+   *
+   * @param {string} importer - Absolute importing module path.
+   * @returns {void}
+   */
   const clearDependencyImporter = (importer) => {
     for (const [dependency, importers] of dependencyImporters) {
       importers.delete(importer);
@@ -673,45 +703,65 @@ export function emulsifyTwigModulePlugin(options) {
       }
 
       const filePath = stripRequestQuery(id);
-      const compiledIncludes = new Map();
+      /** @type {Map<string, ReturnType<typeof compileTwigTemplate>>} */
+      const compiledDependencyTemplates = new Map();
       clearDependencyImporter(filePath);
 
-      const compileIncludes = (includes, fromFilePath, cache) => {
-        for (const templatePath of includes) {
-          const includePath = resolveTwigTemplate(
+      /**
+       * Compile the transitive Twig dependencies needed by one imported module.
+       *
+       * Dependencies are stored once per absolute path and later emitted in
+       * deepest-first order so Twig.js can resolve inline include tokens from
+       * the module-local factory without using its filesystem loader.
+       *
+       * @param {string[]} templateReferences - Raw references found in tokens.
+       * @param {string} fromFilePath - Absolute importer path.
+       * @param {typeof compileCache} cache - Shared compile cache.
+       * @returns {void}
+       */
+      const compileDependencyTemplates = (
+        templateReferences,
+        fromFilePath,
+        cache,
+      ) => {
+        for (const templatePath of templateReferences) {
+          const dependencyPath = resolveTwigTemplate(
             templatePath,
             dirname(fromFilePath),
             options,
           );
-          if (!includePath) continue;
-          if (resolve(includePath) === resolve(filePath)) continue;
+          if (!dependencyPath) continue;
+          if (resolve(dependencyPath) === resolve(filePath)) continue;
 
-          const entry = compiledIncludes.get(includePath);
-          if (entry) continue;
+          const dependencyTemplate =
+            compiledDependencyTemplates.get(dependencyPath);
+          if (dependencyTemplate) continue;
 
-          addDependencyImporter(includePath, filePath);
-          this.addWatchFile(includePath);
+          addDependencyImporter(dependencyPath, filePath);
+          this.addWatchFile(dependencyPath);
 
-          const compiled = compileTwigTemplate(includePath, options, cache);
-          compiledIncludes.set(includePath, compiled);
-          compileIncludes(compiled.includes, includePath, cache);
+          const compiled = compileTwigTemplate(dependencyPath, options, cache);
+          compiledDependencyTemplates.set(dependencyPath, compiled);
+          compileDependencyTemplates(compiled.includes, dependencyPath, cache);
         }
       };
 
       try {
         const compiled = compileTwigTemplate(filePath, options, compileCache);
-        compileIncludes(compiled.includes, filePath, compileCache);
+        compileDependencyTemplates(compiled.includes, filePath, compileCache);
 
-        let includeIndex = 0;
-        const includeCode = Array.from(compiledIncludes.values())
+        let dependencyTemplateIndex = 0;
+        const dependencyTemplateCode = Array.from(
+          compiledDependencyTemplates.values(),
+        )
           .reverse()
-          .map((include) => {
-            const includeName = `__emulsifyInclude${includeIndex}`;
-            includeIndex += 1;
+          .map((compiledDependency) => {
+            const dependencyVariableName = `__emulsifyDependency${dependencyTemplateIndex}`;
+            dependencyTemplateIndex += 1;
             return `
-              const ${includeName} = ${runtimeTemplateCode(
-                include.templateId,
-                include.templateParams,
+              const ${dependencyVariableName} = ${makeTemplateInstantiationCode(
+                compiledDependency.templateId,
+                compiledDependency.templateParams,
               )};
             `;
           })
@@ -726,7 +776,7 @@ export function emulsifyTwigModulePlugin(options) {
           const Twig = factory();
           registerTwigExtensions(Twig);
 
-          ${includeCode}
+          ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};
 
           export default (context = {}) => {
@@ -770,6 +820,11 @@ export function emulsifyTwigModulePlugin(options) {
 
       const projectRoot = options.projectDir || options.root;
       if (projectRoot && isWithinRoot(resolve(projectRoot), filePath)) {
+        /**
+         * Existing files only need entries for their own path and source
+         * directory invalidated. New or deleted files can change previous
+         * resolution misses, so those events clear the full resolution cache.
+         */
         if (fileExists && knownFile) {
           invalidateKnownResolutionCacheEntries(filePath);
         } else {

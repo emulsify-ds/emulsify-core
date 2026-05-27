@@ -33,10 +33,26 @@ const previewOverrideModules = import.meta.glob(
 const [previewOverrideModule] = Object.values(previewOverrideModules);
 const externalOverrides = normalizePreviewOverrideModule(previewOverrideModule);
 
+/**
+ * Active platform behavior used by the shared preview decorators.
+ *
+ * @type {ReturnType<typeof getStorybookPlatformAdapter>}
+ */
 const platformAdapter = getStorybookPlatformAdapter();
+
+/**
+ * Deferred Drupal behavior shim import.
+ *
+ * The decorator awaits this promise when Drupal behaviors are enabled so that
+ * `attachBehaviors()` is available before a story asks for it.
+ *
+ * @type {Promise<*>}
+ */
 const platformBehaviorShimReady = platformAdapter.loadDrupalBehaviorShim
   ? import('./_drupal.js')
   : Promise.resolve();
+
+/** @type {Array<Function>} Platform-specific Twig extension installers. */
 const platformTwigExtensions = [];
 if (platformAdapter.registerDrupalTwigFilters) {
   platformTwigExtensions.push((await import('twig-drupal-filters')).default);

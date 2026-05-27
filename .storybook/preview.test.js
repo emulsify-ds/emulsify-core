@@ -7,6 +7,10 @@ import { fileURLToPath } from 'url';
 
 describe('Storybook preview decorators', () => {
   it('passes current args through the bound Story function', () => {
+    /**
+     * Keep this source-level regression test narrow: it only guards the
+     * decorator boundary that previously dropped updated Storybook args.
+     */
     const source = readFileSync(
       fileURLToPath(new URL('./preview.js', import.meta.url)),
       'utf8',

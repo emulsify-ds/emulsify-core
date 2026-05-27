@@ -52,6 +52,10 @@ function buildTwigContext(args = {}, options = {}, storyContext = {}) {
 /**
  * Check whether a string looks like rendered HTML markup.
  *
+ * This deliberately stays conservative. Plain text story output should remain
+ * plain text, while legacy Twig stories that return markup can be promoted to
+ * React-managed HTML rendering.
+ *
  * @param {*} value - Candidate story result.
  * @returns {boolean} TRUE when the value appears to be an HTML string.
  */
@@ -79,8 +83,8 @@ export function withLegacyStoryToString(result, getStoryResult) {
     return result;
   }
 
-  const element = { ...result };
-  Object.defineProperty(element, 'toString', {
+  const legacyCompatibleElement = { ...result };
+  Object.defineProperty(legacyCompatibleElement, 'toString', {
     value: () => {
       try {
         const storyResult = getStoryResult();
@@ -91,11 +95,16 @@ export function withLegacyStoryToString(result, getStoryResult) {
     },
   });
 
-  return element;
+  return legacyCompatibleElement;
 }
 
 /**
  * Extract legacy Twig HTML from a React story element with a custom toString.
+ *
+ * `withLegacyStoryToString()` marks legacy Storybook results by installing a
+ * custom `toString()`. Reading that value here lets the preview decorator route
+ * legacy Twig strings through `TwigHtmlStory` without invoking the story a
+ * second time.
  *
  * @param {*} reactElement - Candidate React story element.
  * @returns {string|undefined} Legacy HTML string when detected.
@@ -109,17 +118,17 @@ export function legacyStringFromElement(reactElement) {
   }
 
   try {
-    const stringified = String(reactElement);
-    if (stringified === '[object Object]') {
+    const legacyHtml = String(reactElement);
+    if (legacyHtml === '[object Object]') {
       return undefined;
     }
-    if (typeof stringified !== 'string') {
+    if (typeof legacyHtml !== 'string') {
       return undefined;
     }
-    if (!isLikelyHtmlString(stringified)) {
+    if (!isLikelyHtmlString(legacyHtml)) {
       return undefined;
     }
-    return stringified;
+    return legacyHtml;
   } catch {
     return undefined;
   }
@@ -145,8 +154,10 @@ export function renderTwigToHtml(
   }
 
   try {
-    const html = template(buildTwigContext(args, options, storyContext));
-    return html == null ? '' : String(html);
+    const renderedHtml = template(
+      buildTwigContext(args, options, storyContext),
+    );
+    return renderedHtml == null ? '' : String(renderedHtml);
   } catch (error) {
     return `An error occurred whilst rendering Twig story: ${
       error?.message || error
@@ -165,7 +176,7 @@ export function renderTwigToHtml(
 export function TwigHtmlStory({ html = '', options = {} }) {
   const wrapperRef = useRef(null);
   const adapter = getActiveStorybookAdapter(options);
-  const Wrapper = options.wrapper || 'div';
+  const WrapperElement = options.wrapper || 'div';
 
   useEffect(() => {
     void attachStorybookBehaviors({
@@ -174,7 +185,7 @@ export function TwigHtmlStory({ html = '', options = {} }) {
     });
   }, [adapter.attachDrupalBehaviors, html]);
 
-  return React.createElement(Wrapper, {
+  return React.createElement(WrapperElement, {
     ref: wrapperRef,
     id: options.id,
     className: options.className,
@@ -206,6 +217,11 @@ export function TwigStory({
       return undefined;
     }
 
+    /**
+     * Lazy `source()` calls dispatch this event after their dynamic import has
+     * populated the synchronous cache. Re-rendering here gives Twig stories the
+     * resolved source text on the next pass without blocking the first render.
+     */
     window.addEventListener(TWIG_SOURCE_LOADED_EVENT, rerender);
     return () => {
       window.removeEventListener(TWIG_SOURCE_LOADED_EVENT, rerender);
