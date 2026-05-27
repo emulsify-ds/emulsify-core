@@ -12,7 +12,6 @@ import {
 } from '../src/storybook/preview-parameters.js';
 import {
   renderHtmlStoryResult,
-  StoryHtmlBoundary,
   withLegacyStoryToString,
 } from '../src/storybook/render-twig.js';
 import {
@@ -110,13 +109,9 @@ export const decorators = [
       });
     }, [args]);
 
-    return React.createElement(
-      StoryHtmlBoundary,
-      {},
-      renderHtmlStoryResult(Story(), {
-        platformAdapter,
-      }),
-    );
+    return renderHtmlStoryResult(Story({ args }), {
+      platformAdapter,
+    });
   },
 ];
 
