@@ -65,7 +65,7 @@ That fallback blocks the main thread, is deprecated, and is scheduled for remova
 
 ## Storybook CSS Loading
 
-Storybook eagerly imports one CSS source path by default so component styles are available in the iframe. Generic projects load compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output load `components/**/*.css` instead, because those files represent the same CSS through the Drupal-facing path. Emulsify does not load both paths simultaneously.
+Storybook eagerly imports CSS from the selected render path by default so component styles are available in the iframe. Generic projects load compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output load component CSS from `components/**/*.css` and shared compiled CSS from `dist/**/*.css` excluding `dist/components/**/*.css`, because `dist/components` and root `components` represent the same component CSS through different paths.
 
 The eager glob performs the CSS imports directly; no runtime iteration is needed after the glob runs.
 

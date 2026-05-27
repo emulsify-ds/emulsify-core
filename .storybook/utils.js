@@ -43,14 +43,15 @@ export function getLoadAllCSS(parameters = {}) {
 }
 
 /**
- * Eagerly load CSS from exactly one Storybook render path.
+ * Eagerly load CSS from the active Storybook render path.
  *
- * Drupal-style mirrored component CSS uses the root `components` CSS tree; all
- * other projects use the compiled `dist` CSS tree. The eager globs live in
- * separate dynamically imported modules so Vite cannot hoist both CSS trees
- * into the same preview bundle. Projects with very large CSS libraries can set
- * `parameters.emulsify.loadAllCSS = false` and import their own CSS from a
- * preview override.
+ * Drupal-style mirrored component CSS uses the root `components` CSS tree for
+ * component styles and keeps shared compiled CSS from `dist` excluding
+ * `dist/components`; all other projects use the compiled `dist` CSS tree. The
+ * eager globs live in separate dynamically imported modules so Vite cannot
+ * hoist both render paths into the same preview bundle. Projects with very
+ * large CSS libraries can set `parameters.emulsify.loadAllCSS = false` and
+ * import their own CSS from a preview override.
  *
  * @param {object} [parameters={}] - Storybook parameters.
  * @returns {Promise<undefined>} Resolves when the selected CSS path is loaded.

@@ -40,7 +40,7 @@ describe('Storybook utility helpers', () => {
     });
   });
 
-  it('loads mirrored component CSS only when the adapter enables it', async () => {
+  it('loads mirrored component CSS and shared dist CSS when the adapter enables it', async () => {
     const { fetchCSSFiles } = await loadUtils({
       platformAdapter: {
         storybook: {
@@ -51,9 +51,13 @@ describe('Storybook utility helpers', () => {
 
     await fetchCSSFiles();
 
-    expect(importMetaGlob).toHaveBeenCalledTimes(1);
+    expect(importMetaGlob).toHaveBeenCalledTimes(2);
     expect(importMetaGlob).toHaveBeenCalledWith(
       '../../../../components/**/*.css',
+      { eager: true },
+    );
+    expect(importMetaGlob).toHaveBeenCalledWith(
+      ['../../../../dist/**/*.css', '!../../../../dist/components/**/*.css'],
       { eager: true },
     );
   });
