@@ -530,7 +530,10 @@ export function makeTwigPluginOptions(env) {
     root: root || srcDir || projectDir,
     namespaces: makeTwigNamespaces(env),
     functions: getTwigFunctionMap(),
-    reload: (filePath) => /\.(twig|json)$/i.test(filePath),
+    // Twig updates are handled by emulsifyTwigModulePlugin.handleHotUpdate.
+    // Vituum's full reload would defeat HMR by reloading the whole iframe on
+    // every Twig save before module graph invalidation can update the story.
+    reload: () => false,
   };
 
   Object.defineProperty(twigOptions, 'projectDir', {

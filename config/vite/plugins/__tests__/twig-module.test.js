@@ -134,6 +134,18 @@ describe('Twig module plugin', () => {
     ).toEqual(['add_attributes', 'bem']);
   });
 
+  it('lets the Twig module plugin handle HMR instead of Vituum full reloads', () => {
+    projectDir = makeTempProject();
+    fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+
+    const options = makeTwigPluginOptions(makeEnv(projectDir));
+
+    expect(options.reload(join(projectDir, 'src/components/card.twig'))).toBe(
+      false,
+    );
+    expect(options.reload(join(projectDir, 'src/data/card.json'))).toBe(false);
+  });
+
   it('memoizes Twig namespace and plugin options by env identity', () => {
     projectDir = makeTempProject();
     fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
