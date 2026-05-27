@@ -35,6 +35,8 @@
   "files": [
     ".cli/init.js",
     ".storybook/_drupal.js",
+    ".storybook/css-components.js",
+    ".storybook/css-dist.js",
     ".storybook/emulsifyTheme.js",
     ".storybook/main.js",
     ".storybook/manager.js",
