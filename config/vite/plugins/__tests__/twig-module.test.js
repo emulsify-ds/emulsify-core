@@ -346,6 +346,7 @@ describe('Twig module plugin', () => {
     let fsLoaderUsed = false;
 
     runtimeTwig.extend((TwigCore) => {
+      TwigCore.__emulsifyTwigImportFilePatched = true;
       TwigCore.Templates.registerLoader('fs', () => {
         fsLoaderUsed = true;
         throw new Error('fs loader used');

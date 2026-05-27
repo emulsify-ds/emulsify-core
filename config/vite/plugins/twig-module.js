@@ -725,6 +725,45 @@ export function emulsifyTwigModulePlugin(options) {
                 TwigCore.__emulsifyTwigTemplateLoadPatched = true;
               }
 
+              if (!TwigCore.__emulsifyTwigLoadRemotePatched) {
+                const loadRemote = TwigCore.Templates.loadRemote;
+                TwigCore.Templates.loadRemote = (
+                  location,
+                  params = {},
+                  callback,
+                  errorCallback,
+                ) => {
+                  for (const id of [
+                    ...new Set([params.id, params.path, location]),
+                  ]) {
+                    if (!id) continue;
+
+                    const template = TwigCore.Templates.load(id);
+                    if (template) {
+                      __emulsifyTwigApplyTemplateOptions(
+                        template,
+                        __emulsifyTwigTemplateStore.get(id) || {},
+                        params.options || {},
+                      );
+
+                      if (typeof callback === 'function') {
+                        callback(template);
+                      }
+
+                      return template;
+                    }
+                  }
+
+                  return loadRemote(
+                    location,
+                    params,
+                    callback,
+                    errorCallback,
+                  );
+                };
+                TwigCore.__emulsifyTwigLoadRemotePatched = true;
+              }
+
               if (!TwigCore.__emulsifyTwigImportFilePatched) {
                 const importFile = TwigCore.Template?.prototype?.importFile;
                 if (typeof importFile !== 'function') return;
