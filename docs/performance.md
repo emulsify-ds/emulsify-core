@@ -63,6 +63,24 @@ platformAdapter: {
 
 That fallback blocks the main thread, is deprecated, and is scheduled for removal in 4.2.
 
+## Storybook CSS Loading
+
+Storybook eagerly imports one CSS source path by default so component styles are available in the iframe. Generic projects load compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output load `components/**/*.css` instead, because those files represent the same CSS through the Drupal-facing path. Emulsify does not load both paths simultaneously.
+
+The eager glob performs the CSS imports directly; no runtime iteration is needed after the glob runs.
+
+Projects with very large CSS libraries can opt out and import CSS from their own Storybook preview override:
+
+```js
+export const parameters = {
+  emulsify: {
+    loadAllCSS: false,
+  },
+};
+```
+
+When `emulsify.loadAllCSS` is false, Emulsify skips the eager CSS glob entirely.
+
 ## Tailwind Scanning
 
 Tailwind CSS v4 can scan project sources automatically, but explicit `@source` lines make Emulsify structures easier to reason about:

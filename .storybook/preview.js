@@ -70,10 +70,6 @@ const AxeRules = enableRulesByTag([
   'best-practice',
 ]);
 
-// Initialize platform-agnostic Twig helpers and eager-load story CSS.
-setupTwig(Twig, { extensions: platformTwigExtensions });
-fetchCSSFiles();
-
 /**
  * Storybook React wraps story functions in React elements before decorators run.
  * Preserve that React-safe behavior while giving old stringifying decorators a
@@ -148,3 +144,7 @@ export const parameters = mergePreviewParameters(
   defaultParams,
   externalOverrides,
 );
+
+// Initialize platform-agnostic Twig helpers and eager-load story CSS.
+setupTwig(Twig, { extensions: platformTwigExtensions });
+fetchCSSFiles(parameters);

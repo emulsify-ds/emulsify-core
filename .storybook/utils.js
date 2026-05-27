@@ -33,30 +33,41 @@ export function getStorybookPlatformAdapter() {
 }
 
 /**
- * Fetches and loads all CSS files from the specified directories based on the project's configuration.
- * If the active platform adapter enables mirrored component CSS, those files
- * are loaded in addition to the compiled dist CSS.
+ * Determine whether Storybook should eagerly load all compiled CSS.
  *
+ * @param {object} [parameters={}] - Storybook parameters.
+ * @returns {boolean} TRUE unless `parameters.emulsify.loadAllCSS` is false.
+ */
+export function getLoadAllCSS(parameters = {}) {
+  return parameters?.emulsify?.loadAllCSS !== false;
+}
+
+/**
+ * Eagerly load CSS from exactly one Storybook render path.
+ *
+ * Drupal-style mirrored component CSS uses the root `components` CSS tree; all
+ * other projects use the compiled `dist` CSS tree. The eager glob performs the side-effect
+ * imports, so no runtime iteration is required. Projects with very large CSS
+ * libraries can set `parameters.emulsify.loadAllCSS = false` and import their
+ * own CSS from a preview override.
+ *
+ * @param {object} [parameters={}] - Storybook parameters.
  * @returns {undefined} If an error occurs, the function will return undefined.
  */
-const fetchCSSFiles = () => {
+const fetchCSSFiles = (parameters = {}) => {
   try {
+    if (!getLoadAllCSS(parameters)) {
+      return undefined;
+    }
+
     const adapter = getStorybookPlatformAdapter();
 
-    // Load compiled CSS from dist for both development and static previews.
-    const cssFiles = import.meta.glob('../../../../dist/**/*.css', {
-      eager: true,
-    });
-    Object.values(cssFiles).forEach((css) => css);
-
-    // Platform adapters decide whether root component CSS is expected.
     if (adapter.loadMirroredComponentCss) {
-      const mirroredCSSFiles = import.meta.glob(
-        '../../../../components/**/*.css',
-        { eager: true },
-      );
-      Object.values(mirroredCSSFiles).forEach((css) => css);
+      import.meta.glob('../../../../components/**/*.css', { eager: true });
+      return undefined;
     }
+
+    import.meta.glob('../../../../dist/**/*.css', { eager: true });
   } catch {
     return undefined;
   }
