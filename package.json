@@ -58,6 +58,7 @@
     "config/vite/plugins/css-asset-relativizer.js",
     "config/vite/plugins/index.js",
     "config/vite/plugins/mirror-components.js",
+    "config/vite/plugins/require-context.js",
     "config/vite/plugins/source-file-index.js",
     "config/vite/plugins/svg-sprite.js",
     "config/vite/plugins/twig-module.js",

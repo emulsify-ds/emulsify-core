@@ -14,6 +14,7 @@ import { copyAllSrcAssetsPlugin } from './copy-src-assets.js';
 import { copyTwigFilesPlugin } from './copy-twig-files.js';
 import { cssAssetUrlRelativizer } from './css-asset-relativizer.js';
 import { mirrorComponentsToRoot } from './mirror-components.js';
+import { requireContextCompatPlugin } from './require-context.js';
 import { createSourceFileIndex } from './source-file-index.js';
 import { svgSpriteFilePlugin } from './svg-sprite.js';
 import {
@@ -76,6 +77,9 @@ export function makePlugins(env) {
 
     // YAML support lets component metadata import into Vite modules.
     yamlModulePlugin(),
+
+    // Legacy Storybook stories may still enumerate assets with require.context.
+    requireContextCompatPlugin(),
 
     // Keep CSS asset URLs relative to the emitted CSS location.
     cssAssetUrlRelativizer({ assetsRoot: 'assets' }),

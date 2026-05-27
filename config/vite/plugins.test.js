@@ -56,6 +56,7 @@ describe('Vite plugin public barrel', () => {
         'emulsify-svg-sprite-file',
         'vite-plugin-sass-glob-import',
         'emulsify-yaml',
+        'emulsify-require-context-compat',
         'emulsify-css-asset-url-relativizer',
         'emulsify-copy-twig-files',
         'emulsify-copy-all-src-assets',
