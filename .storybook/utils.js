@@ -46,15 +46,16 @@ export function getLoadAllCSS(parameters = {}) {
  * Eagerly load CSS from exactly one Storybook render path.
  *
  * Drupal-style mirrored component CSS uses the root `components` CSS tree; all
- * other projects use the compiled `dist` CSS tree. The eager glob performs the side-effect
- * imports, so no runtime iteration is required. Projects with very large CSS
- * libraries can set `parameters.emulsify.loadAllCSS = false` and import their
- * own CSS from a preview override.
+ * other projects use the compiled `dist` CSS tree. The eager globs live in
+ * separate dynamically imported modules so Vite cannot hoist both CSS trees
+ * into the same preview bundle. Projects with very large CSS libraries can set
+ * `parameters.emulsify.loadAllCSS = false` and import their own CSS from a
+ * preview override.
  *
  * @param {object} [parameters={}] - Storybook parameters.
- * @returns {undefined} If an error occurs, the function will return undefined.
+ * @returns {Promise<undefined>} Resolves when the selected CSS path is loaded.
  */
-const fetchCSSFiles = (parameters = {}) => {
+const fetchCSSFiles = async (parameters = {}) => {
   try {
     if (!getLoadAllCSS(parameters)) {
       return undefined;
@@ -63,11 +64,12 @@ const fetchCSSFiles = (parameters = {}) => {
     const adapter = getStorybookPlatformAdapter();
 
     if (adapter.loadMirroredComponentCss) {
-      import.meta.glob('../../../../components/**/*.css', { eager: true });
+      await import('./css-components.js');
       return undefined;
     }
 
-    import.meta.glob('../../../../dist/**/*.css', { eager: true });
+    await import('./css-dist.js');
+    return undefined;
   } catch {
     return undefined;
   }

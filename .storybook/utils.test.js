@@ -2,6 +2,9 @@
  * @file Tests for shared Storybook runtime helpers.
  */
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+
 async function loadUtils(env) {
   jest.resetModules();
   if (env) {
@@ -29,7 +32,7 @@ describe('Storybook utility helpers', () => {
   it('loads dist CSS only for the generic adapter', async () => {
     const { fetchCSSFiles } = await loadUtils();
 
-    fetchCSSFiles();
+    await fetchCSSFiles();
 
     expect(importMetaGlob).toHaveBeenCalledTimes(1);
     expect(importMetaGlob).toHaveBeenCalledWith('../../../../dist/**/*.css', {
@@ -46,7 +49,7 @@ describe('Storybook utility helpers', () => {
       },
     });
 
-    fetchCSSFiles();
+    await fetchCSSFiles();
 
     expect(importMetaGlob).toHaveBeenCalledTimes(1);
     expect(importMetaGlob).toHaveBeenCalledWith(
@@ -60,8 +63,17 @@ describe('Storybook utility helpers', () => {
 
     expect(getLoadAllCSS()).toBe(true);
     expect(getLoadAllCSS({ emulsify: { loadAllCSS: false } })).toBe(false);
-    fetchCSSFiles({ emulsify: { loadAllCSS: false } });
+    await fetchCSSFiles({ emulsify: { loadAllCSS: false } });
 
     expect(importMetaGlob).not.toHaveBeenCalled();
+  });
+
+  it('keeps eager CSS globs out of the branching utility module', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./utils.js', import.meta.url)),
+      'utf8',
+    );
+
+    expect(source).not.toContain('import.meta.glob(');
   });
 });

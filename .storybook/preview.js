@@ -147,4 +147,4 @@ export const parameters = mergePreviewParameters(
 
 // Initialize platform-agnostic Twig helpers and eager-load story CSS.
 setupTwig(Twig, { extensions: platformTwigExtensions });
-fetchCSSFiles(parameters);
+await fetchCSSFiles(parameters);
