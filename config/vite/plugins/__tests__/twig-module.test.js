@@ -6,6 +6,7 @@ import fs from 'fs';
 import { join } from 'path';
 import Twig from 'twig';
 
+import { registerTwigExtensions } from '../../../../src/extensions/twig/index.js';
 import { resolveProjectConfig } from '../../project-config.js';
 import {
   emulsifyTwigModulePlugin,
@@ -314,6 +315,62 @@ describe('Twig module plugin', () => {
     expect(
       renderGeneratedTwigModule(second.code, { title: 'Updated' }, runtimeTwig),
     ).toContain('<section>Updated</section>');
+  });
+
+  it('recreates known embed templates before Twig falls back to the fs loader', () => {
+    projectDir = makeTempProject();
+    const accordionDir = join(projectDir, 'src/components/accordion');
+    const layoutDir = join(projectDir, 'src/layout/container');
+    const accordionFile = join(accordionDir, 'accordion.twig');
+    const containerFile = join(layoutDir, 'container.twig');
+    fs.mkdirSync(accordionDir, { recursive: true });
+    fs.mkdirSync(layoutDir, { recursive: true });
+    fs.writeFileSync(
+      containerFile,
+      '<section>{% block content %}{% endblock %}</section>',
+    );
+    fs.writeFileSync(
+      accordionFile,
+      [
+        twigEmbed('@layout/container/container.twig'),
+        '  {% block content %}Embedded{% endblock %}',
+        '{% endembed %}',
+      ].join('\n'),
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, accordionFile);
+    const runtimeTwig = Twig.factory();
+    let fsLoaderUsed = false;
+
+    runtimeTwig.extend((TwigCore) => {
+      TwigCore.Templates.registerLoader('fs', () => {
+        fsLoaderUsed = true;
+        throw new Error('fs loader used');
+      });
+    });
+
+    const executable = transformed.code
+      .replace(/^\s*import Twig from 'twig';\s*/m, '')
+      .replace(
+        /^\s*import \{ registerTwigExtensions \} from '@emulsify\/core\/extensions\/twig';\s*/m,
+        '',
+      )
+      .replace(
+        /export default \(context = \{\}\) => \{/,
+        'return (context = {}) => {',
+      );
+    const render = new Function('Twig', 'registerTwigExtensions', executable)(
+      runtimeTwig,
+      registerTwigExtensions,
+    );
+
+    runtimeTwig.extend((TwigCore) => {
+      delete TwigCore.Templates.registry[containerFile];
+    });
+
+    expect(render()).toContain('<section>Embedded</section>');
+    expect(fsLoaderUsed).toBe(false);
   });
 
   it('can transform a child Twig module before a parent includes it', () => {

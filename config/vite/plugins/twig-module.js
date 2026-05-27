@@ -647,6 +647,9 @@ export function emulsifyTwigModulePlugin(options) {
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 
           const { twig } = Twig;
+          const __emulsifyTwigTemplateStore =
+            globalThis.__emulsifyTwigTemplateStore ||
+            (globalThis.__emulsifyTwigTemplateStore = new Map());
           const __emulsifyTwigDeleteTemplate = (id) => {
             if (typeof Twig.extend !== 'function') return;
 
@@ -656,7 +659,14 @@ export function emulsifyTwigModulePlugin(options) {
               }
             });
           };
+          const __emulsifyTwigCreateTemplate = (id, params) => {
+            const template = twig({ ...params, id });
+            template.__emulsifyTwigSignature = params.__emulsifyTwigSignature;
+            return template;
+          };
           const __emulsifyTwigTemplate = (id, params) => {
+            __emulsifyTwigTemplateStore.set(id, params);
+
             const cached = Twig.twig({ ref: id });
             const signature = params.__emulsifyTwigSignature;
 
@@ -676,12 +686,30 @@ export function emulsifyTwigModulePlugin(options) {
               __emulsifyTwigDeleteTemplate(id);
             }
 
-            const template = twig({ ...params, id });
-            template.__emulsifyTwigSignature = signature;
-            return template;
+            return __emulsifyTwigCreateTemplate(id, params);
+          };
+          const __emulsifyTwigPatchTemplateLoad = () => {
+            if (typeof Twig.extend !== 'function') return;
+
+            Twig.extend((TwigCore) => {
+              if (TwigCore.__emulsifyTwigTemplateLoadPatched) return;
+
+              const loadTemplate = TwigCore.Templates.load;
+              TwigCore.Templates.load = (id) => {
+                const template = loadTemplate(id);
+                if (template) return template;
+
+                const params = __emulsifyTwigTemplateStore.get(id);
+                return params
+                  ? __emulsifyTwigCreateTemplate(id, params)
+                  : template;
+              };
+              TwigCore.__emulsifyTwigTemplateLoadPatched = true;
+            });
           };
 
           registerTwigExtensions(Twig);
+          __emulsifyTwigPatchTemplateLoad();
 
           ${includeCode}
 
