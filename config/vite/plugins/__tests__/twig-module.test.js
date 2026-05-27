@@ -17,6 +17,7 @@ import {
   createGeneratedTwigModuleRender,
   makeEnv,
   makeTempProject,
+  createGeneratedTwigModuleRender,
   renderGeneratedTwigModule,
   transformTwigModule,
   twigEmbed,

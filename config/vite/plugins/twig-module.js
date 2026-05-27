@@ -47,6 +47,17 @@ const compileCache = new Map();
 const resolutionCache = new Map();
 
 /**
+ * Track Twig files that have been seen during this build/session.
+ *
+ * Known files can keep include-resolution cache entries across ordinary content
+ * edits because their filesystem location has not changed. Unknown creates or
+ * unlinks still clear path resolution broadly to avoid stale miss entries.
+ *
+ * @type {Set<string>}
+ */
+const knownTwigFiles = new Set();
+
+/**
  * Cache Twig namespace maps by environment object identity.
  *
  * @type {WeakMap<object, Record<string, string>>}
@@ -401,7 +412,30 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
   const resolvedPath =
     resolveTwigTemplateUncached(templatePath, fromDir, options) || null;
   resolutionCache.set(cacheKey, resolvedPath);
+  if (resolvedPath) {
+    knownTwigFiles.add(resolve(resolvedPath));
+  }
   return resolvedPath;
+};
+
+/**
+ * Clear include-resolution cache entries tied to one known Twig file.
+ *
+ * @param {string} filePath - Absolute Twig file path.
+ * @returns {void}
+ */
+const invalidateKnownResolutionCacheEntries = (filePath) => {
+  const absoluteFilePath = resolve(filePath);
+  const fromDirPrefix = `${dirname(absoluteFilePath)}|`;
+
+  for (const [cacheKey, resolvedPath] of resolutionCache) {
+    if (
+      resolvedPath === absoluteFilePath ||
+      cacheKey.startsWith(fromDirPrefix)
+    ) {
+      resolutionCache.delete(cacheKey);
+    }
+  }
 };
 
 /**
@@ -414,6 +448,7 @@ const resolveTwigTemplate = (templatePath, fromDir, options) => {
  */
 const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   const absoluteFilePath = resolve(filePath);
+  knownTwigFiles.add(absoluteFilePath);
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const { mtimeMs } = fs.statSync(absoluteFilePath);
   const cached = cache.get(absoluteFilePath);
@@ -629,6 +664,7 @@ export function emulsifyTwigModulePlugin(options) {
     buildStart() {
       compileCache.clear();
       resolutionCache.clear();
+      knownTwigFiles.clear();
     },
     transform(...args) {
       const [, id] = args;
@@ -723,15 +759,22 @@ export function emulsifyTwigModulePlugin(options) {
       }
 
       const filePath = resolve(file);
+      const fileExists = safeExists(filePath);
+      const knownFile = knownTwigFiles.has(filePath);
       compileCache.delete(filePath);
       const importers = dependencyImporters.get(filePath);
-      if (!safeExists(filePath)) {
+      if (!fileExists) {
         dependencyImporters.delete(filePath);
+        knownTwigFiles.delete(filePath);
       }
 
       const projectRoot = options.projectDir || options.root;
       if (projectRoot && isWithinRoot(resolve(projectRoot), filePath)) {
-        resolutionCache.clear();
+        if (fileExists && knownFile) {
+          invalidateKnownResolutionCacheEntries(filePath);
+        } else {
+          resolutionCache.clear();
+        }
       }
 
       if (!importers?.size) {
