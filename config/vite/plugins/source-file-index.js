@@ -125,6 +125,8 @@ const globalTraversalSkipRoots = (globalRoot, componentRoots) => {
 
 /**
  * Create a lazy, shared index of files under the resolved project source roots.
+ * Accessors return the same array reference between calls for a single index
+ * instance once the file tree has been built.
  *
  * @param {object} structure - Resolved project structure.
  * @returns {{
@@ -135,6 +137,8 @@ const globalTraversalSkipRoots = (globalRoot, componentRoots) => {
  */
 export function createSourceFileIndex(structure) {
   let indexedFiles = null;
+  let componentFilesArr = null;
+  let globalFilesArr = null;
 
   const indexRoot = (root, rootType, options = {}) =>
     walkFiles(root.directory, options).map((absPath) => ({
@@ -147,10 +151,10 @@ export function createSourceFileIndex(structure) {
   const build = () => {
     if (indexedFiles) return indexedFiles;
 
-    const componentFiles = structure.componentRootRecords.flatMap((root) =>
+    componentFilesArr = structure.componentRootRecords.flatMap((root) =>
       indexRoot(root, 'component'),
     );
-    const globalFiles = structure.globalRootRecords.flatMap((root) => {
+    globalFilesArr = structure.globalRootRecords.flatMap((root) => {
       const skipRoots = globalTraversalSkipRoots(
         root,
         structure.componentRootRecords,
@@ -162,14 +166,19 @@ export function createSourceFileIndex(structure) {
       });
     });
 
-    indexedFiles = [...componentFiles, ...globalFiles];
+    indexedFiles = [...componentFilesArr, ...globalFilesArr];
     return indexedFiles;
   };
 
   return {
     all: build,
-    componentFiles: () =>
-      build().filter((entry) => entry.rootType === 'component'),
-    globalFiles: () => build().filter((entry) => entry.rootType === 'global'),
+    componentFiles: () => {
+      build();
+      return componentFilesArr;
+    },
+    globalFiles: () => {
+      build();
+      return globalFilesArr;
+    },
   };
 }

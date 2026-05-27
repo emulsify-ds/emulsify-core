@@ -6,7 +6,7 @@ import fs from 'fs';
 import { join } from 'path';
 
 import { makeTempProject } from '../../test-utils/plugins.js';
-import { walkFiles } from '../source-file-index.js';
+import { createSourceFileIndex, walkFiles } from '../source-file-index.js';
 
 describe('source file index helpers', () => {
   let projectDir;
@@ -47,5 +47,27 @@ describe('source file index helpers', () => {
     expect(allFiles.some((filePath) => filePath.includes('node_modules'))).toBe(
       true,
     );
+  });
+
+  it('returns the same component file array reference between calls', () => {
+    projectDir = makeTempProject();
+    const componentRoot = join(projectDir, 'src/components');
+    const globalRoot = join(projectDir, 'src');
+    fs.mkdirSync(join(componentRoot, 'card'), { recursive: true });
+    fs.mkdirSync(join(globalRoot, 'templates'), { recursive: true });
+    fs.writeFileSync(join(componentRoot, 'card/card.twig'), '<article />');
+    fs.writeFileSync(join(globalRoot, 'templates/page.twig'), '<main />');
+
+    const index = createSourceFileIndex({
+      componentRootRecords: [{ directory: componentRoot }],
+      globalRootRecords: [{ directory: globalRoot }],
+    });
+    const firstComponentFiles = index.componentFiles();
+    const secondComponentFiles = index.componentFiles();
+
+    expect(secondComponentFiles).toBe(firstComponentFiles);
+    expect(firstComponentFiles).toHaveLength(1);
+    expect(index.globalFiles()).toHaveLength(1);
+    expect(index.all()).toHaveLength(2);
   });
 });
