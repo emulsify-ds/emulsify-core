@@ -198,30 +198,71 @@ const templateIdForPath = (filePath, options) => {
 };
 
 /**
- * Build a generated-module expression that reuses cached Twig templates.
+ * Build a generated-module expression that instantiates one Twig template.
  *
  * @param {string} templateId - Stable Twig template id.
  * @param {object} params - Twig template parameters without the id.
- * @returns {string} Cache-aware compiled template expression.
+ * @returns {string} Compiled template expression.
  */
 const runtimeTemplateCode = (templateId, params) =>
-  `__emulsifyTwigTemplate(${JSON.stringify(templateId)}, ${JSON.stringify(
-    params,
-  )})`;
+  `Twig.twig(${JSON.stringify({ ...params, id: templateId })})`;
 
 /**
- * Match the template id Twig.js will request for an inline include.
+ * Rewrite static include/import/embed references to module-local template IDs.
  *
- * @param {string} templatePath - Template reference from Twig source.
- * @param {string} fromFilePath - Absolute path of the importing template.
+ * Twig.js falls back to its filesystem loader when an inline include misses the
+ * registry. Browser modules cannot use that loader, so emitted templates point
+ * static dependency tokens directly at the pre-registered module-local IDs.
+ *
+ * @param {Array} [tokens=[]] - Twig token tree.
+ * @param {string} fromFilePath - Absolute path of the template being compiled.
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
- * @returns {string} Runtime lookup id used by Twig.js.
+ * @returns {Array} Cloned token tree with static dependency references rewritten.
  */
-const runtimeIncludeAlias = (templatePath, fromFilePath, options) =>
-  Twig.path.parsePath(
-    { path: fromFilePath, options: { namespaces: options.namespaces } },
-    templatePath,
-  );
+const rewriteRuntimeIncludeReferences = (tokens = [], fromFilePath, options) =>
+  tokens.map((token) => {
+    const nextToken = { ...token };
+
+    if (token.token) {
+      nextToken.token = { ...token.token };
+
+      if (
+        includeTokenTypes.includes(token.token.type) &&
+        Array.isArray(token.token.stack)
+      ) {
+        nextToken.token.stack = token.token.stack.map((stackToken) => {
+          if (typeof stackToken.value !== 'string') {
+            return stackToken;
+          }
+
+          const includePath = resolveTwigTemplate(
+            stackToken.value,
+            dirname(fromFilePath),
+            options,
+          );
+
+          if (!includePath) {
+            return stackToken;
+          }
+
+          return {
+            ...stackToken,
+            value: templateIdForPath(includePath, options),
+          };
+        });
+      }
+
+      if (Array.isArray(token.token.output)) {
+        nextToken.token.output = rewriteRuntimeIncludeReferences(
+          token.token.output,
+          fromFilePath,
+          options,
+        );
+      }
+    }
+
+    return nextToken;
+  });
 
 /**
  * Resolve Twig namespace syntax to a namespace root and relative path.
@@ -399,12 +440,15 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
     path: absoluteFilePath,
   });
   const includes = unique(pluckIncludes(template.tokens).filter(Boolean));
+  const runtimeTokens = rewriteRuntimeIncludeReferences(
+    template.tokens,
+    absoluteFilePath,
+    options,
+  );
   const templateParams = {
-    __emulsifyTwigSignature: `${absoluteFilePath}:${mtimeMs}`,
     allowInlineIncludes: true,
-    data: template.tokens,
+    data: runtimeTokens,
     namespaces: options.namespaces,
-    path: absoluteFilePath,
     precompiled: true,
     rethrow: true,
   };
@@ -604,27 +648,16 @@ export function emulsifyTwigModulePlugin(options) {
             options,
           );
           if (!includePath) continue;
+          if (resolve(includePath) === resolve(filePath)) continue;
 
-          const aliases = unique([
-            includePath,
-            runtimeIncludeAlias(templatePath, fromFilePath, options),
-          ]);
           const entry = compiledIncludes.get(includePath);
-          if (entry) {
-            for (const alias of aliases) {
-              entry.aliases.add(alias);
-            }
-            continue;
-          }
+          if (entry) continue;
 
           addDependencyImporter(includePath, filePath);
           this.addWatchFile(includePath);
 
           const compiled = compileTwigTemplate(includePath, options, cache);
-          compiledIncludes.set(includePath, {
-            aliases: new Set(aliases),
-            compiled,
-          });
+          compiledIncludes.set(includePath, compiled);
           compileIncludes(compiled.includes, includePath, cache);
         }
       };
@@ -633,189 +666,36 @@ export function emulsifyTwigModulePlugin(options) {
         const compiled = compileTwigTemplate(filePath, options, compileCache);
         compileIncludes(compiled.includes, filePath, compileCache);
 
+        let includeIndex = 0;
         const includeCode = Array.from(compiledIncludes.values())
           .reverse()
-          .flatMap(({ aliases, compiled: include }) =>
-            unique([include.templateId, ...aliases]).map(
-              (templateId) =>
-                `${runtimeTemplateCode(templateId, include.templateParams)};`,
-            ),
-          )
+          .map((include) => {
+            const includeName = `__emulsifyInclude${includeIndex}`;
+            includeIndex += 1;
+            return `
+              const ${includeName} = ${runtimeTemplateCode(
+                include.templateId,
+                include.templateParams,
+              )};
+            `;
+          })
           .join('\n');
         const renderErrorPrefix = JSON.stringify(
           `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
         );
         const moduleCode = `
-          import Twig from 'twig';
+          import { factory } from 'twig';
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 
-          const { twig } = Twig;
-          const __emulsifyTwigTemplateStore =
-            globalThis.__emulsifyTwigTemplateStore ||
-            (globalThis.__emulsifyTwigTemplateStore = new Map());
-          const __emulsifyTwigDeleteTemplate = (id) => {
-            if (typeof Twig.extend !== 'function') return;
-
-            Twig.extend((TwigCore) => {
-              if (TwigCore?.Templates?.registry) {
-                delete TwigCore.Templates.registry[id];
-              }
-            });
-          };
-          const __emulsifyTwigApplyTemplateOptions = (
-            template,
-            params = {},
-            options = {},
-          ) => {
-            template.options = {
-              ...(template.options || {}),
-              ...options,
-              allowInlineIncludes: true,
-              namespaces:
-                params.namespaces ||
-                options.namespaces ||
-                template.options?.namespaces,
-              rethrow: true,
-            };
-            return template;
-          };
-          const __emulsifyTwigCreateTemplate = (id, params, options = {}) => {
-            const template = twig({ ...params, id });
-            template.__emulsifyTwigSignature = params.__emulsifyTwigSignature;
-            return __emulsifyTwigApplyTemplateOptions(
-              template,
-              params,
-              options,
-            );
-          };
-          const __emulsifyTwigStoredTemplate = (id, options = {}) => {
-            const params = __emulsifyTwigTemplateStore.get(id);
-            return params
-              ? __emulsifyTwigCreateTemplate(id, params, options)
-              : null;
-          };
-          const __emulsifyTwigTemplate = (id, params) => {
-            __emulsifyTwigTemplateStore.set(id, params);
-
-            const cached = Twig.twig({ ref: id });
-            const signature = params.__emulsifyTwigSignature;
-
-            if (cached) {
-              __emulsifyTwigApplyTemplateOptions(cached, params);
-
-              if (!signature || cached.__emulsifyTwigSignature === signature) {
-                return cached;
-              }
-
-              // Twig.twig({ ref }) bypasses Twig.cache and can return stale HMR entries.
-              __emulsifyTwigDeleteTemplate(id);
-            }
-
-            return __emulsifyTwigCreateTemplate(id, params);
-          };
-          const __emulsifyTwigPatchTemplateLoad = () => {
-            if (typeof Twig.extend !== 'function') return;
-
-            Twig.extend((TwigCore) => {
-              if (!TwigCore.__emulsifyTwigTemplateLoadPatched) {
-                const loadTemplate = TwigCore.Templates.load;
-                TwigCore.Templates.load = (id) => {
-                  const template = loadTemplate(id);
-                  if (template) return template;
-
-                  return __emulsifyTwigStoredTemplate(id) || template;
-                };
-                TwigCore.__emulsifyTwigTemplateLoadPatched = true;
-              }
-
-              if (!TwigCore.__emulsifyTwigLoadRemotePatched) {
-                const loadRemote = TwigCore.Templates.loadRemote;
-                TwigCore.Templates.loadRemote = (
-                  location,
-                  params = {},
-                  callback,
-                  errorCallback,
-                ) => {
-                  for (const id of [
-                    ...new Set([params.id, params.path, location]),
-                  ]) {
-                    if (!id) continue;
-
-                    const template = TwigCore.Templates.load(id);
-                    if (template) {
-                      __emulsifyTwigApplyTemplateOptions(
-                        template,
-                        __emulsifyTwigTemplateStore.get(id) || {},
-                        params.options || {},
-                      );
-
-                      if (typeof callback === 'function') {
-                        callback(template);
-                      }
-
-                      return template;
-                    }
-                  }
-
-                  return loadRemote(
-                    location,
-                    params,
-                    callback,
-                    errorCallback,
-                  );
-                };
-                TwigCore.__emulsifyTwigLoadRemotePatched = true;
-              }
-
-              if (!TwigCore.__emulsifyTwigImportFilePatched) {
-                const importFile = TwigCore.Template?.prototype?.importFile;
-                if (typeof importFile !== 'function') return;
-
-                TwigCore.Template.prototype.importFile = function (file) {
-                  const loadPrecompiled = (id) => {
-                    const template = TwigCore.Templates.load(id);
-                    if (!template) return null;
-
-                    return __emulsifyTwigApplyTemplateOptions(
-                      template,
-                      __emulsifyTwigTemplateStore.get(id) || {},
-                      this.options || {},
-                    );
-                  };
-                  const candidates = [file];
-
-                  try {
-                    candidates.unshift(
-                      this.path
-                        ? TwigCore.path.parsePath(this, file)
-                        : file,
-                    );
-                  } catch {
-                    // Fall back to Twig's original importFile behavior below.
-                  }
-
-                  for (const id of [...new Set(candidates)]) {
-                    const template = loadPrecompiled(id);
-                    if (template) return template;
-                  }
-
-                  return importFile.call(this, file);
-                };
-                TwigCore.__emulsifyTwigImportFilePatched = true;
-              }
-            });
-          };
-
+          const Twig = factory();
           registerTwigExtensions(Twig);
-          __emulsifyTwigPatchTemplateLoad();
 
           ${includeCode}
+          const __emulsifyTemplate = ${compiled.code};
 
           export default (context = {}) => {
             try {
-              const template = ${compiled.code};
-              template.options.allowInlineIncludes = true;
-              return template.render(context);
+              return __emulsifyTemplate.render(context);
             } catch (error) {
               return ${renderErrorPrefix} + error.toString();
             }
