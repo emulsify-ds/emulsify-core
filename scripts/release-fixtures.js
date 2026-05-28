@@ -45,6 +45,8 @@ const releaseFixtures = [
     type: 'vite',
     assert: [
       'dist/components/card/js/card.js',
+      'dist/components/card/js/Card.js',
+      'dist/components/card/js/mount.js',
       'dist/components/card/css/card.css',
       'dist/components/card/card.twig',
       'dist/components/card/card.asset.txt',
@@ -52,7 +54,11 @@ const releaseFixtures = [
       'dist/global/base/css/base.css',
       'dist/extension-marker.txt',
     ],
-    reject: ['components/card/card.js'],
+    reject: [
+      'components/card/card.js',
+      'dist/components/card/Card.jsx',
+      'dist/components/card/mount.jsx',
+    ],
   },
   {
     name: 'legacy-components',

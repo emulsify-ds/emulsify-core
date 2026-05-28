@@ -58,6 +58,8 @@ default metadata object.
 
 React components render through Storybook's React/Vite support. Storybook discovers React stories from the same normalized story roots as Twig stories. The shared Storybook globs include `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`; fixture coverage validates JavaScript/JSX stories.
 
+Production Vite builds also discover eligible `.jsx` files in supported source roots. They follow the same entry rules as `.js` files: stories, component metadata helpers, minified files, and test files are excluded, and the emitted browser bundle uses a `.js` filename. TypeScript entries and `.js` files containing JSX are outside this production entry support.
+
 ```jsx
 import { Button } from './Button';
 
@@ -86,11 +88,12 @@ src/
       button.scss
     badge/
       Badge.jsx
+      mount.jsx
       badge.stories.jsx
       badge.scss
 ```
 
-Both stories appear in the same Storybook instance. Twig stories should use `renderTwig(template, { context })` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview, but the `renderTwig()` shape is easier to maintain because it makes the Twig context mapping explicit. React stories use standard Storybook React component or render-function patterns.
+Both stories appear in the same Storybook instance. Twig stories should use `renderTwig(template, { context })` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview, but the `renderTwig()` shape is easier to maintain because it makes the Twig context mapping explicit. React stories use standard Storybook React component or render-function patterns. A colocated `.jsx` mount file can be used as the production Vite entry when a CMS needs a browser bundle for that React component.
 
 ## Twig Button Example
 
@@ -223,6 +226,51 @@ export default {
 };
 
 export const Default = {};
+```
+
+## React In Drupal Themes
+
+Emulsify Core does not generate `*.libraries.yml`. Drupal libraries remain owned by the project or theme so each implementation can choose dependencies, loading strategy, attributes, and attachment points.
+
+A common Drupal SDC pattern is:
+
+- Author the React component in a colocated `.jsx` file, such as `Card.jsx`.
+- Add a separate mount entry, such as `mount.jsx`, that imports the component and registers a `Drupal.behaviors` attachment with `once`.
+- Render a Twig mount element with JSON props.
+- Define the Drupal library in the theme and attach the emitted `.js` bundle from Twig or component metadata.
+
+```jsx
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { Card } from './Card.jsx';
+
+Drupal.behaviors.card = {
+  attach(context) {
+    once('card', '[data-card-root]', context).forEach((element) => {
+      const propsScript = element.querySelector('[data-card-props]');
+      const props = propsScript ? JSON.parse(propsScript.textContent) : {};
+
+      createRoot(element).render(<Card {...props} />);
+    });
+  },
+};
+```
+
+```twig
+<div data-card-root>
+  <script type="application/json" data-card-props>
+    {{ card_props|json_encode|escape('html') }}
+  </script>
+</div>
+```
+
+```yaml
+card:
+  js:
+    components/card/mount.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
 ```
 
 ## Shared Sass/CSS

@@ -68,8 +68,8 @@ const entryPath = (entry) =>
 const isJavaScriptEntry = (entry) => {
   const filePath = entryPath(entry);
   return (
-    /\.js$/.test(filePath) &&
-    !/\.(stories|component|min|test)\.js$/.test(filePath)
+    /\.jsx?$/.test(filePath) &&
+    !/\.(stories|component|min|test)\.jsx?$/.test(filePath)
   );
 };
 

@@ -24,8 +24,9 @@ let projectStructureCache = new WeakMap();
 /** @type {object|null} */
 let defaultProjectStructureCache = null;
 
-/** Strip a JS or SCSS extension from an output key. */
-const stripAssetExtension = (filePath) => filePath.replace(/\.(scss|js)$/i, '');
+/** Strip a JS, JSX, or SCSS extension from an output key. */
+const stripAssetExtension = (filePath) =>
+  filePath.replace(/\.(scss|jsx?)$/i, '');
 
 /** Insert "/css|js" bucket unless SDC=true; strip extension. */
 export function injectBucket(rel, bucket, SDC) {
@@ -33,7 +34,7 @@ export function injectBucket(rel, bucket, SDC) {
   if (SDC) {
     return bucket === 'css' ? `${withoutExt}__style` : withoutExt;
   }
-  return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|js)$/i, '');
+  return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|jsx?)$/i, '');
 }
 
 /**

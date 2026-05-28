@@ -230,11 +230,12 @@ src/
       button.scss
     badge/
       Badge.jsx
+      mount.jsx
       badge.stories.jsx
       badge.scss
 ```
 
-Both stories appear in the same Storybook instance and can be organized by the same title hierarchy.
+Both stories appear in the same Storybook instance and can be organized by the same title hierarchy. Storybook already supports React/JSX through `@storybook/react-vite`; production Vite builds also compile eligible colocated `.jsx` files, such as mount entries, to `.js` browser bundles.
 
 ## Preview Overrides
 

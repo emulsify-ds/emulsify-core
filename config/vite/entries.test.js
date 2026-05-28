@@ -32,6 +32,14 @@ const fakeSourceFileIndex = ({ componentFiles = [], globalFiles = [] }) => ({
   globalFiles: () => globalFiles,
 });
 
+const jsxExclusionEntryPaths = [
+  'src/components/card/Card.jsx',
+  'src/components/card/Card.stories.jsx',
+  'src/components/card/Card.component.jsx',
+  'src/components/card/Card.min.jsx',
+  'src/components/card/Card.test.jsx',
+];
+
 const buildContext = (
   projectDir,
   {
@@ -154,6 +162,47 @@ describe('buildInputs structure outputs', () => {
   "global/base/css/base": "src/base/base.scss",
   "global/base/js/base": "src/base/base.js",
   "storybook/components/card/cl-card": "src/components/card/cl-card.scss",
+}
+`);
+  });
+
+  it('builds JSX component entries with JS output keys for generic projects', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: ['src/components/card/Card.jsx'],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/js/Card": "src/components/card/Card.jsx",
+}
+`);
+  });
+
+  it('builds JSX component entries with Drupal SDC output keys', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      platform: 'drupal',
+      SDC: true,
+      componentFilePaths: ['src/components/card/Card.jsx'],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/Card": "src/components/card/Card.jsx",
+}
+`);
+  });
+
+  it('excludes JSX story, component, minified, and test files', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: jsxExclusionEntryPaths,
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/js/Card": "src/components/card/Card.jsx",
 }
 `);
   });

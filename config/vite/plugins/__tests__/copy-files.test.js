@@ -43,7 +43,9 @@ describe('source copy plugins', () => {
     writeFileSync(join(componentDir, '_partial.twig'), '<span></span>');
     writeFileSync(join(componentDir, 'card.component.yml'), 'name: Card');
     writeFileSync(join(componentDir, 'image.png'), 'image');
+    writeFileSync(join(componentDir, 'data.json'), '{"fixture":true}');
     writeFileSync(join(componentDir, 'card.js'), 'console.log("skip");');
+    writeFileSync(join(componentDir, 'Card.jsx'), 'export function Card() {}');
     writeFileSync(join(componentDir, 'card.scss'), '.skip {}');
 
     const structure = resolveProjectStructure(
@@ -63,7 +65,9 @@ describe('source copy plugins', () => {
       true,
     );
     expect(existsSync(join(outDir, 'components/card/image.png'))).toBe(true);
+    expect(existsSync(join(outDir, 'components/card/data.json'))).toBe(true);
     expect(existsSync(join(outDir, 'components/card/card.js'))).toBe(false);
+    expect(existsSync(join(outDir, 'components/card/Card.jsx'))).toBe(false);
     expect(existsSync(join(outDir, 'components/card/card.scss'))).toBe(false);
   });
 

@@ -97,7 +97,7 @@ export const isComponentMetadataFile = (filePath) =>
  * @returns {boolean} TRUE for non-code source assets.
  */
 export const isStaticSourceAsset = (filePath) =>
-  !/\.(js|scss|twig|map)$/i.test(filePath) &&
+  !/\.(jsx?|scss|twig|map)$/i.test(filePath) &&
   !isComponentMetadataFile(filePath);
 
 /**
