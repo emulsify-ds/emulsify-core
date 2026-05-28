@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: '24.x'
       - name: Install
-        run: npm install
+        run: npm ci
       - name: Update version from semantic commits
         run: npm run version:develop -- "${{ github.event.before }}" "${{ github.sha }}"
       - name: Commit package version

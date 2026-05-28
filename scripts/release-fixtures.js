@@ -6,6 +6,7 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
@@ -38,7 +39,13 @@ const releaseFixtures = [
       'components/card/card.component.yml',
       'components/card/card.asset.txt',
     ],
-    reject: ['dist/components/card/card.js'],
+    reject: [
+      'dist/components/card/card.js',
+      'dist/components/card/card.css',
+      'dist/components/card/card.twig',
+      'dist/components/card/card.component.yml',
+      'dist/components/card/card.asset.txt',
+    ],
   },
   {
     name: 'generic-src-components',
@@ -59,6 +66,12 @@ const releaseFixtures = [
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
       'dist/components/card/js/card2.js',
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/**/*.js',
+        strings: ['window.Drupal', 'Drupal.behaviors', 'attachBehaviors'],
+      },
     ],
   },
   {
@@ -94,6 +107,12 @@ const releaseFixtures = [
     type: 'storybook',
     assert: ['.out/iframe.html'],
     match: ['.out/assets/card.stories-*.js'],
+    assertContent: [
+      {
+        pattern: '.out/assets/card.stories-*.js',
+        strings: ['Twig fixture', 'React fixture'],
+      },
+    ],
   },
   {
     name: 'large-twig-storybook',
@@ -313,6 +332,49 @@ function assertMatches(projectDir, patterns = []) {
   }
 }
 
+function readPatternContents(projectDir, pattern) {
+  const matches = globSync(pattern, {
+    cwd: projectDir,
+    nodir: true,
+  });
+
+  if (!matches.length) {
+    throw new Error(`Expected fixture output pattern missing: ${pattern}`);
+  }
+
+  return matches
+    .map((match) => readFileSync(join(projectDir, match), 'utf8'))
+    .join('\n');
+}
+
+function assertContent(projectDir, assertions = []) {
+  for (const { pattern, strings = [] } of assertions) {
+    const contents = readPatternContents(projectDir, pattern);
+
+    for (const expectedString of strings) {
+      if (!contents.includes(expectedString)) {
+        throw new Error(
+          `Expected fixture output pattern ${pattern} to contain "${expectedString}".`,
+        );
+      }
+    }
+  }
+}
+
+function assertNoContent(projectDir, assertions = []) {
+  for (const { pattern, strings = [] } of assertions) {
+    const contents = readPatternContents(projectDir, pattern);
+
+    for (const rejectedString of strings) {
+      if (contents.includes(rejectedString)) {
+        throw new Error(
+          `Unexpected fixture output pattern ${pattern} contains "${rejectedString}".`,
+        );
+      }
+    }
+  }
+}
+
 function directorySize(directory) {
   let total = 0;
 
@@ -353,6 +415,8 @@ function runViteFixture(fixture) {
     );
     assertExists(projectDir, fixture.assert);
     assertMissing(projectDir, fixture.reject);
+    assertContent(projectDir, fixture.assertContent);
+    assertNoContent(projectDir, fixture.rejectContent);
     console.log(`✓ Vite fixture passed: ${fixture.name}`);
   } finally {
     rmSync(projectDir, { recursive: true, force: true });
@@ -373,6 +437,8 @@ function runStorybookFixture(fixture) {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     assertExists(projectDir, fixture.assert);
     assertMatches(projectDir, fixture.match);
+    assertContent(projectDir, fixture.assertContent);
+    assertNoContent(projectDir, fixture.rejectContent);
     if (fixture.measure) {
       const outputSize = directorySize(outputDir);
       console.log(

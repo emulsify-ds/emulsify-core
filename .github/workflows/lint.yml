@@ -19,8 +19,8 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
       - name: Install
-        # npm install validates the package the same way consumers install it.
-        run: npm install
+        # npm ci keeps release-readiness checks locked to package-lock.json.
+        run: npm ci
       - name: Lint
         run: npm run lint
       - name: Test
@@ -51,7 +51,7 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
       - name: Install
-        # npm install validates the package the same way consumers install it.
-        run: npm install
+        # npm ci keeps fixture checks locked to package-lock.json.
+        run: npm ci
       - name: Fixture build
         run: npm run fixtures:release -- --fixture ${{ matrix.fixture }}

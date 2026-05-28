@@ -4,9 +4,12 @@
  * @file Initializes a generated Emulsify project from project.emulsify.json.
  */
 
-const fs = require('fs');
-const path = require('path');
-const yaml = require('js-yaml');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import yaml from 'js-yaml';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Determine whether a value is a plain object.
@@ -24,8 +27,10 @@ const isObjectLiteral = (obj) =>
  * @throws {Error} When the config cannot be loaded.
  */
 const getEmulsifyConfig = () => {
+  const configPath = path.join(__dirname, '../config/project.emulsify.json');
+
   try {
-    return require('../config/project.emulsify.json');
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (e) {
     throw new Error(
       `Unable to load an Emulsify project config file (project.emulsify.json): ${String(

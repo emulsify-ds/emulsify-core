@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '24.x'
       - name: Install
-        run: npm install
+        run: npm ci
       - name: Release
         # Semantic Release reads commit history and repository tokens from CI.
         env:

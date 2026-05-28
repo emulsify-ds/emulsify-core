@@ -9,6 +9,7 @@ import { join, posix } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');
+const packageRoot = join(__dirname, '..');
 const SINGLE_QUOTE = String.fromCharCode(39);
 const DOUBLE_QUOTE = '"';
 
@@ -67,6 +68,37 @@ function collectRelativeJsSpecifiers(source) {
   }
 
   return Array.from(specifiers);
+}
+
+function collectExportTargets(exportValue, targets = new Set()) {
+  if (typeof exportValue === 'string') {
+    targets.add(normalizePackagePath(exportValue));
+    return targets;
+  }
+
+  if (!exportValue || typeof exportValue !== 'object') {
+    return targets;
+  }
+
+  for (const value of Object.values(exportValue)) {
+    collectExportTargets(value, targets);
+  }
+
+  return targets;
+}
+
+function dryRunPackFiles() {
+  const output = execFileSync(
+    'npm',
+    ['pack', '--dry-run', '--ignore-scripts', '--json'],
+    {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    },
+  );
+  const [pack] = JSON.parse(output);
+
+  return pack.files.map(({ path: filePath }) => normalizePackagePath(filePath));
 }
 
 describe('@emulsify/core package exports', () => {
@@ -134,7 +166,6 @@ describe('@emulsify/core package exports', () => {
   });
 
   it('packages relative JavaScript imports used by packaged files', () => {
-    const packageRoot = join(__dirname, '..');
     const packageFiles = packageJson.files.map(normalizePackagePath);
     const packageJsFiles = packageFiles.filter(
       (filePath) => filePath.endsWith('.js') && !filePath.includes('*'),
@@ -161,5 +192,63 @@ describe('@emulsify/core package exports', () => {
     }
 
     expect(missingImports).toEqual([]);
+  });
+
+  it('packs documented public entry points without release-only files', () => {
+    const packFiles = dryRunPackFiles();
+    const packFileSet = new Set(packFiles);
+    const requiredFiles = [
+      'package.json',
+      'README.md',
+      'LICENSE',
+      '.cli/init.js',
+      '.storybook/main.js',
+      '.storybook/preview.js',
+      'config/vite/vite.config.js',
+      'config/vite/plugins.js',
+      'src/storybook/index.js',
+      'src/extensions/index.js',
+      'src/extensions/react/index.js',
+      'src/extensions/twig/index.js',
+    ];
+    const forbiddenFiles = [
+      '.github/workflows/lint.yml',
+      'config/jest.config.js',
+      'config/jest-transform-import-meta-url.js',
+      'config/vite/test-utils/virtual-twig-asset-sources.js',
+      'config/vite/test-utils/virtual-twig-globs.js',
+      'release.config.cjs',
+      'scripts/bump-version-from-commits.js',
+      'scripts/release-fixtures.js',
+    ];
+    const forbiddenPrefixes = [
+      '.coverage/',
+      '.github/',
+      '.out/',
+      'coverage/',
+      'dist/',
+      'src/components/',
+    ];
+    const forbiddenSuffixes = ['.test.js', '.test.jsx'];
+
+    for (const filePath of requiredFiles) {
+      expect(packFileSet.has(filePath)).toBe(true);
+    }
+
+    for (const exportTarget of collectExportTargets(packageJson.exports)) {
+      expect(packFileSet.has(exportTarget)).toBe(true);
+    }
+
+    for (const filePath of forbiddenFiles) {
+      expect(packFileSet.has(filePath)).toBe(false);
+    }
+
+    const accidentalFiles = packFiles.filter(
+      (filePath) =>
+        forbiddenPrefixes.some((prefix) => filePath.startsWith(prefix)) ||
+        forbiddenSuffixes.some((suffix) => filePath.endsWith(suffix)),
+    );
+
+    expect(accidentalFiles).toEqual([]);
   });
 });
