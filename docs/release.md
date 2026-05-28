@@ -64,10 +64,10 @@ The release workflow publishes from `main` with token-based authentication. It p
 Before publishing, verify release authentication from a `main` checkout with a dry run:
 
 ```sh
-GITHUB_TOKEN=<repo-token> NPM_TOKEN=<npm-token> npm run semantic-release -- --dry-run --no-ci
+GITHUB_TOKEN="$GITHUB_TOKEN" NPM_TOKEN="$NPM_TOKEN" npx semantic-release --dry-run
 ```
 
-When running from GitHub Actions on `main`, use the same command without `--no-ci`:
+The equivalent npm script form is:
 
 ```sh
 npm run semantic-release -- --dry-run
