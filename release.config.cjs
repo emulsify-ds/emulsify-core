@@ -4,7 +4,7 @@
 
 module.exports = {
   branches: ['main'],
-  repositoryUrl: 'git@github.com:emulsify-ds/emulsify-core.git',
+  repositoryUrl: 'https://github.com/emulsify-ds/emulsify-core.git',
   plugins: [
     // Conventional commit analysis determines the next release version.
     [
