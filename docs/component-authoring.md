@@ -15,20 +15,27 @@ Mixed libraries use Twig and React in the same Storybook instance. This works we
 Twig imports are transformed into render functions that accept Storybook args as Twig context. Use `renderTwig()` from `@emulsify/core/storybook` to render imported Twig templates in React-based Storybook.
 
 ```js
-import template from './button.twig';
+import buttonTwig from './button.twig';
 import { renderTwig } from '@emulsify/core/storybook';
+
+const context = (args) => ({
+  text: args.text,
+  url: args.url,
+});
 
 export default {
   title: 'Components/Button',
-};
-
-export const Default = {
-  render: renderTwig(template),
+  render: renderTwig(buttonTwig, { context }),
   args: {
     text: 'Read more',
+    url: '#',
   },
 };
+
+export const Default = {};
 ```
+
+The recommended Twig story shape is `render: renderTwig(template, { context })`. The `context` function keeps the Storybook control names and the Twig variable names connected in one predictable place. Emulsify can then render the Twig output through React, which keeps controls, HMR, lazy `source()` re-renders, and platform behavior attachment working consistently.
 
 Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()` and `source()` through the normalized project structure model. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior.
 
@@ -83,7 +90,7 @@ src/
       badge.scss
 ```
 
-Both stories appear in the same Storybook instance. Twig stories should use `renderTwig()` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview. React stories use standard Storybook React component or render-function patterns.
+Both stories appear in the same Storybook instance. Twig stories should use `renderTwig(template, { context })` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview, but the `renderTwig()` shape is easier to maintain because it makes the Twig context mapping explicit. React stories use standard Storybook React component or render-function patterns.
 
 ## Twig Button Example
 
@@ -129,12 +136,19 @@ Both stories appear in the same Storybook instance. Twig stories should use `ren
 `button.stories.js`:
 
 ```js
-import template from './button.twig';
+import buttonTwig from './button.twig';
 import { renderTwig } from '@emulsify/core/storybook';
+
+const context = (args) => ({
+  text: args.text,
+  url: args.url,
+  icon: args.icon,
+  modifiers: args.modifiers,
+});
 
 export default {
   title: 'Components/Button',
-  render: renderTwig(template),
+  render: renderTwig(buttonTwig, { context }),
   args: {
     text: 'Read more',
     url: '#',

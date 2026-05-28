@@ -7,22 +7,33 @@ Emulsify Core uses `@storybook/react-vite`. React components render directly thr
 Twig imports are transformed into render functions that return HTML strings. Use `renderTwig()` from `@emulsify/core/storybook` to adapt those functions to React-based Storybook stories.
 
 ```js
-import template from './card.twig';
+import accordionTwig from './accordion.twig';
 import { renderTwig } from '@emulsify/core/storybook';
 
+const context = (args) => ({
+  accordion__heading: args.heading,
+  accordion__items: args.items,
+});
+
 export default {
-  title: 'Components/Card',
-  render: renderTwig(template),
+  title: 'Components/Accordion',
+  render: renderTwig(accordionTwig, { context }),
   args: {
-    heading: 'Example',
-    body: 'Twig rendered inside React Storybook.',
+    heading: 'Frequently asked questions',
+    items: [],
   },
 };
 
 export const Default = {};
 ```
 
-`renderTwig()` passes Storybook args as Twig context, re-renders when args change, and attaches platform behavior only when the active platform adapter enables it.
+### Recommended Twig Story Pattern
+
+Use `render: renderTwig(template, { context })` for new Twig stories and for stories you are actively editing. The `context` function is the place to translate Storybook args into the variable names the Twig template expects. Keeping that mapping next to the story makes the component contract easier to inspect, test, and maintain.
+
+This pattern is preferred because it gives Storybook a normal React render function instead of a bare HTML string. Emulsify can then render the Twig output through its React-managed `TwigHtmlStory` wrapper, update the visible markup whenever controls change, re-render after lazy `source()` content finishes loading, and attach platform behaviors such as Drupal behaviors at the right time.
+
+It also makes migration work clearer. The imported `.twig` module stays responsible only for rendering Twig. The story stays responsible for Storybook args, defaults, and control-friendly data shaping. That separation is especially useful when a Twig variable name follows CMS conventions such as `accordion__heading`, while the Storybook control can use a simpler name such as `heading`.
 
 ## Legacy Twig Story Compatibility
 
@@ -39,7 +50,7 @@ export const Accordion = (args) =>
 
 Those stories still render in Emulsify Core. The shared Storybook preview routes plain string results, and legacy React story elements with Twig HTML stringification, through the same `TwigHtmlStory` wrapper used by `renderTwig()`. That wrapper uses React-managed HTML updates, so Storybook control changes update the visible markup without a manual refresh. React stories and stories that already return React elements pass through unchanged.
 
-`renderTwig()` remains the preferred pattern for new or actively migrated Twig stories because it makes the Twig/React Storybook boundary explicit:
+Legacy string-returning stories are supported as a compatibility path, not as the recommended authoring style. They can hide the args-to-Twig-context mapping inside arbitrary story code, which makes Storybook controls and future migrations harder to reason about. Prefer converting edited stories to `renderTwig(template, { context })`:
 
 ```js
 import template from './accordion.twig';

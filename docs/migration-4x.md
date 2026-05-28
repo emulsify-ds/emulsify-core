@@ -61,15 +61,19 @@ Projects with `variant.structureImplementations` should keep that configuration 
 
 ## Storybook Migration
 
-Storybook runs on React/Vite. Twig stories still work, but imported Twig templates should be rendered with `renderTwig()` from `@emulsify/core/storybook`.
+Storybook runs on React/Vite. Twig stories still work, but imported Twig templates should be rendered with `renderTwig()` from `@emulsify/core/storybook`. For new or edited Twig stories, prefer `render: renderTwig(template, { context })`.
 
 ```js
-import template from './button.twig';
+import buttonTwig from './button.twig';
 import { renderTwig } from '@emulsify/core/storybook';
+
+const context = (args) => ({
+  text: args.text,
+});
 
 export default {
   title: 'Components/Button',
-  render: renderTwig(template),
+  render: renderTwig(buttonTwig, { context }),
 };
 
 export const Default = {
@@ -81,7 +85,9 @@ export const Default = {
 
 React stories can be added alongside existing Twig components without changing the Twig components.
 
-For older function stories that return `template(args)` directly, Emulsify Core wraps string results as HTML in the shared preview. Legacy story elements that stringify to Twig HTML are also routed through the same `TwigHtmlStory` wrapper used by `renderTwig()`, so Storybook controls update through React instead of a DOM normalization step. That compatibility layer is intended to reduce upgrade churn; `renderTwig()` is still the clearer pattern for stories you are editing.
+For older function stories that return `template(args)` directly, Emulsify Core wraps string results as HTML in the shared preview. Legacy story elements that stringify to Twig HTML are also routed through the same `TwigHtmlStory` wrapper used by `renderTwig()`, so Storybook controls update through React instead of a DOM normalization step. That compatibility layer is intended to reduce upgrade churn.
+
+`renderTwig(template, { context })` is still the preferred pattern for stories you are editing because it makes the Storybook-to-Twig boundary explicit. The imported Twig module renders Twig. The `context` function maps Storybook args to the Twig variable names your component expects. Storybook controls, HMR updates, lazy `source()` re-renders, and platform behavior attachment all run through the same React-managed wrapper.
 
 Run the audit script to list likely legacy Twig stories and other upgrade-readiness items:
 
