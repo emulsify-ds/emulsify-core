@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Card } from './Card.jsx';
+import { Card } from './ReactCard.jsx';
 
 const mount = document.querySelector('[data-card-root]');
 
