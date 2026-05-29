@@ -10,8 +10,16 @@ import { resolve } from 'node:path';
 
 const ZERO_SHA = /^0+$/;
 const RELEASE_TYPES = new Set(['major', 'minor', 'patch']);
+export const releaseRules = [
+  {
+    type: 'feat',
+    subject: 'remove storybook-html in favor of storybook-react v9.x',
+    release: 'major',
+  },
+];
 const semanticReleaseConfig = {
   preset: 'angular',
+  releaseRules,
   parserOpts: {
     noteKeywords: ['BREAKING CHANGE', 'BREAKING CHANGES', 'BREAKING'],
   },

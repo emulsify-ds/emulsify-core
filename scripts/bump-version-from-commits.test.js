@@ -7,6 +7,7 @@ import {
   incrementVersion,
   isZeroSha,
   parseGitLog,
+  releaseRules,
   updatePackageVersions,
 } from './bump-version-from-commits.js';
 
@@ -44,6 +45,14 @@ describe('develop version bump helpers', () => {
     expect(incrementVersion('1.2.3', 'patch')).toBe('1.2.4');
     expect(incrementVersion('1.2.3', 'minor')).toBe('1.3.0');
     expect(incrementVersion('1.2.3', 'major')).toBe('2.0.0');
+  });
+
+  it('keeps the 4.x Storybook renderer migration as the major trigger', () => {
+    expect(releaseRules).toContainEqual({
+      type: 'feat',
+      subject: 'remove storybook-html in favor of storybook-react v9.x',
+      release: 'major',
+    });
   });
 
   it('updates package and lockfile versions together', () => {
