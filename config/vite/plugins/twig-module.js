@@ -771,10 +771,10 @@ export function emulsifyTwigModulePlugin(options) {
         );
         const moduleCode = `
           import { factory } from 'twig';
-          import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
+          import { setupTwig } from '@emulsify/core/storybook/twig/setup';
 
           const Twig = factory();
-          registerTwigExtensions(Twig);
+          setupTwig(Twig);
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};

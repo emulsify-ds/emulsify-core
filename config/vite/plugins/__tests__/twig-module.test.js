@@ -5,6 +5,7 @@
 import fs from 'fs';
 import { join } from 'path';
 import Twig from 'twig';
+import { modules as virtualTwigModules } from 'virtual:emulsify-twig-globs';
 
 import { resolveProjectConfig } from '../../project-config.js';
 import {
@@ -34,6 +35,9 @@ describe('Twig module plugin', () => {
   afterEach(() => {
     if (projectDir) {
       fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+    for (const key of Object.keys(virtualTwigModules)) {
+      delete virtualTwigModules[key];
     }
     resetTwigOptionCaches();
     jest.restoreAllMocks();
@@ -323,7 +327,10 @@ describe('Twig module plugin', () => {
     const transformed = transformTwigModule(twigPlugin, cardFile);
 
     expect(transformed.code).toMatch(/import \{ factory \} from 'twig';/);
+    expect(transformed.code).toContain('import { setupTwig }');
+    expect(transformed.code).toContain('@emulsify/core/storybook/twig/setup');
     expect(transformed.code).toContain('const Twig = factory();');
+    expect(transformed.code).toContain('setupTwig(Twig);');
     expect(transformed.code).toContain('const __emulsifyTemplate = Twig.twig(');
     expect(transformed.code).not.toContain('__emulsifyTwigTemplateStore');
     expect(transformed.code).not.toContain('__emulsifyTwigPatchTemplateLoad');
@@ -352,6 +359,49 @@ describe('Twig module plugin', () => {
     expect(render({ title: 'Second', align: 'center' })).toContain(
       '<article data-align="center">Second</article>',
     );
+  });
+
+  it('renders Drupal-style include() function calls through generated modules', () => {
+    projectDir = makeTempProject();
+    const actionsGridFile = join(
+      projectDir,
+      'src/components/actions-grid/actions-grid.twig',
+    );
+    const headingFile = join(
+      projectDir,
+      'src/components/ui/heading/heading.twig',
+    );
+    fs.mkdirSync(join(projectDir, 'src/components/actions-grid'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/ui/heading'), {
+      recursive: true,
+    });
+    fs.writeFileSync(headingFile, '<h2>{{ heading }}</h2>');
+    fs.writeFileSync(
+      actionsGridFile,
+      [
+        '<section>',
+        '  {{ include("bcj:heading", {',
+        '    heading: actions_grid_title',
+        '  }, with_context: false) }}',
+        '</section>',
+      ].join('\n'),
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const heading = transformTwigModule(twigPlugin, headingFile);
+    const actionsGrid = transformTwigModule(twigPlugin, actionsGridFile);
+
+    virtualTwigModules['/src/components/ui/heading/heading.twig'] =
+      createGeneratedTwigModuleRender(heading.code);
+
+    const output = renderGeneratedTwigModule(actionsGrid.code, {
+      actions_grid_title: 'Actions Grid Title',
+    });
+
+    expect(output).toContain('<h2>Actions Grid Title</h2>');
+    expect(output).not.toContain('include function does not exist');
   });
 
   it('preserves runtime rethrow for precompiled templates', () => {

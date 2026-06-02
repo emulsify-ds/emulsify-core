@@ -8,6 +8,7 @@ import { join } from 'path';
 import Twig from 'twig';
 
 import { registerTwigExtensions } from '../../../src/extensions/twig/index.js';
+import { setupTwig } from '../../../src/storybook/twig/setup.js';
 
 /**
  * Create an isolated temporary project directory for plugin tests.
@@ -113,12 +114,22 @@ export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
       '',
     )
     .replace(
+      /^\s*import \{ setupTwig \} from '@emulsify\/core\/storybook\/twig\/setup';\s*/m,
+      '',
+    )
+    .replace(
       /export default \(context = \{\}\) => \{/,
       'return (context = {}) => {',
     );
-  const render = new Function('factory', 'registerTwigExtensions', executable)(
+  const render = new Function(
+    'factory',
+    'registerTwigExtensions',
+    'setupTwig',
+    executable,
+  )(
     generatedTwigFactory(runtimeTwigOrOptions),
     registerTwigExtensions,
+    setupTwig,
   );
 
   return render;

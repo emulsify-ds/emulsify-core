@@ -6,7 +6,10 @@ import {
   modules as twigModules,
   sources as twigSources,
 } from 'virtual:emulsify-twig-globs';
-import { candidateKeysForReference } from './reference-paths.js';
+import {
+  buildTwigRootRecords,
+  candidateKeysForReference,
+} from './reference-paths.js';
 
 export {
   buildTwigRootRecords,
@@ -38,6 +41,69 @@ function resolveFromMap(map, candidates) {
 }
 
 /**
+ * Build grouped component fallback suffixes from exact candidate keys.
+ *
+ * Drupal SDC projects often keep components under grouping directories such as
+ * `src/components/ui/heading/heading.twig`, while Drupal include IDs use only
+ * the component machine name: `bcj:heading`. Exact candidates remain preferred;
+ * these suffixes only run after direct lookup misses.
+ *
+ * @param {string[]} candidates - Exact candidate Vite glob keys.
+ * @param {object} env - Normalized Emulsify environment.
+ * @returns {{rootRel: string, suffix: string}[]} Root-scoped fallback suffixes.
+ */
+function groupedComponentSuffixes(candidates, env) {
+  const roots = buildTwigRootRecords(env)
+    .map((root) => root.rootRel)
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length);
+  const suffixes = [];
+  const seen = new Set();
+
+  for (const candidate of candidates) {
+    for (const rootRel of roots) {
+      const normalizedRoot = rootRel.replace(/\/+$/, '');
+      const prefix = `${normalizedRoot}/`;
+      if (!candidate.startsWith(prefix)) continue;
+
+      const suffix = candidate.slice(normalizedRoot.length);
+      const key = `${normalizedRoot}|${suffix}`;
+      if (!seen.has(key)) {
+        suffixes.push({ rootRel: normalizedRoot, suffix });
+        seen.add(key);
+      }
+      break;
+    }
+  }
+
+  return suffixes;
+}
+
+/**
+ * Resolve a Twig glob entry by grouped component suffix.
+ *
+ * @param {Record<string, *>} map - Vite glob map.
+ * @param {string[]} candidates - Exact candidate Vite glob keys.
+ * @param {object} env - Normalized Emulsify environment.
+ * @returns {{key: string, value: *}|undefined} Matched glob entry.
+ */
+function findGroupedComponentEntry(map, candidates, env) {
+  const entries = Object.entries(map);
+
+  for (const { rootRel, suffix } of groupedComponentSuffixes(candidates, env)) {
+    const rootPrefix = `${rootRel}/`;
+    const match = entries.find(
+      ([key]) => key.startsWith(rootPrefix) && key.endsWith(suffix),
+    );
+    if (match) {
+      return { key: match[0], value: match[1] };
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Find a Vite glob map entry and keep its key for cache lookups.
  *
  * @param {Record<string, *>} map - Vite glob map.
@@ -54,6 +120,21 @@ function findGlobEntry(map, candidates) {
   }
 
   return undefined;
+}
+
+/**
+ * Find a direct or grouped component Vite glob entry.
+ *
+ * @param {Record<string, *>} map - Vite glob map.
+ * @param {string[]} candidates - Exact candidate Vite glob keys.
+ * @param {object} env - Normalized Emulsify environment.
+ * @returns {{key: string, value: *}|undefined} Matched glob entry.
+ */
+function findTemplateEntry(map, candidates, env) {
+  return (
+    findGlobEntry(map, candidates) ||
+    findGroupedComponentEntry(map, candidates, env)
+  );
 }
 
 /**
@@ -91,9 +172,14 @@ export function createTwigResolver({
   const sourceTextCache = new Map();
   const sourceLoadPromises = new Map();
 
-  const findSourceEntry = (name) =>
-    findGlobEntry(sources, [name]) ||
-    findGlobEntry(sources, candidateKeysForReference(name, env));
+  const findSourceEntry = (name) => {
+    const candidates = candidateKeysForReference(name, env);
+
+    return (
+      findGlobEntry(sources, [name]) ||
+      findTemplateEntry(sources, candidates, env)
+    );
+  };
 
   const resolveSourceEntry = (entry) => {
     if (!entry) return undefined;
@@ -164,6 +250,11 @@ export function createTwigResolver({
       const template = resolveFromMap(modules, candidates);
       if (template) {
         return template;
+      }
+
+      const groupedEntry = findGroupedComponentEntry(modules, candidates, env);
+      if (groupedEntry) {
+        return groupedEntry.value.default ?? groupedEntry.value;
       }
 
       return undefined;

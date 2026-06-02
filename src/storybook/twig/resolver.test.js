@@ -114,6 +114,44 @@ describe('Storybook Twig resolver', () => {
     ).toBe('<button>{{ text }}</button>');
   });
 
+  it('resolves project-namespace component references from grouped component folders', () => {
+    const headingTemplate = jest.fn(() => '<h2>Heading</h2>');
+    const resolver = createTwigResolver({
+      env: createEnv(),
+      modules: {
+        '/src/components/ui/heading/heading.twig': {
+          default: headingTemplate,
+        },
+      },
+      sources: {
+        '/src/components/ui/heading/heading.twig': '<h2>{{ heading }}</h2>',
+      },
+    });
+
+    expect(resolver.resolveTemplate('whisk:heading')).toBe(headingTemplate);
+    expect(resolver.resolveTemplateSource('whisk:heading')).toBe(
+      '<h2>{{ heading }}</h2>',
+    );
+  });
+
+  it('prefers exact component reference matches over grouped fallbacks', () => {
+    const exactTemplate = jest.fn(() => '<h2>Exact</h2>');
+    const groupedTemplate = jest.fn(() => '<h2>Grouped</h2>');
+    const resolver = createTwigResolver({
+      env: createEnv(),
+      modules: {
+        '/src/components/heading/heading.twig': {
+          default: exactTemplate,
+        },
+        '/src/components/ui/heading/heading.twig': {
+          default: groupedTemplate,
+        },
+      },
+    });
+
+    expect(resolver.resolveTemplate('whisk:heading')).toBe(exactTemplate);
+  });
+
   it('loads lazy raw Twig source once and caches it for later sync reads', async () => {
     const sourceLoader = jest.fn(() =>
       Promise.resolve('<button>{{ text }}</button>'),
