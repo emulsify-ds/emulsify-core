@@ -1022,9 +1022,11 @@ export function emulsifyTwigModulePlugin(options) {
           import { factory } from 'twig';
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
           import { createTwigIncludeFunction } from '@emulsify/core/storybook/twig/include-function';
+          import twigSource from '@emulsify/core/storybook/twig/source';
 
           const Twig = factory();
           registerTwigExtensions(Twig);
+          twigSource(Twig);
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};

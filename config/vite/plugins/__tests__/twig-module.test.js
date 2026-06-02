@@ -23,6 +23,10 @@ import {
   twigInclude,
   writeProjectConfig,
 } from '../../test-utils/plugins.js';
+import {
+  resetVirtualTwigAssetSources,
+  setVirtualTwigAssetSources,
+} from 'virtual:emulsify-twig-asset-sources';
 
 describe('Twig module plugin', () => {
   let projectDir;
@@ -36,6 +40,7 @@ describe('Twig module plugin', () => {
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
     resetTwigOptionCaches();
+    resetVirtualTwigAssetSources();
     jest.restoreAllMocks();
   });
 
@@ -329,8 +334,12 @@ describe('Twig module plugin', () => {
     expect(transformed.code).toMatch(
       /import \{ createTwigIncludeFunction \} from '@emulsify\/core\/storybook\/twig\/include-function';/,
     );
+    expect(transformed.code).toMatch(
+      /import twigSource from '@emulsify\/core\/storybook\/twig\/source';/,
+    );
     expect(transformed.code).toContain('const Twig = factory();');
     expect(transformed.code).toContain('registerTwigExtensions(Twig);');
+    expect(transformed.code).toContain('twigSource(Twig);');
     expect(transformed.code).toMatch(/Twig\.extendFunction\('include'/);
     expect(transformed.code).toContain('const __emulsifyTemplate = Twig.twig(');
     expect(transformed.code).not.toContain('__emulsifyTwigTemplateStore');
@@ -358,6 +367,31 @@ describe('Twig module plugin', () => {
     );
     expect(render({ title: 'Second', align: 'center' })).toContain(
       '<article data-align="center">Second</article>',
+    );
+  });
+
+  it('renders source() asset references through generated modules', () => {
+    projectDir = makeTempProject();
+    const iconFile = join(projectDir, 'src/components/icon/icon.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/icon'), {
+      recursive: true,
+    });
+    fs.writeFileSync(iconFile, '{{ source("@assets/icons/refresh.svg") }}');
+    setVirtualTwigAssetSources(
+      {
+        '/assets/icons/refresh.svg':
+          '<svg data-icon="refresh" viewBox="0 0 24 24"></svg>',
+      },
+      ['/assets/'],
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, iconFile);
+    const output = renderGeneratedTwigModule(transformed.code);
+
+    expect(output).toContain('data-icon="refresh"');
+    expect(output).not.toContain(
+      'Template "@assets/icons/refresh.svg" is not defined',
     );
   });
 
