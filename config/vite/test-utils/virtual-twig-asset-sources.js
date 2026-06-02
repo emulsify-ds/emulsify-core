@@ -4,6 +4,8 @@
 
 export const assets = {};
 export const assetRootPrefixes = [];
+export const generatedAssetRootPrefixes = [];
+export const generatedAssetAliases = ['icons.svg'];
 
 const sourceTextCache = new Map();
 const sourceLoadPromises = new Map();
@@ -20,11 +22,17 @@ const candidateKeysForAssetPath = (assetPath) => {
   const rawPath = String(assetPath || '');
   const normalized = normalizeAssetPath(rawPath);
   const directPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const generatedCandidates = generatedAssetAliases.includes(normalized)
+    ? generatedAssetRootPrefixes.map(
+        (root) => `${root.replace(/\/+$/, '')}/${normalized}`,
+      )
+    : [];
 
   return unique([
     rawPath,
     directPath,
     normalized ? `/${normalized}` : '',
+    ...generatedCandidates,
     ...assetRootPrefixes.map(
       (root) => `${root.replace(/\/+$/, '')}/${normalized}`,
     ),
@@ -42,7 +50,8 @@ const normalizeSourceText = (value) => {
 };
 
 export const coversAssetPath = (assetPath) =>
-  assetRootPrefixes.length > 0 && normalizeAssetPath(assetPath).length > 0;
+  (assetRootPrefixes.length > 0 || generatedAssetRootPrefixes.length > 0) &&
+  normalizeAssetPath(assetPath).length > 0;
 
 export const hasAssetText = (assetPath) => Boolean(findAssetKey(assetPath));
 
@@ -89,13 +98,22 @@ export const getAssetText = (assetPath) => {
   return undefined;
 };
 
-export function setVirtualTwigAssetSources(nextAssets = {}, roots = []) {
+export function setVirtualTwigAssetSources(
+  nextAssets = {},
+  roots = [],
+  generatedRoots = [],
+) {
   for (const key of Object.keys(assets)) {
     delete assets[key];
   }
   Object.assign(assets, nextAssets);
 
   assetRootPrefixes.splice(0, assetRootPrefixes.length, ...roots);
+  generatedAssetRootPrefixes.splice(
+    0,
+    generatedAssetRootPrefixes.length,
+    ...generatedRoots,
+  );
   sourceTextCache.clear();
   sourceLoadPromises.clear();
 }

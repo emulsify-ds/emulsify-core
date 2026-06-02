@@ -81,11 +81,16 @@ function readOptionalHtmlFragment(relativePath) {
  * Storybook errors when a declared static directory is absent, so only expose
  * project asset directories that exist in the current workspace.
  *
- * @param {string[]} staticDirs - Absolute static directory paths.
- * @returns {string[]} Existing static directory paths.
+ * @param {Array<string|{from: string, to: string}>} staticDirs - Static directory entries.
+ * @returns {Array<string|{from: string, to: string}>} Existing static directory entries.
  */
 function existingStaticDirs(staticDirs) {
-  return staticDirs.filter((staticDir) => fs.existsSync(staticDir));
+  return staticDirs.filter((staticDir) => {
+    const directory =
+      typeof staticDir === 'string' ? staticDir : staticDir.from;
+
+    return directory && fs.existsSync(directory);
+  });
 }
 
 /**
@@ -182,12 +187,14 @@ const baseConfig = {
    * Anything referenced by URL inside stories should live in one of these
    * directories so it works in both `storybook dev` and static builds.
    *
-   * @type {string[]}
+   * @type {Array<string|{from: string, to: string}>}
    */
   staticDirs: [
     ...existingStaticDirs([
-      path.resolve(process.cwd(), 'assets/images'),
-      path.resolve(process.cwd(), 'assets/icons'),
+      {
+        from: path.resolve(process.cwd(), 'assets'),
+        to: '/assets',
+      },
       path.resolve(process.cwd(), 'dist'),
     ]),
   ],

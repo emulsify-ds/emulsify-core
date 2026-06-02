@@ -93,6 +93,34 @@ describe('Twig source() Storybook helper', () => {
     expect(consoleWarn).not.toHaveBeenCalled();
   });
 
+  it('prefers generated dist asset source for generated asset aliases', () => {
+    setVirtualTwigAssetSources(
+      {
+        '/assets/icons.svg': '<svg>root</svg>',
+        '/dist/assets/icons.svg': '<svg>sprite</svg>',
+      },
+      ['/assets/'],
+      ['/dist/assets/'],
+    );
+    const source = createTwigSourceFunction(() => undefined);
+
+    expect(source('@assets/icons.svg')).toBe('<svg>sprite</svg>');
+    expect(source('@assets/icons/custom.svg')).toBe('');
+  });
+
+  it('resolves non-generated SVG source from project root assets', () => {
+    setVirtualTwigAssetSources(
+      {
+        '/assets/icons/custom.svg': '<svg>custom</svg>',
+      },
+      ['/assets/'],
+      ['/dist/assets/'],
+    );
+    const source = createTwigSourceFunction(() => undefined);
+
+    expect(source('@assets/icons/custom.svg')).toBe('<svg>custom</svg>');
+  });
+
   it('does not use sync XHR for missing text assets by default', () => {
     globalThis.XMLHttpRequest = jest.fn();
     const source = createTwigSourceFunction(() => undefined);

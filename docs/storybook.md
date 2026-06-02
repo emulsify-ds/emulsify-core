@@ -226,9 +226,13 @@ It also supports the Storybook asset alias `@assets` for static assets served fr
 {{ source('@assets/images/example.png') }}
 ```
 
-Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Emulsify uses `projectStructure.assetRoots` when available, otherwise existing `src/assets` and `assets` directories. The first call lazy-loads the raw text and triggers a re-render; later calls return the cached text synchronously.
+Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Emulsify uses `projectStructure.assetRoots` when available and always includes existing root `assets` and `src/assets` directories. Root `./assets` is checked before `./src/assets` for `@assets` references.
 
-Raster image assets still produce image markup. Other assets return a public URL.
+The generated sprite is a special asset alias: `source('@assets/icons.svg')` resolves `dist/assets/icons.svg` before checking root `assets/icons.svg`. Other `@assets/...` SVG references resolve through the project asset roots, so `source('@assets/icons/arrow.svg')` reads `assets/icons/arrow.svg` when that file exists.
+
+The first text source call lazy-loads the raw text and triggers a re-render; later calls return the cached text synchronously.
+
+Raster image assets still produce image markup. Font files and other binary assets return a public URL under `/assets/...`. Storybook serves root `./assets` at that URL prefix, so files such as `assets/images/example.png` and `assets/fonts/example.woff2` can be referenced with `source('@assets/images/example.png')` and `source('@assets/fonts/example.woff2')`.
 
 The old synchronous XHR fallback for text assets is disabled by default because it blocks Storybook rendering. It remains available for one release cycle only for assets outside the virtual asset roots:
 

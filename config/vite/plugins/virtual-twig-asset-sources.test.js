@@ -8,6 +8,7 @@ import { join } from 'path';
 import {
   assetSourceGlobPatterns,
   generateVirtualTwigAssetSourcesModule,
+  generatedAssetSourceRoots,
   VIRTUAL_TWIG_ASSET_SOURCES_ID,
   virtualTwigAssetSourcesPlugin,
 } from './virtual-twig-asset-sources.js';
@@ -45,27 +46,46 @@ describe('virtual Twig asset source module plugin', () => {
     const source = generateVirtualTwigAssetSourcesModule(env);
 
     expect(assetSourceGlobPatterns(env)).toEqual([
-      '/src/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
       '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+      '/src/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
     ]);
     expect(source).toContain(
       'Raw text assets stay lazy and load only when Twig source() requests them.',
     );
     expect(source).toMatch(
-      /import\.meta\.glob\("\/src\/assets\/\*\*\/\*\.\{svg,html,twig,css,js,json,txt,md\}", \{ eager: false, query: '\?raw', import: 'default' \}\)/,
+      /import\.meta\.glob\("\/assets\/\*\*\/\*\.\{svg,html,twig,css,js,json,txt,md\}", \{ eager: false, query: '\?raw', import: 'default' \}\)/,
     );
     expect(source).toMatch(
-      /import\.meta\.glob\("\/assets\/\*\*\/\*\.\{svg,html,twig,css,js,json,txt,md\}", \{ eager: false, query: '\?raw', import: 'default' \}\)/,
+      /import\.meta\.glob\("\/src\/assets\/\*\*\/\*\.\{svg,html,twig,css,js,json,txt,md\}", \{ eager: false, query: '\?raw', import: 'default' \}\)/,
     );
     expect(source).not.toContain('{ eager: true');
     expect(source).toContain('export const assetRootPrefixes =');
+    expect(source).toContain('export const generatedAssetRootPrefixes =');
     expect(source).toContain('export const getAssetText =');
+  });
+
+  it('adds generated dist assets for generated asset aliases', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'assets'), { recursive: true });
+    mkdirSync(join(projectDir, 'dist/assets'), { recursive: true });
+    const env = { projectDir, projectStructure: {} };
+    const source = generateVirtualTwigAssetSourcesModule(env);
+
+    expect(generatedAssetSourceRoots(env)).toEqual(['/dist/assets']);
+    expect(assetSourceGlobPatterns(env)).toEqual([
+      '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+      '/dist/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+    ]);
+    expect(source).toContain(
+      'export const generatedAssetAliases = ["icons.svg"];',
+    );
   });
 
   it('uses configured asset roots when project structure provides them', () => {
     projectDir = makeTempProject();
     const assetRoot = join(projectDir, 'design/assets');
     mkdirSync(assetRoot, { recursive: true });
+    mkdirSync(join(projectDir, 'assets'), { recursive: true });
     const env = {
       projectDir,
       projectStructure: {
@@ -75,6 +95,7 @@ describe('virtual Twig asset source module plugin', () => {
 
     expect(assetSourceGlobPatterns(env)).toEqual([
       '/design/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+      '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
     ]);
   });
 

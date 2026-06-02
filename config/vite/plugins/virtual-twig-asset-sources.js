@@ -14,6 +14,7 @@ import { INLINE_ASSET_EXTS } from '../../../src/storybook/twig/source-extensions
 export const VIRTUAL_TWIG_ASSET_SOURCES_ID =
   'virtual:emulsify-twig-asset-sources';
 const RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID = `\0${VIRTUAL_TWIG_ASSET_SOURCES_ID}`;
+const GENERATED_ASSET_ALIASES = new Set(['icons.svg']);
 
 /**
  * Convert an absolute project path to a Vite root-relative glob base.
@@ -87,10 +88,30 @@ export function assetSourceRoots(env) {
     Array.isArray(env?.projectStructure?.assetRoots) &&
     env.projectStructure.assetRoots.length
       ? env.projectStructure.assetRoots
-      : ['/src/assets', '/assets'];
+      : [];
+  const fallbackRoots = ['/assets', '/src/assets'];
 
   return unique(
-    configuredRoots
+    [...configuredRoots, ...fallbackRoots]
+      .map((root) => toAbsoluteAssetRoot(env?.projectDir, root))
+      .filter((root) => root && safeExists(root))
+      .map((root) => toRootRelativePath(env?.projectDir, root))
+      .filter(Boolean),
+  );
+}
+
+/**
+ * Resolve generated asset roots for Storybook source() text imports.
+ *
+ * Generated aliases such as `@assets/icons.svg` resolve through these roots
+ * before checking project-authored root assets.
+ *
+ * @param {{ projectDir?: string }} env - Emulsify environment.
+ * @returns {string[]} Existing Vite root-relative generated asset roots.
+ */
+export function generatedAssetSourceRoots(env) {
+  return unique(
+    ['/dist/assets']
       .map((root) => toAbsoluteAssetRoot(env?.projectDir, root))
       .filter((root) => root && safeExists(root))
       .map((root) => toRootRelativePath(env?.projectDir, root))
@@ -107,7 +128,7 @@ export function assetSourceRoots(env) {
 export function assetSourceGlobPatterns(env) {
   const extensions = Array.from(INLINE_ASSET_EXTS).join(',');
 
-  return assetSourceRoots(env).map(
+  return [...assetSourceRoots(env), ...generatedAssetSourceRoots(env)].map(
     (root) => `${root === '/' ? '' : root}/**/*.{${extensions}}`,
   );
 }
@@ -120,6 +141,9 @@ export function assetSourceGlobPatterns(env) {
  */
 export function generateVirtualTwigAssetSourcesModule(env) {
   const rootPrefixes = assetSourceRoots(env).map((root) =>
+    `${root === '/' ? '' : root}/`.replace(/\/{2,}/g, '/'),
+  );
+  const generatedRootPrefixes = generatedAssetSourceRoots(env).map((root) =>
     `${root === '/' ? '' : root}/`.replace(/\/{2,}/g, '/'),
   );
   const patterns = assetSourceGlobPatterns(env);
@@ -139,6 +163,10 @@ export function generateVirtualTwigAssetSourcesModule(env) {
  */
 
 export const assetRootPrefixes = ${JSON.stringify(rootPrefixes)};
+export const generatedAssetRootPrefixes = ${JSON.stringify(generatedRootPrefixes)};
+export const generatedAssetAliases = ${JSON.stringify(
+    Array.from(GENERATED_ASSET_ALIASES),
+  )};
 export const assets = Object.assign({}, ...[
 ${globEntries}
 ]);
@@ -158,11 +186,17 @@ const candidateKeysForAssetPath = (assetPath) => {
   const rawPath = String(assetPath || '');
   const normalized = normalizeAssetPath(rawPath);
   const directPath = rawPath.startsWith('/') ? rawPath : \`/\${rawPath}\`;
+  const generatedCandidates = generatedAssetAliases.includes(normalized)
+    ? generatedAssetRootPrefixes.map((root) =>
+        \`\${root.replace(/\\/+$/, '')}/\${normalized}\`,
+      )
+    : [];
 
   return unique([
     rawPath,
     directPath,
     normalized ? \`/\${normalized}\` : '',
+    ...generatedCandidates,
     ...assetRootPrefixes.map((root) =>
       \`\${root.replace(/\\/+$/, '')}/\${normalized}\`,
     ),
@@ -180,7 +214,8 @@ const normalizeSourceText = (value) => {
 };
 
 export const coversAssetPath = (assetPath) =>
-  assetRootPrefixes.length > 0 && normalizeAssetPath(assetPath).length > 0;
+  (assetRootPrefixes.length > 0 || generatedAssetRootPrefixes.length > 0) &&
+  normalizeAssetPath(assetPath).length > 0;
 
 export const hasAssetText = (assetPath) => Boolean(findAssetKey(assetPath));
 

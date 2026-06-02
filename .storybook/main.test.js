@@ -3,8 +3,29 @@
  */
 
 import { execFileSync } from 'node:child_process';
-
 describe('Storybook main config', () => {
+  it('serves project root assets at the /assets URL prefix', () => {
+    const script = `
+      const path = await import('node:path');
+      const { default: config } = await import('./.storybook/main.js');
+      console.log(JSON.stringify({
+        staticDirs: config.staticDirs,
+        expectedFrom: path.resolve(process.cwd(), 'assets'),
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const { staticDirs, expectedFrom } = JSON.parse(output.toString());
+
+    expect(staticDirs).toContainEqual({
+      from: expectedFrom,
+      to: '/assets',
+    });
+  });
+
   it('dedupes React runtime modules in the final Vite config', async () => {
     const script = `
       const { default: config } = await import('./.storybook/main.js');
