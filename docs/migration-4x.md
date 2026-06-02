@@ -132,7 +132,7 @@ themes. At minimum:
   "scripts": {
     "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\\n\"; exit $status' --",
     "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\"; exit $status' --",
-    "build": "npm run ensure-dist && vite --config node_modules/@emulsify/core/config/vite/vite.config.js",
+    "build": "npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js",
     "develop": "npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook",
     "vite": "vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js"
   },

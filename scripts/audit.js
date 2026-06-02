@@ -498,8 +498,16 @@ function auditGeneratedPackageScripts(context) {
 
   const findings = [];
   const details = [];
+  const buildScript = scripts.build || '';
 
-  if (/\bwebpack\b|config\/webpack/.test(scripts.build || '')) {
+  if (/\bwebpack\b|config\/webpack/.test(buildScript)) {
+    details.push('Replace scripts.build with the Vite build command.');
+  } else if (
+    /node_modules\/@emulsify\/core\/config\/vite\/vite\.config\.js/.test(
+      buildScript,
+    ) &&
+    /\bvite\s+(?:--config|-c)\b/.test(buildScript)
+  ) {
     details.push('Replace scripts.build with the Vite build command.');
   }
 

@@ -327,7 +327,7 @@ No audit findings found."
           'audit:twig-stories':
             'sh -c \'node_modules/@emulsify/core/scripts/audit-twig-stories.js "$@"; status=$?; printf "\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n"; exit $status\' --',
           build:
-            'npm run ensure-dist && vite --config node_modules/@emulsify/core/config/vite/vite.config.js',
+            'npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js',
           develop:
             'npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook',
           vite: 'vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js',
@@ -348,6 +348,47 @@ No audit findings found."
     expect(result.findings.map((finding) => finding.id)).not.toContain(
       'generated-package-json-migration-needed',
     );
+  });
+
+  it('reports generated build scripts missing the Vite build subcommand', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'generic',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'package.json',
+      JSON.stringify({
+        name: 'generated-theme-missing-vite-build-command',
+        scripts: {
+          audit: 'node_modules/@emulsify/core/scripts/audit.js',
+          'audit:twig-stories':
+            'node_modules/@emulsify/core/scripts/audit-twig-stories.js',
+          build:
+            'npm run ensure-dist && vite --config node_modules/@emulsify/core/config/vite/vite.config.js',
+          develop:
+            'npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook',
+          vite: 'vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js',
+        },
+        dependencies: {
+          '@emulsify/core': '^4.0.0',
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+    const finding = result.findings.find(
+      (item) => item.id === 'generated-package-json-migration-needed',
+    );
+
+    expect(finding.details).toEqual([
+      'Replace scripts.build with the Vite build command.',
+    ]);
   });
 
   it('does not require generated package scripts for custom Core consumers', () => {
