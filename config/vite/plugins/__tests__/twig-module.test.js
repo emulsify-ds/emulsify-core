@@ -361,7 +361,7 @@ describe('Twig module plugin', () => {
     );
   });
 
-  it('renders Drupal-style include() function calls through generated modules', () => {
+  it('renders project-namespace include() function calls through generated modules', () => {
     projectDir = makeTempProject();
     const actionsGridFile = join(
       projectDir,
@@ -382,7 +382,7 @@ describe('Twig module plugin', () => {
       actionsGridFile,
       [
         '<section>',
-        '  {{ include("bcj:heading", {',
+        '  {{ include("project:heading", {',
         '    heading: actions_grid_title',
         '  }, with_context: false) }}',
         '</section>',
@@ -400,7 +400,7 @@ describe('Twig module plugin', () => {
     expect(output).not.toContain('include function does not exist');
   });
 
-  it('renders SDC tag includes from grouped component folders', () => {
+  it('renders project-namespace tag includes from grouped component folders', () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/ui/card/card.twig');
     const buttonFile = join(projectDir, 'src/components/ui/button/button.twig');
@@ -411,7 +411,7 @@ describe('Twig module plugin', () => {
       recursive: true,
     });
     fs.writeFileSync(buttonFile, '<button>{{ label }}</button>');
-    fs.writeFileSync(cardFile, '{% include "bcj:button" %}');
+    fs.writeFileSync(cardFile, '{% include "project:button" %}');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const transformed = transformTwigModule(twigPlugin, cardFile);

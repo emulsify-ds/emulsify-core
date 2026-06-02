@@ -464,8 +464,9 @@ const componentGroupRoots = (componentRoot) => {
 /**
  * Resolve a component reference through one grouping directory level.
  *
- * Drupal SDC IDs use the component machine name (`bcj:button`) even when
- * projects organize components under grouping directories such as `ui`.
+ * Project-scoped component IDs can use the component name (`project:button`)
+ * even when projects organize components under grouping directories such as
+ * `ui`.
  *
  * @param {string} templatePath - Component-relative template reference.
  * @param {string} componentRoot - Absolute component root path.

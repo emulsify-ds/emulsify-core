@@ -8,7 +8,16 @@ The extension source lives under `src/extensions/`:
 - `src/extensions/shared/` contains reusable HTML attribute and list utilities.
 - `src/extensions/react/` contains React extension registry helpers.
 
-Storybook-only Twig runtime helpers live under `src/storybook/twig/`; see [Storybook](storybook.md) for `include()` and `source()`.
+Storybook-only Twig runtime helpers live under `src/storybook/twig/`; see [Storybook](storybook.md#include) for `include()` and [Storybook](storybook.md#source) for `source()`.
+
+## Storybook Runtime Helpers
+
+Emulsify Core registers two additional Twig functions for Storybook-rendered Twig:
+
+- `include()` renders another Twig template through the normalized project structure resolver. It supports namespace paths such as `@components/button/button.twig` and project-scoped component IDs such as `project_id:button`.
+- `source()` returns raw Twig template source or project asset source for Storybook use cases such as code examples and inline SVG.
+
+These helpers are Storybook runtime helpers, not native Twig extension exports from `@emulsify/core/extensions/twig`. Core's Storybook and Vite integrations register them automatically when Twig stories or imported Twig modules are rendered.
 
 ## `bem()`
 

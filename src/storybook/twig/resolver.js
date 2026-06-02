@@ -43,10 +43,10 @@ function resolveFromMap(map, candidates) {
 /**
  * Build grouped component fallback suffixes from exact candidate keys.
  *
- * Drupal SDC projects often keep components under grouping directories such as
- * `src/components/ui/heading/heading.twig`, while Drupal include IDs use only
- * the component machine name: `bcj:heading`. Exact candidates remain preferred;
- * these suffixes only run after direct lookup misses.
+ * Projects can keep components under grouping directories such as
+ * `src/components/ui/heading/heading.twig`, while project-scoped component IDs
+ * use only the component name, such as `project:heading`. Exact candidates
+ * remain preferred; these suffixes only run after direct lookup misses.
  *
  * @param {string[]} candidates - Exact candidate Vite glob keys.
  * @param {object} env - Normalized Emulsify environment.

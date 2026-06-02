@@ -135,6 +135,7 @@ Imported Twig modules are isolated from each other at runtime. Each generated mo
 Storybook's Twig resolver uses Vite `import.meta.glob()` calls generated from the normalized project structure model. It eagerly imports compiled Twig template modules, then lazy-loads raw Twig template source and text asset source only when `source()` asks for them:
 
 - Template modules support `{% include %}`, `{% embed %}`, `{% extends %}`, `{% import %}`, and `{% from %}` dependencies.
+- Generated Twig modules also support static `include()` function references through the same template dependency resolver.
 - Lazy raw Twig source imports support `source('@components/...')`.
 - Lazy text asset imports support `source('@assets/...')` for SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown files.
 
@@ -167,13 +168,33 @@ A lazy resolver/cache model is feasible later because the resolver already centr
 
 ## `include()`
 
-`include()` resolves templates through the normalized project structure model. References can use configured Twig namespaces such as `@components`, `@foundation`, `@layout`, or `@tokens` when those roots exist in `project.emulsify.json`.
+Emulsify Core adds a Storybook runtime implementation of Twig's `include()` function. It resolves templates through the same normalized project structure model used by Twig tags, so imported Twig modules and Storybook-rendered templates can use the same reference forms.
+
+References can use configured Twig namespaces such as `@components`, `@foundation`, `@layout`, or `@tokens` when those roots exist in `project.emulsify.json`.
 
 ```twig
 {{ include('@components/icon/icon.twig', {
   name: 'arrow-right'
 }) }}
 ```
+
+Template tags use the same resolver:
+
+```twig
+{% include '@components/button/button.twig' %}
+```
+
+Project-scoped component IDs are also supported. The namespace segment is the consuming project or theme ID, followed by the component name:
+
+```twig
+{{ include('project_id:button', {
+  label: 'Read more'
+}) }}
+
+{% include 'project_id:button' %}
+```
+
+Both namespace paths and project-scoped IDs can resolve grouped component folders. For example, `@components/button/button.twig` and `project_id:button` can resolve `src/components/ui/button/button.twig` when components are organized under a grouping directory such as `ui`.
 
 The runtime supports explicit variables, `with_context`, `ignore_missing`, and ordered template candidates:
 
@@ -187,6 +208,8 @@ The runtime supports explicit variables, `with_context`, `ignore_missing`, and o
   ignore_missing: true
 }) }}
 ```
+
+Static `include()` function references are compiled into the generated Twig module's local dependency map. Dynamic template names can still be used when the active runtime resolver can resolve them, but static strings are preferred for predictable Storybook rendering and HMR.
 
 ## `source()`
 
