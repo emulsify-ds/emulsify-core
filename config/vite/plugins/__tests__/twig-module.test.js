@@ -335,11 +335,11 @@ describe('Twig module plugin', () => {
       /import \{ createTwigIncludeFunction \} from '@emulsify\/core\/storybook\/twig\/include-function';/,
     );
     expect(transformed.code).toMatch(
-      /import twigSource from '@emulsify\/core\/storybook\/twig\/source';/,
+      /import \{ createTwigSourceFunction \} from '@emulsify\/core\/storybook\/twig\/source-function';/,
     );
     expect(transformed.code).toContain('const Twig = factory();');
     expect(transformed.code).toContain('registerTwigExtensions(Twig);');
-    expect(transformed.code).toContain('twigSource(Twig);');
+    expect(transformed.code).toMatch(/Twig\.extendFunction\('source'/);
     expect(transformed.code).toMatch(/Twig\.extendFunction\('include'/);
     expect(transformed.code).toContain('const __emulsifyTemplate = Twig.twig(');
     expect(transformed.code).not.toContain('__emulsifyTwigTemplateStore');
@@ -393,6 +393,26 @@ describe('Twig module plugin', () => {
     expect(output).not.toContain(
       'Template "@assets/icons/refresh.svg" is not defined',
     );
+  });
+
+  it('renders static source() template references through generated modules', () => {
+    projectDir = makeTempProject();
+    const previewFile = join(projectDir, 'src/components/preview/preview.twig');
+    const codeFile = join(projectDir, 'src/components/code/code.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/preview'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/code'), {
+      recursive: true,
+    });
+    fs.writeFileSync(previewFile, '{{ source("@components/code/code.twig") }}');
+    fs.writeFileSync(codeFile, '<button>{{ text }}</button>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, previewFile);
+    const output = renderGeneratedTwigModule(transformed.code);
+
+    expect(output).toContain('<button>{{ text }}</button>');
   });
 
   it('renders project-namespace include() function calls through generated modules', () => {

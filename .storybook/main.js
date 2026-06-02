@@ -27,6 +27,18 @@ import {
 
 // Twig glob maps are provided by config/vite/plugins/virtual-twig-globs.js.
 
+const twigVirtualModuleIds = [
+  'virtual:emulsify-twig-globs',
+  'virtual:emulsify-twig-asset-sources',
+];
+
+const twigRuntimeOptimizeDepsExclude = [
+  ...twigVirtualModuleIds,
+  '@emulsify/core/storybook/twig/source-function',
+  '@emulsify/core/storybook/twig/source',
+  '@emulsify/core/storybook/twig/resolver',
+];
+
 /**
  * Minimal subset of the resolved Emulsify environment used by this file.
  *
@@ -91,6 +103,47 @@ function existingStaticDirs(staticDirs) {
 
     return directory && fs.existsSync(directory);
   });
+}
+
+/**
+ * Merge Storybook and project optimizeDeps excludes with Core Twig runtime IDs.
+ *
+ * Storybook's dependency optimizer runs before normal Vite virtual module
+ * resolution. Core Twig runtime modules import virtual IDs that must stay in
+ * the Vite module graph so Emulsify's virtual plugins can resolve them.
+ *
+ * @param {...string[]} excludeLists - Existing optimizeDeps exclude arrays.
+ * @returns {string[]} Merged exclude list.
+ */
+function mergeTwigRuntimeOptimizeDepsExcludes(...excludeLists) {
+  return Array.from(
+    new Set([
+      ...excludeLists.flatMap((excludeList) =>
+        Array.isArray(excludeList) ? excludeList : [],
+      ),
+      ...twigRuntimeOptimizeDepsExclude,
+    ]),
+  );
+}
+
+/**
+ * Keep Emulsify Twig virtual imports out of Storybook dependency prebundles.
+ *
+ * @returns {import('esbuild').Plugin} Esbuild plugin for optimizeDeps.
+ */
+function makeTwigVirtualModuleOptimizerPlugin() {
+  return {
+    name: 'emulsify-twig-virtual-modules',
+    setup(build) {
+      build.onResolve(
+        { filter: /^virtual:emulsify-twig-(?:globs|asset-sources)$/ },
+        (args) => ({
+          path: args.path,
+          external: true,
+        }),
+      );
+    },
+  };
 }
 
 /**
@@ -482,9 +535,18 @@ const baseConfig = {
         ...(baseViteConfig?.optimizeDeps || {}),
         ...(config?.optimizeDeps || {}),
         include: optimizeDepsInclude,
+        exclude: mergeTwigRuntimeOptimizeDepsExcludes(
+          baseViteConfig?.optimizeDeps?.exclude,
+          config?.optimizeDeps?.exclude,
+        ),
         esbuildOptions: {
           ...(baseViteConfig?.optimizeDeps?.esbuildOptions || {}),
           ...(config?.optimizeDeps?.esbuildOptions || {}),
+          plugins: [
+            ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.plugins || []),
+            ...(config?.optimizeDeps?.esbuildOptions?.plugins || []),
+            makeTwigVirtualModuleOptimizerPlugin(),
+          ],
           loader: {
             ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.loader || {}),
             ...(config?.optimizeDeps?.esbuildOptions?.loader || {}),
@@ -503,6 +565,9 @@ const baseConfig = {
         ...(mergedConfig.optimizeDeps || {}),
         include: mergeReactSingletonOptimizeDeps(
           mergedConfig.optimizeDeps?.include,
+        ),
+        exclude: mergeTwigRuntimeOptimizeDepsExcludes(
+          mergedConfig.optimizeDeps?.exclude,
         ),
         esbuildOptions: {
           ...(mergedConfig.optimizeDeps?.esbuildOptions || {}),

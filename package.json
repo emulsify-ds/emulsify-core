@@ -106,6 +106,7 @@
     "src/storybook/twig/setup.js",
     "src/storybook/twig/source-events.js",
     "src/storybook/twig/source-extensions.js",
+    "src/storybook/twig/source-function.js",
     "src/storybook/twig/source.js"
   ],
   "exports": {
@@ -115,6 +116,7 @@
     "./extensions/twig": "./src/extensions/twig/index.js",
     "./storybook": "./src/storybook/index.js",
     "./storybook/twig/include-function": "./src/storybook/twig/include-function.js",
+    "./storybook/twig/source-function": "./src/storybook/twig/source-function.js",
     "./storybook/twig/source": "./src/storybook/twig/source.js",
     "./vite": "./config/vite/vite.config.js",
     "./vite/plugins": "./config/vite/plugins.js",

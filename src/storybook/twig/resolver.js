@@ -267,7 +267,25 @@ export function createTwigResolver({
   };
 }
 
-const defaultResolver = createTwigResolver();
+let defaultResolver;
+
+/**
+ * Lazily create the default resolver after virtual Twig glob bindings settle.
+ *
+ * The virtual Twig glob module eagerly imports compiled Twig modules. Those
+ * modules register source(), which imports this resolver while the virtual glob
+ * module may still be initializing. Deferring the default resolver avoids
+ * reading virtual module bindings during that circular module setup.
+ *
+ * @returns {ReturnType<typeof createTwigResolver>} Default Twig resolver.
+ */
+function getDefaultResolver() {
+  if (!defaultResolver) {
+    defaultResolver = createTwigResolver();
+  }
+
+  return defaultResolver;
+}
 
 /**
  * Resolve a template identifier to a compiled Twig render function.
@@ -276,7 +294,7 @@ const defaultResolver = createTwigResolver();
  * @returns {Function|undefined} Render function when available.
  */
 export default function resolveTemplate(name) {
-  return defaultResolver.resolveTemplate(name);
+  return getDefaultResolver().resolveTemplate(name);
 }
 
 /**
@@ -290,11 +308,11 @@ export default function resolveTemplate(name) {
  * @returns {string|undefined} Raw Twig source when available.
  */
 export function resolveTemplateSource(name) {
-  return defaultResolver.resolveTemplateSource(name);
+  return getDefaultResolver().resolveTemplateSource(name);
 }
 
 resolveTemplateSource.isTemplateSourceLoading = (name) =>
-  defaultResolver.isTemplateSourceLoading(name);
+  getDefaultResolver().isTemplateSourceLoading(name);
 
 resolveTemplateSource.whenTemplateSourceLoaded = (name) =>
-  defaultResolver.whenTemplateSourceLoaded(name);
+  getDefaultResolver().whenTemplateSourceLoaded(name);

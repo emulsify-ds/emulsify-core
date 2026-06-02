@@ -46,6 +46,10 @@ describe('Storybook main config', () => {
       console.log(JSON.stringify({
         dedupe: finalConfig.resolve.dedupe,
         include: finalConfig.optimizeDeps.include,
+        exclude: finalConfig.optimizeDeps.exclude,
+        esbuildPluginNames: finalConfig.optimizeDeps.esbuildOptions.plugins.map(
+          (plugin) => plugin.name,
+        ),
       }));
     `;
     const output = execFileSync(process.execPath, [
@@ -71,5 +75,15 @@ describe('Storybook main config', () => {
       'react/jsx-runtime',
       'react/jsx-dev-runtime',
     ]);
+    expect(finalConfig.exclude).toEqual([
+      'virtual:emulsify-twig-globs',
+      'virtual:emulsify-twig-asset-sources',
+      '@emulsify/core/storybook/twig/source-function',
+      '@emulsify/core/storybook/twig/source',
+      '@emulsify/core/storybook/twig/resolver',
+    ]);
+    expect(finalConfig.esbuildPluginNames).toContain(
+      'emulsify-twig-virtual-modules',
+    );
   });
 });

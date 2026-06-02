@@ -33,6 +33,7 @@ const templateReferenceTokenTypes = [
 ];
 
 const includeFunctionName = 'include';
+const sourceFunctionName = 'source';
 const expressionTokenTypes = {
   arrayEnd: 'Twig.expression.type.array.end',
   arrayStart: 'Twig.expression.type.array.start',
@@ -58,7 +59,7 @@ const expressionClosingTokenTypes = new Set([
 /**
  * Cache compiled Twig templates by absolute path for the life of one build.
  *
- * @type {Map<string, { mtimeMs: number, compiled: { code: string, includes: string[], templateId: string, templateParams: object } }>}
+ * @type {Map<string, { mtimeMs: number, compiled: { code: string, includes: string[], sourceReferences: string[], templateId: string, templateParams: object } }>}
  */
 const compileCache = new Map();
 
@@ -194,19 +195,73 @@ const collectIncludeFunctionArgumentReferences = (params = []) => {
 };
 
 /**
+ * Collect static template references from a source() function token.
+ *
+ * Dynamic values are left for runtime asset resolution. Literal template
+ * references are embedded into generated Twig modules as raw source strings.
+ *
+ * @param {Array} [params=[]] - Twig source() function token parameters.
+ * @returns {string[]} Static template references.
+ */
+const collectSourceFunctionArgumentReferences = (params = []) => {
+  const argumentTokens = firstFunctionArgumentTokens(params);
+  const firstToken = argumentTokens[0];
+
+  return firstToken?.type === expressionTokenTypes.string
+    ? [firstToken.value].filter(Boolean)
+    : [];
+};
+
+/**
+ * Extract static references from Twig expression function calls.
+ *
+ * @param {Array} [tokens=[]] - Twig expression token list.
+ * @param {string} functionName - Twig function name.
+ * @param {Function} collectArgumentReferences - Function argument collector.
+ * @returns {string[]} Static function argument references.
+ */
+const collectFunctionReferences = (
+  tokens = [],
+  functionName,
+  collectArgumentReferences,
+) =>
+  tokens.flatMap((token) => [
+    ...(token.type === expressionTokenTypes.function &&
+    token.fn === functionName
+      ? collectArgumentReferences(token.params || [])
+      : []),
+    ...collectFunctionReferences(
+      token.params || [],
+      functionName,
+      collectArgumentReferences,
+    ),
+  ]);
+
+/**
  * Extract include() references from Twig expression tokens.
  *
  * @param {Array} [tokens=[]] - Twig expression token list.
  * @returns {string[]} Static include() template references.
  */
 const collectIncludeFunctionReferences = (tokens = []) =>
-  tokens.flatMap((token) => [
-    ...(token.type === expressionTokenTypes.function &&
-    token.fn === includeFunctionName
-      ? collectIncludeFunctionArgumentReferences(token.params || [])
-      : []),
-    ...collectIncludeFunctionReferences(token.params || []),
-  ]);
+  collectFunctionReferences(
+    tokens,
+    includeFunctionName,
+    collectIncludeFunctionArgumentReferences,
+  );
+
+/**
+ * Extract source() references from Twig expression tokens.
+ *
+ * @param {Array} [tokens=[]] - Twig expression token list.
+ * @returns {string[]} Static source() template references.
+ */
+const collectSourceFunctionReferences = (tokens = []) =>
+  collectFunctionReferences(
+    tokens,
+    sourceFunctionName,
+    collectSourceFunctionArgumentReferences,
+  );
 
 /**
  * Extract referenced Twig templates from compiled Twig token trees.
@@ -225,6 +280,19 @@ const collectStaticTemplateReferences = (tokens = []) => [
   ...tokens.flatMap((token) => collectIncludeFunctionReferences(token.stack)),
   ...tokens.flatMap((token) =>
     collectStaticTemplateReferences(token.token?.output || []),
+  ),
+];
+
+/**
+ * Extract raw source template references from compiled Twig token trees.
+ *
+ * @param {Array} [tokens=[]] - Twig token tree.
+ * @returns {string[]} Referenced Twig source paths.
+ */
+const collectStaticSourceReferences = (tokens = []) => [
+  ...tokens.flatMap((token) => collectSourceFunctionReferences(token.stack)),
+  ...tokens.flatMap((token) =>
+    collectStaticSourceReferences(token.token?.output || []),
   ),
 ];
 
@@ -630,7 +698,7 @@ const invalidateKnownResolutionCacheEntries = (filePath) => {
  * @param {string} filePath - Absolute template file path.
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
  * @param {typeof compileCache} [cache=compileCache] - Shared compile cache.
- * @returns {{ code: string, includes: string[] }} Compiled template code and references.
+ * @returns {{ code: string, includes: string[], sourceReferences: string[] }} Compiled template code and references.
  */
 const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   const absoluteFilePath = resolve(filePath);
@@ -663,6 +731,9 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   const includes = unique(
     collectStaticTemplateReferences(template.tokens).filter(Boolean),
   );
+  const sourceReferences = unique(
+    collectStaticSourceReferences(template.tokens).filter(Boolean),
+  );
   const runtimeTokens = rewriteTemplateReferencesToIds(
     template.tokens,
     absoluteFilePath,
@@ -678,6 +749,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   const compiled = {
     code: makeTemplateInstantiationCode(templateId, templateParams),
     includes,
+    sourceReferences,
     templateId,
     templateParams,
   };
@@ -963,6 +1035,49 @@ export function emulsifyTwigModulePlugin(options) {
         }
       };
 
+      /**
+       * Emit raw Twig source registrations for static source() references.
+       *
+       * @param {string} fromFilePath - Absolute file that contains the reference.
+       * @param {ReturnType<typeof compileTwigTemplate>} compiledTemplate - Compiled template metadata.
+       * @returns {string[]} Generated source map registration statements.
+       */
+      const makeSourceTemplateRegistrations = (
+        fromFilePath,
+        compiledTemplate,
+      ) =>
+        (compiledTemplate.sourceReferences || []).flatMap((reference) => {
+          if (
+            reference.startsWith('@assets/') ||
+            reference.startsWith('assets/')
+          ) {
+            return [];
+          }
+
+          const sourcePath = resolveTwigTemplate(
+            reference,
+            dirname(fromFilePath),
+            options,
+          );
+          if (!sourcePath) return [];
+
+          const absoluteSourcePath = resolve(sourcePath);
+          addDependencyImporter(absoluteSourcePath, sourceFilePath);
+          this.addWatchFile(absoluteSourcePath);
+          // eslint-disable-next-line security/detect-non-literal-fs-filename
+          const sourceText = fs.readFileSync(absoluteSourcePath, 'utf8');
+
+          return unique([
+            reference,
+            templateIdForPath(absoluteSourcePath, options),
+          ]).map(
+            (key) =>
+              `__emulsifySourceTemplates.set(${JSON.stringify(
+                key,
+              )}, ${JSON.stringify(sourceText)});`,
+          );
+        });
+
       try {
         const compiled = compileTwigTemplate(
           sourceFilePath,
@@ -1015,6 +1130,16 @@ export function emulsifyTwigModulePlugin(options) {
               )}, (context = {}) => __emulsifyTemplate.render(context));`,
           ),
         ].join('\n');
+        const sourceTemplateRegistrations = [
+          ...dependencyTemplateRecords.flatMap(
+            ({ dependencyPath, compiledDependency }) =>
+              makeSourceTemplateRegistrations(
+                dependencyPath,
+                compiledDependency,
+              ),
+          ),
+          ...makeSourceTemplateRegistrations(sourceFilePath, compiled),
+        ].join('\n');
         const renderErrorPrefix = JSON.stringify(
           `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
         );
@@ -1022,19 +1147,23 @@ export function emulsifyTwigModulePlugin(options) {
           import { factory } from 'twig';
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
           import { createTwigIncludeFunction } from '@emulsify/core/storybook/twig/include-function';
-          import twigSource from '@emulsify/core/storybook/twig/source';
+          import { createTwigSourceFunction } from '@emulsify/core/storybook/twig/source-function';
 
           const Twig = factory();
           registerTwigExtensions(Twig);
-          twigSource(Twig);
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};
           const __emulsifyIncludeTemplates = new Map();
+          const __emulsifySourceTemplates = new Map();
           ${includeTemplateRegistrations}
+          ${sourceTemplateRegistrations}
           const __emulsifyResolveInclude = (templateName) =>
             __emulsifyIncludeTemplates.get(templateName);
+          const __emulsifyResolveSource = (templateName) =>
+            __emulsifySourceTemplates.get(templateName);
           Twig.extendFunction('include', createTwigIncludeFunction(__emulsifyResolveInclude));
+          Twig.extendFunction('source', createTwigSourceFunction(__emulsifyResolveSource));
 
           export default (context = {}) => {
             try {
