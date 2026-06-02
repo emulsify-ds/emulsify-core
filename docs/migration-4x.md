@@ -210,22 +210,50 @@ See [Extension Points](extension-points.md) for Vite plugins, Tailwind CSS, Stor
 
 ## CSS Asset URLs
 
-Vite resolves `url(...)` values relative to the stylesheet it is compiling.
-When a stylesheet points outside the normalized Emulsify source roots, Vite may
-leave the URL unchanged and print a message such as:
+Use project-root `/assets/...` URLs for fonts, SVGs, background images, and
+other static files that live in root `assets/`.
 
-```text
-../../../assets/fonts/Avenir-Regular.woff2 referenced in ../../../assets/fonts/Avenir-Regular.woff2 didn't resolve at build time, it will remain unchanged to be resolved at runtime
+```scss
+$font-url: '/assets/fonts/example';
+
+@font-face {
+  font-family: 'Example Sans';
+  src: url('#{$font-url}/Example-Regular.woff2') format('woff2');
+}
+
+.icon {
+  background-image: url('/assets/icons/arrow.svg');
+}
 ```
 
-That can be intentional in Drupal projects when the URL points at a theme asset
-that Drupal serves directly. Verify that the unchanged URL is valid from the
-compiled CSS file in `dist/` or mirrored `components/` output.
+Storybook serves root `./assets` at `/assets`. During the Vite build, Emulsify
+rewrites CSS `url('/assets/...')` and `url('assets/...')` references to paths
+relative to the emitted CSS file, so the same authored Sass can work in
+Storybook and built platform CSS.
+
+Avoid hard-coded platform or deployment paths in Sass. They may work in a single
+runtime, but they bypass Storybook's static asset mount and make components
+harder to reuse.
+
+Vite also resolves ordinary relative `url(...)` values relative to the
+stylesheet it is compiling. When a stylesheet points outside the normalized
+Emulsify source roots, Vite may leave the URL unchanged and print a message such
+as:
+
+```text
+../../../assets/fonts/Example-Regular.woff2 referenced in ../../../assets/fonts/Example-Regular.woff2 didn't resolve at build time, it will remain unchanged to be resolved at runtime
+```
+
+That can be intentional when the URL points at an asset the runtime serves
+directly. Verify that the unchanged URL is valid from the compiled CSS file in
+`dist/` or mirrored `components/` output.
 
 To make Vite resolve and rebase the asset at build time, keep the asset under a
-normalized source root and reference it relative to the authored stylesheet. If
-the asset must remain in a project-level `assets/` directory, use a stable
-runtime URL or add a project Vite extension that copies/rewrites the asset path.
+normalized source root and reference it relative to the authored stylesheet, or
+keep it under project root `assets/` and use `/assets/...`.
+
+See [Asset References](asset-references.md) for Sass/CSS and Twig examples,
+including inline SVGs through `source('@assets/...')`.
 
 ## Upgrade Checklist
 

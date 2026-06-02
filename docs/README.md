@@ -8,6 +8,7 @@ These docs expand on the short project README and are organized by the task a pr
 | [Component Authoring](component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
 | [Storybook](storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
 | [Project Structure And Output](project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
+| [Asset References](asset-references.md)              | Referencing fonts, SVGs, images, and other files from project root `assets/` in Sass, CSS, and Twig.                  |
 | [Platform Adapters](platform-adapters.md)            | Understanding `generic`, `drupal`, platform resolution order, and Drupal SDC behavior.                                |
 | [Extension Points](extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
 | [Performance](performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
