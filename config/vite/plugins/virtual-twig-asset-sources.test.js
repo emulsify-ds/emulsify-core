@@ -2,13 +2,14 @@
  * @file Tests for the Twig text asset source virtual module plugin.
  */
 
-import { mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   assetSourceGlobPatterns,
   generateVirtualTwigAssetSourcesModule,
   generatedAssetSourceRoots,
+  publicAssetSourceEntries,
   VIRTUAL_TWIG_ASSET_SOURCES_ID,
   virtualTwigAssetSourcesPlugin,
 } from './virtual-twig-asset-sources.js';
@@ -42,6 +43,8 @@ describe('virtual Twig asset source module plugin', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'src/assets'), { recursive: true });
     mkdirSync(join(projectDir, 'assets'), { recursive: true });
+    mkdirSync(join(projectDir, 'assets/icons'), { recursive: true });
+    writeFileSync(join(projectDir, 'assets/icons/arrow.svg'), '<svg></svg>');
     const env = { projectDir, projectStructure: {} };
     const source = generateVirtualTwigAssetSourcesModule(env);
 
@@ -61,6 +64,15 @@ describe('virtual Twig asset source module plugin', () => {
     expect(source).not.toContain('{ eager: true');
     expect(source).toContain('export const assetRootPrefixes =');
     expect(source).toContain('export const generatedAssetRootPrefixes =');
+    expect(publicAssetSourceEntries(env)).toEqual([
+      {
+        key: '/assets/icons/arrow.svg',
+        url: '/assets/icons/arrow.svg',
+      },
+    ]);
+    expect(source).toContain(
+      '"/assets/icons/arrow.svg": fetchAssetText("/assets/icons/arrow.svg")',
+    );
     expect(source).toContain('export const getAssetText =');
   });
 
@@ -68,6 +80,7 @@ describe('virtual Twig asset source module plugin', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'assets'), { recursive: true });
     mkdirSync(join(projectDir, 'dist/assets'), { recursive: true });
+    writeFileSync(join(projectDir, 'dist/assets/icons.svg'), '<svg></svg>');
     const env = { projectDir, projectStructure: {} };
     const source = generateVirtualTwigAssetSourcesModule(env);
 
@@ -78,6 +91,15 @@ describe('virtual Twig asset source module plugin', () => {
     ]);
     expect(source).toContain(
       'export const generatedAssetAliases = ["icons.svg"];',
+    );
+    expect(publicAssetSourceEntries(env)).toEqual([
+      {
+        key: '/dist/assets/icons.svg',
+        url: '/assets/icons.svg',
+      },
+    ]);
+    expect(source).toContain(
+      '"/dist/assets/icons.svg": fetchAssetText("/assets/icons.svg")',
     );
   });
 

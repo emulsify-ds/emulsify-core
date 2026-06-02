@@ -234,6 +234,8 @@ The first text source call lazy-loads the raw text and triggers a re-render; lat
 
 Raster image assets still produce image markup. Font files and other binary assets return a public URL under `/assets/...`. Storybook serves root `./assets` at that URL prefix, so files such as `assets/images/example.png` and `assets/fonts/example.woff2` can be referenced with `source('@assets/images/example.png')` and `source('@assets/fonts/example.woff2')`.
 
+Legacy stories that use `require.context()` to list static assets are converted to a static key list for common asset extensions. This lets stories enumerate files such as `assets/icons/*.svg` without loading those SVGs as JavaScript modules.
+
 The old synchronous XHR fallback for text assets is disabled by default because it blocks Storybook rendering. It remains available for one release cycle only for assets outside the virtual asset roots:
 
 ```js
