@@ -8,7 +8,7 @@ import { join } from 'path';
 import Twig from 'twig';
 
 import { registerTwigExtensions } from '../../../src/extensions/twig/index.js';
-import { setupTwig } from '../../../src/storybook/twig/setup.js';
+import { createTwigIncludeFunction } from '../../../src/storybook/twig/include-function.js';
 
 /**
  * Create an isolated temporary project directory for plugin tests.
@@ -114,7 +114,7 @@ export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
       '',
     )
     .replace(
-      /^\s*import \{ setupTwig \} from '@emulsify\/core\/storybook\/twig\/setup';\s*/m,
+      /^\s*import \{ createTwigIncludeFunction \} from '@emulsify\/core\/storybook\/twig\/include-function';\s*/m,
       '',
     )
     .replace(
@@ -124,12 +124,12 @@ export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
   const render = new Function(
     'factory',
     'registerTwigExtensions',
-    'setupTwig',
+    'createTwigIncludeFunction',
     executable,
   )(
     generatedTwigFactory(runtimeTwigOrOptions),
     registerTwigExtensions,
-    setupTwig,
+    createTwigIncludeFunction,
   );
 
   return render;

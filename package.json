@@ -99,6 +99,7 @@
     "src/storybook/platform-behaviors.js",
     "src/storybook/preview-parameters.js",
     "src/storybook/render-twig.js",
+    "src/storybook/twig/include-function.js",
     "src/storybook/twig/include.js",
     "src/storybook/twig/reference-paths.js",
     "src/storybook/twig/resolver.js",
@@ -113,7 +114,7 @@
     "./extensions/react": "./src/extensions/react/index.js",
     "./extensions/twig": "./src/extensions/twig/index.js",
     "./storybook": "./src/storybook/index.js",
-    "./storybook/twig/setup": "./src/storybook/twig/setup.js",
+    "./storybook/twig/include-function": "./src/storybook/twig/include-function.js",
     "./vite": "./config/vite/vite.config.js",
     "./vite/plugins": "./config/vite/plugins.js",
     "./package.json": "./package.json"

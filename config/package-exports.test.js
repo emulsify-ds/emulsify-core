@@ -118,6 +118,10 @@ describe('@emulsify/core package exports', () => {
         '@emulsify/core/storybook',
         ['renderHtmlStoryResult', 'renderTwig', 'TwigHtmlStory', 'TwigStory'],
       ],
+      [
+        '@emulsify/core/storybook/twig/include-function',
+        ['createTwigIncludeFunction'],
+      ],
       ['@emulsify/core/vite', ['default']],
       [
         '@emulsify/core/vite/plugins',

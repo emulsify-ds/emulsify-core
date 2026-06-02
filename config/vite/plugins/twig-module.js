@@ -32,6 +32,29 @@ const templateReferenceTokenTypes = [
   'Twig.logic.type.include',
 ];
 
+const includeFunctionName = 'include';
+const expressionTokenTypes = {
+  arrayEnd: 'Twig.expression.type.array.end',
+  arrayStart: 'Twig.expression.type.array.start',
+  comma: 'Twig.expression.type.comma',
+  function: 'Twig.expression.type._function',
+  objectEnd: 'Twig.expression.type.object.end',
+  objectStart: 'Twig.expression.type.object.start',
+  parameterEnd: 'Twig.expression.type.parameter.end',
+  parameterStart: 'Twig.expression.type.parameter.start',
+  string: 'Twig.expression.type.string',
+};
+const expressionOpeningTokenTypes = new Set([
+  expressionTokenTypes.arrayStart,
+  expressionTokenTypes.objectStart,
+  expressionTokenTypes.parameterStart,
+]);
+const expressionClosingTokenTypes = new Set([
+  expressionTokenTypes.arrayEnd,
+  expressionTokenTypes.objectEnd,
+  expressionTokenTypes.parameterEnd,
+]);
+
 /**
  * Cache compiled Twig templates by absolute path for the life of one build.
  *
@@ -100,6 +123,92 @@ const isTwigModuleRequest = (id) => {
 const stripRequestQuery = (id) => id.split('?')[0];
 
 /**
+ * Extract the first argument from a Twig function token parameter list.
+ *
+ * Twig.js represents function arguments as flat expression tokens. Tracking
+ * nested delimiters keeps commas inside array or object literals from ending
+ * the first argument too early.
+ *
+ * @param {Array} [params=[]] - Twig function token parameters.
+ * @returns {Array} Expression tokens for the first argument.
+ */
+const firstFunctionArgumentTokens = (params = []) => {
+  const argumentTokens = [];
+  let functionStarted = false;
+  let nestedDepth = 0;
+
+  for (const token of params) {
+    if (!functionStarted) {
+      if (token.type === expressionTokenTypes.parameterStart) {
+        functionStarted = true;
+      }
+      continue;
+    }
+
+    if (token.type === expressionTokenTypes.comma && nestedDepth === 0) {
+      break;
+    }
+    if (token.type === expressionTokenTypes.parameterEnd && nestedDepth === 0) {
+      break;
+    }
+
+    argumentTokens.push(token);
+
+    if (expressionOpeningTokenTypes.has(token.type)) {
+      nestedDepth += 1;
+    } else if (expressionClosingTokenTypes.has(token.type)) {
+      nestedDepth = Math.max(0, nestedDepth - 1);
+    }
+  }
+
+  return argumentTokens;
+};
+
+/**
+ * Collect static template references from an include() function token.
+ *
+ * The first argument can be a literal template name or an array of literal
+ * candidates. Dynamic values are left alone and will resolve at runtime only
+ * if a resolver knows how to handle them.
+ *
+ * @param {Array} [params=[]] - Twig include() function token parameters.
+ * @returns {string[]} Static template references.
+ */
+const collectIncludeFunctionArgumentReferences = (params = []) => {
+  const argumentTokens = firstFunctionArgumentTokens(params);
+  const firstToken = argumentTokens[0];
+  if (!firstToken) return [];
+
+  if (firstToken.type === expressionTokenTypes.string) {
+    return [firstToken.value].filter(Boolean);
+  }
+
+  if (firstToken.type !== expressionTokenTypes.arrayStart) {
+    return [];
+  }
+
+  return argumentTokens
+    .filter((token) => token.type === expressionTokenTypes.string)
+    .map((token) => token.value)
+    .filter(Boolean);
+};
+
+/**
+ * Extract include() references from Twig expression tokens.
+ *
+ * @param {Array} [tokens=[]] - Twig expression token list.
+ * @returns {string[]} Static include() template references.
+ */
+const collectIncludeFunctionReferences = (tokens = []) =>
+  tokens.flatMap((token) => [
+    ...(token.type === expressionTokenTypes.function &&
+    token.fn === includeFunctionName
+      ? collectIncludeFunctionArgumentReferences(token.params || [])
+      : []),
+    ...collectIncludeFunctionReferences(token.params || []),
+  ]);
+
+/**
  * Extract referenced Twig templates from compiled Twig token trees.
  *
  * @param {Array} [tokens=[]] - Twig token tree.
@@ -113,6 +222,7 @@ const collectStaticTemplateReferences = (tokens = []) => [
         .map((stack) => stack.value)
         .filter((value) => typeof value === 'string'),
     ),
+  ...tokens.flatMap((token) => collectIncludeFunctionReferences(token.stack)),
   ...tokens.flatMap((token) =>
     collectStaticTemplateReferences(token.token?.output || []),
   ),
@@ -282,23 +392,36 @@ const rewriteTemplateReferencesToIds = (tokens = [], fromFilePath, options) =>
  *
  * @param {string} templatePath - Template reference from Twig source.
  * @param {Record<string, string>} [namespaces={}] - Namespace root map.
- * @returns {{ root: string, path: string }|null} Namespace lookup result.
+ * @returns {{ namespace: string, root: string, path: string }|null}
+ *   Namespace lookup result.
  */
 const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
   const namespaceNames = Object.keys(namespaces);
   const atNamespace = templatePath.match(/^@([^/]+)\/(.+)$/);
   if (atNamespace && namespaces[atNamespace[1]]) {
-    return { root: namespaces[atNamespace[1]], path: atNamespace[2] };
+    return {
+      namespace: atNamespace[1],
+      root: namespaces[atNamespace[1]],
+      path: atNamespace[2],
+    };
   }
 
   const doubleColon = templatePath.match(/^([^:]+)::(.+)$/);
   if (doubleColon && namespaces[doubleColon[1]]) {
-    return { root: namespaces[doubleColon[1]], path: doubleColon[2] };
+    return {
+      namespace: doubleColon[1],
+      root: namespaces[doubleColon[1]],
+      path: doubleColon[2],
+    };
   }
 
   const singleColon = templatePath.match(/^([^:/.]+):(.+)$/);
   if (singleColon && namespaces[singleColon[1]]) {
-    return { root: namespaces[singleColon[1]], path: singleColon[2] };
+    return {
+      namespace: singleColon[1],
+      root: namespaces[singleColon[1]],
+      path: singleColon[2],
+    };
   }
 
   const slashNamespace = namespaceNames.find((namespace) =>
@@ -306,6 +429,9 @@ const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
   );
   if (slashNamespace) {
     return {
+      namespace: slashNamespace,
+      // Namespace names come from the normalized Twig namespace map.
+      // eslint-disable-next-line security/detect-object-injection
       root: namespaces[slashNamespace],
       path: templatePath.slice(slashNamespace.length + 1),
     };
@@ -313,6 +439,44 @@ const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
 
   return null;
 };
+
+/**
+ * Return immediate directory roots that may group component folders.
+ *
+ * @param {string} componentRoot - Absolute component root path.
+ * @returns {string[]} Absolute grouping directory paths.
+ */
+const componentGroupRoots = (componentRoot) => {
+  if (!componentRoot) return [];
+
+  try {
+    // Component group roots come from a configured project directory.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
+    return fs
+      .readdirSync(componentRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => resolve(componentRoot, entry.name));
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Resolve a component reference through one grouping directory level.
+ *
+ * Drupal SDC IDs use the component machine name (`bcj:button`) even when
+ * projects organize components under grouping directories such as `ui`.
+ *
+ * @param {string} templatePath - Component-relative template reference.
+ * @param {string} componentRoot - Absolute component root path.
+ * @returns {string|null} Existing template path when found.
+ */
+const resolveGroupedComponentTemplate = (templatePath, componentRoot) =>
+  findExistingTemplateFile(
+    componentGroupRoots(componentRoot).flatMap((groupRoot) =>
+      buildTemplateFileCandidates(groupRoot, templatePath),
+    ),
+  ) || null;
 
 /**
  * Resolve shorthand component references against the components namespace.
@@ -340,8 +504,12 @@ const resolveComponentShorthandReference = (templatePath, componentRoot) => {
     return null;
   }
 
-  return findExistingTemplateFile(
-    buildTemplateFileCandidates(componentRoot, genericNamespace[1]),
+  const genericComponentPath = genericNamespace[1];
+
+  return (
+    findExistingTemplateFile(
+      buildTemplateFileCandidates(componentRoot, genericComponentPath),
+    ) || resolveGroupedComponentTemplate(genericComponentPath, componentRoot)
   );
 };
 
@@ -376,9 +544,21 @@ const resolveTwigTemplateWithoutCache = (templatePath, fromDir, options) => {
     options.namespaces,
   );
   if (namespaced) {
-    return findExistingTemplateFile(
+    const namespacedTemplate = findExistingTemplateFile(
       buildTemplateFileCandidates(namespaced.root, namespaced.path),
     );
+    if (namespacedTemplate) {
+      return namespacedTemplate;
+    }
+
+    if (namespaced.namespace === 'components') {
+      return resolveGroupedComponentTemplate(
+        namespaced.path,
+        options.namespaces?.components,
+      );
+    }
+
+    return null;
   }
 
   const relativeTemplate = findExistingTemplateFile([
@@ -703,9 +883,34 @@ export function emulsifyTwigModulePlugin(options) {
       }
 
       const filePath = stripRequestQuery(id);
+      const sourceFilePath = resolve(filePath);
       /** @type {Map<string, ReturnType<typeof compileTwigTemplate>>} */
       const compiledDependencyTemplates = new Map();
-      clearDependencyImporter(filePath);
+      /** @type {Map<string, Set<string>>} */
+      const compiledDependencyReferences = new Map();
+      clearDependencyImporter(sourceFilePath);
+
+      /**
+       * Record one raw Twig reference against its resolved template file.
+       *
+       * include() function calls are not rewritten to template IDs, so the
+       * generated runtime resolver needs the original strings as lookup keys.
+       *
+       * @param {string} dependencyPath - Absolute resolved dependency path.
+       * @param {string} templateReference - Raw reference found in Twig tokens.
+       * @returns {void}
+       */
+      const addCompiledDependencyReference = (
+        dependencyPath,
+        templateReference,
+      ) => {
+        const absoluteDependencyPath = resolve(dependencyPath);
+        const references =
+          compiledDependencyReferences.get(absoluteDependencyPath) || new Set();
+        references.add(templateReference);
+        references.add(templateIdForPath(absoluteDependencyPath, options));
+        compiledDependencyReferences.set(absoluteDependencyPath, references);
+      };
 
       /**
        * Compile the transitive Twig dependencies needed by one imported module.
@@ -731,53 +936,102 @@ export function emulsifyTwigModulePlugin(options) {
             options,
           );
           if (!dependencyPath) continue;
-          if (resolve(dependencyPath) === resolve(filePath)) continue;
+          const absoluteDependencyPath = resolve(dependencyPath);
+          addCompiledDependencyReference(absoluteDependencyPath, templatePath);
+          if (absoluteDependencyPath === sourceFilePath) continue;
 
-          const dependencyTemplate =
-            compiledDependencyTemplates.get(dependencyPath);
+          const dependencyTemplate = compiledDependencyTemplates.get(
+            absoluteDependencyPath,
+          );
           if (dependencyTemplate) continue;
 
-          addDependencyImporter(dependencyPath, filePath);
-          this.addWatchFile(dependencyPath);
+          addDependencyImporter(absoluteDependencyPath, sourceFilePath);
+          this.addWatchFile(absoluteDependencyPath);
 
-          const compiled = compileTwigTemplate(dependencyPath, options, cache);
-          compiledDependencyTemplates.set(dependencyPath, compiled);
-          compileDependencyTemplates(compiled.includes, dependencyPath, cache);
+          const compiled = compileTwigTemplate(
+            absoluteDependencyPath,
+            options,
+            cache,
+          );
+          compiledDependencyTemplates.set(absoluteDependencyPath, compiled);
+          compileDependencyTemplates(
+            compiled.includes,
+            absoluteDependencyPath,
+            cache,
+          );
         }
       };
 
       try {
-        const compiled = compileTwigTemplate(filePath, options, compileCache);
-        compileDependencyTemplates(compiled.includes, filePath, compileCache);
+        const compiled = compileTwigTemplate(
+          sourceFilePath,
+          options,
+          compileCache,
+        );
+        compileDependencyTemplates(
+          compiled.includes,
+          sourceFilePath,
+          compileCache,
+        );
 
-        let dependencyTemplateIndex = 0;
-        const dependencyTemplateCode = Array.from(
-          compiledDependencyTemplates.values(),
+        const dependencyTemplateRecords = Array.from(
+          compiledDependencyTemplates.entries(),
         )
           .reverse()
-          .map((compiledDependency) => {
-            const dependencyVariableName = `__emulsifyDependency${dependencyTemplateIndex}`;
-            dependencyTemplateIndex += 1;
-            return `
-              const ${dependencyVariableName} = ${makeTemplateInstantiationCode(
+          .map(([dependencyPath, compiledDependency], index) => ({
+            dependencyPath,
+            compiledDependency,
+            variableName: `__emulsifyDependency${index}`,
+          }));
+        const dependencyTemplateCode = dependencyTemplateRecords
+          .map(
+            ({ compiledDependency, variableName }) => `
+              const ${variableName} = ${makeTemplateInstantiationCode(
                 compiledDependency.templateId,
                 compiledDependency.templateParams,
               )};
-            `;
-          })
+            `,
+          )
           .join('\n');
+        const includeTemplateRegistrations = [
+          ...dependencyTemplateRecords.flatMap(
+            ({ dependencyPath, variableName }) =>
+              Array.from(
+                compiledDependencyReferences.get(dependencyPath) || [],
+              ).map(
+                (reference) =>
+                  `__emulsifyIncludeTemplates.set(${JSON.stringify(
+                    reference,
+                  )}, (context = {}) => ${variableName}.render(context));`,
+              ),
+          ),
+          ...Array.from(
+            compiledDependencyReferences.get(sourceFilePath) || [],
+          ).map(
+            (reference) =>
+              `__emulsifyIncludeTemplates.set(${JSON.stringify(
+                reference,
+              )}, (context = {}) => __emulsifyTemplate.render(context));`,
+          ),
+        ].join('\n');
         const renderErrorPrefix = JSON.stringify(
           `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
         );
         const moduleCode = `
           import { factory } from 'twig';
-          import { setupTwig } from '@emulsify/core/storybook/twig/setup';
+          import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
+          import { createTwigIncludeFunction } from '@emulsify/core/storybook/twig/include-function';
 
           const Twig = factory();
-          setupTwig(Twig);
+          registerTwigExtensions(Twig);
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};
+          const __emulsifyIncludeTemplates = new Map();
+          ${includeTemplateRegistrations}
+          const __emulsifyResolveInclude = (templateName) =>
+            __emulsifyIncludeTemplates.get(templateName);
+          Twig.extendFunction('include', createTwigIncludeFunction(__emulsifyResolveInclude));
 
           export default (context = {}) => {
             try {

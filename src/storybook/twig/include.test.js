@@ -2,7 +2,7 @@
  * @file Tests for the Storybook Twig include() runtime helper.
  */
 
-import { createTwigIncludeFunction } from './include.js';
+import { createTwigIncludeFunction } from './include-function.js';
 
 describe('Twig include() Storybook helper', () => {
   let consoleError;

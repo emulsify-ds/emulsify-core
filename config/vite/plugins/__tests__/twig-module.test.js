@@ -5,7 +5,6 @@
 import fs from 'fs';
 import { join } from 'path';
 import Twig from 'twig';
-import { modules as virtualTwigModules } from 'virtual:emulsify-twig-globs';
 
 import { resolveProjectConfig } from '../../project-config.js';
 import {
@@ -35,9 +34,6 @@ describe('Twig module plugin', () => {
   afterEach(() => {
     if (projectDir) {
       fs.rmSync(projectDir, { recursive: true, force: true });
-    }
-    for (const key of Object.keys(virtualTwigModules)) {
-      delete virtualTwigModules[key];
     }
     resetTwigOptionCaches();
     jest.restoreAllMocks();
@@ -327,14 +323,18 @@ describe('Twig module plugin', () => {
     const transformed = transformTwigModule(twigPlugin, cardFile);
 
     expect(transformed.code).toMatch(/import \{ factory \} from 'twig';/);
-    expect(transformed.code).toContain('import { setupTwig }');
-    expect(transformed.code).toContain('@emulsify/core/storybook/twig/setup');
+    expect(transformed.code).toMatch(
+      /import \{ registerTwigExtensions \} from '@emulsify\/core\/extensions\/twig';/,
+    );
+    expect(transformed.code).toMatch(
+      /import \{ createTwigIncludeFunction \} from '@emulsify\/core\/storybook\/twig\/include-function';/,
+    );
     expect(transformed.code).toContain('const Twig = factory();');
-    expect(transformed.code).toContain('setupTwig(Twig);');
+    expect(transformed.code).toContain('registerTwigExtensions(Twig);');
+    expect(transformed.code).toMatch(/Twig\.extendFunction\('include'/);
     expect(transformed.code).toContain('const __emulsifyTemplate = Twig.twig(');
     expect(transformed.code).not.toContain('__emulsifyTwigTemplateStore');
     expect(transformed.code).not.toContain('__emulsifyTwigPatchTemplateLoad');
-    expect(transformed.code).not.toContain('Twig.extend');
     expect(transformed.code).not.toContain('globalThis');
   });
 
@@ -390,11 +390,7 @@ describe('Twig module plugin', () => {
     );
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const heading = transformTwigModule(twigPlugin, headingFile);
     const actionsGrid = transformTwigModule(twigPlugin, actionsGridFile);
-
-    virtualTwigModules['/src/components/ui/heading/heading.twig'] =
-      createGeneratedTwigModuleRender(heading.code);
 
     const output = renderGeneratedTwigModule(actionsGrid.code, {
       actions_grid_title: 'Actions Grid Title',
@@ -402,6 +398,56 @@ describe('Twig module plugin', () => {
 
     expect(output).toContain('<h2>Actions Grid Title</h2>');
     expect(output).not.toContain('include function does not exist');
+  });
+
+  it('renders SDC tag includes from grouped component folders', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/ui/card/card.twig');
+    const buttonFile = join(projectDir, 'src/components/ui/button/button.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/ui/card'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/ui/button'), {
+      recursive: true,
+    });
+    fs.writeFileSync(buttonFile, '<button>{{ label }}</button>');
+    fs.writeFileSync(cardFile, '{% include "bcj:button" %}');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code, {
+      label: 'Read more',
+    });
+
+    expect(transformed.code).not.toContain(
+      'An error occurred whilst compiling',
+    );
+    expect(output).toContain('<button>Read more</button>');
+  });
+
+  it('renders @components tag includes from grouped component folders', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/ui/card/card.twig');
+    const buttonFile = join(projectDir, 'src/components/ui/button/button.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/ui/card'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/ui/button'), {
+      recursive: true,
+    });
+    fs.writeFileSync(buttonFile, '<button>{{ label }}</button>');
+    fs.writeFileSync(cardFile, twigInclude('@components/button/button.twig'));
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code, {
+      label: 'Read more',
+    });
+
+    expect(transformed.code).not.toContain(
+      'An error occurred whilst compiling',
+    );
+    expect(output).toContain('<button>Read more</button>');
   });
 
   it('preserves runtime rethrow for precompiled templates', () => {
