@@ -7,6 +7,7 @@ import { join } from 'path';
 import Twig from 'twig';
 
 import { resolveProjectConfig } from '../../project-config.js';
+import twigDrupalFilters from '../../../../src/storybook/twig/drupal-filters.js';
 import {
   emulsifyTwigModulePlugin,
   makeTwigNamespaces,
@@ -332,6 +333,9 @@ describe('Twig module plugin', () => {
       /import \{ registerTwigExtensions \} from '@emulsify\/core\/extensions\/twig';/,
     );
     expect(transformed.code).toMatch(
+      /import \{ registerConfiguredTwigExtensions \} from 'virtual:emulsify-twig-extension-installers';/,
+    );
+    expect(transformed.code).toMatch(
       /import \{ createTwigIncludeFunction \} from '@emulsify\/core\/storybook\/twig\/include-function';/,
     );
     expect(transformed.code).toMatch(
@@ -339,12 +343,46 @@ describe('Twig module plugin', () => {
     );
     expect(transformed.code).toContain('const Twig = factory();');
     expect(transformed.code).toContain('registerTwigExtensions(Twig);');
+    expect(transformed.code).toContain(
+      'registerConfiguredTwigExtensions(Twig);',
+    );
     expect(transformed.code).toMatch(/Twig\.extendFunction\('source'/);
     expect(transformed.code).toMatch(/Twig\.extendFunction\('include'/);
     expect(transformed.code).toContain('const __emulsifyTemplate = Twig.twig(');
     expect(transformed.code).not.toContain('__emulsifyTwigTemplateStore');
     expect(transformed.code).not.toContain('__emulsifyTwigPatchTemplateLoad');
     expect(transformed.code).not.toContain('globalThis');
+  });
+
+  it('compiles and renders configured Drupal-compatible Twig filters', () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), {
+      recursive: true,
+    });
+    fs.writeFileSync(cardFile, '<article>{{ title|clean_id }}</article>');
+
+    const twigPlugin = makeTwigModulePlugin(
+      makeEnv(projectDir, {
+        projectConfig: {
+          storybook: {
+            registerDrupalTwigFilters: true,
+          },
+        },
+      }),
+    );
+    const transformed = transformTwigModule(twigPlugin, cardFile);
+
+    expect(
+      renderGeneratedTwigModule(
+        transformed.code,
+        { title: 'Hello World!' },
+        {
+          factory: () => Twig.factory(),
+          registerConfiguredTwigExtensions: twigDrupalFilters,
+        },
+      ),
+    ).toBe('<article>hello-world</article>');
   });
 
   it('renders updated context through the same generated module instance', () => {

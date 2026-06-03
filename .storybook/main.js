@@ -20,6 +20,7 @@ import {
   mergeReactSingletonOptimizeDeps,
   mergeReactSingletonResolve,
 } from '../config/vite/utils/react-singleton.js';
+import { twigExtensionModuleSpecifiers } from '../config/vite/twig-extensions.js';
 import {
   applyStorybookConfigOverrides,
   normalizeStorybookConfigOverrideModule,
@@ -30,6 +31,7 @@ import {
 const twigVirtualModuleIds = [
   'virtual:emulsify-twig-globs',
   'virtual:emulsify-twig-asset-sources',
+  'virtual:emulsify-twig-extension-installers',
 ];
 
 const twigRuntimeOptimizeDepsExclude = [
@@ -498,9 +500,7 @@ const baseConfig = {
       [
         'twig',
         '@emulsify/core/extensions/twig',
-        ...(env.platformAdapter?.storybook?.registerDrupalTwigFilters
-          ? ['twig-drupal-filters']
-          : []),
+        ...twigExtensionModuleSpecifiers(env),
       ],
     );
 

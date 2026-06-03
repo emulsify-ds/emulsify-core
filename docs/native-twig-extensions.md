@@ -19,6 +19,40 @@ Emulsify Core registers two additional Twig functions for Storybook-rendered Twi
 
 These helpers are Storybook runtime helpers, not native Twig extension exports from `@emulsify/core/extensions/twig`. Core's Storybook and Vite integrations register them automatically when Twig stories or imported Twig modules are rendered.
 
+## Optional Drupal-Compatible Filters
+
+Emulsify Core can register the
+[`twig-drupal-filters`](https://github.com/kalamuna/twig-drupal-filters) package
+for Storybook-rendered Twig. This is useful when templates use Drupal-style
+filters or functions and the project still runs Storybook outside Drupal.
+
+Drupal platform projects enable this automatically through the adapter. Generic
+projects can opt in with `project.emulsify.json`:
+
+```json
+{
+  "storybook": {
+    "registerDrupalTwigFilters": true
+  }
+}
+```
+
+After restarting Storybook, filters such as `clean_class`, `clean_id`, and
+`without` are available to Twig.js:
+
+```twig
+<div class="{{ title|clean_class }}">
+  {{ attributes|without('id') }}
+</div>
+```
+
+The package also provides stubs for Drupal-specific functions such as
+`attach_library()`. Those stubs prevent Storybook compile errors, but they do
+not attach real Drupal libraries or replace Drupal's server-side rendering.
+
+See [Extension Points](extension-points.md#storybook-twigjs-extensions) for the
+configuration details.
+
 ## `bem()`
 
 `bem()` remains backward-compatible with the existing positional API:

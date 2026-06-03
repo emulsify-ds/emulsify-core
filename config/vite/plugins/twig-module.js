@@ -19,6 +19,10 @@ import {
 } from '../../../src/extensions/twig/index.js';
 import { toRootRelativePath } from '../../../src/storybook/twig/reference-paths.js';
 import { resolveProjectStructure } from '../project-structure.js';
+import {
+  registerConfiguredTwigExtensions,
+  shouldRegisterDrupalTwigFilters,
+} from '../twig-extensions.js';
 import { firstExistingPath, safeExists } from '../utils/fs-safe.js';
 import { toPosixPath } from '../utils/paths.js';
 import { unique } from '../utils/unique.js';
@@ -712,6 +716,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
 
   const compilerTwig = Twig.factory();
   registerTwigExtensions(compilerTwig);
+  registerConfiguredTwigExtensions(compilerTwig, options);
 
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   const source = fs.readFileSync(absoluteFilePath, 'utf8');
@@ -869,6 +874,7 @@ export function makeTwigPluginOptions(env) {
     root: root || srcDir || projectDir,
     namespaces: makeTwigNamespaces(env),
     functions: getTwigFunctionMap(),
+    registerDrupalTwigFilters: shouldRegisterDrupalTwigFilters(env),
     // Twig updates are handled by emulsifyTwigModulePlugin.handleHotUpdate.
     // Vituum's full reload would defeat HMR by reloading the whole iframe on
     // every Twig save before module graph invalidation can update the story.
@@ -1146,11 +1152,13 @@ export function emulsifyTwigModulePlugin(options) {
         const moduleCode = `
           import { factory } from 'twig';
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
+          import { registerConfiguredTwigExtensions } from 'virtual:emulsify-twig-extension-installers';
           import { createTwigIncludeFunction } from '@emulsify/core/storybook/twig/include-function';
           import { createTwigSourceFunction } from '@emulsify/core/storybook/twig/source-function';
 
           const Twig = factory();
           registerTwigExtensions(Twig);
+          registerConfiguredTwigExtensions(Twig);
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};

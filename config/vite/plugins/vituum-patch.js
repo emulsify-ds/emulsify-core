@@ -10,6 +10,7 @@ import Twig from 'twig';
 
 import { registerTwigExtensions } from '../../../src/extensions/twig/index.js';
 import { makeTwigPluginOptions } from './twig-module.js';
+import { registerConfiguredTwigExtensions } from '../twig-extensions.js';
 
 const EXPECTED_PLUGIN_NAMES = [
   '@vituum/vite-plugin-core:bundle',
@@ -139,6 +140,7 @@ function stripExpectedHooks(pluginOption) {
  */
 export function makeTwigPlugins(env, options = makeTwigPluginOptions(env)) {
   registerTwigExtensions(Twig);
+  registerConfiguredTwigExtensions(Twig, options);
 
   const twigPlugins = twig(options);
   const normalizedPlugins = Array.isArray(twigPlugins)

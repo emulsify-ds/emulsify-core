@@ -124,9 +124,13 @@ Twig support in Storybook is optional and platform-agnostic. When Twig stories a
 - Native Emulsify Twig logic tags such as `switch`, `case`, `default`, and `endswitch`.
 - Storybook runtime support for `include()` and `source()`.
 - Compiled template dependency support for `{% include %}`, `{% embed %}`, `{% extends %}`, `{% import %}`, and `{% from %}`.
-- Optional platform Twig extensions supplied by the active adapter.
+- Optional platform or project Twig extensions supplied by configuration.
 
-Drupal-specific Twig filters are not part of the generic Twig runtime. They are registered only when the active platform adapter enables them.
+Drupal-compatible Twig filters are not part of the generic Twig runtime by
+default. They are registered when the active platform adapter enables them, or
+when a project sets `storybook.registerDrupalTwigFilters` in
+`project.emulsify.json`. See
+[Storybook Twig.js Extensions](extension-points.md#storybook-twigjs-extensions).
 
 Imported Twig modules are isolated from each other at runtime. Each generated module creates its own Twig.js factory instance, registers Emulsify's Twig extensions, and preloads that module's transitive template dependencies into the local instance. This avoids global Twig template registry collisions without a shared template store or `Twig.Templates` monkey-patches.
 

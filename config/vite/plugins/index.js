@@ -17,6 +17,7 @@ import { mirrorComponentsToRoot } from './mirror-components.js';
 import { requireContextCompatPlugin } from './require-context.js';
 import { createSourceFileIndex } from './source-file-index.js';
 import { svgSpriteFilePlugin } from './svg-sprite.js';
+import { virtualTwigExtensionInstallersPlugin } from './twig-extension-installers.js';
 import {
   emulsifyTwigModulePlugin,
   makeTwigPluginOptions,
@@ -53,6 +54,7 @@ export function makePlugins(env) {
     env.sourceFileIndex || createSourceFileIndex(structure);
 
   const basePlugins = [
+    virtualTwigExtensionInstallersPlugin(envWithStructure),
     virtualTwigGlobsPlugin(envWithStructure),
     virtualTwigAssetSourcesPlugin(envWithStructure),
 

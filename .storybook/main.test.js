@@ -78,6 +78,7 @@ describe('Storybook main config', () => {
     expect(finalConfig.exclude).toEqual([
       'virtual:emulsify-twig-globs',
       'virtual:emulsify-twig-asset-sources',
+      'virtual:emulsify-twig-extension-installers',
       '@emulsify/core/storybook/twig/source-function',
       '@emulsify/core/storybook/twig/source',
       '@emulsify/core/storybook/twig/resolver',

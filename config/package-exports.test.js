@@ -122,6 +122,7 @@ describe('@emulsify/core package exports', () => {
         '@emulsify/core/storybook/twig/include-function',
         ['createTwigIncludeFunction'],
       ],
+      ['@emulsify/core/storybook/twig/drupal-filters', ['default']],
       ['@emulsify/core/vite', ['default']],
       [
         '@emulsify/core/vite/plugins',

@@ -6,6 +6,7 @@ import { getRules } from 'axe-core';
 import React from 'react';
 import { defaultDecorateStory, useEffect } from 'storybook/preview-api';
 import Twig from 'twig';
+import { twigExtensionInstallers } from 'virtual:emulsify-twig-extension-installers';
 import {
   mergePreviewParameters,
   normalizePreviewOverrideModule,
@@ -52,11 +53,8 @@ const platformBehaviorShimReady = platformAdapter.loadDrupalBehaviorShim
   ? import('./_drupal.js')
   : Promise.resolve();
 
-/** @type {Array<Function>} Platform-specific Twig extension installers. */
-const platformTwigExtensions = [];
-if (platformAdapter.registerDrupalTwigFilters) {
-  platformTwigExtensions.push((await import('twig-drupal-filters')).default);
-}
+/** @type {Array<Function>} Configured Twig.js extension installers. */
+const configuredTwigExtensions = twigExtensionInstallers;
 
 /**
  * Filters accessibility rules by matching tags.
@@ -157,5 +155,5 @@ export const parameters = mergePreviewParameters(
 );
 
 // Initialize platform-agnostic Twig helpers and eager-load story CSS.
-setupTwig(Twig, { extensions: platformTwigExtensions });
+setupTwig(Twig, { extensions: configuredTwigExtensions });
 await fetchCSSFiles(parameters);
