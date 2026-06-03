@@ -191,6 +191,8 @@ Emulsify treats `@vituum/vite-plugin-twig` as a pinned integration point. The in
 
 Drupal-specific Storybook behavior comes from the Drupal platform adapter. Generic and unknown platforms do not create or require a Drupal global by default.
 
+For Drupal projects, Storybook initializes a browser compatibility shim with `window.Drupal`, `window.Drupal.behaviors`, `Drupal.t()`, `Drupal.formatString()`, and neutral `window.drupalSettings` defaults. Projects can still add module-specific `drupalSettings` values from `config/emulsify-core/storybook/preview.js`; Emulsify Core merges those values with the defaults when the shim loads.
+
 Drupal SDC mirroring remains supported for Drupal projects that enable `singleDirectoryComponents`.
 
 ## Vite Customization

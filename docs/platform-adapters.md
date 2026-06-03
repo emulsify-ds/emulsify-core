@@ -41,6 +41,7 @@ Use `generic` for standalone Twig libraries, React libraries, mixed Storybook li
 The Drupal adapter owns Drupal-specific behavior:
 
 - Storybook loads the Drupal behavior shim.
+- The shim initializes `window.Drupal`, `window.Drupal.behaviors`, `Drupal.t()`, `Drupal.formatString()`, and neutral `window.drupalSettings` defaults for browser-authored JavaScript.
 - Storybook calls `Drupal.attachBehaviors()` after story render and args updates.
 - Drupal Twig filters are registered by default.
 - Drupal SDC component output can mirror from `dist/components` to root `./components`.
@@ -57,6 +58,19 @@ The Drupal adapter owns Drupal-specific behavior:
 ```
 
 Drupal behavior attachment and Drupal SDC mirroring should not be assumed for generic, React-only, WordPress + Timber, Craft CMS, or other non-Drupal projects.
+
+The Drupal settings shim intentionally includes only cross-project defaults. Projects that need module-specific browser settings can define them in `config/emulsify-core/storybook/preview.js` before stories render:
+
+```js
+window.drupalSettings = {
+  ...(window.drupalSettings || {}),
+  exampleModule: {
+    enabled: true,
+  },
+};
+```
+
+Emulsify Core merges those project settings with its defaults when the Drupal adapter loads the shim, and project-provided values win.
 
 ## Drupal SDC Behavior
 

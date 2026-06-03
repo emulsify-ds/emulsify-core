@@ -184,6 +184,17 @@ export const parameters = {
 
 Preview overrides are loaded in the browser-bundled Storybook preview through Vite-safe imports. They should not rely on CommonJS `require()`.
 
+Drupal projects can use the same preview override to add project-specific browser settings. Emulsify Core's Drupal Storybook shim provides neutral `window.drupalSettings` defaults, then merges existing project-provided values when the shim loads:
+
+```js
+window.drupalSettings = {
+  ...(window.drupalSettings || {}),
+  exampleModule: {
+    apiUrl: '/example-endpoint',
+  },
+};
+```
+
 ## Storybook Twig.js Extensions
 
 Emulsify Core registers its native Twig.js helpers automatically. Some projects
