@@ -59,7 +59,9 @@ The unused imported bindings intentionally prove each documented public package 
 
 ## Semantic-Release Dry Run
 
-The release workflow publishes from `main` with token-based authentication. It provides `GITHUB_TOKEN` and `NPM_TOKEN`, and grants `contents: write` so semantic-release can push tags and create GitHub releases.
+The publish workflow lives at `.github/workflows/publish.yml` and publishes from `main`. It grants `id-token: write` for npm trusted publishing, provides `GITHUB_TOKEN` so semantic-release can push tags and create GitHub releases, and provides `NPM_TOKEN` as the fallback token-based npm authentication path.
+
+When configuring npm trusted publishing for `@emulsify/core`, use `publish.yml` as the GitHub Actions workflow filename.
 
 Before publishing, verify release authentication from a `main` checkout with a dry run:
 
