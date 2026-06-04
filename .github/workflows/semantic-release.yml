@@ -1,7 +1,12 @@
+# Publishes GitHub release metadata when changes land on main.
 name: Semantic Release on Merge
 on:
   push:
     branches: [main]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 jobs:
   release:
     name: Attempt Semantic Release
@@ -14,10 +19,11 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24.x"
+          node-version: '24.x'
       - name: Install
-        run: npm install
+        run: npm ci
       - name: Release
+        # Semantic Release reads commit history and repository tokens from CI.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

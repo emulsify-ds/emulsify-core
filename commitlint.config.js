@@ -1,5 +1,10 @@
+/**
+ * @file Commit message linting configuration.
+ */
+
 const Configuration = {
-  extends: ["@commitlint/config-conventional"],
+  // Conventional commits feed semantic-release versioning.
+  extends: ['@commitlint/config-conventional'],
 };
 
 export default Configuration;

@@ -1,30 +1,60 @@
-// .storybook/preview.js
-import { useEffect } from 'storybook/preview-api';
-import Twig from 'twig';
-import { setupTwig, fetchCSSFiles } from './utils.js';
+/**
+ * @file Storybook preview configuration shared by Emulsify projects.
+ */
+
 import { getRules } from 'axe-core';
+import React from 'react';
+import { defaultDecorateStory, useEffect } from 'storybook/preview-api';
+import Twig from 'twig';
+import { twigExtensionInstallers } from 'virtual:emulsify-twig-extension-installers';
+import {
+  mergePreviewParameters,
+  normalizePreviewOverrideModule,
+} from '../src/storybook/preview-parameters.js';
+import {
+  renderHtmlStoryResult,
+  withLegacyStoryToString,
+} from '../src/storybook/render-twig.js';
+import {
+  attachStorybookBehaviors,
+  fetchCSSFiles,
+  getStorybookPlatformAdapter,
+  setupTwig,
+} from './utils.js';
+
+const previewOverrideModules = import.meta.glob(
+  [
+    // Installed package path: node_modules/@emulsify/core/.storybook -> project root.
+    '../../../../config/emulsify-core/storybook/preview.js',
+    // Local development path: repo .storybook -> repo root.
+    '../config/emulsify-core/storybook/preview.js',
+  ],
+  { eager: true },
+);
+const [previewOverrideModule] = Object.values(previewOverrideModules);
+const externalOverrides = normalizePreviewOverrideModule(previewOverrideModule);
 
 /**
- * External override parameters loaded from project config file, if present.
- * @type {object}
+ * Active platform behavior used by the shared preview decorators.
+ *
+ * @type {ReturnType<typeof getStorybookPlatformAdapter>}
  */
-let externalOverrides;
+const platformAdapter = getStorybookPlatformAdapter();
 
-// Load the preview.js from the project config overrides.
-try {
-  /**
-   * Dynamically require external preview overrides.
-   * @module '../../../../config/emulsify-core/storybook/preview.js'
-   */
-  externalOverrides =
-    require('../../../../config/emulsify-core/storybook/preview.js').default;
-} catch {
-  // no override file? swallow the error and use {}
-  externalOverrides = {};
-}
+/**
+ * Deferred Drupal behavior shim import.
+ *
+ * The decorator awaits this promise when Drupal behaviors are enabled so that
+ * `attachBehaviors()` is available before a story asks for it.
+ *
+ * @type {Promise<*>}
+ */
+const platformBehaviorShimReady = platformAdapter.loadDrupalBehaviorShim
+  ? import('./_drupal.js')
+  : Promise.resolve();
 
-// Import Drupal behaviors for rich JavaScript integration.
-import './_drupal.js';
+/** @type {Array<Function>} Configured Twig.js extension installers. */
+const configuredTwigExtensions = twigExtensionInstallers;
 
 /**
  * Filters accessibility rules by matching tags.
@@ -54,99 +84,48 @@ const AxeRules = enableRulesByTag([
 ]);
 
 /**
- * Cache of rendered story output keyed by story id.
- * Storybook server renderer calls `storyFn()` before `fetchStoryHtml`, so
- * decorators can stash markup here and fetch can read it without re-rendering.
+ * Storybook React wraps story functions in React elements before decorators run.
+ * Preserve that React-safe behavior while giving old stringifying decorators a
+ * useful string result for legacy Twig stories.
  *
- * @type {Map<string, unknown>}
+ * @param {Function} storyFn Storybook story function.
+ * @param {Function[]} decorators Storybook decorators.
+ * @returns {Function} Decorated story function.
  */
-const renderedStoryCache = new Map();
+export const applyDecorators = (storyFn, decorators) =>
+  defaultDecorateStory(
+    (context) =>
+      withLegacyStoryToString(React.createElement(storyFn, context), () =>
+        storyFn(context),
+      ),
+    decorators,
+  );
 
 /**
- * Converts a rendered story return value into an HTML string.
- *
- * @param {unknown} rendered
- *   The rendered story result.
- *
- * @returns {string}
- *   Normalized HTML string.
- */
-function toHtmlString(rendered) {
-  if (typeof rendered === 'string') {
-    return rendered;
-  }
-
-  if (rendered && typeof rendered === 'object') {
-    if (typeof rendered.outerHTML === 'string') {
-      return rendered.outerHTML;
-    }
-    if (typeof rendered.html === 'string') {
-      return rendered.html;
-    }
-  }
-
-  return '';
-}
-
-/**
- * Default server renderer adapter for Storybook 9 server-webpack5.
- * Falls back to local story functions so projects do not need a remote
- * `parameters.server.url` endpoint for basic HTML/Twig stories.
- *
- * @param {string} _url
- *   Unused URL from server parameters.
- * @param {string} _path
- *   Unused story path/id from server parameters.
- * @param {object} _params
- *   Unused merged server params.
- * @param {object} storyContext
- *   Story context from Storybook.
- *
- * @returns {Promise<string>}
- *   Story markup as an HTML string.
- */
-async function fetchStoryHtmlFromStoryContext(
-  _url,
-  _path,
-  _params,
-  storyContext,
-) {
-  const storyId = storyContext?.id || _path;
-  if (!storyId || !renderedStoryCache.has(storyId)) {
-    return '';
-  }
-
-  const rendered = await Promise.resolve(renderedStoryCache.get(storyId));
-  return toHtmlString(rendered);
-}
-
-// Initialize Twig and load any CSS that your stories need.
-setupTwig(Twig);
-fetchCSSFiles();
-
-/**
- * Storybook decorators to apply Drupal behaviors before rendering each story.
- * The HTML renderer still uses the generic Storybook decorator signature.
- * @type {Function[]}
+ * Storybook decorators to apply platform-specific behavior after each story render.
+ * @type {Array<import('@storybook/react').Decorator>}
  */
 export const decorators = [
   /**
-   * Decorator that attaches Drupal behaviors on story mount.
+   * Decorator that attaches platform behavior on story mount and args updates.
+   * Legacy Twig stories that return HTML strings are wrapped so React
+   * Storybook renders them as markup while projects migrate to renderTwig().
+   *
    * @param {Function} Story The story component to render.
    * @param {object} context Story context including args.
-   * @returns {Function} Rendered story.
+   * @returns {*} Rendered story.
    */
-  (Story, context) => {
-    const { args, id } = context;
+  (Story, { args }) => {
     useEffect(() => {
-      Drupal.attachBehaviors();
+      void attachStorybookBehaviors({
+        adapter: platformAdapter,
+        behaviorShimReady: platformBehaviorShimReady,
+      });
     }, [args]);
 
-    const rendered = Story();
-    if (id) {
-      renderedStoryCache.set(id, rendered);
-    }
-    return rendered;
+    return renderHtmlStoryResult(Story({ args }), {
+      platformAdapter,
+    });
   },
 ];
 
@@ -164,18 +143,17 @@ const defaultParams = {
     },
   },
   layout: 'fullscreen',
-  server: {
-    url: '',
-    fetchStoryHtml: fetchStoryHtmlFromStoryContext,
-    params: {},
-  },
 };
 
 /**
  * Merged Storybook parameters including external overrides.
  * @type {object}
  */
-export const parameters = {
-  ...defaultParams,
-  ...externalOverrides,
-};
+export const parameters = mergePreviewParameters(
+  defaultParams,
+  externalOverrides,
+);
+
+// Initialize platform-agnostic Twig helpers and eager-load story CSS.
+setupTwig(Twig, { extensions: configuredTwigExtensions });
+await fetchCSSFiles(parameters);

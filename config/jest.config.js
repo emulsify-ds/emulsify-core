@@ -1,8 +1,30 @@
-module.exports = {
+/**
+ * @file Jest configuration for unit tests and coverage reporting.
+ */
+
+export default {
+  rootDir: '..',
   testEnvironment: 'jsdom',
+  transform: {
+    '^.+\\.m?js$': [
+      'babel-jest',
+      {
+        babelrc: false,
+        configFile: false,
+        presets: [['@babel/preset-env', { targets: { node: 'current' } }]],
+        plugins: ['./config/jest-transform-import-meta-url.js'],
+      },
+    ],
+  },
+  moduleNameMapper: {
+    '^virtual:emulsify-twig-globs$':
+      '<rootDir>/config/vite/test-utils/virtual-twig-globs.js',
+    '^virtual:emulsify-twig-asset-sources$':
+      '<rootDir>/config/vite/test-utils/virtual-twig-asset-sources.js',
+  },
   coverageDirectory: '.coverage',
-  // @TODO: once every file has 100% test coverage,
-  // these thresholds should be updated.
+  coverageProvider: 'v8',
+  // TODO: Raise these thresholds once coverage exists for every maintained file.
   coverageThreshold: {
     global: {
       branches: 0,

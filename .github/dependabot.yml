@@ -1,6 +1,8 @@
+# Keeps npm dependency metadata current for the package root.
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: '/'
+    # Weekly updates reduce churn while keeping dependencies maintained.
     schedule:
       interval: weekly

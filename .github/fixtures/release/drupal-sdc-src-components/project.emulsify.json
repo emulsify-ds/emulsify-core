@@ -1,0 +1,8 @@
+{
+  "project": {
+    "platform": "drupal",
+    "name": "drupal-sdc-src-components",
+    "machineName": "drupal_sdc_src_components",
+    "singleDirectoryComponents": true
+  }
+}

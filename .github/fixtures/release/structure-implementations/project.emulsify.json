@@ -1,0 +1,16 @@
+{
+  "project": {
+    "platform": "generic",
+    "name": "structure-implementations",
+    "machineName": "structure_implementations"
+  },
+  "variant": {
+    "platform": "generic",
+    "structureImplementations": [
+      { "name": "components", "directory": "./src/components/" },
+      { "name": "foundation", "directory": "./src/foundation/" },
+      { "name": "layout", "directory": "./src/layout/" },
+      { "name": "tokens", "directory": "./src/tokens/" }
+    ]
+  }
+}

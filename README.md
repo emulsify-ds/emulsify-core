@@ -4,93 +4,144 @@
 
 An open-source toolset for creating and implementing design systems.
 
-**Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Webpack](https://webpack.js.org/) development environment. It is meant to make project setup and ongoing development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone project.
+**Emulsify Core** provides shared [Vite](https://vite.dev/) build configuration and a [Storybook](https://storybook.js.org/) component library setup for component-driven development. Twig-based components and React components are both supported authoring models. A project can be Twig-first, React-first, or intentionally mixed.
 
-## Installation and usage
-Installation and configuration is setup by the provided base theme project(s). As of this writing, Emulsify Drupal is the only base theme project [with this integration](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L36).
+## How Emulsify Core Works
 
-### Manual installation
-- `npm install @emulsify/core` within your repository or project theme.
-- Copy the provided `npm run` scripts from [Emulsify Drupal's package.json](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L15)
-- Copy the contents of `whisk/config/emulsify-core/` from [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/tree/main/whisk/config/emulsify-core) into your project so `config/` exists at the root of your repository or project theme. The files within `config/` allow you to extend or overwrite configuration provided by Emulsify Core.
+- Vite builds project JavaScript, Sass/CSS, Twig templates, component metadata, and static component assets.
+- Storybook uses the React/Vite framework.
+- Twig files can render in React-based Storybook through `renderTwig()`.
+- React components render through Storybook's React/Vite support.
+- Twig and React stories can coexist in the same Storybook instance.
+- `project.emulsify.json` is the source of truth for platform and structure configuration.
+- Platform-specific behavior is controlled by adapters instead of being assumed globally.
+- Node.js 24 or later is required.
 
-### Common Scripts
+## Project Evolution
 
-Run `nvm use` prior to running any of the following commands to verify you are using Node 20.
-(Each is prefixed with `npm run `)
+Emulsify Core has grown through each major release while keeping the same practical goal: make component-library tooling easier to share across real projects.
 
-**develop**
-Starts and instance of storybook, watches for any files changes, recompiles CSS/JS, and live reloads storybook assets.
+- `1.x` established Emulsify Core as a reusable package for Storybook, Webpack, linting, a11y checks, project overrides, and asset handling.
+- `2.x` expanded component structure support, improved Drupal SDC compatibility, upgraded Storybook, and made more project files configurable from consuming projects.
+- `3.x` modernized the runtime around ESM and Node 24, continued Storybook and dependency upgrades, improved component asset copying, and strengthened compatibility for existing Drupal-oriented builds.
+- The current release moves the build system to Vite, runs Storybook on React/Vite, supports Twig and React stories side by side, and normalizes platform and project-structure behavior through `project.emulsify.json`.
 
-**lint**
-Lints all JS/SCSS within your components and reports any violations.
+The latest version is the next evolution of that work: faster builds, clearer public APIs, less global Drupal assumption, and a broader foundation for CMS themes, standalone UI libraries, and mixed component systems.
 
-**lint-fix**
-Automatically fixes any simple violations.
+See [Version Evolution](docs/version-evolution.md) for more release history.
 
-**prettier**
-Outputs any code formatting violations.
+## Authoring Models
 
-**prettier-fix**
-Automatically fixes any simple code formatting violations.
+Twig and React are equally valid ways to build component libraries with Emulsify Core. The right authoring model depends on the consuming project:
 
-**storybook-build**
-Builds a static output of the storybook instance.
+- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today; Craft CMS and WordPress + Timber can use the generic adapter unless a project adds platform-specific behavior.
+- Use React for standalone UI libraries, application components, or projects that already use React.
+- Use mixed Twig and React when a design system needs to document both CMS-rendered and JavaScript-rendered components in the same Storybook instance.
 
+See [Component Authoring](docs/component-authoring.md) for Twig, React, mixed Storybook, and shared Sass examples.
 
-### Quick Links
+## Basic Usage
 
-- [Emulsify Homepage](https://www.emulsify.info/)
+Installation and project scripts are usually provided by a starter or platform integration. Manual setup starts with:
 
-## Demo
+```sh
+npm install @emulsify/core
+```
 
-1. [Storybook](http://storybook.emulsify.info/)
+Every project should provide a `project.emulsify.json` file at the project root:
+
+```json
+{
+  "project": {
+    "platform": "generic",
+    "name": "example",
+    "machineName": "example"
+  }
+}
+```
+
+Common project scripts call the shared Emulsify Core Vite and Storybook config:
+
+- `storybook`: starts Storybook development.
+- `storybook-build`: builds static Storybook output.
+- `build`: runs the Vite build for JS, CSS, copied Twig templates, component metadata, and static component assets.
+- `lint`: lints maintained project source.
+
+## Documentation
+
+The documentation is split by task:
+
+| Topic                                                     | Use This When                                                                                                         |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [Version Evolution](docs/version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |
+| [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
+| [Storybook](docs/storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
+| [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
+| [Platform Adapters](docs/platform-adapters.md)            | Understanding `generic`, `drupal`, platform resolution order, and Drupal SDC behavior.                                |
+| [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
+| [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
+| [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
+| [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                     |
+| [Migration](docs/migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                                 |
+
+## Known Limitations
+
+- Implemented platform adapters are currently `generic` and `drupal`. WordPress + Timber and Craft CMS are supported as Twig-oriented use cases through the generic adapter today; dedicated adapters are future opportunities. See [Platform Adapters](docs/platform-adapters.md).
+- Storybook's Twig resolver eagerly imports Twig modules and raw Twig source. This is reliable for `include()` and `source()`, but large Twig libraries should keep Storybook source roots intentional. See [Performance](docs/performance.md).
+- Production sourcemaps are enabled by default unless a project overrides Vite config through `config/emulsify-core/vite/plugins.*`. See [Performance](docs/performance.md).
+- Project extensions use the public `config/emulsify-core` directory: `config/emulsify-core/vite/plugins.*` for Vite, `config/emulsify-core/storybook/...` for Storybook, and `config/emulsify-core/a11y.config.js` for a11y. See [Extension Points](docs/extension-points.md).
+- Webpack-specific customizations must be migrated manually to Vite plugins or `extendConfig()`. See [Migration](docs/migration-4x.md).
+- Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are enabled. Generic projects should expect output to remain in `dist/`. See [Platform Adapters](docs/platform-adapters.md).
+
+## Supported Project Shapes
+
+Release-readiness coverage validates:
+
+- Drupal SDC projects using `src/components`.
+- Generic Twig projects using `src/components`.
+- Root `./components` projects.
+- Projects using multiple `variant.structureImplementations`.
+- Mixed Twig + React Storybook projects.
+
+WordPress + Timber and Craft CMS are Twig-based project use cases that can use the `generic` adapter today. Dedicated adapters for those platforms are future opportunities. The implemented adapters in this package are currently `generic` and `drupal`.
+
+## Public Imports
+
+Emulsify Core exposes stable public package paths:
+
+```js
+import { renderTwig } from '@emulsify/core/storybook';
+import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
+import { defineReactExtension } from '@emulsify/core/extensions/react';
+```
+
+`defineReactExtension` is reserved for future React extension support. It currently returns the input unchanged. Adopting the import path is safe; the runtime is intentionally a no-op until the registry lands. See [Extension Points](docs/extension-points.md#public-imports).
+
+Vite consumers can import the shared config from `@emulsify/core/vite` and public Vite plugin helpers from `@emulsify/core/vite/plugins`.
 
 ## Contributing
 
-### [Code of Conduct](https://github.com/emulsify-ds/emulsify-drupal/blob/master/CODE_OF_CONDUCT.md)
+Maintained JavaScript source, config, scripts, and tests should use consistent comments:
 
-The project maintainers have adopted a Code of Conduct that we expect project participants to adhere to. Please read the full text so that you can understand what actions will and will not be tolerated.
+- Start each maintained JS file with a short JSDoc file block that explains the file's responsibility.
+- Use JSDoc blocks for exported functions, complex helpers, and public contracts.
+- Use `//` comments for local intent, compatibility behavior, and non-obvious edge cases.
+- Keep comments concise and factual. Prefer explaining why behavior exists instead of restating the code.
+- Use YAML or shell comments in workflow, hook, and fixture files where the format supports comments.
 
-### Contribution Guide
+Do not add comments to JSON files, lockfiles, binary assets, generated output, legal documents, or dependency files. Those formats either do not support comments or should remain exact artifacts.
 
 Please also follow the issue template and pull request templates provided. See below for the correct places to post issues:
 
 1. [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/issues)
-2. [Emulsify Twig Extensions](https://github.com/emulsify-ds/emulsify-twig-extensions/issues)
-3. [Emulsify Tools (Drupal module)](https://www.drupal.org/project/issues/emulsify_tools)
+2. [Emulsify Tools (Drupal module)](https://www.drupal.org/project/issues/emulsify_tools)
 
-### Committing Changes
+## Links
 
-To facilitate automatic semantic release versioning, we utilize the [Conventional Changelog](https://github.com/conventional-changelog/conventional-changelog) standard through Commitizen. Follow these steps when commiting your work to ensure semantic release can version correctly.
-
-1. Stage your changes, ensuring they encompass exactly what you wish to change, no more.
-2. Run the `commit` script via `yarn commit` or `npm run commit` and follow the prompts to craft the perfect commit message.
-3. Your commit message will be used to create the changelog for the next version that includes that commit.
+- [Emulsify Homepage](https://www.emulsify.info/)
+- [Storybook Demo](http://storybook.emulsify.info/)
+- [Code of Conduct](https://github.com/emulsify-ds/emulsify-drupal/blob/master/CODE_OF_CONDUCT.md)
 
 ## Author
 
 Emulsify&reg; is a product of [Four Kitchens](https://fourkitchens.com).
-
-## Contributors
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/callinmullaney"><img src="https://avatars.githubusercontent.com/u/369018?v=4?s=100" width="100px;" alt="Callin Mullaney"/><br /><sub><b>Callin Mullaney</b></sub></a><br /><a href="https://github.com/fourkitchens/emulsify-core/commits?author=callinmullaney" title="Code">💻</a> <a href="https://github.com/fourkitchens/emulsify-core/commits?author=callinmullaney" title="Documentation">📖</a></td>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/amazingrando"><img src="https://avatars.githubusercontent.com/u/409903?v=4?s=100" width="100px;" alt="Randy Oest"/><br /><sub><b>Randy Oest</b></sub></a><br /><a href="https://github.com/fourkitchens/emulsify-core/commits?author=amazingrando" title="Code">💻</a> <a href="https://github.com/fourkitchens/emulsify-core/commits?author=amazingrando" title="Documentation">📖</a></td>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/robherba"><img src="https://avatars.githubusercontent.com/u/9342274?v=4?s=100" width="100px;" alt="Roberto Hernandez"/><br /><sub><b>Roberto Hernandez</b></sub></a><br /><a href="https://github.com/fourkitchens/emulsify-core/commits?author=robherba" title="Code">💻</a></td>
-      <td align="center" valign="top" width="16.66%"><a href="https://github.com/dependabot"><img src="https://avatars.githubusercontent.com/u/49699333?v=4?s=100" width="100px;" alt="Dependabot"/><br /><sub><b>Dependabot</b></sub></a><br /><a href="#maintenance-dependabot" title="Maintenance">🚧</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

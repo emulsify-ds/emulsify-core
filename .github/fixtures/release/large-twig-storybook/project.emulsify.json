@@ -1,0 +1,7 @@
+{
+  "project": {
+    "platform": "generic",
+    "name": "large-twig-storybook",
+    "machineName": "large_twig_storybook"
+  }
+}

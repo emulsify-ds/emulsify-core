@@ -1,25 +1,27 @@
-import 'regenerator-runtime/runtime';
+/**
+ * @file Unit tests for the pa11y accessibility reporting script.
+ */
 
-const mockExit = jest
-  .spyOn(global.process, 'exit')
-  .mockImplementation(() => {});
-jest.mock('pa11y', () => jest.fn());
-jest.spyOn(global.console, 'log').mockImplementation(() => {});
-const pa11y = require('pa11y');
-const path = require('path');
-const {
+import 'regenerator-runtime/runtime';
+import path from 'path';
+import pa11y from 'pa11y';
+
+import a11yConfig from '../config/a11y.config.js';
+import {
   severityToColor,
   issueIsValid,
   logIssue,
   logReport,
   lintComponent,
   lintReportAndExit,
-} = require('./a11y');
-const {
-  ignore,
-  storybookBuildDir,
-  pa11y: pa11yConfig,
-} = require('../config/a11y.config');
+} from './a11y.js';
+
+const mockExit = jest
+  .spyOn(global.process, 'exit')
+  .mockImplementation(() => {});
+jest.mock('pa11y', () => jest.fn());
+jest.spyOn(global.console, 'log').mockImplementation(() => {});
+const { ignore, storybookBuildDir, pa11y: pa11yConfig } = a11yConfig;
 
 const STORYBOOK_BUILD_DIR = path.resolve(__dirname, '../', storybookBuildDir);
 const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
@@ -28,12 +30,11 @@ pa11y.mockResolvedValue('very official report');
 
 describe('a11y', () => {
   beforeEach(() => {
+    // Reset mocked process and console state between report scenarios.
     global.console.log.mockClear();
     global.process.exit.mockClear();
   });
-
-  it('maps axe issue severity to a label', () => {
-    // (Name no longer mentions "chalk")
+  it('can map axe issue severity to the correct chalk color', () => {
     expect.assertions(3);
     expect(severityToColor('error')).toBe('red');
     expect(severityToColor('warning')).toBe('yellow');
@@ -58,7 +59,7 @@ describe('a11y', () => {
     expect(issueIsValid({ code: 'chicken', runnerExtras: {} })).toBe(true);
   });
 
-  it('logs a single issue without color codes', () => {
+  it('can use an axe issue to generate a single log message about the issue', () => {
     expect.assertions(1);
     logIssue({
       type: 'error',
@@ -67,16 +68,16 @@ describe('a11y', () => {
       selector: 'kfc > popeyes > .chicken',
     });
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(`
-"
-severity: error
-message: this chicken is not fried enough.
-context: https://example.com
-selector: kfc > popeyes > .chicken
-"
-`);
+      "
+      severity: error
+      message: this chicken is not fried enough.
+      context: https://example.com
+      selector: kfc > popeyes > .chicken
+      "
+    `);
   });
 
-  it('logs a whole report without color codes', () => {
+  it('can log a whole axe report', () => {
     const report = {
       issues: [
         {
@@ -98,56 +99,45 @@ selector: kfc > popeyes > .chicken
     };
     expect(logReport(report)).toBe(true);
     expect(global.console.log.mock.calls).toMatchInlineSnapshot(`
-Array [
-  Array [
-    "Issues found in component: https://example/component.html",
-  ],
-  Array [
-    "
-severity: error
-message: this pizza is too soggy
-context: https://example.com
-selector: pizza > .hut
-",
-  ],
-  Array [
-    "
-severity: error
-message: this pasta is undercooked
-context: https://example.com
-selector: olive > .garden
-",
-  ],
-]
-`);
+      [
+        [
+          "Issues found in component: https://example/component.html",
+        ],
+        [
+          "
+      severity: error
+      message: this pizza is too soggy
+      context: https://example.com
+      selector: pizza > .hut
+      ",
+        ],
+        [
+          "
+      severity: error
+      message: this pasta is undercooked
+      context: https://example.com
+      selector: olive > .garden
+      ",
+        ],
+      ]
+    `);
   });
 
-  it('logs that a component has no issues when a report is empty', () => {
+  it('logs about a component having no issue if a report comes back empty', () => {
     expect(logReport({ issues: [], pageUrl: 'papa-johns' })).toBe(false);
     expect(global.console.log.mock.calls[0][0]).toMatchInlineSnapshot(
-      `"No issues found in component: papa-johns"`,
+      '"No issues found in component: papa-johns"',
     );
   });
 
-  it('calls pa11y with the full path to a component', async () => {
-    expect.assertions(3);
+  it('can call pa11y with the full path to a component', async () => {
+    expect.assertions(2);
     await expect(lintComponent('chicken-strips')).resolves.toBe(
       'very official report',
     );
-
-    // First arg: URL
-    expect(pa11y.mock.calls[0][0]).toBe(
+    expect(pa11y).toHaveBeenCalledWith(
       `${STORYBOOK_IFRAME}?id=chicken-strips`,
-    );
-
-    // Second arg: options merged with defaults in a11y.js
-    expect(pa11y.mock.calls[0][1]).toEqual(
-      expect.objectContaining({
-        includeNotices: true,
-        includeWarnings: true,
-        runners: ['axe'],
-        ...pa11yConfig,
-      }),
+      pa11yConfig,
     );
   });
 

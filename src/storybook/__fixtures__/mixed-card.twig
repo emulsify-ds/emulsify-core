@@ -1,0 +1,10 @@
+<article data-renderer="twig">
+  <h2>{{ heading }}</h2>
+  <p>{{ body }}</p>
+  {% switch variant|default('standard') %}
+    {% case 'featured' or 'highlight' %}
+      <span data-variant="featured">Featured</span>
+    {% default %}
+      <span data-variant="standard">Standard</span>
+  {% endswitch %}
+</article>

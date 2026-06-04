@@ -1,7 +1,9 @@
-// .storybook/manager.js
+/**
+ * @file Storybook manager bootstrap and theme selection.
+ */
 
 import { addons } from 'storybook/manager-api';
-import emulsifyTheme from './emulsifyTheme.js';
+import emulsifyTheme from './emulsifyTheme';
 
 /**
  * Dynamically import the user-provided Storybook theme override.
@@ -9,37 +11,28 @@ import emulsifyTheme from './emulsifyTheme.js';
  */
 import('../../../../config/emulsify-core/storybook/theme')
   /**
-   * Handle successful dynamic import of the theme module.
+   * Apply a project theme override when one exists.
+   *
    * @param {{ default: object }} module - The imported theme module.
    */
   .then(({ default: customTheme }) => {
-    /**
-     * Determine if the imported theme object is empty or not.
-     * @type {boolean}
-     */
+    // Empty override files should still fall back to the package theme.
     const isEmptyObject =
       !customTheme ||
       (typeof customTheme === 'object' &&
         Object.keys(customTheme).length === 0);
 
-    /**
-     * Apply the chosen theme to Storybook’s manager UI configuration.
-     * @type {{ theme: object }}
-     */
     addons.setConfig({
       theme: isEmptyObject ? emulsifyTheme : customTheme,
     });
   })
   /**
-   * Handle failure of the dynamic import (e.g., file not found).
+   * Fall back to the default theme when the project override is absent.
+   *
    * @returns {void}
    */
   .catch(() => {
     addons.setConfig({
-      /**
-       * Fallback to the default Emulsify theme on import error.
-       * @type {{ theme: object }}
-       */
       theme: emulsifyTheme,
     });
   });

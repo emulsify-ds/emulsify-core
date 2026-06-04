@@ -1,26 +1,36 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const yaml = require('js-yaml');
+/**
+ * @file Initializes a generated Emulsify project from project.emulsify.json.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import yaml from 'js-yaml';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Returns a boolean indicating whether or not the given object is a literal object.
+ * Determine whether a value is a plain object.
  *
- * @param {any} obj object who's type will be checked.
- * @returns {boolean} boolean indicating whether or not the given obj is a literal object.
+ * @param {*} obj - Value to inspect.
+ * @returns {boolean} TRUE when the value is a plain object.
  */
 const isObjectLiteral = (obj) =>
   obj != null && obj.constructor.name === 'Object';
 
 /**
- * Attempts to require the project.emulsify.json file.
+ * Load project.emulsify.json from the generated project config directory.
  *
- * @returns parsed project.emulsify.json file.
+ * @returns {Object} Parsed project.emulsify.json file.
+ * @throws {Error} When the config cannot be loaded.
  */
 const getEmulsifyConfig = () => {
+  const configPath = path.join(__dirname, '../config/project.emulsify.json');
+
   try {
-    return require('../config/project.emulsify.json');
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (e) {
     throw new Error(
       `Unable to load an Emulsify project config file (project.emulsify.json): ${String(
@@ -31,9 +41,11 @@ const getEmulsifyConfig = () => {
 };
 
 /**
- * Throws if the given emulsify config file is invalid.
+ * Validate the minimal project configuration required for initialization.
  *
- * @param {*} config emulsify project config, as loaded from a project.emulsify.json file.
+ * @param {*} config - Emulsify project config loaded from project.emulsify.json.
+ * @returns {void}
+ * @throws {Error} When required config values are missing or invalid.
  */
 const validateEmulsifyConfig = (config) => {
   const prefix = 'Invalid project.emulsify.json config file';
@@ -68,11 +80,10 @@ const validateEmulsifyConfig = (config) => {
 };
 
 /**
- * Takes an array of objects describing the origin and destination of a given file,
- * then moves each specified file according to it's to/from properties.
+ * Move generated starter files to their project-specific names.
  *
- * @param {Array<{ to: string, from: string }>} files array of objects depicting the origin and destination of a given file.
- * @returns void.
+ * @param {Array<{ to: string, from: string }>} files - Files to move.
+ * @returns {Array<void>} Rename results.
  */
 const renameFiles = (files) =>
   files.map(({ from, to }) =>
@@ -80,24 +91,23 @@ const renameFiles = (files) =>
   );
 
 /**
- * Takes a machineName, and returns a fn that, when called with a str,
- * replaces all instances of `emulsify` with the given machineName.
+ * Create a replacer that swaps the starter machine name for the project name.
  *
- * @param {string} machineName string that should replace emulsify.
- * @returns {function} fn that when called with a str, replaces all instances of `emulsify` with the given machineName.
+ * @param {string} machineName - Machine name that should replace `emulsify`.
+ * @returns {Function} String replacer.
  */
 const strReplaceEmulsify = (machineName) => (str) =>
   str.replace(/emulsify/g, machineName);
 
 /**
- * Loads a yml file at filePath, applies the functor to the contents of the file, and writes it.
+ * Load a YAML file, transform its parsed contents, and write it back.
  *
- * @param {string} filePath path to the file that should be loaded, modified, and re-saved.
- * @param {fn} functor fn that should return the new contents of the file, to be saved.
- * @returns void.
+ * @param {string} filePath - File to load, modify, and save.
+ * @param {Function} functor - Function that returns the replacement YAML data.
+ * @returns {void}
  */
 const applyToYmlFile = (filePath, functor) => {
-  if (!filePath || typeof filePath !== `string`) {
+  if (!filePath || typeof filePath !== 'string') {
     throw new Error(
       `Cannot modify a file without knowing how to access it: ${filePath}`,
     );
@@ -111,18 +121,17 @@ const applyToYmlFile = (filePath, functor) => {
 };
 
 const main = () => {
-  // Load up config file, throw if none exists.
+  // Load the project config before mutating any generated files.
   const config = getEmulsifyConfig();
 
-  // Validate config file, throw if it is missing
-  //properties or is otherwise malformed.
+  // Fail fast when required project metadata is missing or malformed.
   validateEmulsifyConfig(config);
 
   const {
-    project: { machineName, name },
+    project: { machineName },
   } = config;
 
-  // Move all files to their correct location.
+  // Rename starter files from the generic prefix to the project machine name.
   renameFiles([
     {
       from: '../emulsify.info.yml',
@@ -142,7 +151,7 @@ const main = () => {
     },
   ]);
 
-  // Update info.yml file.
+  // Update info.yml values that Drupal reads from the generated theme.
   applyToYmlFile(
     path.join(__dirname, `../${machineName}.info.yml`),
     (info) => ({
@@ -152,7 +161,7 @@ const main = () => {
     }),
   );
 
-  // Update breakpoint.yml file.
+  // Update breakpoint keys to match the renamed theme machine name.
   applyToYmlFile(
     path.join(__dirname, `../${machineName}.breakpoints.yml`),
     (breakpoints) => {

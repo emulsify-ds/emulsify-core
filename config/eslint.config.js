@@ -1,19 +1,32 @@
-// Import ESLint Flat Config and required plugins
+/**
+ * @file ESLint flat configuration for Emulsify Core.
+ */
+
 import js from '@eslint/js';
+import babelParser from '@babel/eslint-parser';
+import importPlugin from 'eslint-plugin-import';
 import pluginSecurity from 'eslint-plugin-security';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default [
-  // Base ESLint recommended rules
+  // Start with core and plugin recommendations before project overrides.
   js.configs.recommended,
 
-  // Plugin configurations
+  importPlugin.flatConfigs.recommended,
   pluginSecurity.configs.recommended,
   eslintPluginPrettierRecommended,
 
   {
     name: 'emulsify-core-config',
     languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        requireConfigFile: false,
+        babelOptions: {
+          babelrc: false,
+          configFile: false,
+        },
+      },
       sourceType: 'module',
       ecmaVersion: 'latest',
       globals: {
@@ -28,10 +41,15 @@ export default [
     ignores: ['**/*.min.js', '**/node_modules/**/*'],
 
     rules: {
+      // Keep historical project conventions while warning on risky patterns.
       strict: 0,
       'consistent-return': 'off',
       'no-underscore-dangle': 'off',
       'max-nested-callbacks': ['warn', 3],
+      'import/extensions': 'off',
+      'import/no-unresolved': 'off',
+      'import/no-extraneous-dependencies': 'warn',
+      'import/no-mutable-exports': 'warn',
       'no-plusplus': ['warn', { allowForLoopAfterthoughts: true }],
       'no-param-reassign': 'off',
       'no-prototype-builtins': 'off',
@@ -44,6 +62,16 @@ export default [
         { overrides: { '?': 'ignore', ':': 'ignore' } },
       ],
       quotes: ['error', 'single'],
+    },
+
+    settings: {
+      'import/ignore': ['\\.(scss|less|css)$'],
+      'import/resolver': {
+        node: {
+          extensions: ['.js', '.jsx'],
+          moduleDirectory: ['src', 'node_modules'],
+        },
+      },
     },
   },
 ];

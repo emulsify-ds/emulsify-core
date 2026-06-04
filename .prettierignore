@@ -1,3 +1,4 @@
+# Ignore generated and dependency artifacts that should not be reformatted.
 dist
 .out
 .coverage

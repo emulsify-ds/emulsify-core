@@ -1,16 +1,21 @@
-// Documentation on theming Storybook: https://storybook.js.org/docs/configurations/theming/
+/**
+ * @file Default Emulsify theme for the Storybook manager UI.
+ *
+ * @see https://storybook.js.org/docs/configurations/theming/
+ */
+
 import { create } from 'storybook/theming';
 
 export default create({
   base: 'dark',
 
-  // UI
+  // Storybook application chrome colors.
   appBg: '#00405B',
   appContentBg: '#00202E',
   appBorderColor: '#00405B',
   appBorderRadius: 4,
 
-  // Typography
+  // Typography is intentionally aligned with the design system brand.
   fontBase: '"Mona Sans", sans-serif',
   fontCode: 'monospace',
 
@@ -29,9 +34,7 @@ export default create({
   inputBorder: '#00405B',
   inputTextColor: 'white',
   inputBorderRadius: 4,
-  // Branding
+  // Branding links the manager back to the public Emulsify site.
   brandTitle: 'Emulsify',
   brandUrl: 'https://emulsify.info',
-  brandImage:
-    'https://raw.githubusercontent.com/fourkitchens/emulsify-core/main/assets/images/emulsify-logo-sb.svg',
 });

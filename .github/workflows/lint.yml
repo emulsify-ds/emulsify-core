@@ -1,11 +1,12 @@
-name: Lint
+# Runs release-readiness checks once for PR updates and after integration merges.
+name: CI
 on:
   push:
     branches: [develop, main]
   pull_request:
-    branches: [develop, main]
+    branches: [4.x, develop, main]
 jobs:
-  build:
+  release-readiness:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -15,8 +16,42 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: '24.x'
+          cache: 'npm'
       - name: Install
-        run: npm install
+        # npm ci keeps release-readiness checks locked to package-lock.json.
+        run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Storybook build
+        run: npm run storybook-build
+  fixture-builds:
+    name: Fixture / ${{ matrix.fixture }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - drupal-sdc-src-components
+          - generic-src-components
+          - legacy-components
+          - structure-implementations
+          - mixed-storybook
+          - large-twig-storybook
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+      - name: Install
+        # npm ci keeps fixture checks locked to package-lock.json.
+        run: npm ci
+      - name: Fixture build
+        run: npm run fixtures:release -- --fixture ${{ matrix.fixture }}
