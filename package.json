@@ -76,7 +76,6 @@
     "config/vite/utils/react-singleton.js",
     "config/vite/utils/unique.js",
     "config/vite/vite.config.js",
-    "docs/**/*",
     "scripts/a11y.js",
     "scripts/audit.js",
     "scripts/audit-twig-stories.js",
