@@ -14,6 +14,47 @@ import { getTwigTagDefinitions } from './tag-map.js';
 const registeredTwigInstances = new WeakSet();
 
 /**
+ * PHP-style boolean conversion used by Twig.js truthiness checks.
+ *
+ * Twig.js normally provides this through `Twig.lib.boolval`, but dependency
+ * optimizer interop can drop the helper while leaving the rest of Twig usable.
+ *
+ * @param {*} value - Value to coerce using PHP/Twig truthiness rules.
+ * @returns {boolean} TRUE when the value should be truthy in Twig.
+ */
+function phpBoolval(value) {
+  return (
+    value !== false &&
+    value !== 0 &&
+    value !== '' &&
+    value !== '0' &&
+    !(Array.isArray(value) && value.length === 0) &&
+    value !== null &&
+    typeof value !== 'undefined'
+  );
+}
+
+/**
+ * Ensure Twig.js has the internal boolean helper required by conditionals.
+ *
+ * @param {Object} Twig - Twig.js module or compatible extension target.
+ * @returns {Object} The same Twig instance after compatibility patching.
+ */
+function ensureTwigBoolval(Twig) {
+  Twig.extend((InternalTwig) => {
+    if (!InternalTwig.lib) {
+      InternalTwig.lib = {};
+    }
+
+    if (typeof InternalTwig.lib.boolval !== 'function') {
+      InternalTwig.lib.boolval = phpBoolval;
+    }
+  });
+
+  return Twig;
+}
+
+/**
  * Register native Emulsify Twig functions and logic tags with Twig.js.
  *
  * @param {Object} Twig - Twig.js module or compatible extension target.
@@ -31,6 +72,8 @@ export function registerTwigExtensions(Twig) {
       'A Twig.js instance with extendFunction(), extendTag(), and extend() is required.',
     );
   }
+
+  ensureTwigBoolval(Twig);
 
   if (registeredTwigInstances.has(Twig)) {
     return Twig;

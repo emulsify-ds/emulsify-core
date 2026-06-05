@@ -183,6 +183,13 @@ Drupal-specific Twig filters are only loaded when the Drupal adapter enables the
 
 Core 4 no longer uses a browser-global Twig template store or patches `Twig.Templates` to resolve compiled Storybook dependencies. Each emitted Twig module now creates an isolated Twig.js factory instance and registers its own compiled dependency set locally. This keeps duplicate template IDs from colliding while avoiding global runtime cleanup during HMR.
 
+If Storybook reports `Twig.lib.boolval is not a function`, Twig.js failed while
+evaluating a boolean expression such as `{% if %}`, `and`, `or`, `not`, or a
+ternary. Core provides a narrow runtime fallback for that internal helper, but
+the message still usually points to dependency optimizer or transitive package
+drift. Clear Storybook/Vite caches and confirm the project-level `overrides`
+above are present in the consuming theme if the error appears during migration.
+
 ## Vituum Twig Integration
 
 Emulsify treats `@vituum/vite-plugin-twig` as a pinned integration point. The internal `vituum-patch.js` adapter removes Vituum build hooks that conflict with Emulsify's output model and fails fast if a future Vituum release changes the expected plugin shape, so projects should pin to a known-good Vituum version or update the adapter instead of accepting a silent rendering break.
