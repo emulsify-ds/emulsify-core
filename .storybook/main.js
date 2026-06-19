@@ -71,6 +71,27 @@ const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
 
 /**
+ * The consuming project root for Storybook static mounts.
+ *
+ * Storybook loads this package config from different physical locations
+ * depending on whether Core is linked locally or installed in node_modules, so
+ * static paths must be rooted at the process cwd rather than this file.
+ *
+ * @type {string}
+ */
+const projectRoot = process.cwd();
+
+/**
+ * Vite-generated Storybook chunks should not share `/assets` with project
+ * static files. Storybook copies staticDirs while the preview build runs, so
+ * keeping generated chunks in a separate folder avoids concurrent writers in
+ * `.out/assets`.
+ *
+ * @type {string}
+ */
+const storybookViteAssetsDir = 'storybook-assets';
+
+/**
  * Reads an optional HTML fragment relative to this config file.
  *
  * Missing files are treated as empty content so downstream projects can opt in
@@ -247,10 +268,17 @@ const baseConfig = {
   staticDirs: [
     ...existingStaticDirs([
       {
-        from: path.resolve(process.cwd(), 'assets'),
+        from: path.resolve(projectRoot, 'assets'),
         to: '/assets',
       },
-      path.resolve(process.cwd(), 'dist'),
+      {
+        from: path.resolve(projectRoot, 'dist/assets'),
+        to: '/assets',
+      },
+      {
+        from: path.resolve(projectRoot, 'dist'),
+        to: '/dist',
+      },
     ]),
   ],
 
@@ -452,6 +480,7 @@ const baseConfig = {
     const { mergeConfig } = await import('vite');
     /** @type {StorybookEnvironment} */
     const env = resolvedStorybookEnv;
+    const storybookBuildConfig = config?.build || {};
 
     // Keep using the `serve` branch of the shared Vite config here. Storybook
     // has historically consumed that branch, while `mode` still reflects
@@ -560,6 +589,14 @@ const baseConfig = {
 
     return {
       ...mergedConfig,
+      build: {
+        ...(mergedConfig.build || {}),
+        ...(storybookBuildConfig.outDir
+          ? { outDir: storybookBuildConfig.outDir }
+          : {}),
+        assetsDir: storybookViteAssetsDir,
+        emptyOutDir: false,
+      },
       resolve: mergeReactSingletonResolve(mergedConfig),
       optimizeDeps: {
         ...(mergedConfig.optimizeDeps || {}),
