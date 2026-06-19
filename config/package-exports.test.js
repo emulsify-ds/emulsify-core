@@ -101,6 +101,13 @@ function dryRunPackFiles() {
   return pack.files.map(({ path: filePath }) => normalizePackagePath(filePath));
 }
 
+function matchesForbiddenPackagePath(filePath, prefixes, suffixes) {
+  return (
+    prefixes.some((prefix) => filePath.startsWith(prefix)) ||
+    suffixes.some((suffix) => filePath.endsWith(suffix))
+  );
+}
+
 describe('@emulsify/core package exports', () => {
   it('imports each public export with native Node ESM resolution', () => {
     const checks = [
@@ -178,7 +185,6 @@ describe('@emulsify/core package exports', () => {
     const missingImports = [];
 
     for (const filePath of packageJsFiles) {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       const source = readFileSync(join(packageRoot, filePath), 'utf8');
 
       for (const specifier of collectRelativeJsSpecifiers(source)) {
@@ -248,10 +254,12 @@ describe('@emulsify/core package exports', () => {
       expect(packFileSet.has(filePath)).toBe(false);
     }
 
-    const accidentalFiles = packFiles.filter(
-      (filePath) =>
-        forbiddenPrefixes.some((prefix) => filePath.startsWith(prefix)) ||
-        forbiddenSuffixes.some((suffix) => filePath.endsWith(suffix)),
+    const accidentalFiles = packFiles.filter((filePath) =>
+      matchesForbiddenPackagePath(
+        filePath,
+        forbiddenPrefixes,
+        forbiddenSuffixes,
+      ),
     );
 
     expect(accidentalFiles).toEqual([]);

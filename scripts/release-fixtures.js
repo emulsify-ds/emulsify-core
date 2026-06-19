@@ -106,10 +106,10 @@ const releaseFixtures = [
     name: 'mixed-storybook',
     type: 'storybook',
     assert: ['.out/iframe.html'],
-    match: ['.out/assets/card.stories-*.js'],
+    match: ['.out/storybook-assets/card.stories-*.js'],
     assertContent: [
       {
-        pattern: '.out/assets/card.stories-*.js',
+        pattern: '.out/storybook-assets/card.stories-*.js',
         strings: ['Twig fixture', 'React fixture'],
       },
     ],
@@ -119,7 +119,7 @@ const releaseFixtures = [
     type: 'storybook',
     setup: setupLargeTwigStorybookFixture,
     assert: ['.out/iframe.html'],
-    match: ['.out/assets/gallery.stories-*.js'],
+    match: ['.out/storybook-assets/gallery.stories-*.js'],
     measure: true,
     metricComponentCount: largeTwigComponentCount,
   },

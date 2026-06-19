@@ -16,9 +16,7 @@ import {
   lintReportAndExit,
 } from './a11y.js';
 
-const mockExit = jest
-  .spyOn(global.process, 'exit')
-  .mockImplementation(() => {});
+jest.spyOn(global.process, 'exit').mockImplementation(() => {});
 jest.mock('pa11y', () => jest.fn());
 jest.spyOn(global.console, 'log').mockImplementation(() => {});
 const { ignore, storybookBuildDir, pa11y: pa11yConfig } = a11yConfig;

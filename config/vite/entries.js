@@ -57,7 +57,7 @@ export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
 function safeSetKey(map, key, value) {
   const forbidden = ['__proto__', 'prototype', 'constructor'];
   if (!key || forbidden.some((bad) => key.includes(bad))) return;
-  map[key] = value; // eslint-disable-line security/detect-object-injection
+  map[key] = value;
 }
 
 /** Return an absolute path from a source index entry or string. */

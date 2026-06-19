@@ -43,7 +43,6 @@ export function walkFiles(
 
     let entryNames = [];
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       entryNames = readdirSync(currentDir, { withFileTypes: true }).sort(
         (a, b) => a.name.localeCompare(b.name),
       );
