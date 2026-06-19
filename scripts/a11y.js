@@ -62,7 +62,6 @@ const applyProjectA11yConfig = (config = {}) => {
  * @returns {void}
  */
 const printHelp = () => {
-  // eslint-disable-next-line no-console
   console.log(
     [
       'Usage: node scripts/a11y.js [options]',
@@ -128,7 +127,6 @@ const logIssue = ({ type: severity, message, context, selector }) => {
     `selector: ${selector}`,
     '',
   ];
-  // eslint-disable-next-line no-console
   console.log(lines.join('\n'));
 };
 
@@ -142,11 +140,9 @@ const logReport = ({ issues, pageUrl }) => {
   const hasIssues = validIssues.length > 0;
 
   if (hasIssues) {
-    // eslint-disable-next-line no-console
     console.log(`Issues found in component: ${pageUrl}`);
     validIssues.forEach(logIssue);
   } else {
-    // eslint-disable-next-line no-console
     console.log(`No issues found in component: ${pageUrl}`);
   }
 

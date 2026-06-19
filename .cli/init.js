@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -116,8 +116,8 @@ const applyToYmlFile = (filePath, functor) => {
     return;
   }
 
-  const file = yaml.load(fs.readFileSync(filePath, 'utf8'));
-  fs.writeFileSync(filePath, yaml.dump(functor(file)));
+  const file = loadYaml(fs.readFileSync(filePath, 'utf8'));
+  fs.writeFileSync(filePath, dumpYaml(functor(file)));
 };
 
 const main = () => {

@@ -30,7 +30,6 @@ const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 function resolveFromMap(map, candidates) {
   for (const key of candidates) {
     // Vite glob map keys are generated from static Storybook patterns.
-    // eslint-disable-next-line security/detect-object-injection
     const value = map[key];
     if (value) {
       return value.default ?? value;
@@ -114,7 +113,6 @@ function findGlobEntry(map, candidates) {
   for (const key of candidates) {
     if (Object.hasOwnProperty.call(map, key)) {
       // Vite glob map keys are generated from static Storybook patterns.
-      // eslint-disable-next-line security/detect-object-injection
       return { key, value: map[key] };
     }
   }
@@ -240,7 +238,6 @@ export function createTwigResolver({
     candidateKeysForReference: (name) => candidateKeysForReference(name, env),
     resolveTemplate(name) {
       // Direct lookups support callers that already resolved a Vite glob key.
-      // eslint-disable-next-line security/detect-object-injection
       const direct = modules[name];
       if (direct) {
         return direct.default ?? direct;

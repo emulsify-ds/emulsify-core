@@ -41,9 +41,15 @@ export default [
     ignores: ['**/*.min.js', '**/node_modules/**/*'],
 
     rules: {
-      // Keep historical project conventions while warning on risky patterns.
+      // Keep historical project conventions while tuning noisy security
+      // heuristics that flag intentional file-generation and source-scanning
+      // patterns throughout this tooling package.
       strict: 0,
       'consistent-return': 'off',
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-non-literal-regexp': 'off',
+      'security/detect-object-injection': 'off',
+      'security/detect-unsafe-regex': 'off',
       'no-underscore-dangle': 'off',
       'max-nested-callbacks': ['warn', 3],
       'import/extensions': 'off',

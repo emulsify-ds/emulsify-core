@@ -65,7 +65,6 @@ function mergeDrupalSettings(defaults, overrides) {
 
   for (const [key, value] of Object.entries(overrides || {})) {
     // Drupal settings keys are project/module-defined by design.
-    // eslint-disable-next-line security/detect-object-injection
     const defaultValue = merged[key];
     const nextValue =
       isPlainObject(defaultValue) && isPlainObject(value)
@@ -73,7 +72,6 @@ function mergeDrupalSettings(defaults, overrides) {
         : value;
 
     // Drupal settings keys are project/module-defined by design.
-    // eslint-disable-next-line security/detect-object-injection
     merged[key] = nextValue;
   }
 
@@ -156,7 +154,6 @@ window.drupalSettings = mergeDrupalSettings(
     // Attach each registered behavior while isolating individual failures.
     Object.keys(behaviors).forEach(function (behaviorName) {
       // Drupal behavior names are project/module-defined by design.
-      // eslint-disable-next-line security/detect-object-injection
       const behavior = behaviors[behaviorName];
       if (typeof behavior.attach === 'function') {
         try {

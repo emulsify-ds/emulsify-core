@@ -332,7 +332,6 @@ const buildTemplateFileCandidates = (baseDir, templatePath) => {
 const findExistingTemplateFile = (paths) =>
   paths.filter(Boolean).find((filePath) => {
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       return fs.statSync(filePath).isFile();
     } catch {
       return false;
@@ -503,7 +502,6 @@ const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
     return {
       namespace: slashNamespace,
       // Namespace names come from the normalized Twig namespace map.
-      // eslint-disable-next-line security/detect-object-injection
       root: namespaces[slashNamespace],
       path: templatePath.slice(slashNamespace.length + 1),
     };
@@ -523,7 +521,6 @@ const componentGroupRoots = (componentRoot) => {
 
   try {
     // Component group roots come from a configured project directory.
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     return fs
       .readdirSync(componentRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -707,7 +704,6 @@ const invalidateKnownResolutionCacheEntries = (filePath) => {
 const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   const absoluteFilePath = resolve(filePath);
   knownTwigFiles.add(absoluteFilePath);
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   const { mtimeMs } = fs.statSync(absoluteFilePath);
   const cached = cache.get(absoluteFilePath);
   if (cached?.mtimeMs === mtimeMs) {
@@ -718,7 +714,6 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   registerTwigExtensions(compilerTwig);
   registerConfiguredTwigExtensions(compilerTwig, options);
 
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   const source = fs.readFileSync(absoluteFilePath, 'utf8');
   const compileOptions = {
     allowInlineIncludes: true,
@@ -1070,7 +1065,6 @@ export function emulsifyTwigModulePlugin(options) {
           const absoluteSourcePath = resolve(sourcePath);
           addDependencyImporter(absoluteSourcePath, sourceFilePath);
           this.addWatchFile(absoluteSourcePath);
-          // eslint-disable-next-line security/detect-non-literal-fs-filename
           const sourceText = fs.readFileSync(absoluteSourcePath, 'utf8');
 
           return unique([
