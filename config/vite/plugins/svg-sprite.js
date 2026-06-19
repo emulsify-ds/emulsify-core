@@ -82,7 +82,6 @@ export function svgSpriteFilePlugin({ include, symbolId = '[name]' }) {
         .map((abs) => {
           let content = '';
           try {
-            // eslint-disable-next-line security/detect-non-literal-fs-filename
             content = readFileSync(abs, 'utf8');
           } catch {
             return '';

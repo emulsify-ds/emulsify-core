@@ -68,7 +68,6 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
 
   const isEmpty = (dir) => {
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       return readdirSync(dir).length === 0;
     } catch {
       return false;
@@ -79,7 +78,6 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
     if (!isEmpty(cursor)) break;
 
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       rmdirSync(cursor);
     } catch {
       // Stop at the first directory that cannot be removed.
@@ -103,9 +101,7 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
  */
 export const filesHaveSameBytes = (sourceFile, destinationFile) => {
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const sourceStats = statSync(sourceFile);
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const destinationStats = statSync(destinationFile);
     if (!destinationStats.isFile()) return false;
     if (sourceStats.size !== destinationStats.size) return false;
@@ -117,10 +113,8 @@ export const filesHaveSameBytes = (sourceFile, destinationFile) => {
 
     const sourceBuffer = Buffer.allocUnsafe(FILE_COMPARE_CHUNK_SIZE);
     const destinationBuffer = Buffer.allocUnsafe(FILE_COMPARE_CHUNK_SIZE);
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const sourceHandle = openSync(sourceFile, 'r');
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       const destinationHandle = openSync(destinationFile, 'r');
       try {
         let position = 0;
@@ -175,7 +169,6 @@ export const filesHaveSameBytes = (sourceFile, destinationFile) => {
  */
 const isSymlink = (filePath) => {
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     return lstatSync(filePath).isSymbolicLink();
   } catch {
     return false;
@@ -189,7 +182,6 @@ const isSymlink = (filePath) => {
  */
 const removeSourceFile = (sourceFile) => {
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     unlinkSync(sourceFile);
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
@@ -221,12 +213,10 @@ const copyFileIntoPlace = (sourceFile, destinationFile) => {
 
   try {
     copyFileSync(sourceFile, tempDestination);
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     renameSync(tempDestination, destinationFile);
     removeSourceFile(sourceFile);
   } catch (error) {
     try {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       unlinkSync(tempDestination);
     } catch {
       /* noop */
@@ -255,7 +245,6 @@ const moveFileIntoPlace = (sourceFile, destinationFile) => {
   }
 
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     renameSync(sourceFile, destinationFile);
   } catch (error) {
     if (error?.code !== 'EXDEV') throw error;
@@ -282,7 +271,6 @@ const readMirrorState = (markerFile) => {
  */
 const writeMirrorState = (markerFile, state) => {
   mkdirSync(dirname(markerFile), { recursive: true });
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   writeFileSync(markerFile, `${JSON.stringify(state, null, 2)}\n`);
 };
 

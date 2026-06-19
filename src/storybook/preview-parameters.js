@@ -33,7 +33,6 @@ export function mergePreviewParameters(defaults = {}, overrides = {}) {
     if (value === undefined) continue;
 
     // Storybook parameter keys are intentionally dynamic.
-    // eslint-disable-next-line security/detect-object-injection
     const current = merged[key];
     const nextValue =
       isPlainObject(current) && isPlainObject(value)
@@ -41,7 +40,6 @@ export function mergePreviewParameters(defaults = {}, overrides = {}) {
         : value;
 
     // Storybook parameter keys are intentionally dynamic.
-    // eslint-disable-next-line security/detect-object-injection
     merged[key] = nextValue;
   }
 
