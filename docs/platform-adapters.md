@@ -7,7 +7,7 @@ The implemented adapters are currently:
 - `none`
 - `drupal`
 
-Emulsify Core supports Twig-based authoring for CMS-oriented projects, but WordPress + Timber and Craft CMS do not have dedicated adapters in this package yet. Those projects can use `none` behavior today when they do not need platform-specific Storybook behavior or output mirroring.
+Emulsify Core supports Twig-based authoring for CMS-oriented projects, but WordPress and Timber do not have a dedicated adapter in this package yet. WordPress and Timber projects should currently use `platform: "none"`. This keeps Emulsify Core in platform-neutral mode while still supporting Twig-oriented component development. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced.
 
 ## Platform Resolution
 
@@ -24,7 +24,7 @@ Unknown platform names currently use `none` adapter behavior while preserving th
 
 The `none` adapter keeps output in `dist/`. It does not load Drupal behavior shims, does not call `Drupal.attachBehaviors()`, and does not register Drupal Twig filters by default.
 
-Use `none` for standalone Twig libraries, React libraries, mixed Storybook libraries, Craft CMS projects, WordPress + Timber projects, or any non-Drupal project that does not need platform-specific output behavior. For CMS projects without a dedicated adapter, `none` means Emulsify Core provides Twig Storybook/runtime support and normal `dist/` output, but it does not add CMS-specific filters, behavior hooks, or mirroring.
+Use `none` for standalone Twig libraries, React libraries, mixed Storybook libraries, WordPress and Timber projects, Craft CMS projects, or any non-Drupal project that does not need platform-specific output behavior. For CMS projects without a dedicated adapter, `none` means Emulsify Core provides Twig Storybook/runtime support and normal `dist/` output, but it does not add CMS-specific filters, behavior hooks, or mirroring.
 
 ```json
 {
@@ -57,7 +57,7 @@ The Drupal adapter owns Drupal-specific behavior:
 }
 ```
 
-Drupal behavior attachment and Drupal SDC mirroring should not be assumed for `none`, React-only, WordPress + Timber, Craft CMS, or other non-Drupal projects.
+Drupal behavior attachment and Drupal SDC mirroring should not be assumed for `none`, React-only, WordPress and Timber, Craft CMS, or other non-Drupal projects.
 
 The Drupal settings shim intentionally includes only cross-project defaults. Projects that need module-specific browser settings can define them in `config/emulsify-core/storybook/preview.js` before stories render:
 
@@ -90,4 +90,4 @@ Future adapters should own their platform-specific behavior instead of changing 
 - Static asset handling.
 - CMS-specific mirroring or copy behavior.
 
-WordPress + Timber and Craft CMS can use `none` Twig behavior today. Dedicated adapters can be added later when those integrations need platform-specific defaults such as CMS filters, behavior hooks, asset handling, or output conventions.
+WordPress and Timber projects should currently use `platform: "none"`. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced. Future adapters should be added only when an integration needs platform-specific defaults such as CMS filters, behavior hooks, asset handling, or output conventions.

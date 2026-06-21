@@ -2,6 +2,8 @@
 
 Use the project root `assets/` directory for static files that components need
 at runtime, such as fonts, inline SVGs, background images, and other media.
+Projects can also add custom asset roots with
+`assets.roots` in `project.emulsify.json`.
 
 ```text
 assets/
@@ -14,6 +16,21 @@ assets/
   images/
     example.png
 ```
+
+Projects that keep Storybook text assets in additional directories can declare
+custom asset roots in `project.emulsify.json`:
+
+```json
+{
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
+  }
+}
+```
+
+Configured roots are resolved relative to the project root. Paths that resolve
+outside the project are ignored. Existing root `assets/` and `src/assets/`
+directories are always included for `@assets` source lookups.
 
 ## Sass And CSS
 
@@ -39,11 +56,12 @@ $font-url: '/assets/fonts/example';
 }
 ```
 
-Storybook mounts root `./assets` at `/assets`, so these URLs work in stories.
-During the Vite build, Emulsify rewrites CSS `url('/assets/...')` and
-`url('assets/...')` references to paths relative to the emitted CSS file. That
-lets built CSS under `dist/` or mirrored component output resolve the same
-project assets without hard-coding a platform-specific theme path.
+Storybook mounts existing configured asset roots at `/assets`, so these URLs
+work in stories. During the Vite build, Emulsify rewrites CSS
+`url('/assets/...')` and `url('assets/...')` references to paths relative to
+the emitted CSS file. That lets built CSS under `dist/` or mirrored component
+output resolve the same project assets without hard-coding a platform-specific
+theme path.
 
 Avoid Sass URLs that hard-code a platform or deployment directory. They may work
 in one runtime, but they bypass Storybook's static asset mount and make the
@@ -59,9 +77,17 @@ through Emulsify's Storybook Twig helpers.
 ```
 
 For text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and
-Markdown, `source('@assets/...')` reads from configured asset roots and always
-includes existing root `assets` and `src/assets` directories. Root `./assets`
-is checked before `./src/assets`.
+Markdown, `source('@assets/...')` reads from `assets.roots` and always includes
+existing root `assets` and `src/assets` directories. Root `./assets` is checked
+before `./src/assets`.
+
+```json
+{
+  "assets": {
+    "roots": ["./design/assets"]
+  }
+}
+```
 
 The generated SVG sprite is a special case:
 

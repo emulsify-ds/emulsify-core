@@ -34,7 +34,7 @@ See [Version Evolution](docs/version-evolution.md) for more release history.
 
 Twig and React are equally valid ways to build component libraries with Emulsify Core. The right authoring model depends on the consuming project:
 
-- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today; Craft CMS and WordPress + Timber can use the `none` adapter unless a project adds platform-specific behavior.
+- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today. WordPress and Timber projects should currently use `platform: "none"` unless a project adds its own platform-specific behavior.
 - Use React for standalone UI libraries, application components, or projects that already use React.
 - Use mixed Twig and React when a design system needs to document both CMS-rendered and JavaScript-rendered components in the same Storybook instance.
 
@@ -56,9 +56,17 @@ Every project should provide a `project.emulsify.json` file at the project root:
     "platform": "none",
     "name": "example",
     "machineName": "example"
+  },
+  "assets": {
+    "roots": ["./design/assets"]
   }
 }
 ```
+
+Asset files are discovered from the default asset roots and any additional
+roots configured in `project.emulsify.json`. Use asset roots when a project
+stores fonts, images, icons, or other static files outside the default
+locations.
 
 Common project scripts call the shared Emulsify Core Vite and Storybook config:
 
@@ -86,7 +94,7 @@ The documentation is split by task:
 
 ## Known Limitations
 
-- Implemented platform adapters are currently `none` and `drupal`. WordPress + Timber and Craft CMS are supported as Twig-oriented use cases through the `none` adapter today. Dedicated adapters are future opportunities. See [Platform Adapters](docs/platform-adapters.md).
+- Implemented platform adapters are currently `none` and `drupal`. WordPress and Timber projects should currently use `platform: "none"`. This keeps Emulsify Core in platform-neutral mode while still supporting Twig-oriented component development. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced. See [Platform Adapters](docs/platform-adapters.md).
 - Storybook's Twig resolver eagerly imports Twig modules and raw Twig source. This is reliable for `include()` and `source()`, but large Twig libraries should keep Storybook source roots intentional. See [Performance](docs/performance.md).
 - Production sourcemaps are enabled by default unless a project overrides Vite config through `config/emulsify-core/vite/plugins.*`. See [Performance](docs/performance.md).
 - Project extensions use the public `config/emulsify-core` directory: `config/emulsify-core/vite/plugins.*` for Vite, `config/emulsify-core/storybook/...` for Storybook, and `config/emulsify-core/a11y.config.js` for a11y. See [Extension Points](docs/extension-points.md).
@@ -103,7 +111,7 @@ Release-readiness coverage validates:
 - Projects using multiple `variant.structureImplementations`.
 - Mixed Twig + React Storybook projects.
 
-WordPress + Timber and Craft CMS are Twig-based project use cases that can use the `none` adapter today. Dedicated adapters for those platforms are future opportunities. The implemented adapters in this package are currently `none` and `drupal`.
+WordPress and Timber projects should currently use `platform: "none"`. This keeps Emulsify Core in platform-neutral mode while still supporting Twig-oriented component development. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced. The implemented adapters in this package are currently `none` and `drupal`.
 
 ## Public Imports
 

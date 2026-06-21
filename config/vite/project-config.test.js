@@ -123,6 +123,97 @@ describe('resolveProjectConfig', () => {
     });
   });
 
+  it('has no configured asset roots by default', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.assetRoots).toEqual([]);
+    expect(env.projectStructure.assetRoots).toEqual(env.assetRoots);
+    expect(env.ignoredAssetRoots).toEqual([]);
+  });
+
+  it('normalizes multiple configured asset roots relative to the project root', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'design/assets'), { recursive: true });
+    mkdirSync(join(projectDir, 'public/static'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      projectStructure: {
+        assetRoots: ['./design/assets', 'public/static'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'design/assets'),
+      join(projectDir, 'public/static'),
+    ]);
+  });
+
+  it('deduplicates configured asset roots', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      projectStructure: {
+        assetRoots: ['./assets', 'assets', './src/assets', 'custom', 'custom/'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'assets'),
+      join(projectDir, 'src/assets'),
+      join(projectDir, 'custom'),
+    ]);
+  });
+
+  it('ignores asset roots that escape the project root', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      projectStructure: {
+        assetRoots: ['../outside', './assets'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'assets'),
+    ]);
+    expect(env.ignoredAssetRoots).toEqual(['../outside']);
+  });
+
+  it('keeps existing configs without public asset roots backward compatible', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'components'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'generic',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.platform).toBe('none');
+    expect(env.projectStructure.assetRoots).toEqual([]);
+    expect(env.ignoredAssetRoots).toEqual([]);
+  });
+
   it('supports legacy generic platform config as none', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'components'), { recursive: true });
@@ -284,5 +375,57 @@ describe('resolveProjectConfig', () => {
     expect(env.namespaceRoots).toEqual({
       components: join(projectDir, 'src/components'),
     });
+  });
+
+  it('normalizes documented assets.roots into project structure asset roots', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'design-system/assets'), {
+      recursive: true,
+    });
+    mkdirSync(join(projectDir, 'prototype-assets'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      assets: {
+        roots: ['./design-system/assets/', './prototype-assets'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+    const expectedRoots = [
+      join(projectDir, 'design-system/assets'),
+      join(projectDir, 'prototype-assets'),
+    ];
+
+    expect(env.assetRoots).toEqual(expectedRoots);
+    expect(env.projectStructure.assetRoots).toEqual(expectedRoots);
+  });
+
+  it('ignores unsafe asset root paths', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/assets'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      assets: {
+        roots: [
+          '../shared-assets',
+          '/tmp/outside-assets',
+          './src/assets',
+          './src/assets',
+          '',
+          42,
+        ],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.assetRoots).toEqual([join(projectDir, 'src/assets')]);
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'src/assets'),
+    ]);
   });
 });

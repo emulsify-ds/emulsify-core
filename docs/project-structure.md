@@ -1,16 +1,16 @@
 # Project Structure And Output
 
-Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, and copy behavior.
+Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, asset roots, and copy behavior.
 
 ## Which Structure Should I Use?
 
-| Project Type                                 | Recommended Structure                        | Platform Setting   | Notes                                                                                                                         |
-| -------------------------------------------- | -------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| New standalone design system                 | `src/components`                             | `none`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                     |
-| Existing root `./components` project         | Keep `./components`                          | `none` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                       |
-| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`           | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                  |
-| Multi-root design system                     | `variant.structureImplementations`           | `none` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                          |
-| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `none`             | Use this for Craft CMS, WordPress + Timber, or similar Twig-based projects today. Dedicated adapters are not implemented yet. |
+| Project Type                                 | Recommended Structure                        | Platform Setting   | Notes                                                                                                                       |
+| -------------------------------------------- | -------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| New standalone design system                 | `src/components`                             | `none`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                   |
+| Existing root `./components` project         | Keep `./components`                          | `none` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                     |
+| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`           | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                |
+| Multi-root design system                     | `variant.structureImplementations`           | `none` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                        |
+| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `none`             | WordPress and Timber projects should currently use `platform: "none"`; dedicated WordPress behavior is not implemented yet. |
 
 ## Supported Project Structures
 
@@ -66,6 +66,35 @@ Projects using this structure do not need to create `src/` just to use the curre
 ```
 
 Each implementation name becomes a structure root and Twig namespace, so templates can reference names such as `@components`, `@foundation`, `@layout`, and `@tokens`. Configured paths that resolve outside the project root are ignored.
+
+### Asset Roots
+
+Asset files are discovered from the default asset roots and any additional
+roots configured in `project.emulsify.json`. Use asset roots when a project
+stores fonts, images, icons, or other static files outside the default
+locations.
+
+The default asset roots are root `./assets` and `./src/assets`. Additional
+asset roots use `assets.roots` and are resolved relative to the project root:
+
+```json
+{
+  "project": {
+    "platform": "none",
+    "name": "example",
+    "machineName": "example"
+  },
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
+  }
+}
+```
+
+Each root is normalized into `projectStructure.assetRoots` as an absolute path.
+Configured roots are deduplicated. Paths that resolve outside the project root
+are ignored and reported by `emulsify-audit`. Existing root `assets/` and
+`src/assets/` directories are still checked automatically for `@assets`
+references.
 
 ## Story Roots
 

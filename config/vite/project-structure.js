@@ -7,7 +7,7 @@
  * process.
  */
 
-import { basename, relative, resolve, sep } from 'path';
+import { basename, normalize, relative, resolve, sep } from 'path';
 import { safeExists } from './utils/fs-safe.js';
 import { replaceLastSlash, toPosixPath } from './utils/paths.js';
 import { unique } from './utils/unique.js';
@@ -182,6 +182,33 @@ function fallbackNamespaceRoots({
 }
 
 /**
+ * Normalize project-scoped asset roots.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string[]} assetRoots - Raw asset root paths.
+ * @returns {string[]} Safe absolute asset root paths.
+ */
+function normalizeAssetRoots(projectDir, assetRoots = []) {
+  if (!Array.isArray(assetRoots)) return [];
+
+  const projectRoot = resolve(projectDir);
+
+  return unique(
+    assetRoots
+      .map((root) =>
+        typeof root === 'string' && root.trim()
+          ? normalize(resolve(projectRoot, root))
+          : '',
+      )
+      .filter(
+        (root) =>
+          root &&
+          (root === projectRoot || root.startsWith(`${projectRoot}${sep}`)),
+      ),
+  );
+}
+
+/**
  * Resolve the serializable project structure model.
  *
  * @param {{
@@ -190,6 +217,8 @@ function fallbackNamespaceRoots({
  *   srcExists?: boolean,
  *   SDC?: boolean,
  *   structureImplementations?: {name: string, directory: string}[],
+ *   assetRoots?: string[],
+ *   ignoredAssetRoots?: string[],
  *   platformAdapter?: object
  * }} [env] - Normalized project environment.
  * @returns {object} Project structure model.
@@ -214,6 +243,8 @@ export function resolveProjectStructure(env) {
     srcDir = defaultSrcDir,
     srcExists = safeExists(defaultSrcDir),
     SDC = false,
+    assetRoots: rawAssetRoots = [],
+    ignoredAssetRoots = [],
     platformAdapter = {},
   } = resolvedEnv;
   const structureImplementations =
@@ -244,6 +275,7 @@ export function resolveProjectStructure(env) {
       });
   const componentRoots = componentRootRecords.map((root) => root.directory);
   const globalRoots = globalRootRecords.map((root) => root.directory);
+  const assetRoots = normalizeAssetRoots(projectDir, rawAssetRoots);
   const namespaceRootValues = Object.values(namespaceRoots);
   const sourceRoots = unique(
     [...componentRoots, ...globalRoots].filter(Boolean),
@@ -278,7 +310,9 @@ export function resolveProjectStructure(env) {
     globalRootRecords,
     componentRoots,
     globalRoots,
+    assetRoots,
     sourceRoots,
+    ignoredAssetRoots: unique(ignoredAssetRoots),
     sourceRootRecords,
     storyRoots,
     twigRoots,

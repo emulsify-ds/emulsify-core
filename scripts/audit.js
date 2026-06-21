@@ -396,6 +396,18 @@ function auditProjectConfig(context) {
     }
   }
 
+  for (const root of env.ignoredAssetRoots || []) {
+    findings.push(
+      makeFinding({
+        id: 'invalid-asset-root',
+        severity: 'warn',
+        filePath: resolve(projectDir, 'project.emulsify.json'),
+        message: `Configured asset root "${root}" was ignored because it resolves outside the project root.`,
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md#asset-roots',
+      }),
+    );
+  }
+
   return findings;
 }
 
@@ -1046,7 +1058,7 @@ function styleRuntimeDirectories(filePath, env, projectDir) {
 function auditCssAssetReferences(context) {
   const { env, projectDir, styleFiles } = context;
   const findings = [];
-  const projectAssetsDir = resolve(projectDir, 'assets');
+  const projectAssetRoots = auditAssetRoots(env).filter(safeIsDirectory);
   const styleSourceRoots = env.projectStructure?.sourceRoots || [];
 
   for (const filePath of styleFiles) {
@@ -1092,7 +1104,7 @@ function auditCssAssetReferences(context) {
       }
 
       if (
-        isSameOrInside(resolvedAsset, projectAssetsDir) &&
+        projectAssetRoots.some((root) => isSameOrInside(resolvedAsset, root)) &&
         (!sourceAsset || runtimeAsset || assetPath.startsWith('..'))
       ) {
         findings.push(

@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "4.0.4",
+  "version": "4.1.0",
   "description": "Bundled tooling for Storybook development + Vite Build",
   "keywords": [
     "component library",
@@ -98,6 +98,7 @@
     "src/storybook/index.js",
     "src/storybook/main-config.js",
     "src/storybook/platform-behaviors.js",
+    "src/storybook/preview-decorator.js",
     "src/storybook/preview-parameters.js",
     "src/storybook/render-twig.js",
     "src/storybook/twig/include-function.js",
