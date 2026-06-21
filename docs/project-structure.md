@@ -4,13 +4,13 @@ Emulsify Core reads `project.emulsify.json` once and normalizes project structur
 
 ## Which Structure Should I Use?
 
-| Project Type                                 | Recommended Structure                        | Platform Setting   | Notes                                                                                                                         |
-| -------------------------------------------- | -------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| New standalone design system                 | `src/components`                             | `none`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                     |
-| Existing root `./components` project         | Keep `./components`                          | `none` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                       |
-| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`           | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                  |
-| Multi-root design system                     | `variant.structureImplementations`           | `none` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                          |
-| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `none`             | Use this for Craft CMS, WordPress + Timber, or similar Twig-based projects today. Dedicated adapters are not implemented yet. |
+| Project Type                                 | Recommended Structure                        | Platform Setting   | Notes                                                                                                                       |
+| -------------------------------------------- | -------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| New standalone design system                 | `src/components`                             | `none`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                   |
+| Existing root `./components` project         | Keep `./components`                          | `none` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                     |
+| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`           | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                |
+| Multi-root design system                     | `variant.structureImplementations`           | `none` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                        |
+| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `none`             | WordPress and Timber projects should currently use `platform: "none"`; dedicated WordPress behavior is not implemented yet. |
 
 ## Supported Project Structures
 
