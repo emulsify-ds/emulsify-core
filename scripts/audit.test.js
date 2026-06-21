@@ -11,6 +11,7 @@ import {
   findCssUrlReferences,
   findTwigIncludeSourceReferences,
   formatAuditReport,
+  resolvesTwigReference,
 } from './audit.js';
 
 function writeFile(projectDir, relPath, contents = '') {
@@ -420,6 +421,81 @@ No audit findings found."
     expect(result.findings.map((finding) => finding.id)).not.toContain(
       'generated-package-json-migration-needed',
     );
+  });
+
+  it('resolves source() asset references from src/assets', () => {
+    const quote = String.fromCharCode(39);
+
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'none',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'src/components/icon/icon.twig',
+      `{{ source(${quote}@assets/icons/foo.svg${quote}) }}`,
+    );
+    writeFile(projectDir, 'src/assets/icons/foo.svg', '<svg></svg>');
+
+    const result = auditProject({ projectDir });
+
+    expect(
+      result.findings.filter(
+        (finding) => finding.id === 'unresolved-twig-reference',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('continues to resolve source() asset references from root assets', () => {
+    const quote = String.fromCharCode(39);
+
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'none',
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'src/components/icon/icon.twig',
+      `{{ source(${quote}@assets/icons/foo.svg${quote}) }}`,
+    );
+    writeFile(projectDir, 'assets/icons/foo.svg', '<svg></svg>');
+
+    const result = auditProject({ projectDir });
+
+    expect(
+      result.findings.filter(
+        (finding) => finding.id === 'unresolved-twig-reference',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('resolves source() asset references from configured asset roots', () => {
+    const quote = String.fromCharCode(39);
+    const twigFile = writeFile(
+      projectDir,
+      'src/components/icon/icon.twig',
+      `{{ source(${quote}@assets/icons/foo.svg${quote}) }}`,
+    );
+    writeFile(projectDir, 'custom-assets/icons/foo.svg', '<svg></svg>');
+
+    expect(
+      resolvesTwigReference('@assets/icons/foo.svg', twigFile, {
+        projectDir,
+        projectStructure: {
+          assetRoots: ['custom-assets'],
+        },
+      }),
+    ).toBe(true);
   });
 
   it('only treats first include/source argument strings as template references', () => {
