@@ -1,15 +1,27 @@
-### Emulsify Core Version:
+### Current @emulsify/core version
 
-- [1.0.0](https://github.com/emulsify-ds/emulsify-core/releases)):
+_Example: 4.0.3_
 
-### Description of the feature request:
+### Platform adapter
 
-_Please give as much information as possible_
+_Example: Drupal, Drupal SDC, WordPress, or none._
 
-### Suggested solution or approach:
+### Project structure
 
-_(optional) Describe a solution or approach to your request that may help with implementation._
+_Describe whether the project uses src/components, SDC components, custom structureImplementations, or another layout._
 
-### Additional context:
+### Feature request
 
-_(optional) Add any other context or screenshots about the feature request here._
+_Describe the feature or change you want._
+
+### Expected behavior
+
+_Describe what should happen when this feature exists._
+
+### Suggested solution or approach
+
+_(Optional) Describe an implementation approach that may help._
+
+### Additional context
+
+_(Optional) Add links, screenshots, examples, or related issues._

@@ -5,7 +5,14 @@
  */
 
 import { lstatSync, readdirSync, statSync } from 'node:fs';
-import { basename, dirname, relative, resolve, sep } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import { globSync } from 'glob';
 import { resolveProjectConfig } from '../config/vite/project-config.js';
 import {
@@ -68,6 +75,7 @@ const RECOMMENDED_PACKAGE_OVERRIDES = [
 ];
 const GENERATED_PACKAGE_SCRIPT_DOCS =
   'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#manual-packagejson-updates';
+const GENERATED_ASSET_ALIASES = new Set(['icons.svg']);
 
 /**
  * Cache source file reads for one top-level audit run.
@@ -727,6 +735,74 @@ function candidateKeysToFiles(keys, env) {
 }
 
 /**
+ * Resolve an audit asset root using Storybook's root-relative convention.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string} assetRoot - Configured, absolute, or project-relative root.
+ * @returns {string} Absolute filesystem path, or an empty string.
+ */
+function resolveAuditAssetRoot(projectDir, assetRoot) {
+  if (typeof assetRoot !== 'string' || !assetRoot.trim()) return '';
+
+  const normalizedProjectDir = resolve(projectDir || process.cwd());
+  const normalizedRoot = assetRoot.trim();
+
+  if (isAbsolute(normalizedRoot)) {
+    const absoluteRoot = resolve(normalizedRoot);
+
+    return safeExists(absoluteRoot)
+      ? absoluteRoot
+      : resolve(normalizedProjectDir, `.${normalizedRoot}`);
+  }
+
+  return resolve(normalizedProjectDir, normalizedRoot);
+}
+
+/**
+ * Return filesystem roots that Storybook can use for @assets source() calls.
+ *
+ * @param {object} env - Normalized environment.
+ * @param {object} [options={}] - Asset root options.
+ * @param {boolean} [options.includeGenerated=false] - Include generated roots.
+ * @returns {string[]} Absolute asset roots.
+ */
+function auditAssetRoots(env = {}, { includeGenerated = false } = {}) {
+  const projectDir = env.projectDir || process.cwd();
+  const configuredRoots = Array.isArray(env?.projectStructure?.assetRoots)
+    ? env.projectStructure.assetRoots
+    : [];
+  const fallbackRoots = ['assets', 'src/assets'];
+  const generatedRoots = includeGenerated ? ['dist/assets'] : [];
+
+  return Array.from(
+    new Set(
+      [...fallbackRoots, ...configuredRoots, ...generatedRoots]
+        .map((root) => resolveAuditAssetRoot(projectDir, root))
+        .filter(Boolean),
+    ),
+  );
+}
+
+/**
+ * Determine whether an @assets reference resolves through Storybook asset roots.
+ *
+ * @param {string} reference - Twig @assets reference.
+ * @param {object} env - Normalized environment.
+ * @returns {boolean} TRUE when a candidate exists.
+ */
+function resolvesAssetReference(reference, env) {
+  const relAsset = reference.replace(/^@assets\//, '');
+  if (!relAsset) return false;
+  const includeGenerated = GENERATED_ASSET_ALIASES.has(relAsset);
+
+  return auditAssetRoots(env, { includeGenerated }).some((root) => {
+    const candidate = resolve(root, relAsset);
+
+    return isSameOrInside(candidate, root) && safeExists(candidate);
+  });
+}
+
+/**
  * Determine whether a Twig include/source reference resolves.
  *
  * @param {string} reference - Twig reference.
@@ -738,8 +814,7 @@ export function resolvesTwigReference(reference, filePath, env) {
   if (!reference || /^https?:\/\//i.test(reference)) return true;
 
   if (reference.startsWith('@assets/')) {
-    const relAsset = reference.replace(/^@assets\//, '');
-    return safeExists(resolve(env.projectDir, 'assets', relAsset));
+    return resolvesAssetReference(reference, env);
   }
 
   const candidates =
