@@ -7,6 +7,7 @@
 
 export default {
   storybookBuildDir: '../../../../.out',
+  discoverStories: true,
   pa11y: {
     includeNotices: false,
     includeWarnings: false,
@@ -17,7 +18,7 @@ export default {
     codes: ['landmark-one-main', 'page-has-heading-one'],
     descriptions: ['Ensures all page content is contained by landmarks'],
   },
-  // List of storybook component IDs defined and used in this project.
+  // Manual Storybook IDs merged with IDs discovered from built Storybook output.
   components: [
     'base-colors--palettes',
     'base-motion--usage',

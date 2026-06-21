@@ -5,7 +5,7 @@
  * and reports issues.
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import * as R from 'ramda';
@@ -16,15 +16,15 @@ import a11yConfig from '../config/a11y.config.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const { storybookBuildDir, pa11y: pa11yConfig } = a11yConfig;
-
 // Project-specific configuration.
-let { ignore = {}, components = [] } = a11yConfig;
+let {
+  ignore = {},
+  components = [],
+  discoverStories = true,
+  storybookBuildDir,
+  pa11y: pa11yConfig = {},
+} = a11yConfig;
 
-/** Absolute path to Storybook build directory. */
-const STORYBOOK_BUILD_DIR = path.resolve(__dirname, '../', storybookBuildDir);
-/** Absolute path to Storybook iframe file used for per-story rendering. */
-const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
 /** Project-specific accessibility config path used by generated themes. */
 const PROJECT_A11Y_CONFIG = path.resolve(
   __dirname,
@@ -48,12 +48,26 @@ const loadProjectA11yConfig = async () => {
 /**
  * Apply project-specific a11y config values over shared defaults.
  *
- * @param {{ignore?: object, components?: string[]}} config - Project config.
+ * @param {{ignore?: object, components?: string[], discoverStories?: boolean, storybookBuildDir?: string, pa11y?: object}} config - Project config.
  * @returns {void}
  */
 const applyProjectA11yConfig = (config = {}) => {
   ignore = config.ignore || ignore;
-  components = config.components || components;
+  components = Array.isArray(config.components)
+    ? config.components
+    : components;
+  discoverStories =
+    typeof config.discoverStories === 'boolean'
+      ? config.discoverStories
+      : discoverStories;
+  storybookBuildDir =
+    typeof config.storybookBuildDir === 'string' && config.storybookBuildDir
+      ? config.storybookBuildDir
+      : storybookBuildDir;
+  pa11yConfig =
+    config.pa11y && typeof config.pa11y === 'object'
+      ? { ...pa11yConfig, ...config.pa11y }
+      : pa11yConfig;
 };
 
 /**
@@ -67,10 +81,126 @@ const printHelp = () => {
       'Usage: node scripts/a11y.js [options]',
       '',
       'Options:',
-      '  -r           Run pa11y against configured Storybook component IDs.',
+      '  -r           Run pa11y against discovered and configured Storybook story IDs.',
       '  -h, --help   Print this help text.',
     ].join('\n'),
   );
+};
+
+/**
+ * Resolve the configured Storybook build directory.
+ *
+ * @param {string} [buildDir=storybookBuildDir] - Configured build directory.
+ * @returns {string} Absolute Storybook build directory.
+ */
+const resolveStorybookBuildDir = (buildDir = storybookBuildDir) =>
+  path.resolve(__dirname, '../', buildDir);
+
+/**
+ * Resolve Storybook's iframe file used for per-story rendering.
+ *
+ * @param {string} [buildDir=storybookBuildDir] - Configured build directory.
+ * @returns {string} Absolute iframe.html path.
+ */
+const resolveStorybookIframe = (buildDir = storybookBuildDir) =>
+  path.join(resolveStorybookBuildDir(buildDir), 'iframe.html');
+
+/**
+ * Return unique non-empty Storybook IDs in first-seen order.
+ *
+ * @param {Array} values - Candidate story IDs.
+ * @returns {string[]} Unique story IDs.
+ */
+const normalizeStoryIds = (values = []) =>
+  Array.from(
+    new Set(
+      values
+        .filter((value) => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
+
+/**
+ * Extract runnable story IDs from a Storybook index object.
+ *
+ * @param {object} index - Parsed Storybook index.json or stories.json.
+ * @returns {string[]} Story IDs.
+ */
+const storyIdsFromStorybookIndex = (index = {}) => {
+  const entries =
+    index?.entries && typeof index.entries === 'object'
+      ? index.entries
+      : index?.stories && typeof index.stories === 'object'
+        ? index.stories
+        : {};
+
+  return normalizeStoryIds(
+    Object.entries(entries)
+      .filter(([, entry]) => !entry?.type || entry.type === 'story')
+      .map(([id, entry]) =>
+        typeof entry?.id === 'string' && entry.id ? entry.id : id,
+      ),
+  );
+};
+
+/**
+ * Discover runnable Storybook story IDs from built Storybook output.
+ *
+ * @param {string} [buildDir=storybookBuildDir] - Configured Storybook build directory.
+ * @param {{warn?: Function}} [options] - Reporting options.
+ * @returns {string[]} Story IDs discovered from Storybook's generated index.
+ */
+const discoverStoryIds = (
+  buildDir = storybookBuildDir,
+  { warn = console.warn } = {},
+) => {
+  const indexPath = path.join(resolveStorybookBuildDir(buildDir), 'index.json');
+
+  if (!existsSync(indexPath)) {
+    warn(
+      `Storybook index not found at ${indexPath}; falling back to configured Pa11y story IDs.`,
+    );
+    return [];
+  }
+
+  try {
+    return storyIdsFromStorybookIndex(
+      JSON.parse(readFileSync(indexPath, 'utf8')),
+    );
+  } catch (error) {
+    warn(
+      `Unable to read Storybook index at ${indexPath}: ${
+        error.message || error
+      }; falling back to configured Pa11y story IDs.`,
+    );
+    return [];
+  }
+};
+
+/**
+ * Resolve the final Pa11y story ID list.
+ *
+ * @param {object} [options={}] - Resolution options.
+ * @param {string[]} [options.manualIds=components] - Manually configured IDs.
+ * @param {boolean} [options.discover=discoverStories] - Whether discovery is enabled.
+ * @param {string} [options.buildDir=storybookBuildDir] - Storybook build directory.
+ * @param {Function} [options.warn=console.warn] - Warning sink.
+ * @returns {string[]} Story IDs to lint.
+ */
+const resolvePa11yStoryIds = ({
+  manualIds = components,
+  discover = discoverStories,
+  buildDir = storybookBuildDir,
+  warn = console.warn,
+} = {}) => {
+  const manual = normalizeStoryIds(manualIds);
+  if (discover === false) return manual;
+
+  return normalizeStoryIds([
+    ...manual,
+    ...discoverStoryIds(buildDir, { warn }),
+  ]);
 };
 
 /**
@@ -155,7 +285,7 @@ const logReport = ({ issues, pageUrl }) => {
  * @returns {Promise<{ issues: Pa11yIssue[], pageUrl: string }>} Pa11y result.
  */
 const lintComponent = async (name) =>
-  pa11y(`${STORYBOOK_IFRAME}?id=${name}`, {
+  pa11y(`${resolveStorybookIframe()}?id=${name}`, {
     includeNotices: true,
     includeWarnings: true,
     runners: ['axe'],
@@ -188,15 +318,22 @@ if (R.includes(process.argv[2], ['-h', '--help'])) {
 } else if (R.pathEq(['argv', 2], '-r')(process)) {
   loadProjectA11yConfig().then((projectConfig) => {
     applyProjectA11yConfig(projectConfig);
-    return lintReportAndExit(components);
+    return lintReportAndExit(resolvePa11yStoryIds());
   });
 }
 
 export {
   severityToColor,
+  applyProjectA11yConfig,
+  discoverStoryIds,
   issueIsValid,
   logIssue,
   logReport,
   lintComponent,
   lintReportAndExit,
+  normalizeStoryIds,
+  resolvePa11yStoryIds,
+  resolveStorybookBuildDir,
+  resolveStorybookIframe,
+  storyIdsFromStorybookIndex,
 };

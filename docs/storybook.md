@@ -95,6 +95,46 @@ For only the Twig story migration report, use `npm run audit:twig-stories` from 
 
 Add `--fail-on-found` when using the audit in CI during a migration push.
 
+## Pa11y Accessibility Checks
+
+Build Storybook before running Pa11y so Storybook writes its generated
+`index.json`:
+
+```sh
+npm run storybook-build
+node scripts/a11y.js -r
+```
+
+Consuming projects can call the installed Core script:
+
+```sh
+node node_modules/@emulsify/core/scripts/a11y.js -r
+```
+
+By default, Pa11y reads Storybook story IDs from the built Storybook
+`index.json` under `storybookBuildDir`. Manual IDs configured in
+`config/emulsify-core/a11y.config.js` are merged with discovered IDs and
+deduplicated, so projects can keep explicit coverage for stories that are not
+present in the generated index:
+
+```js
+export default {
+  components: ['components-manual-card--default'],
+};
+```
+
+To run only manual IDs, disable discovery explicitly:
+
+```js
+export default {
+  discoverStories: false,
+  components: ['components-manual-card--default'],
+};
+```
+
+If `index.json` is missing or malformed, the script prints a warning and falls
+back to the configured manual IDs.
+
 ## React Stories
 
 React stories use standard Storybook React patterns.
