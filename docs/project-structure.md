@@ -1,6 +1,6 @@
 # Project Structure And Output
 
-Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, and copy behavior.
+Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, asset roots, and copy behavior.
 
 ## Which Structure Should I Use?
 
@@ -75,8 +75,7 @@ stores fonts, images, icons, or other static files outside the default
 locations.
 
 The default asset roots are root `./assets` and `./src/assets`. Additional
-asset roots use `projectStructure.assetRoots` and are resolved relative to the
-project root:
+asset roots use `assets.roots` and are resolved relative to the project root:
 
 ```json
 {
@@ -85,14 +84,17 @@ project root:
     "name": "example",
     "machineName": "example"
   },
-  "projectStructure": {
-    "assetRoots": ["./design/assets", "./public/static"]
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
   }
 }
 ```
 
-Configured asset roots are deduplicated with the defaults. Paths that resolve
-outside the project root are ignored and reported by `emulsify-audit`.
+Each root is normalized into `projectStructure.assetRoots` as an absolute path.
+Configured roots are deduplicated. Paths that resolve outside the project root
+are ignored and reported by `emulsify-audit`. Existing root `assets/` and
+`src/assets/` directories are still checked automatically for `@assets`
+references.
 
 ## Story Roots
 

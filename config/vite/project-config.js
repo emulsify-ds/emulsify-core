@@ -98,15 +98,16 @@ function normalizeStructureImplementations(projectDir, implementations = []) {
 /**
  * Read public asset root configuration from supported project config paths.
  *
- * `projectStructure.assetRoots` is the documented public path. `project.assetRoots`
- * is accepted as a conservative alias for projects that already grouped static
- * asset settings under the project block while this feature was internal.
+ * `assets.roots` is the documented public path.
+ * `projectStructure.assetRoots` and `project.assetRoots` remain supported for
+ * compatibility with earlier follow-up work and local project experiments.
  *
  * @param {object} rawConfig - Parsed project.emulsify.json contents.
  * @returns {Array} Raw configured asset roots.
  */
 function rawAssetRoots(rawConfig = {}) {
   return [
+    ...(Array.isArray(rawConfig?.assets?.roots) ? rawConfig.assets.roots : []),
     ...(Array.isArray(rawConfig?.projectStructure?.assetRoots)
       ? rawConfig.projectStructure.assetRoots
       : []),

@@ -270,7 +270,17 @@ It also supports the Storybook asset alias `@assets` for static assets served fr
 {{ source('@assets/images/example.png') }}
 ```
 
-Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Configure additional roots with `projectStructure.assetRoots` in `project.emulsify.json`. Emulsify always includes existing root `assets` and `src/assets` directories. Root `./assets` is checked before `./src/assets` for `@assets` references.
+Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Projects can add custom roots with `assets.roots` in `project.emulsify.json`; Emulsify normalizes those paths into `projectStructure.assetRoots` and always includes existing root `assets` and `src/assets` directories. Root `./assets` is checked before `./src/assets` for `@assets` references.
+
+```json
+{
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
+  }
+}
+```
+
+Configured asset roots must resolve inside the project root. Unsafe paths are ignored.
 
 The generated sprite is a special asset alias: `source('@assets/icons.svg')` resolves `dist/assets/icons.svg` before checking root `assets/icons.svg`. Other `@assets/...` SVG references resolve through the project asset roots, so `source('@assets/icons/arrow.svg')` reads `assets/icons/arrow.svg` when that file exists.
 

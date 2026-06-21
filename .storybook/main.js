@@ -149,12 +149,14 @@ function existingStaticDirs(staticDirs) {
  * @returns {Array<string|{from: string, to: string}>} Static directory entries.
  */
 function buildAssetStaticDirs(env) {
-  const assetRoots = Array.isArray(env.projectStructure?.assetRoots)
+  const configuredAssetRoots = Array.isArray(env.projectStructure?.assetRoots)
     ? env.projectStructure.assetRoots
-    : [
-        path.resolve(projectRoot, 'assets'),
-        path.resolve(projectRoot, 'src/assets'),
-      ];
+    : [];
+  const assetRoots = [
+    ...configuredAssetRoots,
+    path.resolve(projectRoot, 'assets'),
+    path.resolve(projectRoot, 'src/assets'),
+  ];
 
   return existingStaticDirs([
     ...assetRoots.map((root) => ({

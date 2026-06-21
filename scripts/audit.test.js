@@ -498,7 +498,7 @@ No audit findings found."
     ).toBe(true);
   });
 
-  it('resolves source() asset references from public configured asset roots', () => {
+  it('resolves source() asset references from assets.roots config', () => {
     const quote = String.fromCharCode(39);
 
     writeFile(
@@ -508,8 +508,8 @@ No audit findings found."
         project: {
           platform: 'none',
         },
-        projectStructure: {
-          assetRoots: ['custom-assets', './design/assets'],
+        assets: {
+          roots: ['./custom-assets'],
         },
       }),
     );
@@ -518,7 +518,7 @@ No audit findings found."
       'src/components/icon/icon.twig',
       `{{ source(${quote}@assets/icons/foo.svg${quote}) }}`,
     );
-    writeFile(projectDir, 'design/assets/icons/foo.svg', '<svg></svg>');
+    writeFile(projectDir, 'custom-assets/icons/foo.svg', '<svg></svg>');
 
     const result = auditProject({ projectDir });
 
@@ -537,8 +537,8 @@ No audit findings found."
         project: {
           platform: 'none',
         },
-        projectStructure: {
-          assetRoots: ['../outside-assets'],
+        assets: {
+          roots: ['../outside-assets'],
         },
       }),
     );
@@ -554,7 +554,6 @@ No audit findings found."
         'Configured asset root "../outside-assets" was ignored because it resolves outside the project root.',
     });
   });
-
   it('only treats first include/source argument strings as template references', () => {
     const quote = String.fromCharCode(39);
 

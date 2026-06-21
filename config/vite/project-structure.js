@@ -7,7 +7,7 @@
  * process.
  */
 
-import { basename, relative, resolve, sep } from 'path';
+import { basename, normalize, relative, resolve, sep } from 'path';
 import { safeExists } from './utils/fs-safe.js';
 import { replaceLastSlash, toPosixPath } from './utils/paths.js';
 import { unique } from './utils/unique.js';
@@ -117,28 +117,6 @@ function fallbackGlobalRoots({ srcDir, srcExists }) {
 }
 
 /**
- * Build the project-authored roots that can satisfy @assets references.
- *
- * Configured roots are checked first to preserve the existing internal
- * `projectStructure.assetRoots` behavior. Default roots remain appended and
- * deduplicated so root `assets` and `src/assets` continue to work.
- *
- * @param {{projectDir: string, assetRoots?: string[]}} env - Project environment.
- * @returns {string[]} Absolute asset root paths.
- */
-function resolveAssetRoots({ projectDir, assetRoots = [] }) {
-  return unique(
-    [
-      ...(Array.isArray(assetRoots) ? assetRoots : []),
-      resolve(projectDir, 'assets'),
-      resolve(projectDir, 'src/assets'),
-    ]
-      .filter(Boolean)
-      .map((root) => resolve(root)),
-  );
-}
-
-/**
  * Build Twig namespace roots for explicit structure implementations.
  *
  * @param {{name: string, directory: string}[]} structureImplementations
@@ -204,6 +182,33 @@ function fallbackNamespaceRoots({
 }
 
 /**
+ * Normalize project-scoped asset roots.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {string[]} assetRoots - Raw asset root paths.
+ * @returns {string[]} Safe absolute asset root paths.
+ */
+function normalizeAssetRoots(projectDir, assetRoots = []) {
+  if (!Array.isArray(assetRoots)) return [];
+
+  const projectRoot = resolve(projectDir);
+
+  return unique(
+    assetRoots
+      .map((root) =>
+        typeof root === 'string' && root.trim()
+          ? normalize(resolve(projectRoot, root))
+          : '',
+      )
+      .filter(
+        (root) =>
+          root &&
+          (root === projectRoot || root.startsWith(`${projectRoot}${sep}`)),
+      ),
+  );
+}
+
+/**
  * Resolve the serializable project structure model.
  *
  * @param {{
@@ -238,7 +243,7 @@ export function resolveProjectStructure(env) {
     srcDir = defaultSrcDir,
     srcExists = safeExists(defaultSrcDir),
     SDC = false,
-    assetRoots = [],
+    assetRoots: rawAssetRoots = [],
     ignoredAssetRoots = [],
     platformAdapter = {},
   } = resolvedEnv;
@@ -270,11 +275,11 @@ export function resolveProjectStructure(env) {
       });
   const componentRoots = componentRootRecords.map((root) => root.directory);
   const globalRoots = globalRootRecords.map((root) => root.directory);
+  const assetRoots = normalizeAssetRoots(projectDir, rawAssetRoots);
   const namespaceRootValues = Object.values(namespaceRoots);
   const sourceRoots = unique(
     [...componentRoots, ...globalRoots].filter(Boolean),
   );
-  const resolvedAssetRoots = resolveAssetRoots({ projectDir, assetRoots });
   const sourceRootRecords = [...componentRootRecords, ...globalRootRecords];
   const componentStoryRoots = srcExists
     ? componentRoots.filter((root) => !isSameOrInsideRoot(root, srcDir))
@@ -305,8 +310,8 @@ export function resolveProjectStructure(env) {
     globalRootRecords,
     componentRoots,
     globalRoots,
+    assetRoots,
     sourceRoots,
-    assetRoots: resolvedAssetRoots,
     ignoredAssetRoots: unique(ignoredAssetRoots),
     sourceRootRecords,
     storyRoots,

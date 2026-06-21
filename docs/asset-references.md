@@ -3,7 +3,7 @@
 Use the project root `assets/` directory for static files that components need
 at runtime, such as fonts, inline SVGs, background images, and other media.
 Projects can also add custom asset roots with
-`projectStructure.assetRoots` in `project.emulsify.json`.
+`assets.roots` in `project.emulsify.json`.
 
 ```text
 assets/
@@ -16,6 +16,21 @@ assets/
   images/
     example.png
 ```
+
+Projects that keep Storybook text assets in additional directories can declare
+custom asset roots in `project.emulsify.json`:
+
+```json
+{
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
+  }
+}
+```
+
+Configured roots are resolved relative to the project root. Paths that resolve
+outside the project are ignored. Existing root `assets/` and `src/assets/`
+directories are always included for `@assets` source lookups.
 
 ## Sass And CSS
 
@@ -62,14 +77,14 @@ through Emulsify's Storybook Twig helpers.
 ```
 
 For text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and
-Markdown, `source('@assets/...')` reads from configured asset roots and always
-includes existing root `assets` and `src/assets` directories. Root `./assets`
-is checked before `./src/assets`.
+Markdown, `source('@assets/...')` reads from `assets.roots` and always includes
+existing root `assets` and `src/assets` directories. Root `./assets` is checked
+before `./src/assets`.
 
 ```json
 {
-  "projectStructure": {
-    "assetRoots": ["./design/assets"]
+  "assets": {
+    "roots": ["./design/assets"]
   }
 }
 ```

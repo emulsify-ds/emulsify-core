@@ -57,8 +57,8 @@ Every project should provide a `project.emulsify.json` file at the project root:
     "name": "example",
     "machineName": "example"
   },
-  "projectStructure": {
-    "assetRoots": ["./design/assets"]
+  "assets": {
+    "roots": ["./design/assets"]
   }
 }
 ```

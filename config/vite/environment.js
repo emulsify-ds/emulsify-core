@@ -9,6 +9,7 @@
  *  - `SDC`: boolean from project.emulsify.json `project.singleDirectoryComponents`.
  *  - `structureOverrides`: true when safe `variant.structureImplementations` exist.
  *  - `structureRoots`: array of directories from `variant.structureImplementations`.
+ *  - `assetRoots`: array of directories from safe `assets.roots` config.
  *  - `platformAdapter`: active adapter for platform-specific behavior.
  */
 
@@ -26,6 +27,7 @@ import { resolveProjectConfig } from './project-config.js';
  *   structureOverrides: boolean,
  *   structureRoots: string[],
  *   structureImplementations: Array<{name: string, directory: string}>,
+ *   assetRoots: string[],
  *   componentRoots: string[],
  *   globalRoots: string[],
  *   namespaceRoots: Record<string, string>,

@@ -6,6 +6,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
+  resetProjectConfigCache,
+  resolveProjectConfig,
+} from '../project-config.js';
+import {
+  assetSourceRoots,
   assetSourceGlobPatterns,
   generateVirtualTwigAssetSourcesModule,
   generatedAssetSourceRoots,
@@ -24,6 +29,7 @@ describe('virtual Twig asset source module plugin', () => {
     if (projectDir) {
       rmSync(projectDir, { recursive: true, force: true });
     }
+    resetProjectConfigCache();
   });
 
   it('resolves and loads the virtual module', () => {
@@ -115,6 +121,32 @@ describe('virtual Twig asset source module plugin', () => {
       },
     };
 
+    expect(assetSourceGlobPatterns(env)).toEqual([
+      '/design/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+      '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+    ]);
+  });
+
+  it('uses asset roots normalized from project.emulsify.json', () => {
+    projectDir = makeTempProject();
+    const assetRoot = join(projectDir, 'design/assets');
+    mkdirSync(assetRoot, { recursive: true });
+    mkdirSync(join(projectDir, 'assets'), { recursive: true });
+    writeFileSync(
+      join(projectDir, 'project.emulsify.json'),
+      JSON.stringify({
+        project: {
+          platform: 'none',
+        },
+        assets: {
+          roots: ['./design/assets'],
+        },
+      }),
+    );
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([assetRoot]);
+    expect(assetSourceRoots(env)).toEqual(['/design/assets', '/assets']);
     expect(assetSourceGlobPatterns(env)).toEqual([
       '/design/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
       '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
