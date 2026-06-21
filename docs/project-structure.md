@@ -1,6 +1,6 @@
 # Project Structure And Output
 
-Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, and copy behavior.
+Emulsify Core reads `project.emulsify.json` once and normalizes project structure for Vite, Storybook, Twig namespaces, asset roots, and copy behavior.
 
 ## Which Structure Should I Use?
 
@@ -66,6 +66,29 @@ Projects using this structure do not need to create `src/` just to use the curre
 ```
 
 Each implementation name becomes a structure root and Twig namespace, so templates can reference names such as `@components`, `@foundation`, `@layout`, and `@tokens`. Configured paths that resolve outside the project root are ignored.
+
+### `assets.roots`
+
+`assets.roots` declares additional project directories that Storybook can use
+for `source('@assets/...')` text asset lookups.
+
+```json
+{
+  "project": {
+    "platform": "none",
+    "name": "example",
+    "machineName": "example"
+  },
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
+  }
+}
+```
+
+Each root is normalized into `projectStructure.assetRoots` as an absolute path.
+Configured paths that resolve outside the project root are ignored. Existing
+root `assets/` and `src/assets/` directories are still checked automatically
+for `@assets` references.
 
 ## Story Roots
 

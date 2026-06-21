@@ -70,4 +70,30 @@ describe('resolveProjectStructure', () => {
 
     expect(second).toBe(first);
   });
+
+  it('includes normalized asset roots in the project structure model', () => {
+    const env = makeEnv();
+    env.assetRoots = ['./src/assets', join(env.projectDir, 'design/assets')];
+
+    const structure = resolveProjectStructure(env);
+
+    expect(structure.assetRoots).toEqual([
+      join(env.projectDir, 'src/assets'),
+      join(env.projectDir, 'design/assets'),
+    ]);
+  });
+
+  it('ignores unsafe asset roots in the project structure model', () => {
+    const env = makeEnv();
+    env.assetRoots = [
+      '../shared-assets',
+      '/tmp/outside-assets',
+      './src/assets',
+      './src/assets',
+    ];
+
+    const structure = resolveProjectStructure(env);
+
+    expect(structure.assetRoots).toEqual([join(env.projectDir, 'src/assets')]);
+  });
 });

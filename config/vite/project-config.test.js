@@ -285,4 +285,56 @@ describe('resolveProjectConfig', () => {
       components: join(projectDir, 'src/components'),
     });
   });
+
+  it('normalizes documented assets.roots into project structure asset roots', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'design-system/assets'), {
+      recursive: true,
+    });
+    mkdirSync(join(projectDir, 'prototype-assets'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      assets: {
+        roots: ['./design-system/assets/', './prototype-assets'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+    const expectedRoots = [
+      join(projectDir, 'design-system/assets'),
+      join(projectDir, 'prototype-assets'),
+    ];
+
+    expect(env.assetRoots).toEqual(expectedRoots);
+    expect(env.projectStructure.assetRoots).toEqual(expectedRoots);
+  });
+
+  it('ignores unsafe asset root paths', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/assets'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      assets: {
+        roots: [
+          '../shared-assets',
+          '/tmp/outside-assets',
+          './src/assets',
+          './src/assets',
+          '',
+          42,
+        ],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.assetRoots).toEqual([join(projectDir, 'src/assets')]);
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'src/assets'),
+    ]);
+  });
 });
