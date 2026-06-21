@@ -115,7 +115,9 @@ export const decorators = [
    * @param {object} context Story context including args.
    * @returns {*} Rendered story.
    */
-  (Story, { args }) => {
+  (Story, context) => {
+    const { args } = context;
+
     useEffect(() => {
       void attachStorybookBehaviors({
         adapter: platformAdapter,
@@ -123,7 +125,7 @@ export const decorators = [
       });
     }, [args]);
 
-    return renderHtmlStoryResult(Story({ args }), {
+    return renderHtmlStoryResult(Story(context), {
       platformAdapter,
     });
   },
