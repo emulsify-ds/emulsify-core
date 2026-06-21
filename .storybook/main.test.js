@@ -5,6 +5,142 @@
 import { execFileSync } from 'node:child_process';
 
 describe('Storybook main config', () => {
+  it('appends project preview head overrides from installed package consumers', () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      const packageRoot = path.join(
+        projectRoot,
+        'node_modules/@emulsify/core',
+      );
+      mkdirSync(path.dirname(packageRoot), { recursive: true });
+      symlinkSync(repoRoot, packageRoot, 'dir');
+      mkdirSync(
+        path.join(projectRoot, 'config/emulsify-core/storybook'),
+        { recursive: true },
+      );
+      writeFileSync(
+        path.join(
+          projectRoot,
+          'config/emulsify-core/storybook/preview-head.html',
+        ),
+        '<meta name="preview-override" content="yes">',
+      );
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(packageRoot, '.storybook/main.js')).href
+      );
+
+      console.log(JSON.stringify({
+        head: config.previewHead('<meta name="existing-preview">'),
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--preserve-symlinks',
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const { head } = JSON.parse(output.toString());
+
+    expect(head).toContain('<meta name="existing-preview">');
+    expect(head).toContain('<meta name="preview-override" content="yes">');
+  });
+
+  it('appends project manager head overrides from installed package consumers', () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      const packageRoot = path.join(
+        projectRoot,
+        'node_modules/@emulsify/core',
+      );
+      mkdirSync(path.dirname(packageRoot), { recursive: true });
+      symlinkSync(repoRoot, packageRoot, 'dir');
+      mkdirSync(
+        path.join(projectRoot, 'config/emulsify-core/storybook'),
+        { recursive: true },
+      );
+      writeFileSync(
+        path.join(
+          projectRoot,
+          'config/emulsify-core/storybook/manager-head.html',
+        ),
+        '<meta name="manager-override" content="yes">',
+      );
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(packageRoot, '.storybook/main.js')).href
+      );
+
+      console.log(JSON.stringify({
+        head: config.managerHead('<meta name="existing-manager">'),
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--preserve-symlinks',
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const { head } = JSON.parse(output.toString());
+
+    expect(head).toContain('<meta name="existing-manager">');
+    expect(head).toContain('<meta name="manager-override" content="yes">');
+  });
+
+  it('ignores missing project head override files from installed package consumers', () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, symlinkSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      const packageRoot = path.join(
+        projectRoot,
+        'node_modules/@emulsify/core',
+      );
+      mkdirSync(path.dirname(packageRoot), { recursive: true });
+      symlinkSync(repoRoot, packageRoot, 'dir');
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(packageRoot, '.storybook/main.js')).href
+      );
+
+      console.log(JSON.stringify({
+        previewHead: config.previewHead('<meta name="existing-preview">'),
+        managerHead: config.managerHead('<meta name="existing-manager">'),
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--preserve-symlinks',
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const { previewHead, managerHead } = JSON.parse(output.toString());
+
+    expect(previewHead).toContain('<meta name="existing-preview">');
+    expect(previewHead).not.toContain('preview-override');
+    expect(managerHead).toContain('<meta name="existing-manager">');
+    expect(managerHead).not.toContain('manager-override');
+  });
+
   it('serves project root assets at the /assets URL prefix', () => {
     const script = `
       const path = await import('node:path');
