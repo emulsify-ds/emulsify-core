@@ -32,7 +32,7 @@ describe('Storybook platform behavior helpers', () => {
     );
   });
 
-  it('does not attach or create Drupal globals for generic platforms', async () => {
+  it('does not attach or create Drupal globals for none platforms', async () => {
     const attached = await attachStorybookBehaviors({
       adapter: { attachDrupalBehaviors: false },
     });

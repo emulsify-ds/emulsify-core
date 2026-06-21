@@ -1,6 +1,6 @@
 {
   "project": {
-    "platform": "generic",
+    "platform": "none",
     "name": "mixed-storybook",
     "machineName": "mixed_storybook"
   }

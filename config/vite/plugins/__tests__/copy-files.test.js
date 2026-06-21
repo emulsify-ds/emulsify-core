@@ -76,7 +76,7 @@ describe('source copy plugins', () => {
     const outDir = join(projectDir, 'dist');
     writeProjectConfig(projectDir, {
       project: {
-        platform: 'generic',
+        platform: 'none',
       },
       variant: {
         structureImplementations: [

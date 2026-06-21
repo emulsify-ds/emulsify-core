@@ -5,6 +5,7 @@
 import {
   attachStorybookBehaviors,
   genericStorybookAdapter,
+  noneStorybookAdapter,
   normalizeStorybookPlatformAdapter,
 } from '../src/storybook/platform-behaviors.js';
 import { setupTwig } from '../src/storybook/twig/setup.js';
@@ -93,6 +94,7 @@ export {
   attachStorybookBehaviors,
   fetchCSSFiles,
   genericStorybookAdapter,
+  noneStorybookAdapter,
   normalizeStorybookPlatformAdapter,
   setupTwig,
 };
