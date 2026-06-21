@@ -95,7 +95,7 @@ describe('Storybook main config overrides', () => {
   });
 
   it('passes context to config factories and extendConfig', async () => {
-    const env = { platform: 'generic' };
+    const env = { platform: 'none' };
     const extendConfig = jest.fn((config, context) => ({
       ...config,
       staticDirs: [context.env.platform],
@@ -118,9 +118,9 @@ describe('Storybook main config overrides', () => {
         '@storybook/addon-a11y',
         '@storybook/addon-links',
         '@storybook/addon-themes',
-        'addon-generic',
+        'addon-none',
       ],
-      staticDirs: ['generic'],
+      staticDirs: ['none'],
     });
     expect(extendConfig).toHaveBeenCalled();
   });

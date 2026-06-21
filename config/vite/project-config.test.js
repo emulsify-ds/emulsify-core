@@ -82,12 +82,12 @@ describe('resolveProjectConfig', () => {
     });
   });
 
-  it('normalizes generic project config without platform-specific behavior', () => {
+  it('normalizes none project config without platform-specific behavior', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'components'), { recursive: true });
     writeProjectConfig(projectDir, {
       project: {
-        platform: 'generic',
+        platform: 'none',
         name: 'starter',
         machineName: 'starter',
       },
@@ -96,7 +96,7 @@ describe('resolveProjectConfig', () => {
     const env = resolveProjectConfig(projectDir, {});
 
     expect(env).toMatchObject({
-      platform: 'generic',
+      platform: 'none',
       machineName: 'starter',
       srcExists: false,
       srcDir: join(projectDir, 'components'),
@@ -105,7 +105,7 @@ describe('resolveProjectConfig', () => {
       outputStrategy: 'dist',
     });
     expect(env.platformAdapter).toMatchObject({
-      name: 'generic',
+      name: 'none',
       storybook: {
         loadDrupalBehaviorShim: false,
         attachDrupalBehaviors: false,
@@ -121,6 +121,22 @@ describe('resolveProjectConfig', () => {
       storyRoots: [join(projectDir, 'components')],
       mirrorComponentOutput: false,
     });
+  });
+
+  it('supports legacy generic platform config as none', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'components'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'generic',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.platform).toBe('none');
+    expect(env.platformAdapter.name).toBe('none');
+    expect(env.platformAdapter.build.mirrorDistComponentsToRoot).toBe(false);
   });
 
   it('normalizes multiple named variant structure implementations', () => {
@@ -199,12 +215,45 @@ describe('resolveProjectConfig', () => {
     });
 
     const env = resolveProjectConfig(projectDir, {
+      EMULSIFY_PLATFORM: 'none',
+    });
+
+    expect(env.platform).toBe('none');
+    expect(env.platformAdapter.name).toBe('none');
+    expect(env.platformAdapter.build.mirrorDistComponentsToRoot).toBe(false);
+  });
+
+  it('supports legacy generic platform env override as none', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'drupal',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {
       EMULSIFY_PLATFORM: 'generic',
     });
 
-    expect(env.platform).toBe('generic');
-    expect(env.platformAdapter.name).toBe('generic');
-    expect(env.platformAdapter.build.mirrorDistComponentsToRoot).toBe(false);
+    expect(env.platform).toBe('none');
+    expect(env.platformAdapter.name).toBe('none');
+  });
+
+  it('does not share cache entries between explicit none overrides and project defaults', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'drupal',
+      },
+    });
+
+    const overridden = resolveProjectConfig(projectDir, {
+      EMULSIFY_PLATFORM: 'generic',
+    });
+    const fromProjectConfig = resolveProjectConfig(projectDir, {});
+
+    expect(overridden.platform).toBe('none');
+    expect(fromProjectConfig.platform).toBe('drupal');
   });
 
   it('ignores unsafe structure implementation paths', () => {
@@ -212,7 +261,7 @@ describe('resolveProjectConfig', () => {
     mkdirSync(join(projectDir, 'src/components'), { recursive: true });
     writeProjectConfig(projectDir, {
       project: {
-        platform: 'generic',
+        platform: 'none',
       },
       variant: {
         structureImplementations: [

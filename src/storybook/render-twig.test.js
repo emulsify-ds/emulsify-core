@@ -132,7 +132,7 @@ describe('renderTwig', () => {
     ).toBe(true);
   });
 
-  it('does not create or require Drupal globals for generic platforms', () => {
+  it('does not create or require Drupal globals for none platforms', () => {
     globalThis.__EMULSIFY_ENV__ = {
       platformAdapter: {
         storybook: {
@@ -140,14 +140,14 @@ describe('renderTwig', () => {
         },
       },
     };
-    const storyRender = renderTwig(() => '<section>Generic</section>');
+    const storyRender = renderTwig(() => '<section>None</section>');
 
     act(() => {
       root.render(storyRender({}));
     });
 
     expect(window.Drupal).toBeUndefined();
-    expect(container.textContent).toBe('Generic');
+    expect(container.textContent).toBe('None');
   });
 
   it('renders legacy Twig HTML strings through the shared wrapper', () => {

@@ -4,7 +4,7 @@ Emulsify Core supports component-driven development with Vite and Storybook. Twi
 
 ## Choosing An Authoring Model
 
-Twig is a good fit for CMS themes and server-rendered template systems where production markup is rendered by Twig. Drupal has a dedicated adapter today. Craft CMS, WordPress + Timber, and other Twig-based CMS projects can use the generic adapter unless they need project-specific integration code.
+Twig is a good fit for CMS themes and server-rendered template systems where production markup is rendered by Twig. Drupal has a dedicated adapter today. Craft CMS, WordPress + Timber, and other Twig-based CMS projects can use the `none` adapter unless they need project-specific integration code.
 
 React is a good fit for standalone UI packages, application components, and design systems consumed by React applications.
 

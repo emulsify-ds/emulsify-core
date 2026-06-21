@@ -26,7 +26,7 @@ Emulsify Core can register the
 for Storybook-rendered Twig. This is useful when templates use Drupal-style
 filters or functions and the project still runs Storybook outside Drupal.
 
-Drupal platform projects enable this automatically through the adapter. Generic
+Drupal platform projects enable this automatically through the adapter. `none`
 projects can opt in with `project.emulsify.json`:
 
 ```json

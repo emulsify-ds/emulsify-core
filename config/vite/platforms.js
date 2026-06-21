@@ -5,8 +5,8 @@
  * decisions can be used by Node-side Vite config and Storybook browser code.
  */
 
-const genericAdapter = {
-  name: 'generic',
+const noneAdapter = {
+  name: 'none',
   outputStrategy: 'dist',
   storybook: {
     loadDrupalBehaviorShim: false,
@@ -36,7 +36,8 @@ const drupalAdapter = {
 };
 
 const adapters = {
-  generic: genericAdapter,
+  none: noneAdapter,
+  generic: noneAdapter,
   drupal: drupalAdapter,
 };
 
@@ -51,20 +52,38 @@ function cloneAdapter(adapter) {
 }
 
 /**
+ * Normalize configured platform names to canonical identifiers.
+ *
+ * `generic` is retained as a legacy alias for existing projects, but new
+ * configuration should use `none` for projects without platform-specific
+ * behavior.
+ *
+ * @param {*} platform - Candidate platform name.
+ * @returns {string} Canonical platform name.
+ */
+export function normalizePlatformName(platform = 'none') {
+  const key = (platform || '').toString().toLowerCase().trim();
+  if (!key || key === 'generic') {
+    return 'none';
+  }
+  return key;
+}
+
+/**
  * Resolve the platform adapter for a normalized platform name.
  *
- * Unknown platforms intentionally use generic behavior while preserving the
+ * Unknown platforms intentionally use `none` behavior while preserving the
  * resolved `platform` string separately on the environment object.
  *
- * @param {string} [platform='generic'] - Normalized platform name.
+ * @param {string} [platform='none'] - Normalized platform name.
  * @returns {object} Serializable platform adapter.
  */
-export function getPlatformAdapter(platform = 'generic') {
-  const key = (platform || 'generic').toString().toLowerCase().trim();
+export function getPlatformAdapter(platform = 'none') {
+  const key = normalizePlatformName(platform);
   if (key === 'drupal') {
     return cloneAdapter(drupalAdapter);
   }
-  return cloneAdapter(genericAdapter);
+  return cloneAdapter(noneAdapter);
 }
 
 export { adapters };

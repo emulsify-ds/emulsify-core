@@ -47,7 +47,7 @@ describe('audit', () => {
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
           name: 'Audit fixture',
           machineName: 'audit_fixture',
         },
@@ -108,7 +108,7 @@ describe('audit', () => {
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -168,7 +168,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
         variant: {
           structureImplementations: [
@@ -194,7 +194,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -227,7 +227,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -260,7 +260,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -312,7 +312,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -356,7 +356,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -397,7 +397,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );
@@ -532,7 +532,7 @@ No audit findings found."
       'project.emulsify.json',
       JSON.stringify({
         project: {
-          platform: 'generic',
+          platform: 'none',
         },
       }),
     );

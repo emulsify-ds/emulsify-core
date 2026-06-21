@@ -43,7 +43,7 @@ const jsxExclusionEntryPaths = [
 const buildContext = (
   projectDir,
   {
-    platform = 'generic',
+    platform = 'none',
     SDC = false,
     srcExists = true,
     structureImplementations = [],
@@ -139,7 +139,7 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
-  it('preserves generic output for src/components projects', () => {
+  it('preserves none-platform output for src/components projects', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
       componentFilePaths: [
@@ -166,7 +166,7 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
-  it('builds JSX component entries with JS output keys for generic projects', () => {
+  it('builds JSX component entries with JS output keys for none projects', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
       componentFilePaths: ['src/components/card/Card.jsx'],

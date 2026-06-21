@@ -113,7 +113,7 @@ describe('Twig module plugin', () => {
     projectDir = makeTempProject();
     writeProjectConfig(projectDir, {
       project: {
-        platform: 'generic',
+        platform: 'none',
       },
       variant: {
         structureImplementations: [
@@ -137,7 +137,7 @@ describe('Twig module plugin', () => {
     });
   });
 
-  it('adds native Emulsify Twig functions to generic Twig rendering options', () => {
+  it('adds native Emulsify Twig functions to default Twig rendering options', () => {
     projectDir = makeTempProject();
     fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
 

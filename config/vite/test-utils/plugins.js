@@ -34,7 +34,7 @@ export const makeEnv = (projectDir, overrides = {}) => {
     projectDir,
     srcDir,
     srcExists: true,
-    platform: 'generic',
+    platform: 'none',
     structureOverrides: false,
     structureRoots: [],
     ...overrides,

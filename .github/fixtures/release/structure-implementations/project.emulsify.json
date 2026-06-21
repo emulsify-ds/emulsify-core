@@ -1,11 +1,11 @@
 {
   "project": {
-    "platform": "generic",
+    "platform": "none",
     "name": "structure-implementations",
     "machineName": "structure_implementations"
   },
   "variant": {
-    "platform": "generic",
+    "platform": "none",
     "structureImplementations": [
       { "name": "components", "directory": "./src/components/" },
       { "name": "foundation", "directory": "./src/foundation/" },

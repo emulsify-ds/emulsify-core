@@ -1,6 +1,6 @@
 {
   "project": {
-    "platform": "generic",
+    "platform": "none",
     "name": "legacy-components",
     "machineName": "legacy_components"
   }
