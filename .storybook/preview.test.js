@@ -22,7 +22,7 @@ describe('Storybook preview decorators', () => {
     const source = readPreviewSource();
 
     expect(source).toMatch(/\(Story,\s*context\)\s*=>/);
-    expect(source).toMatch(/renderHtmlStoryResult\(Story\(context\),/);
+    expect(source).toMatch(/renderPreviewStory\(Story,\s*context,/);
     expect(source).not.toMatch(/Story\(\{\s*args\s*\}\)/);
     expect(source).not.toContain('StoryHtmlBoundary');
   });
