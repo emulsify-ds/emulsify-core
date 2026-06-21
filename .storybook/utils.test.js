@@ -29,7 +29,7 @@ describe('Storybook utility helpers', () => {
     delete globalThis.__viteImportMetaGlob;
   });
 
-  it('loads dist CSS only for the generic adapter', async () => {
+  it('loads dist CSS only for the none adapter', async () => {
     const { fetchCSSFiles } = await loadUtils();
 
     await fetchCSSFiles();

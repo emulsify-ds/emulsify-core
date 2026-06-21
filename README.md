@@ -34,7 +34,7 @@ See [Version Evolution](docs/version-evolution.md) for more release history.
 
 Twig and React are equally valid ways to build component libraries with Emulsify Core. The right authoring model depends on the consuming project:
 
-- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today; Craft CMS and WordPress + Timber can use the generic adapter unless a project adds platform-specific behavior.
+- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today; Craft CMS and WordPress + Timber can use the `none` adapter unless a project adds platform-specific behavior.
 - Use React for standalone UI libraries, application components, or projects that already use React.
 - Use mixed Twig and React when a design system needs to document both CMS-rendered and JavaScript-rendered components in the same Storybook instance.
 
@@ -53,7 +53,7 @@ Every project should provide a `project.emulsify.json` file at the project root:
 ```json
 {
   "project": {
-    "platform": "generic",
+    "platform": "none",
     "name": "example",
     "machineName": "example"
   }
@@ -77,7 +77,7 @@ The documentation is split by task:
 | [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
 | [Storybook](docs/storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
 | [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
-| [Platform Adapters](docs/platform-adapters.md)            | Understanding `generic`, `drupal`, platform resolution order, and Drupal SDC behavior.                                |
+| [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `drupal`, platform resolution order, and Drupal SDC behavior.                                   |
 | [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
 | [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
@@ -86,24 +86,24 @@ The documentation is split by task:
 
 ## Known Limitations
 
-- Implemented platform adapters are currently `generic` and `drupal`. WordPress + Timber and Craft CMS are supported as Twig-oriented use cases through the generic adapter today; dedicated adapters are future opportunities. See [Platform Adapters](docs/platform-adapters.md).
+- Implemented platform adapters are currently `none` and `drupal`. WordPress + Timber and Craft CMS are supported as Twig-oriented use cases through the `none` adapter today. Dedicated adapters are future opportunities. See [Platform Adapters](docs/platform-adapters.md).
 - Storybook's Twig resolver eagerly imports Twig modules and raw Twig source. This is reliable for `include()` and `source()`, but large Twig libraries should keep Storybook source roots intentional. See [Performance](docs/performance.md).
 - Production sourcemaps are enabled by default unless a project overrides Vite config through `config/emulsify-core/vite/plugins.*`. See [Performance](docs/performance.md).
 - Project extensions use the public `config/emulsify-core` directory: `config/emulsify-core/vite/plugins.*` for Vite, `config/emulsify-core/storybook/...` for Storybook, and `config/emulsify-core/a11y.config.js` for a11y. See [Extension Points](docs/extension-points.md).
 - Webpack-specific customizations must be migrated manually to Vite plugins or `extendConfig()`. See [Migration](docs/migration-4x.md).
-- Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are enabled. Generic projects should expect output to remain in `dist/`. See [Platform Adapters](docs/platform-adapters.md).
+- Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are enabled. `none` projects should expect output to remain in `dist/`. See [Platform Adapters](docs/platform-adapters.md).
 
 ## Supported Project Shapes
 
 Release-readiness coverage validates:
 
 - Drupal SDC projects using `src/components`.
-- Generic Twig projects using `src/components`.
+- `none` platform Twig projects using `src/components`.
 - Root `./components` projects.
 - Projects using multiple `variant.structureImplementations`.
 - Mixed Twig + React Storybook projects.
 
-WordPress + Timber and Craft CMS are Twig-based project use cases that can use the `generic` adapter today. Dedicated adapters for those platforms are future opportunities. The implemented adapters in this package are currently `generic` and `drupal`.
+WordPress + Timber and Craft CMS are Twig-based project use cases that can use the `none` adapter today. Dedicated adapters for those platforms are future opportunities. The implemented adapters in this package are currently `none` and `drupal`.
 
 ## Public Imports
 

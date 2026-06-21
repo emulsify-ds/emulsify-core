@@ -5,7 +5,7 @@
  * entries, plugins, and the Vite config.
  *
  * Highlights:
- *  - `platform`: from env var or project.emulsify.json (default "generic").
+ *  - `platform`: from env var or project.emulsify.json (default "none").
  *  - `SDC`: boolean from project.emulsify.json `project.singleDirectoryComponents`.
  *  - `structureOverrides`: true when safe `variant.structureImplementations` exist.
  *  - `structureRoots`: array of directories from `variant.structureImplementations`.
@@ -21,7 +21,7 @@ import { resolveProjectConfig } from './project-config.js';
  *   projectDir: string,
  *   srcDir: string,
  *   srcExists: boolean,
- *   platform: 'drupal' | 'generic' | string,
+ *   platform: 'drupal' | 'none' | string,
  *   SDC: boolean,
  *   structureOverrides: boolean,
  *   structureRoots: string[],

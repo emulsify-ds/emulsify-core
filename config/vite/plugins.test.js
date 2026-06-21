@@ -74,7 +74,7 @@ describe('Vite plugin public barrel', () => {
     );
     const rootComponentFile = join(projectDir, 'components/card/card.twig');
 
-    const genericMirror = pluginsModule
+    const noneMirror = pluginsModule
       .makePlugins(makeEnv(projectDir))
       .find((plugin) => plugin?.name === 'emulsify-mirror-components-to-root');
     const drupalMirror = pluginsModule
@@ -91,10 +91,10 @@ describe('Vite plugin public barrel', () => {
 
     mkdirSync(join(projectDir, 'dist/components/card'), { recursive: true });
     writeFileSync(distComponentFile, '<article>{{ title }}</article>');
-    genericMirror.configResolved({
+    noneMirror.configResolved({
       build: { outDir: join(projectDir, 'dist') },
     });
-    expect(genericMirror.writeBundle()).toBeUndefined();
+    expect(noneMirror.writeBundle()).toBeUndefined();
     expect(existsSync(distComponentFile)).toBe(true);
     expect(existsSync(rootComponentFile)).toBe(false);
 

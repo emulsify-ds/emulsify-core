@@ -2,7 +2,7 @@
  * @file Platform-specific Storybook behavior helpers.
  */
 
-export const genericStorybookAdapter = {
+export const noneStorybookAdapter = {
   loadDrupalBehaviorShim: false,
   attachDrupalBehaviors: false,
   registerDrupalTwigFilters: false,
@@ -10,15 +10,17 @@ export const genericStorybookAdapter = {
   allowSyncXhrSource: false,
 };
 
+export const genericStorybookAdapter = noneStorybookAdapter;
+
 /**
  * Normalize optional platform adapter flags into the full Storybook shape.
  *
  * @param {object} [adapter] - Candidate Storybook adapter flags.
- * @returns {object} Storybook adapter flags with generic defaults.
+ * @returns {object} Storybook adapter flags with non-platform defaults.
  */
 export function normalizeStorybookPlatformAdapter(adapter = {}) {
   return {
-    ...genericStorybookAdapter,
+    ...noneStorybookAdapter,
     ...(adapter || {}),
   };
 }
@@ -27,7 +29,7 @@ export function normalizeStorybookPlatformAdapter(adapter = {}) {
  * Attach platform-specific behaviors after a Storybook render.
  *
  * Drupal behavior attachment is opt-in through the active platform adapter.
- * Generic and unknown platforms return without creating Drupal globals.
+ * `none` and unknown platforms return without creating Drupal globals.
  *
  * @param {object} [options={}] - Attachment options.
  * @param {object} [options.adapter] - Active Storybook platform adapter.

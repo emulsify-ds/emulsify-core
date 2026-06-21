@@ -156,7 +156,7 @@ For advanced cases, export `extendConfig()`. It receives the already-merged Stor
 // config/emulsify-core/storybook/main.js
 export function extendConfig(config, { env }) {
   const staticDirs = [...(config.staticDirs || [])];
-  if (env.platform === 'generic') {
+  if (env.platform === 'none') {
     staticDirs.push('public');
   }
 
@@ -213,13 +213,13 @@ Projects using the `drupal` platform adapter get those filters automatically:
 }
 ```
 
-Generic projects can opt into only the Twig.js filters without enabling Drupal
+`none` projects can opt into only the Twig.js filters without enabling Drupal
 behavior attachment, mirrored SDC output, or other Drupal adapter behavior:
 
 ```json
 {
   "project": {
-    "platform": "generic"
+    "platform": "none"
   },
   "storybook": {
     "registerDrupalTwigFilters": true

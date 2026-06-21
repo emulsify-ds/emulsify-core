@@ -8,7 +8,7 @@
  */
 
 import { normalize, resolve, sep } from 'path';
-import { getPlatformAdapter } from './platforms.js';
+import { getPlatformAdapter, normalizePlatformName } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
 import { safeExists, safeReadJson } from './utils/fs-safe.js';
 
@@ -53,8 +53,12 @@ function normalizeIdentifier(value) {
  * @returns {string} Stable cache-key segment.
  */
 function projectConfigEnvSignature(env = {}) {
+  const platformOverride = normalizeIdentifier(env.EMULSIFY_PLATFORM);
+
   return JSON.stringify({
-    EMULSIFY_PLATFORM: normalizeIdentifier(env.EMULSIFY_PLATFORM),
+    EMULSIFY_PLATFORM: platformOverride
+      ? normalizePlatformName(platformOverride)
+      : '',
   });
 }
 
@@ -119,11 +123,12 @@ export function resolveProjectConfig(
   const srcExists = safeExists(srcCandidate);
   const srcDir = srcExists ? srcCandidate : resolve(root, 'components');
 
-  const platform =
+  const resolvedPlatform =
     normalizeIdentifier(env.EMULSIFY_PLATFORM) ||
     normalizeIdentifier(rawConfig?.project?.platform) ||
     normalizeIdentifier(rawConfig?.variant?.platform) ||
-    'generic';
+    'none';
+  const platform = normalizePlatformName(resolvedPlatform);
   const platformAdapter = getPlatformAdapter(platform);
 
   const singleDirectoryComponents = Boolean(

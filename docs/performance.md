@@ -65,7 +65,7 @@ That fallback blocks the main thread, is deprecated, and is scheduled for remova
 
 ## Storybook CSS Loading
 
-Storybook eagerly imports CSS from the selected render path by default so component styles are available in the iframe. Generic projects load compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output load component CSS from `components/**/*.css` and shared compiled CSS from `dist/**/*.css` excluding `dist/components/**/*.css`, because `dist/components` and root `components` represent the same component CSS through different paths.
+Storybook eagerly imports CSS from the selected render path by default so component styles are available in the iframe. `none` projects load compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output load component CSS from `components/**/*.css` and shared compiled CSS from `dist/**/*.css` excluding `dist/components/**/*.css`, because `dist/components` and root `components` represent the same component CSS through different paths.
 
 The eager glob performs the CSS imports directly; no runtime iteration is needed after the glob runs.
 
@@ -118,7 +118,6 @@ package installed by consuming projects.
 Run one fixture when debugging a specific project shape:
 
 ```sh
-npm run fixtures:release -- --fixture generic-src-components
 npm run fixtures:release -- --fixture mixed-storybook
 npm run fixtures:release -- --fixture large-twig-storybook
 ```

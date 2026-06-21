@@ -329,7 +329,7 @@ function resolveAuditEnvironment(projectDir) {
     return {
       env: {
         projectDir,
-        platform: 'generic',
+        platform: 'none',
         namespaceRoots: {},
         projectStructure: {},
       },
