@@ -163,6 +163,58 @@ describe('Storybook main config', () => {
     });
   });
 
+  it('serves configured asset roots at the /assets URL prefix', () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      mkdirSync(path.join(projectRoot, 'custom-assets'), { recursive: true });
+      mkdirSync(path.join(projectRoot, 'src/assets'), { recursive: true });
+      writeFileSync(
+        path.join(projectRoot, 'project.emulsify.json'),
+        JSON.stringify({
+          project: {
+            platform: 'none',
+          },
+          projectStructure: {
+            assetRoots: ['custom-assets'],
+          },
+        }),
+      );
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+
+      console.log(JSON.stringify({
+        staticDirs: config.staticDirs,
+        projectRoot: process.cwd(),
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const { staticDirs, projectRoot } = JSON.parse(output.toString());
+
+    expect(staticDirs).toEqual([
+      {
+        from: `${projectRoot}/custom-assets`,
+        to: '/assets',
+      },
+      {
+        from: `${projectRoot}/src/assets`,
+        to: '/assets',
+      },
+    ]);
+  });
+
   it('serves compiled dist assets without mounting all dist files at the output root', () => {
     const script = `
       const { mkdirSync, mkdtempSync } = await import('node:fs');

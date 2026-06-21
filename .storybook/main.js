@@ -120,12 +120,56 @@ function readOptionalHtmlFragment(relativePath) {
  * @returns {Array<string|{from: string, to: string}>} Existing static directory entries.
  */
 function existingStaticDirs(staticDirs) {
-  return staticDirs.filter((staticDir) => {
+  const seen = new Set();
+  const existing = [];
+
+  for (const staticDir of staticDirs) {
     const directory =
       typeof staticDir === 'string' ? staticDir : staticDir.from;
 
-    return directory && fs.existsSync(directory);
-  });
+    if (!directory || !fs.existsSync(directory)) continue;
+
+    const key =
+      typeof staticDir === 'string'
+        ? staticDir
+        : `${staticDir.from || ''}\0${staticDir.to || ''}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    existing.push(staticDir);
+  }
+
+  return existing;
+}
+
+/**
+ * Build static directory mounts for normalized project asset roots.
+ *
+ * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
+ * @returns {Array<string|{from: string, to: string}>} Static directory entries.
+ */
+function buildAssetStaticDirs(env) {
+  const assetRoots = Array.isArray(env.projectStructure?.assetRoots)
+    ? env.projectStructure.assetRoots
+    : [
+        path.resolve(projectRoot, 'assets'),
+        path.resolve(projectRoot, 'src/assets'),
+      ];
+
+  return existingStaticDirs([
+    ...assetRoots.map((root) => ({
+      from: root,
+      to: '/assets',
+    })),
+    {
+      from: path.resolve(projectRoot, 'dist/assets'),
+      to: '/assets',
+    },
+    {
+      from: path.resolve(projectRoot, 'dist'),
+      to: '/dist',
+    },
+  ]);
 }
 
 /**
@@ -265,22 +309,7 @@ const baseConfig = {
    *
    * @type {Array<string|{from: string, to: string}>}
    */
-  staticDirs: [
-    ...existingStaticDirs([
-      {
-        from: path.resolve(projectRoot, 'assets'),
-        to: '/assets',
-      },
-      {
-        from: path.resolve(projectRoot, 'dist/assets'),
-        to: '/assets',
-      },
-      {
-        from: path.resolve(projectRoot, 'dist'),
-        to: '/dist',
-      },
-    ]),
-  ],
+  staticDirs: buildAssetStaticDirs(resolvedStorybookEnv),
 
   /**
    * Enable the default addon set used by Emulsify.

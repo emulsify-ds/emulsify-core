@@ -117,6 +117,28 @@ function fallbackGlobalRoots({ srcDir, srcExists }) {
 }
 
 /**
+ * Build the project-authored roots that can satisfy @assets references.
+ *
+ * Configured roots are checked first to preserve the existing internal
+ * `projectStructure.assetRoots` behavior. Default roots remain appended and
+ * deduplicated so root `assets` and `src/assets` continue to work.
+ *
+ * @param {{projectDir: string, assetRoots?: string[]}} env - Project environment.
+ * @returns {string[]} Absolute asset root paths.
+ */
+function resolveAssetRoots({ projectDir, assetRoots = [] }) {
+  return unique(
+    [
+      ...(Array.isArray(assetRoots) ? assetRoots : []),
+      resolve(projectDir, 'assets'),
+      resolve(projectDir, 'src/assets'),
+    ]
+      .filter(Boolean)
+      .map((root) => resolve(root)),
+  );
+}
+
+/**
  * Build Twig namespace roots for explicit structure implementations.
  *
  * @param {{name: string, directory: string}[]} structureImplementations
@@ -190,6 +212,8 @@ function fallbackNamespaceRoots({
  *   srcExists?: boolean,
  *   SDC?: boolean,
  *   structureImplementations?: {name: string, directory: string}[],
+ *   assetRoots?: string[],
+ *   ignoredAssetRoots?: string[],
  *   platformAdapter?: object
  * }} [env] - Normalized project environment.
  * @returns {object} Project structure model.
@@ -214,6 +238,8 @@ export function resolveProjectStructure(env) {
     srcDir = defaultSrcDir,
     srcExists = safeExists(defaultSrcDir),
     SDC = false,
+    assetRoots = [],
+    ignoredAssetRoots = [],
     platformAdapter = {},
   } = resolvedEnv;
   const structureImplementations =
@@ -248,6 +274,7 @@ export function resolveProjectStructure(env) {
   const sourceRoots = unique(
     [...componentRoots, ...globalRoots].filter(Boolean),
   );
+  const resolvedAssetRoots = resolveAssetRoots({ projectDir, assetRoots });
   const sourceRootRecords = [...componentRootRecords, ...globalRootRecords];
   const componentStoryRoots = srcExists
     ? componentRoots.filter((root) => !isSameOrInsideRoot(root, srcDir))
@@ -279,6 +306,8 @@ export function resolveProjectStructure(env) {
     componentRoots,
     globalRoots,
     sourceRoots,
+    assetRoots: resolvedAssetRoots,
+    ignoredAssetRoots: unique(ignoredAssetRoots),
     sourceRootRecords,
     storyRoots,
     twigRoots,

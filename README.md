@@ -56,9 +56,17 @@ Every project should provide a `project.emulsify.json` file at the project root:
     "platform": "none",
     "name": "example",
     "machineName": "example"
+  },
+  "projectStructure": {
+    "assetRoots": ["./design/assets"]
   }
 }
 ```
+
+Asset files are discovered from the default asset roots and any additional
+roots configured in `project.emulsify.json`. Use asset roots when a project
+stores fonts, images, icons, or other static files outside the default
+locations.
 
 Common project scripts call the shared Emulsify Core Vite and Storybook config:
 

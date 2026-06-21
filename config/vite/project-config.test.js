@@ -123,6 +123,121 @@ describe('resolveProjectConfig', () => {
     });
   });
 
+  it('includes default asset roots in the normalized project structure', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.assetRoots).toEqual([
+      join(projectDir, 'assets'),
+      join(projectDir, 'src/assets'),
+    ]);
+    expect(env.projectStructure.assetRoots).toEqual(env.assetRoots);
+  });
+
+  it('preserves src/assets as a default asset root', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/assets/icons'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toContain(
+      join(projectDir, 'src/assets'),
+    );
+  });
+
+  it('normalizes multiple configured asset roots relative to the project root', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'design/assets'), { recursive: true });
+    mkdirSync(join(projectDir, 'public/static'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      projectStructure: {
+        assetRoots: ['./design/assets', 'public/static'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'design/assets'),
+      join(projectDir, 'public/static'),
+      join(projectDir, 'assets'),
+      join(projectDir, 'src/assets'),
+    ]);
+  });
+
+  it('deduplicates configured and default asset roots', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      projectStructure: {
+        assetRoots: ['./assets', 'assets', './src/assets', 'custom', 'custom/'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'assets'),
+      join(projectDir, 'src/assets'),
+      join(projectDir, 'custom'),
+    ]);
+  });
+
+  it('ignores asset roots that escape the project root', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      projectStructure: {
+        assetRoots: ['../outside', './assets'],
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'assets'),
+      join(projectDir, 'src/assets'),
+    ]);
+    expect(env.ignoredAssetRoots).toEqual(['../outside']);
+  });
+
+  it('keeps existing configs without public asset roots backward compatible', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'components'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'generic',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.platform).toBe('none');
+    expect(env.projectStructure.assetRoots).toEqual([
+      join(projectDir, 'assets'),
+      join(projectDir, 'src/assets'),
+    ]);
+    expect(env.ignoredAssetRoots).toEqual([]);
+  });
+
   it('supports legacy generic platform config as none', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'components'), { recursive: true });

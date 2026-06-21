@@ -223,14 +223,14 @@ Static `include()` function references are compiled into the generated Twig modu
 <pre>{{ source('@components/button/button.twig') }}</pre>
 ```
 
-It also supports the Storybook asset alias `@assets` for static assets served from the project asset directory.
+It also supports the Storybook asset alias `@assets` for static assets served from configured project asset roots.
 
 ```twig
 {{ source('@assets/icons/arrow.svg') }}
 {{ source('@assets/images/example.png') }}
 ```
 
-Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Emulsify uses `projectStructure.assetRoots` when available and always includes existing root `assets` and `src/assets` directories. Root `./assets` is checked before `./src/assets` for `@assets` references.
+Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown are resolved from a build-time virtual module when they live under configured asset roots. Configure additional roots with `projectStructure.assetRoots` in `project.emulsify.json`. Emulsify always includes existing root `assets` and `src/assets` directories. Root `./assets` is checked before `./src/assets` for `@assets` references.
 
 The generated sprite is a special asset alias: `source('@assets/icons.svg')` resolves `dist/assets/icons.svg` before checking root `assets/icons.svg`. Other `@assets/...` SVG references resolve through the project asset roots, so `source('@assets/icons/arrow.svg')` reads `assets/icons/arrow.svg` when that file exists.
 

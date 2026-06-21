@@ -67,6 +67,33 @@ Projects using this structure do not need to create `src/` just to use the curre
 
 Each implementation name becomes a structure root and Twig namespace, so templates can reference names such as `@components`, `@foundation`, `@layout`, and `@tokens`. Configured paths that resolve outside the project root are ignored.
 
+### Asset Roots
+
+Asset files are discovered from the default asset roots and any additional
+roots configured in `project.emulsify.json`. Use asset roots when a project
+stores fonts, images, icons, or other static files outside the default
+locations.
+
+The default asset roots are root `./assets` and `./src/assets`. Additional
+asset roots use `projectStructure.assetRoots` and are resolved relative to the
+project root:
+
+```json
+{
+  "project": {
+    "platform": "none",
+    "name": "example",
+    "machineName": "example"
+  },
+  "projectStructure": {
+    "assetRoots": ["./design/assets", "./public/static"]
+  }
+}
+```
+
+Configured asset roots are deduplicated with the defaults. Paths that resolve
+outside the project root are ignored and reported by `emulsify-audit`.
+
 ## Story Roots
 
 Stories remain colocated with components. Storybook discovers stories from the normalized source roots regardless of whether a project uses:
