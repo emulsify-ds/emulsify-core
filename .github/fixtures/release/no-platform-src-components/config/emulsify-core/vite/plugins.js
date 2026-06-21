@@ -1,6 +1,6 @@
 module.exports = [
   {
-    name: 'generic-fixture-vite-extension',
+    name: 'no-platform-fixture-vite-extension',
     generateBundle() {
       this.emitFile({
         type: 'asset',

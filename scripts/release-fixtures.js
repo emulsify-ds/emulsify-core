@@ -48,7 +48,7 @@ const releaseFixtures = [
     ],
   },
   {
-    name: 'generic-src-components',
+    name: 'no-platform-src-components',
     type: 'vite',
     assert: [
       'dist/components/card/js/card.js',
