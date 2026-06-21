@@ -126,7 +126,7 @@ Twig support in Storybook is optional and platform-agnostic. When Twig stories a
 - Compiled template dependency support for `{% include %}`, `{% embed %}`, `{% extends %}`, `{% import %}`, and `{% from %}`.
 - Optional platform or project Twig extensions supplied by configuration.
 
-Drupal-compatible Twig filters are not part of the generic Twig runtime by
+Drupal-compatible Twig filters are not part of the default Twig runtime by
 default. They are registered when the active platform adapter enables them, or
 when a project sets `storybook.registerDrupalTwigFilters` in
 `project.emulsify.json`. See

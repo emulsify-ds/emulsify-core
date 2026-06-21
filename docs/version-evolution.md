@@ -28,4 +28,4 @@ The current release is the next evolution of Emulsify Core. Vite replaces Webpac
 
 The project model is also more explicit. `project.emulsify.json` drives platform and structure configuration. The normalized structure model supports `src/components`, root `./components`, and custom `variant.structureImplementations`. Platform adapters own platform-specific behavior such as Drupal behavior attachment, Drupal Twig filters, and Drupal SDC output mirroring.
 
-That combination keeps existing Drupal and Twig-heavy projects viable while making Emulsify Core a better fit for generic Twig libraries, standalone React libraries, and mixed design systems. It is not a break from the project history; it is the same shared-tooling idea updated for the way modern component libraries are built.
+That combination keeps existing Drupal and Twig-heavy projects viable while making Emulsify Core a better fit for standalone Twig libraries, standalone React libraries, and mixed design systems. It is not a break from the project history; it is the same shared-tooling idea updated for the way modern component libraries are built.

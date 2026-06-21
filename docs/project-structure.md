@@ -4,13 +4,13 @@ Emulsify Core reads `project.emulsify.json` once and normalizes project structur
 
 ## Which Structure Should I Use?
 
-| Project Type                                 | Recommended Structure                        | Platform Setting      | Notes                                                                                                                         |
-| -------------------------------------------- | -------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| New generic design system                    | `src/components`                             | `generic`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                     |
-| Existing root `./components` project         | Keep `./components`                          | `generic` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                       |
-| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`              | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                  |
-| Multi-root design system                     | `variant.structureImplementations`           | `generic` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                          |
-| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `generic`             | Use this for Craft CMS, WordPress + Timber, or similar Twig-based projects today. Dedicated adapters are not implemented yet. |
+| Project Type                                 | Recommended Structure                        | Platform Setting   | Notes                                                                                                                         |
+| -------------------------------------------- | -------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| New standalone design system                 | `src/components`                             | `none`             | Good default for Twig, React, or mixed component libraries that do not need CMS-specific output behavior.                     |
+| Existing root `./components` project         | Keep `./components`                          | `none` or `drupal` | Valid for upgrades. Do not create `src/` only to satisfy Emulsify Core.                                                       |
+| Drupal SDC theme                             | `src/components` with SDC enabled            | `drupal`           | Builds through `dist/components` and mirrors component output to root `./components` for Drupal consumption.                  |
+| Multi-root design system                     | `variant.structureImplementations`           | `none` or `drupal` | Use explicit named roots such as `components`, `foundation`, `layout`, and `tokens`.                                          |
+| CMS Twig project without a dedicated adapter | `src/components` or explicit structure roots | `none`             | Use this for Craft CMS, WordPress + Timber, or similar Twig-based projects today. Dedicated adapters are not implemented yet. |
 
 ## Supported Project Structures
 
@@ -41,7 +41,7 @@ components/
     button.scss
 ```
 
-Projects using this structure do not need to create `src/` just to use the current build system. Generic builds emit into `dist/`; Drupal SDC mirroring happens only when the Drupal adapter enables it.
+Projects using this structure do not need to create `src/` just to use the current build system. `none` builds emit into `dist/`; Drupal SDC mirroring happens only when the Drupal adapter enables it.
 
 ### `variant.structureImplementations`
 
@@ -50,7 +50,7 @@ Projects using this structure do not need to create `src/` just to use the curre
 ```json
 {
   "project": {
-    "platform": "generic",
+    "platform": "none",
     "name": "example",
     "machineName": "example"
   },
@@ -96,7 +96,7 @@ The Vite outDir is `dist/` unless a platform adapter performs additional work af
 
 | Project type                               | JS output                                                                                                                                                              | CSS output                                                                                                                                                              | Twig output                                                                                       | Component metadata                                    | Assets                                                                                                                  | Storybook styles                                             |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `src/components` generic project           | `dist/components/<name>/js/<file>.js`; `.js` and `.jsx` entries both emit `.js`; global JS under `dist/global/**/js/*.js`                                              | `dist/components/<name>/css/<file>.css`; global CSS under `dist/global/**/css/*.css`                                                                                    | `dist/components/<name>/<file>.twig`                                                              | `dist/components/<name>/*.component.yml` when present | `dist/components/<name>/<asset>`                                                                                        | `dist/storybook/<source-path>/<cl-or-sb-file>.css`           |
+| `src/components` `none` project            | `dist/components/<name>/js/<file>.js`; `.js` and `.jsx` entries both emit `.js`; global JS under `dist/global/**/js/*.js`                                              | `dist/components/<name>/css/<file>.css`; global CSS under `dist/global/**/css/*.css`                                                                                    | `dist/components/<name>/<file>.twig`                                                              | `dist/components/<name>/*.component.yml` when present | `dist/components/<name>/<asset>`                                                                                        | `dist/storybook/<source-path>/<cl-or-sb-file>.css`           |
 | `src/components` Drupal SDC project        | Mirrored to `components/<name>/<file>.js`; `.jsx` source is compiled, not copied                                                                                       | Mirrored to `components/<name>/<file>.css`                                                                                                                              | Mirrored to `components/<name>/<file>.twig`                                                       | Mirrored to `components/<name>/*.component.yml`       | Mirrored to `components/<name>/<asset>`                                                                                 | `dist/storybook/<source-path>/<cl-or-sb-file>.css`           |
 | Root `./components` project                | `dist/components/<name>/js/<file>.js`; `.js` and `.jsx` entries both emit `.js`                                                                                        | `dist/components/<name>/css/<file>.css`                                                                                                                                 | `dist/components/<name>/<file>.twig`                                                              | `dist/components/<name>/*.component.yml` when present | `dist/components/<name>/<asset>`                                                                                        | `dist/storybook/<component-path>/<cl-or-sb-file>.css`        |
 | `variant.structureImplementations` project | Component-root JS/JSX can emit as `dist/js/<name>/<file>.js`; non-`components` roots preserve project-relative paths such as `dist/js/src/foundation/colors/colors.js` | Component-root CSS can emit as `dist/css/<name>/<file>.css`; non-`components` roots preserve project-relative paths such as `dist/css/src/foundation/colors/colors.css` | Copied under each named root, such as `dist/components/**`, `dist/layout/**`, or `dist/tokens/**` | Copied under the named root when present              | Copied under the named root, such as `dist/components/button/button.asset.txt` or `dist/foundation/colors/palette.json` | `dist/storybook/<project-relative-path>/<cl-or-sb-file>.css` |
