@@ -498,6 +498,37 @@ No audit findings found."
     ).toBe(true);
   });
 
+  it('resolves source() asset references from assets.roots config', () => {
+    const quote = String.fromCharCode(39);
+
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'none',
+        },
+        assets: {
+          roots: ['./custom-assets'],
+        },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'src/components/icon/icon.twig',
+      `{{ source(${quote}@assets/icons/foo.svg${quote}) }}`,
+    );
+    writeFile(projectDir, 'custom-assets/icons/foo.svg', '<svg></svg>');
+
+    const result = auditProject({ projectDir });
+
+    expect(
+      result.findings.filter(
+        (finding) => finding.id === 'unresolved-twig-reference',
+      ),
+    ).toHaveLength(0);
+  });
+
   it('only treats first include/source argument strings as template references', () => {
     const quote = String.fromCharCode(39);
 

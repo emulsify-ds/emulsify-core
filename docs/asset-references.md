@@ -15,6 +15,21 @@ assets/
     example.png
 ```
 
+Projects that keep Storybook text assets in additional directories can declare
+custom asset roots in `project.emulsify.json`:
+
+```json
+{
+  "assets": {
+    "roots": ["./design-system/assets", "./prototype-assets"]
+  }
+}
+```
+
+Configured roots are resolved relative to the project root. Paths that resolve
+outside the project are ignored. Existing root `assets/` and `src/assets/`
+directories are always included for `@assets` source lookups.
+
 ## Sass And CSS
 
 Sass and CSS should reference project assets with `/assets/...` URLs.
@@ -59,9 +74,9 @@ through Emulsify's Storybook Twig helpers.
 ```
 
 For text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and
-Markdown, `source('@assets/...')` reads from configured asset roots and always
-includes existing root `assets` and `src/assets` directories. Root `./assets`
-is checked before `./src/assets`.
+Markdown, `source('@assets/...')` reads from `assets.roots` and always includes
+existing root `assets` and `src/assets` directories. Root `./assets` is checked
+before `./src/assets`.
 
 The generated SVG sprite is a special case:
 

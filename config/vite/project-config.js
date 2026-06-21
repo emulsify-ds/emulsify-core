@@ -95,6 +95,31 @@ function normalizeStructureImplementations(projectDir, implementations = []) {
 }
 
 /**
+ * Normalize project asset roots.
+ *
+ * @param {string} projectDir - Absolute project root.
+ * @param {Array} roots - Raw asset root entries.
+ * @returns {string[]} Safe absolute asset root paths.
+ */
+function normalizeAssetRoots(projectDir, roots = []) {
+  if (!Array.isArray(roots)) return [];
+
+  const seen = new Set();
+
+  return roots
+    .map((root) =>
+      typeof root === 'string' ? coerceToProjectPath(projectDir, root) : null,
+    )
+    .filter(Boolean)
+    .map((root) => normalize(root))
+    .filter((root) => {
+      if (seen.has(root)) return false;
+      seen.add(root);
+      return true;
+    });
+}
+
+/**
  * Normalize project config for current tooling consumers.
  *
  * @param {string} [projectDir=process.cwd()] - Absolute project root.
@@ -140,6 +165,7 @@ export function resolveProjectConfig(
     root,
     rawStructureImplementations,
   );
+  const assetRoots = normalizeAssetRoots(root, rawConfig?.assets?.roots);
   const structureRoots = structureImplementations.map(
     (implementation) => implementation.directory,
   );
@@ -149,6 +175,7 @@ export function resolveProjectConfig(
     srcExists,
     SDC: singleDirectoryComponents,
     structureImplementations,
+    assetRoots,
     platformAdapter,
   });
 
@@ -166,6 +193,7 @@ export function resolveProjectConfig(
     structureOverrides: projectStructure.structureOverrides,
     structureImplementations,
     structureRoots,
+    assetRoots,
     componentRoots: projectStructure.componentRoots,
     globalRoots: projectStructure.globalRoots,
     namespaceRoots: projectStructure.namespaceRoots,
