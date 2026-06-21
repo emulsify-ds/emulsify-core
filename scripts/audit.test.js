@@ -529,6 +529,31 @@ No audit findings found."
     ).toHaveLength(0);
   });
 
+  it('reports configured asset roots that escape the project root', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'none',
+        },
+        assets: {
+          roots: ['../outside-assets'],
+        },
+      }),
+    );
+
+    const result = auditProject({ projectDir });
+    const finding = result.findings.find(
+      (item) => item.id === 'invalid-asset-root',
+    );
+
+    expect(finding).toMatchObject({
+      severity: 'warn',
+      message:
+        'Configured asset root "../outside-assets" was ignored because it resolves outside the project root.',
+    });
+  });
   it('only treats first include/source argument strings as template references', () => {
     const quote = String.fromCharCode(39);
 
@@ -631,6 +656,42 @@ No audit findings found."
         expect.stringContaining('src/components/search/search.scss'),
       ]),
     );
+  });
+
+  it('reports CSS runtime references from src/assets and configured asset roots', () => {
+    writeFile(
+      projectDir,
+      'project.emulsify.json',
+      JSON.stringify({
+        project: {
+          platform: 'none',
+        },
+        projectStructure: {
+          assetRoots: ['custom-assets'],
+        },
+      }),
+    );
+    writeFile(projectDir, 'src/assets/icons/search.svg', '<svg />');
+    writeFile(projectDir, 'custom-assets/icons/brand.svg', '<svg />');
+    writeFile(
+      projectDir,
+      'src/components/search/search.scss',
+      [
+        '.search { mask-image: url("../../assets/icons/search.svg"); }',
+        '.brand { mask-image: url("../../../custom-assets/icons/brand.svg"); }',
+      ].join('\n'),
+    );
+
+    const result = auditProject({ projectDir });
+    const findings = result.findings.filter(
+      (finding) => finding.id === 'css-runtime-asset-reference',
+    );
+
+    expect(findings).toHaveLength(2);
+    expect(findings.map((finding) => finding.message)).toEqual([
+      'CSS asset URL "../../assets/icons/search.svg" resolves to project-level assets and may be left unchanged by Vite for runtime resolution.',
+      'CSS asset URL "../../../custom-assets/icons/brand.svg" resolves to project-level assets and may be left unchanged by Vite for runtime resolution.',
+    ]);
   });
 
   it('reports unresolved CSS asset references', () => {

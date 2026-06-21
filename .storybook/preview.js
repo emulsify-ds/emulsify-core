@@ -3,7 +3,6 @@
  */
 
 import { getRules } from 'axe-core';
-import React from 'react';
 import { defaultDecorateStory, useEffect } from 'storybook/preview-api';
 import Twig from 'twig';
 import { twigExtensionInstallers } from 'virtual:emulsify-twig-extension-installers';
@@ -12,9 +11,9 @@ import {
   normalizePreviewOverrideModule,
 } from '../src/storybook/preview-parameters.js';
 import {
-  renderHtmlStoryResult,
-  withLegacyStoryToString,
-} from '../src/storybook/render-twig.js';
+  applyStoryDecorators,
+  renderPreviewStory,
+} from '../src/storybook/preview-decorator.js';
 import {
   attachStorybookBehaviors,
   fetchCSSFiles,
@@ -93,13 +92,7 @@ const AxeRules = enableRulesByTag([
  * @returns {Function} Decorated story function.
  */
 export const applyDecorators = (storyFn, decorators) =>
-  defaultDecorateStory(
-    (context) =>
-      withLegacyStoryToString(React.createElement(storyFn, context), () =>
-        storyFn(context),
-      ),
-    decorators,
-  );
+  applyStoryDecorators(defaultDecorateStory, storyFn, decorators);
 
 /**
  * Storybook decorators to apply platform-specific behavior after each story render.
@@ -125,7 +118,7 @@ export const decorators = [
       });
     }, [args]);
 
-    return renderHtmlStoryResult(Story(context), {
+    return renderPreviewStory(Story, context, {
       platformAdapter,
     });
   },

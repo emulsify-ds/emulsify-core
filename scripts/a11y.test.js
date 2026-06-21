@@ -3,17 +3,22 @@
  */
 
 import 'regenerator-runtime/runtime';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import pa11y from 'pa11y';
 
 import a11yConfig from '../config/a11y.config.js';
 import {
+  discoverStoryIds,
   severityToColor,
   issueIsValid,
   logIssue,
   logReport,
   lintComponent,
   lintReportAndExit,
+  resolvePa11yStoryIds,
+  storyIdsFromStorybookIndex,
 } from './a11y.js';
 
 jest.spyOn(global.process, 'exit').mockImplementation(() => {});
@@ -26,12 +31,197 @@ const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
 
 pa11y.mockResolvedValue('very official report');
 
+const tempDirs = [];
+
+function makeStorybookBuild(indexSource) {
+  const buildDir = mkdtempSync(path.join(tmpdir(), 'emulsify-a11y-'));
+  tempDirs.push(buildDir);
+  mkdirSync(buildDir, { recursive: true });
+
+  if (indexSource !== undefined) {
+    writeFileSync(
+      path.join(buildDir, 'index.json'),
+      typeof indexSource === 'string'
+        ? indexSource
+        : JSON.stringify(indexSource, null, 2),
+    );
+  }
+
+  return buildDir;
+}
+
 describe('a11y', () => {
   beforeEach(() => {
     // Reset mocked process and console state between report scenarios.
     global.console.log.mockClear();
     global.process.exit.mockClear();
   });
+
+  afterEach(() => {
+    for (const tempDir of tempDirs) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  it('discovers story IDs from Storybook index entries', () => {
+    expect(
+      storyIdsFromStorybookIndex({
+        entries: {
+          'components-button--primary': {
+            id: 'components-button--primary',
+            type: 'story',
+          },
+          'components-button--docs': {
+            id: 'components-button--docs',
+            type: 'docs',
+          },
+          'components-card--default': {
+            type: 'story',
+          },
+        },
+      }),
+    ).toEqual(['components-button--primary', 'components-card--default']);
+  });
+
+  it('discovers story IDs from built Storybook index.json', () => {
+    const buildDir = makeStorybookBuild({
+      v: 5,
+      entries: {
+        'components-button--primary': {
+          id: 'components-button--primary',
+          type: 'story',
+          title: 'Components/Button',
+          name: 'Primary',
+        },
+        'components-card--default': {
+          id: 'components-card--default',
+          type: 'story',
+          title: 'Components/Card',
+          name: 'Default',
+        },
+      },
+    });
+
+    expect(discoverStoryIds(buildDir, { warn: jest.fn() })).toEqual([
+      'components-button--primary',
+      'components-card--default',
+    ]);
+  });
+
+  it('keeps manual-only configuration when discovery is disabled', () => {
+    const warn = jest.fn();
+
+    expect(
+      resolvePa11yStoryIds({
+        manualIds: ['manual-card--default'],
+        discover: false,
+        warn,
+      }),
+    ).toEqual(['manual-card--default']);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('merges discovered and manual story IDs', () => {
+    const buildDir = makeStorybookBuild({
+      entries: {
+        'components-button--primary': {
+          id: 'components-button--primary',
+          type: 'story',
+        },
+      },
+    });
+
+    expect(
+      resolvePa11yStoryIds({
+        manualIds: ['manual-card--default'],
+        buildDir,
+        warn: jest.fn(),
+      }),
+    ).toEqual(['manual-card--default', 'components-button--primary']);
+  });
+
+  it('deduplicates manual and discovered story IDs', () => {
+    const buildDir = makeStorybookBuild({
+      entries: {
+        'components-button--primary': {
+          id: 'components-button--primary',
+          type: 'story',
+        },
+        'components-card--default': {
+          id: 'components-card--default',
+          type: 'story',
+        },
+        'components-card--duplicate': {
+          id: 'components-card--default',
+          type: 'story',
+        },
+      },
+    });
+
+    expect(
+      resolvePa11yStoryIds({
+        manualIds: ['components-button--primary', 'manual-card--default'],
+        buildDir,
+        warn: jest.fn(),
+      }),
+    ).toEqual([
+      'components-button--primary',
+      'manual-card--default',
+      'components-card--default',
+    ]);
+  });
+
+  it('falls back to manual IDs with a warning when index.json is missing', () => {
+    const buildDir = makeStorybookBuild();
+    const warn = jest.fn();
+
+    expect(
+      resolvePa11yStoryIds({
+        manualIds: ['manual-card--default'],
+        buildDir,
+        warn,
+      }),
+    ).toEqual(['manual-card--default']);
+    expect(warn.mock.calls[0][0]).toContain('Storybook index not found');
+  });
+
+  it('falls back to manual IDs with a warning when index.json is malformed', () => {
+    const buildDir = makeStorybookBuild('{not-json');
+    const warn = jest.fn();
+
+    expect(
+      resolvePa11yStoryIds({
+        manualIds: ['manual-card--default'],
+        buildDir,
+        warn,
+      }),
+    ).toEqual(['manual-card--default']);
+    expect(warn.mock.calls[0][0]).toContain('Unable to read Storybook index');
+  });
+
+  it('does not read Storybook index.json when discovery is disabled', () => {
+    const buildDir = makeStorybookBuild({
+      entries: {
+        'components-button--primary': {
+          id: 'components-button--primary',
+          type: 'story',
+        },
+      },
+    });
+    const warn = jest.fn();
+
+    expect(
+      resolvePa11yStoryIds({
+        manualIds: ['manual-card--default'],
+        discover: false,
+        buildDir,
+        warn,
+      }),
+    ).toEqual(['manual-card--default']);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('can map axe issue severity to the correct chalk color', () => {
     expect.assertions(3);
     expect(severityToColor('error')).toBe('red');

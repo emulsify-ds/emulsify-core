@@ -218,6 +218,7 @@ function normalizeAssetRoots(projectDir, assetRoots = []) {
  *   SDC?: boolean,
  *   structureImplementations?: {name: string, directory: string}[],
  *   assetRoots?: string[],
+ *   ignoredAssetRoots?: string[],
  *   platformAdapter?: object
  * }} [env] - Normalized project environment.
  * @returns {object} Project structure model.
@@ -242,6 +243,8 @@ export function resolveProjectStructure(env) {
     srcDir = defaultSrcDir,
     srcExists = safeExists(defaultSrcDir),
     SDC = false,
+    assetRoots: rawAssetRoots = [],
+    ignoredAssetRoots = [],
     platformAdapter = {},
   } = resolvedEnv;
   const structureImplementations =
@@ -272,7 +275,7 @@ export function resolveProjectStructure(env) {
       });
   const componentRoots = componentRootRecords.map((root) => root.directory);
   const globalRoots = globalRootRecords.map((root) => root.directory);
-  const assetRoots = normalizeAssetRoots(projectDir, resolvedEnv.assetRoots);
+  const assetRoots = normalizeAssetRoots(projectDir, rawAssetRoots);
   const namespaceRootValues = Object.values(namespaceRoots);
   const sourceRoots = unique(
     [...componentRoots, ...globalRoots].filter(Boolean),
@@ -309,6 +312,7 @@ export function resolveProjectStructure(env) {
     globalRoots,
     assetRoots,
     sourceRoots,
+    ignoredAssetRoots: unique(ignoredAssetRoots),
     sourceRootRecords,
     storyRoots,
     twigRoots,

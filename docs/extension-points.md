@@ -10,7 +10,7 @@ Project-level extension locations live under `config/emulsify-core`:
 | --------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Vite plugins/config patches | `config/emulsify-core/vite/plugins.(mjs\|js\|cjs)` | Build-time Vite extensions are loaded only by Node/Vite.                           |
 | Storybook overrides         | `config/emulsify-core/storybook/...`               | Storybook preview/head overrides are project-facing assets that Storybook imports. |
-| A11y config                 | `config/emulsify-core/a11y.config.js`              | The a11y script keeps the existing project config path for compatibility.          |
+| A11y config                 | `config/emulsify-core/a11y.config.js`              | Configure Pa11y ignores, manual Storybook IDs, and Storybook discovery behavior.   |
 
 Vite extensions should use `config/emulsify-core/vite/`. Storybook overrides should continue using `config/emulsify-core/storybook/`, and the a11y script continues to read `config/emulsify-core/a11y.config.js`.
 

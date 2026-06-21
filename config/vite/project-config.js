@@ -11,6 +11,7 @@ import { normalize, resolve, sep } from 'path';
 import { getPlatformAdapter, normalizePlatformName } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
 import { safeExists, safeReadJson } from './utils/fs-safe.js';
+import { unique } from './utils/unique.js';
 
 /**
  * Cache normalized project config by project root and relevant env signature.
@@ -95,28 +96,62 @@ function normalizeStructureImplementations(projectDir, implementations = []) {
 }
 
 /**
- * Normalize project asset roots.
+ * Read public asset root configuration from supported project config paths.
+ *
+ * `assets.roots` is the documented public path.
+ * `projectStructure.assetRoots` and `project.assetRoots` remain supported for
+ * compatibility with earlier follow-up work and local project experiments.
+ *
+ * @param {object} rawConfig - Parsed project.emulsify.json contents.
+ * @returns {Array} Raw configured asset roots.
+ */
+function rawAssetRoots(rawConfig = {}) {
+  return [
+    ...(Array.isArray(rawConfig?.assets?.roots) ? rawConfig.assets.roots : []),
+    ...(Array.isArray(rawConfig?.projectStructure?.assetRoots)
+      ? rawConfig.projectStructure.assetRoots
+      : []),
+    ...(Array.isArray(rawConfig?.project?.assetRoots)
+      ? rawConfig.project.assetRoots
+      : []),
+  ];
+}
+
+/**
+ * Normalize public asset root declarations.
+ *
+ * Paths must resolve inside the project root. Invalid entries are retained as
+ * diagnostics so the audit command can report them without making Storybook or
+ * Vite builds fail for existing projects.
  *
  * @param {string} projectDir - Absolute project root.
- * @param {Array} roots - Raw asset root entries.
- * @returns {string[]} Safe absolute asset root paths.
+ * @param {Array} roots - Raw configured asset root entries.
+ * @returns {{roots: string[], ignored: string[]}} Normalized asset root state.
  */
 function normalizeAssetRoots(projectDir, roots = []) {
-  if (!Array.isArray(roots)) return [];
+  if (!Array.isArray(roots)) return { roots: [], ignored: [] };
 
-  const seen = new Set();
+  const normalizedRoots = [];
+  const ignored = [];
 
-  return roots
-    .map((root) =>
-      typeof root === 'string' ? coerceToProjectPath(projectDir, root) : null,
-    )
-    .filter(Boolean)
-    .map((root) => normalize(root))
-    .filter((root) => {
-      if (seen.has(root)) return false;
-      seen.add(root);
-      return true;
-    });
+  for (const item of roots) {
+    if (typeof item !== 'string' || !item.trim()) {
+      continue;
+    }
+
+    const directory = coerceToProjectPath(projectDir, item);
+    if (!directory) {
+      ignored.push(item);
+      continue;
+    }
+
+    normalizedRoots.push(normalize(directory));
+  }
+
+  return {
+    roots: unique(normalizedRoots),
+    ignored: unique(ignored),
+  };
 }
 
 /**
@@ -165,7 +200,7 @@ export function resolveProjectConfig(
     root,
     rawStructureImplementations,
   );
-  const assetRoots = normalizeAssetRoots(root, rawConfig?.assets?.roots);
+  const assetRoots = normalizeAssetRoots(root, rawAssetRoots(rawConfig));
   const structureRoots = structureImplementations.map(
     (implementation) => implementation.directory,
   );
@@ -175,7 +210,8 @@ export function resolveProjectConfig(
     srcExists,
     SDC: singleDirectoryComponents,
     structureImplementations,
-    assetRoots,
+    assetRoots: assetRoots.roots,
+    ignoredAssetRoots: assetRoots.ignored,
     platformAdapter,
   });
 
@@ -193,7 +229,8 @@ export function resolveProjectConfig(
     structureOverrides: projectStructure.structureOverrides,
     structureImplementations,
     structureRoots,
-    assetRoots,
+    assetRoots: projectStructure.assetRoots,
+    ignoredAssetRoots: projectStructure.ignoredAssetRoots,
     componentRoots: projectStructure.componentRoots,
     globalRoots: projectStructure.globalRoots,
     namespaceRoots: projectStructure.namespaceRoots,

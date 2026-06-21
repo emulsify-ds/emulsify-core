@@ -195,6 +195,8 @@ For Drupal projects, Storybook initializes a browser compatibility shim with `wi
 
 Drupal SDC mirroring remains supported for Drupal projects that enable `singleDirectoryComponents`.
 
+WordPress and Timber projects should currently use `platform: "none"`. This keeps Emulsify Core in platform-neutral mode while still supporting Twig-oriented component development. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced.
+
 ## Vite Customization
 
 Replace Webpack-specific customizations with Vite configuration or `config/emulsify-core/vite/plugins.*` extensions.
