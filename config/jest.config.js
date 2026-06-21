@@ -24,13 +24,13 @@ export default {
   },
   coverageDirectory: '.coverage',
   coverageProvider: 'v8',
-  // TODO: Raise these thresholds once coverage exists for every maintained file.
+  // Keep thresholds conservative for now, and ratchet them upward as coverage improves.
   coverageThreshold: {
     global: {
-      branches: 0,
-      functions: 0,
-      lines: 0,
-      statements: 0,
+      branches: 70,
+      functions: 80,
+      lines: 85,
+      statements: 85,
     },
   },
   testPathIgnorePatterns: [
