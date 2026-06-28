@@ -13,7 +13,7 @@ describe('platform adapter resolution', () => {
   });
 
   it('uses non-platform behavior for none, legacy generic, and unknown platforms', () => {
-    for (const platform of ['none', 'generic', 'wordpress']) {
+    for (const platform of ['none', 'generic', 'unknown']) {
       expect(getPlatformAdapter(platform)).toMatchObject({
         name: 'none',
         outputStrategy: 'dist',
@@ -27,6 +27,24 @@ describe('platform adapter resolution', () => {
         },
       });
     }
+  });
+
+  it('uses WordPress behavior for the WordPress platform', () => {
+    expect(normalizePlatformName(' WordPress ')).toBe('wordpress');
+    expect(getPlatformAdapter('wordpress')).toMatchObject({
+      name: 'wordpress',
+      outputStrategy: 'dist',
+      storybook: {
+        loadDrupalBehaviorShim: false,
+        attachDrupalBehaviors: false,
+        registerDrupalTwigFilters: false,
+        loadMirroredComponentCss: false,
+        allowSyncXhrSource: false,
+      },
+      build: {
+        mirrorDistComponentsToRoot: false,
+      },
+    });
   });
 
   it('uses Drupal behavior only for the Drupal platform', () => {

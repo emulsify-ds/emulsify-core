@@ -1,0 +1,7 @@
+{
+  "project": {
+    "platform": "wordpress",
+    "name": "wordpress-src-components",
+    "machineName": "whisk"
+  }
+}

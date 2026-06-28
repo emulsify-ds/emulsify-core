@@ -35,10 +35,26 @@ const drupalAdapter = {
   },
 };
 
+const wordpressAdapter = {
+  name: 'wordpress',
+  outputStrategy: 'dist',
+  storybook: {
+    loadDrupalBehaviorShim: false,
+    attachDrupalBehaviors: false,
+    registerDrupalTwigFilters: false,
+    loadMirroredComponentCss: false,
+    allowSyncXhrSource: false,
+  },
+  build: {
+    mirrorDistComponentsToRoot: false,
+  },
+};
+
 const adapters = {
   none: noneAdapter,
   generic: noneAdapter,
   drupal: drupalAdapter,
+  wordpress: wordpressAdapter,
 };
 
 /**
@@ -80,10 +96,7 @@ export function normalizePlatformName(platform = 'none') {
  */
 export function getPlatformAdapter(platform = 'none') {
   const key = normalizePlatformName(platform);
-  if (key === 'drupal') {
-    return cloneAdapter(drupalAdapter);
-  }
-  return cloneAdapter(noneAdapter);
+  return cloneAdapter(adapters[key] || noneAdapter);
 }
 
 export { adapters };

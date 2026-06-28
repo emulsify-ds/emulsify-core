@@ -123,6 +123,57 @@ describe('resolveProjectConfig', () => {
     });
   });
 
+  it('normalizes WordPress project config without Drupal behavior', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/components'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'wordpress',
+        name: 'whisk',
+        machineName: 'whisk',
+      },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env).toMatchObject({
+      projectDir,
+      platform: 'wordpress',
+      machineName: 'whisk',
+      srcExists: true,
+      srcDir: join(projectDir, 'src'),
+      singleDirectoryComponents: false,
+      SDC: false,
+      outputStrategy: 'dist',
+      outputMode: 'dist',
+    });
+    expect(env.componentRoots).toEqual([join(projectDir, 'src/components')]);
+    expect(env.namespaceRoots.components).toBe(
+      join(projectDir, 'src/components'),
+    );
+    expect(env.projectStructure).toMatchObject({
+      componentRoots: [join(projectDir, 'src/components')],
+      globalRoots: [join(projectDir, 'src')],
+      storyRoots: [join(projectDir, 'src')],
+      outputStrategy: 'dist',
+      outputMode: 'dist',
+      mirrorComponentOutput: false,
+    });
+    expect(env.platformAdapter).toMatchObject({
+      name: 'wordpress',
+      outputStrategy: 'dist',
+      storybook: {
+        loadDrupalBehaviorShim: false,
+        attachDrupalBehaviors: false,
+        registerDrupalTwigFilters: false,
+        loadMirroredComponentCss: false,
+      },
+      build: {
+        mirrorDistComponentsToRoot: false,
+      },
+    });
+  });
+
   it('has no configured asset roots by default', () => {
     projectDir = makeTempProject();
     writeProjectConfig(projectDir, {

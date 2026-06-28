@@ -124,6 +124,7 @@
     "./storybook/twig/source": "./src/storybook/twig/source.js",
     "./vite": "./config/vite/vite.config.js",
     "./vite/plugins": "./config/vite/plugins.js",
+    "./vite/platforms": "./config/vite/platforms.js",
     "./package.json": "./package.json"
   },
   "publishConfig": {
