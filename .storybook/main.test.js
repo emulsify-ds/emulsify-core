@@ -351,6 +351,76 @@ describe('Storybook main config', () => {
     expect(modules.sharedDist).toContain('"dist/global/foundation.css"');
   });
 
+  it('updates dist CSS links without a full Storybook reload', async () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      mkdirSync(path.join(projectRoot, 'dist/global'), { recursive: true });
+      writeFileSync(path.join(projectRoot, 'dist/global/foundation.css'), '.foundation {}');
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+      const finalConfig = await config.viteFinal({
+        mode: 'development',
+        server: {
+          fs: {
+            allow: [],
+          },
+        },
+        optimizeDeps: {},
+      });
+      const plugin = finalConfig.plugins.find(
+        (item) => item && item.name === 'emulsify-storybook-css-links',
+      );
+      const watcherCallbacks = {};
+      const messages = [];
+
+      plugin.configureServer({
+        middlewares: {
+          use() {},
+        },
+        watcher: {
+          add() {},
+          on(eventName, callback) {
+            watcherCallbacks[eventName] = callback;
+          },
+        },
+        ws: {
+          send(message) {
+            messages.push(message);
+          },
+        },
+      });
+
+      watcherCallbacks.change(path.join(projectRoot, 'dist/global/foundation.css'));
+
+      console.log(JSON.stringify(messages));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const messages = JSON.parse(output.toString());
+
+    expect(messages).toHaveLength(2);
+    expect(messages.every((message) => message.type === 'custom')).toBe(true);
+    expect(messages.map((message) => message.data.sourceName)).toEqual([
+      'dist',
+      'shared-dist',
+    ]);
+    expect(messages[0].data.stylesheetHrefs).toContain(
+      'dist/global/foundation.css',
+    );
+  });
+
   it('serves generated dist assets that appear after Storybook config loads', async () => {
     const script = `
       const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');

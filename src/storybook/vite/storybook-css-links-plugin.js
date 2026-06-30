@@ -15,12 +15,32 @@ const storybookCssResolvedVirtualModuleIds = new Map(
 );
 
 function isWithinDirectory(filePath, directory) {
-  const relativePath = path.relative(directory, filePath);
+  const relativePath = path.relative(
+    comparablePath(directory),
+    comparablePath(filePath),
+  );
   return Boolean(
     relativePath &&
     !relativePath.startsWith('..') &&
     !path.isAbsolute(relativePath),
   );
+}
+
+function comparablePath(filePath) {
+  try {
+    return fs.realpathSync.native(filePath);
+  } catch {
+    const directory = path.dirname(filePath);
+
+    try {
+      return path.join(
+        fs.realpathSync.native(directory),
+        path.basename(filePath),
+      );
+    } catch {
+      return path.resolve(filePath);
+    }
+  }
 }
 
 function toPosixPath(filePath) {
@@ -66,25 +86,85 @@ function buildDistStylesheetHrefs(
 
 function generateStylesheetLinkModule(hrefs, sourceName) {
   return `
-const stylesheetHrefs = ${JSON.stringify(hrefs)};
+export const stylesheetHrefs = ${JSON.stringify(hrefs)};
 const sourceName = ${JSON.stringify(sourceName)};
-const loadedStylesheets =
-  (globalThis.__EMULSIFY_STORYBOOK_CSS_LINKS__ ||= new Set());
 const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\\/?$/, '/');
 
-if (typeof document !== 'undefined') {
-  for (const stylesheetHref of stylesheetHrefs) {
-    const href = \`\${baseUrl}\${String(stylesheetHref).replace(/^\\/+/, '')}\`;
-    const key = \`\${sourceName}:\${href}\`;
+function baseHref(stylesheetHref) {
+  return \`\${baseUrl}\${String(stylesheetHref).replace(/^\\/+/, '')}\`;
+}
 
-    if (loadedStylesheets.has(key)) continue;
+function timestampHref(href, timestamp) {
+  if (!timestamp) return href;
+  return \`\${href}\${href.includes('?') ? '&' : '?'}t=\${timestamp}\`;
+}
 
+function sourceLinks() {
+  return Array.from(
+    document.querySelectorAll(
+      \`link[data-emulsify-storybook-css="\${sourceName}"]\`,
+    ),
+  );
+}
+
+function appendStylesheet(href, stableHref) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
     link.dataset.emulsifyStorybookCss = sourceName;
+    link.dataset.emulsifyStorybookCssHref = stableHref;
     document.head.appendChild(link);
-    loadedStylesheets.add(key);
+}
+
+function replaceStylesheet(link, href, stableHref) {
+  if (link.getAttribute('href') === href) return;
+
+  const nextLink = link.cloneNode();
+  nextLink.href = href;
+  nextLink.dataset.emulsifyStorybookCss = sourceName;
+  nextLink.dataset.emulsifyStorybookCssHref = stableHref;
+  const removeOldLink = () => link.remove();
+  nextLink.addEventListener('load', removeOldLink);
+  nextLink.addEventListener('error', removeOldLink);
+  link.after(nextLink);
+}
+
+function loadStylesheets(nextStylesheetHrefs = stylesheetHrefs, timestamp) {
+  const stableHrefs = new Set(nextStylesheetHrefs.map(baseHref));
+
+  for (const link of sourceLinks()) {
+    if (!stableHrefs.has(link.dataset.emulsifyStorybookCssHref)) {
+      link.remove();
+    }
+  }
+
+  for (const stylesheetHref of nextStylesheetHrefs) {
+    const stableHref = baseHref(stylesheetHref);
+    const href = timestampHref(stableHref, timestamp);
+    const existingLink = sourceLinks().find(
+      (link) => link.dataset.emulsifyStorybookCssHref === stableHref,
+    );
+
+    if (existingLink) {
+      replaceStylesheet(existingLink, href, stableHref);
+    } else {
+      appendStylesheet(href, stableHref);
+    }
+  }
+}
+
+if (typeof document !== 'undefined') {
+  loadStylesheets();
+
+  if (import.meta.hot) {
+    import.meta.hot.on('emulsify-storybook-css-update', (event) => {
+      if (event?.sourceName !== sourceName) return;
+
+      loadStylesheets(
+        event.stylesheetHrefs || stylesheetHrefs,
+        event.timestamp || Date.now(),
+      );
+    });
   }
 }
 `;
@@ -234,6 +314,30 @@ export function makeStorybookCssLinksPlugin({
         path.join(distAssetsDir, '**/*'),
       ]);
 
+      const sendCssUpdate = () => {
+        const timestamp = Date.now();
+        server.ws.send({
+          type: 'custom',
+          event: 'emulsify-storybook-css-update',
+          data: {
+            sourceName: 'dist',
+            stylesheetHrefs: buildDistStylesheetHrefs(projectRoot),
+            timestamp,
+          },
+        });
+        server.ws.send({
+          type: 'custom',
+          event: 'emulsify-storybook-css-update',
+          data: {
+            sourceName: 'shared-dist',
+            stylesheetHrefs: buildDistStylesheetHrefs(projectRoot, {
+              includeComponentCss: false,
+            }),
+            timestamp,
+          },
+        });
+      };
+
       const reloadGeneratedDistFile = (filePath) => {
         const absolutePath = path.resolve(filePath);
         const isDistCss =
@@ -246,11 +350,10 @@ export function makeStorybookCssLinksPlugin({
         }
 
         if (isDistCss) {
-          for (const id of storybookCssResolvedVirtualModuleIds.values()) {
-            const cssModule = server.moduleGraph.getModuleById(id);
-            if (cssModule) server.moduleGraph.invalidateModule(cssModule);
-          }
+          sendCssUpdate();
+          return;
         }
+
         server.ws.send({ type: 'full-reload', path: '*' });
       };
 
