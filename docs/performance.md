@@ -61,7 +61,7 @@ platformAdapter: {
 }
 ```
 
-That fallback blocks the main thread, is deprecated, and is scheduled for removal in 4.2.
+That fallback blocks the main thread, is deprecated, and is scheduled for removal in a future major release.
 
 ## Storybook CSS Loading
 
