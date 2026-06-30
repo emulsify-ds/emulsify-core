@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "Bundled tooling for Storybook development + Vite Build",
   "keywords": [
     "component library",

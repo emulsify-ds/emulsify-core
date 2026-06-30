@@ -28,13 +28,22 @@ The release fixture suite validates the 4.x checklist items that are easy to aut
 
 ## Tarball Smoke Test
 
-After `npm pack`, install the generated tarball in a clean temporary project and verify public imports resolve from the packed package:
+From the repository root, use `npm pack --json` to create the tarball, install the generated filename in a clean temporary project, and verify public imports resolve from the packed package:
 
 ```sh
 tmp="$(mktemp -d)"
+npm pack --pack-destination "$tmp" --json > "$tmp/pack.json"
+tarball="$(
+  node -e "
+    const fs = require('node:fs');
+    const pack = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    console.log(pack[0].filename);
+  " "$tmp/pack.json"
+)"
+
 cd "$tmp"
 npm init -y
-npm install /path/to/emulsify-core-4.0.0.tgz
+npm install "./$tarball"
 
 node --input-type=module -e "
   const core = await import('@emulsify/core');
@@ -43,6 +52,7 @@ node --input-type=module -e "
   const react = await import('@emulsify/core/extensions/react');
   const vite = await import('@emulsify/core/vite');
   const plugins = await import('@emulsify/core/vite/plugins');
+  const platforms = await import('@emulsify/core/vite/platforms');
 
   if (typeof storybook.renderTwig !== 'function') {
     throw new Error('renderTwig missing from @emulsify/core/storybook');
