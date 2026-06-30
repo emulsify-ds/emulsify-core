@@ -89,7 +89,7 @@ export function getProjectMachineName() {
     : undefined;
 }
 
-// Keep these named exports stable for preview.js and downstream overrides.
+// Keep these compatibility exports for downstream preview overrides.
 export {
   attachStorybookBehaviors,
   fetchCSSFiles,

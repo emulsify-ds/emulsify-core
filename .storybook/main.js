@@ -14,32 +14,13 @@
 import fs from 'fs';
 import path, { resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import viteConfig from '../config/vite/vite.config.js';
 import { resolveEnvironment } from '../config/vite/environment.js';
-import {
-  mergeReactSingletonOptimizeDeps,
-  mergeReactSingletonResolve,
-} from '../config/vite/utils/react-singleton.js';
-import { twigExtensionModuleSpecifiers } from '../config/vite/twig-extensions.js';
 import {
   applyStorybookConfigOverrides,
   normalizeStorybookConfigOverrideModule,
 } from '../src/storybook/main-config.js';
-
-// Twig glob maps are provided by config/vite/plugins/virtual-twig-globs.js.
-
-const twigVirtualModuleIds = [
-  'virtual:emulsify-twig-globs',
-  'virtual:emulsify-twig-asset-sources',
-  'virtual:emulsify-twig-extension-installers',
-];
-
-const twigRuntimeOptimizeDepsExclude = [
-  ...twigVirtualModuleIds,
-  '@emulsify/core/storybook/twig/source-function',
-  '@emulsify/core/storybook/twig/source',
-  '@emulsify/core/storybook/twig/resolver',
-];
+import { buildAssetStaticDirs } from './main-static-assets.js';
+import { createViteFinal } from './main-vite.js';
 
 /**
  * Minimal subset of the resolved Emulsify environment used by this file.
@@ -71,27 +52,6 @@ const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
 
 /**
- * The consuming project root for Storybook static mounts.
- *
- * Storybook loads this package config from different physical locations
- * depending on whether Core is linked locally or installed in node_modules, so
- * static paths must be rooted at the process cwd rather than this file.
- *
- * @type {string}
- */
-const projectRoot = process.cwd();
-
-/**
- * Vite-generated Storybook chunks should not share `/assets` with project
- * static files. Storybook copies staticDirs while the preview build runs, so
- * keeping generated chunks in a separate folder avoids concurrent writers in
- * `.out/assets`.
- *
- * @type {string}
- */
-const storybookViteAssetsDir = 'storybook-assets';
-
-/**
  * Reads an optional HTML fragment relative to this config file.
  *
  * Missing files are treated as empty content so downstream projects can opt in
@@ -108,111 +68,6 @@ function readOptionalHtmlFragment(relativePath) {
   }
 
   return fs.readFileSync(fragmentPath, 'utf8');
-}
-
-/**
- * Keeps Storybook static directory config aligned to the consuming project.
- *
- * Storybook errors when a declared static directory is absent, so only expose
- * project asset directories that exist in the current workspace.
- *
- * @param {Array<string|{from: string, to: string}>} staticDirs - Static directory entries.
- * @returns {Array<string|{from: string, to: string}>} Existing static directory entries.
- */
-function existingStaticDirs(staticDirs) {
-  const seen = new Set();
-  const existing = [];
-
-  for (const staticDir of staticDirs) {
-    const directory =
-      typeof staticDir === 'string' ? staticDir : staticDir.from;
-
-    if (!directory || !fs.existsSync(directory)) continue;
-
-    const key =
-      typeof staticDir === 'string'
-        ? staticDir
-        : `${staticDir.from || ''}\0${staticDir.to || ''}`;
-    if (seen.has(key)) continue;
-
-    seen.add(key);
-    existing.push(staticDir);
-  }
-
-  return existing;
-}
-
-/**
- * Build static directory mounts for normalized project asset roots.
- *
- * @param {StorybookEnvironment} env - Resolved project paths used by Storybook.
- * @returns {Array<string|{from: string, to: string}>} Static directory entries.
- */
-function buildAssetStaticDirs(env) {
-  const configuredAssetRoots = Array.isArray(env.projectStructure?.assetRoots)
-    ? env.projectStructure.assetRoots
-    : [];
-  const assetRoots = [
-    ...configuredAssetRoots,
-    path.resolve(projectRoot, 'assets'),
-    path.resolve(projectRoot, 'src/assets'),
-  ];
-
-  return existingStaticDirs([
-    ...assetRoots.map((root) => ({
-      from: root,
-      to: '/assets',
-    })),
-    {
-      from: path.resolve(projectRoot, 'dist/assets'),
-      to: '/assets',
-    },
-    {
-      from: path.resolve(projectRoot, 'dist'),
-      to: '/dist',
-    },
-  ]);
-}
-
-/**
- * Merge Storybook and project optimizeDeps excludes with Core Twig runtime IDs.
- *
- * Storybook's dependency optimizer runs before normal Vite virtual module
- * resolution. Core Twig runtime modules import virtual IDs that must stay in
- * the Vite module graph so Emulsify's virtual plugins can resolve them.
- *
- * @param {...string[]} excludeLists - Existing optimizeDeps exclude arrays.
- * @returns {string[]} Merged exclude list.
- */
-function mergeTwigRuntimeOptimizeDepsExcludes(...excludeLists) {
-  return Array.from(
-    new Set([
-      ...excludeLists.flatMap((excludeList) =>
-        Array.isArray(excludeList) ? excludeList : [],
-      ),
-      ...twigRuntimeOptimizeDepsExclude,
-    ]),
-  );
-}
-
-/**
- * Keep Emulsify Twig virtual imports out of Storybook dependency prebundles.
- *
- * @returns {import('esbuild').Plugin} Esbuild plugin for optimizeDeps.
- */
-function makeTwigVirtualModuleOptimizerPlugin() {
-  return {
-    name: 'emulsify-twig-virtual-modules',
-    setup(build) {
-      build.onResolve(
-        { filter: /^virtual:emulsify-twig-(?:globs|asset-sources)$/ },
-        (args) => ({
-          path: args.path,
-          external: true,
-        }),
-      );
-    },
-  };
 }
 
 /**
@@ -367,109 +222,12 @@ const baseConfig = {
    * @returns {string} Manager head markup with Emulsify additions appended.
    */
   managerHead: (head) => {
-    // Keep the manager styling inline so consumers inherit the branded UI
-    // without having to maintain a separate manager-only stylesheet.
-    const inlineStyles = `
-      <style>
-      :root {
-        --colors-emulsify-blue-100: #e6f5fc;
-        --colors-emulsify-blue-200: #CCECFA;
-        --colors-emulsify-blue-300: #99D9F4;
-        --colors-emulsify-blue-400: #66c5ef;
-        --colors-emulsify-blue-500: #33b2e9;
-        --colors-emulsify-blue-600: #009fe4;
-        --colors-emulsify-blue-700: #007FB6;
-        --colors-emulsify-blue-800: #005f89;
-        --colors-emulsify-blue-900: #00405b;
-        --colors-emulsify-blue-1000: #00202e;
-        --colors-purple: #8B1E7E;
-      }
-      .sidebar-container {
-        background-color: var(--colors-emulsify-blue-900);
-      }
-      .sidebar-container .sidebar-subheading {
-        color: var(--colors-emulsify-blue-200);
-        font-size: 13px;
-        letter-spacing: 0.15em;
-      }
-      .sidebar-container .sidebar-subheading button:focus {
-        color: var(--colors-emulsify-blue-300);
-      }
-      /* Triangle icon. */
-      .sidebar-container .sidebar-subheading button span {
-        color: var(--colors-emulsify-blue-300);
-      }
-      .sidebar-container .search-field input {
-        border-color: var(--colors-emulsify-blue-700);
-      }
-      .sidebar-container .search-field input:active {
-        border-color: var(--colors-emulsify-blue-700);
-      }
-      .sidebar-container .search-result-recentlyOpened,
-      .sidebar-container .search-result-back,
-      .sidebar-container .search-result-clearHistory {
-        color: var(--colors-emulsify-blue-300) !important;
-        letter-spacing: 0.15em;
-      }
-      .sidebar-container .search-result-back span,
-      .sidebar-container .search-result-back svg,
-      .sidebar-container .search-result-clearHistory span,
-      .sidebar-container .search-result-clearHistory svg {
-        letter-spacing: normal;
-        color: white;
-      }
-      .sidebar-container .sidebar-item svg {
-        margin-top: 1px;
-      }
-      .sidebar-container .sidebar-item span {
-        margin-top: 4px;
-      }
-      .sidebar-container .sidebar-subheading-action svg {
-        color: var(--colors-emulsify-blue-400);
-      }
-      .sidebar-container .sidebar-subheading-action:hover svg {
-        color: var(--colors-emulsify-blue-300);
-      }
-      .sidebar-header button[title="Shortcuts"] {
-        box-shadow: none;
-        border: 1px solid var(--colors-emulsify-blue-700);
-      }
-      .sidebar-header button[title="Shortcuts"]:active {
-        border: 1px solid var(--colors-emulsify-blue-500);
-      }
-      .sidebar-header button[title="Shortcuts"]:focus {
-        background: transparent;
-      }
-      #shortcuts {
-        border-bottom-color: var(--colors-emulsify-blue-900) !important;
-      }
-      [role="main"]:not(:nth-child(3)) {
-        top: 1rem !important;
-        height: calc(100vh - 2rem) !important;
-      }
-      [role="main"] .os-host .os-content button:hover {
-        background: var(--colors-emulsify-blue-100);
-      }
-      [role="main"] .os-host .os-content button:hover svg {
-        color: var(--colors-emulsify-blue-900);
-      }
-      #panel-tab-content,
-      #panel-tab-content>* {
-        color: var(--colors-emulsify-blue-100) !important;
-      }
-      #panel-tab-content a,
-      #panel-tab-content a span,
-      #panel-tab-content a span svg {
-        color: var(--colors-emulsify-blue-800);
-      }
-      #panel-tab-content>div>div>div>div>div>div {
-        background: transparent;
-      }
-      #panel-tab-content>div>div>div>div>div>div>div {
-        color: var(--colors-emulsify-blue-1000) !important;
-      }
-    </style>
-    `;
+    const managerStyles = readOptionalHtmlFragment('./manager-head.css');
+    const inlineStyles = managerStyles
+      ? `<style>
+${managerStyles}
+</style>`
+      : '';
     const externalManagerHtml = readOptionalHtmlFragment(
       '../../../../config/emulsify-core/storybook/manager-head.html',
     );
@@ -497,156 +255,7 @@ const baseConfig = {
       ${externalHtml}`;
   },
 
-  /**
-   * Merges Storybook's generated Vite config with Emulsify's shared Vite config.
-   *
-   * Storybook supplies a baseline config, but Emulsify still needs to expose
-   * the resolved environment, expand filesystem access, and expose the Twig
-   * virtual glob module used by the runtime resolver.
-   *
-   * @param {import('vite').UserConfig} config - Storybook's generated Vite config.
-   * @returns {Promise<import('vite').UserConfig>} Final Vite config used by Storybook.
-   */
-  async viteFinal(config) {
-    const { mergeConfig } = await import('vite');
-    /** @type {StorybookEnvironment} */
-    const env = resolvedStorybookEnv;
-    const storybookBuildConfig = config?.build || {};
-
-    // Keep using the `serve` branch of the shared Vite config here. Storybook
-    // has historically consumed that branch, while `mode` still reflects
-    // whether Storybook is running in development or production.
-    const mode = config?.mode || 'development';
-    const baseViteConfig =
-      typeof viteConfig === 'function'
-        ? await viteConfig({ command: 'serve', mode })
-        : viteConfig;
-    const existingDefine = (config && config.define) || {};
-    const viteDefine = (baseViteConfig && baseViteConfig.define) || {};
-
-    // Allow Storybook's dev server to read component sources from the project
-    // root and any structure override paths used by Emulsify consumers.
-    const allowList = new Set([
-      ...(config?.server?.fs?.allow || []),
-      env.projectDir,
-      path.resolve(env.projectDir, 'src'),
-      path.resolve(env.projectDir, 'components'),
-      path.resolve(env.projectDir, 'dist'),
-      ...(Array.isArray(env.projectStructure?.sourceRoots)
-        ? env.projectStructure.sourceRoots
-        : []),
-      ...(Array.isArray(env.componentRoots) ? env.componentRoots : []),
-      ...(Array.isArray(env.structureRoots) ? env.structureRoots : []),
-      ...(env.namespaceRoots && typeof env.namespaceRoots === 'object'
-        ? Object.values(env.namespaceRoots)
-        : []),
-      ...(Array.isArray(env.projectStructure?.assetRoots)
-        ? env.projectStructure.assetRoots
-        : []),
-    ]);
-
-    // Twig files are loaded through custom resolvers/plugins, so they need to
-    // be treated as importable assets by Storybook's Vite pipeline.
-    const assetsInclude = Array.from(
-      new Set([
-        ...(config.assetsInclude || []),
-        ...(baseViteConfig.assetsInclude || []),
-        '**/*.twig',
-      ]),
-    );
-    const optimizeDepsInclude = mergeReactSingletonOptimizeDeps(
-      baseViteConfig?.optimizeDeps?.include,
-      config?.optimizeDeps?.include,
-      [
-        'twig',
-        '@emulsify/core/extensions/twig',
-        ...twigExtensionModuleSpecifiers(env),
-      ],
-    );
-
-    const mergedConfig = mergeConfig(config, {
-      ...baseViteConfig,
-      resolve: mergeReactSingletonResolve(baseViteConfig, config),
-      define: {
-        // Preserve shared and Storybook-provided constants, then publish the
-        // resolved Emulsify environment to client-side code.
-        ...viteDefine,
-        ...existingDefine,
-        __EMULSIFY_ENV__: JSON.stringify(env),
-        'globalThis.__EMULSIFY_ENV__': JSON.stringify(env),
-      },
-      server: {
-        ...(baseViteConfig?.server || {}),
-        fs: {
-          allow: Array.from(allowList),
-        },
-      },
-      assetsInclude,
-      plugins: [...(baseViteConfig?.plugins || [])],
-      esbuild: {
-        // Some downstream code is authored as `.js` files containing JSX, so
-        // keep Storybook's esbuild settings aligned with the shared Vite config.
-        jsx: 'automatic',
-        loader: 'jsx',
-        include: /.*\.jsx?$/,
-        exclude: [],
-      },
-      optimizeDeps: {
-        ...(baseViteConfig?.optimizeDeps || {}),
-        ...(config?.optimizeDeps || {}),
-        include: optimizeDepsInclude,
-        exclude: mergeTwigRuntimeOptimizeDepsExcludes(
-          baseViteConfig?.optimizeDeps?.exclude,
-          config?.optimizeDeps?.exclude,
-        ),
-        esbuildOptions: {
-          ...(baseViteConfig?.optimizeDeps?.esbuildOptions || {}),
-          ...(config?.optimizeDeps?.esbuildOptions || {}),
-          plugins: [
-            ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.plugins || []),
-            ...(config?.optimizeDeps?.esbuildOptions?.plugins || []),
-            makeTwigVirtualModuleOptimizerPlugin(),
-          ],
-          loader: {
-            ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.loader || {}),
-            ...(config?.optimizeDeps?.esbuildOptions?.loader || {}),
-            // Pre-bundle `.js` dependencies with the JSX loader for packages
-            // that ship JSX without a `.jsx` extension.
-            '.js': 'jsx',
-          },
-        },
-      },
-    });
-
-    return {
-      ...mergedConfig,
-      build: {
-        ...(mergedConfig.build || {}),
-        ...(storybookBuildConfig.outDir
-          ? { outDir: storybookBuildConfig.outDir }
-          : {}),
-        assetsDir: storybookViteAssetsDir,
-        emptyOutDir: false,
-      },
-      resolve: mergeReactSingletonResolve(mergedConfig),
-      optimizeDeps: {
-        ...(mergedConfig.optimizeDeps || {}),
-        include: mergeReactSingletonOptimizeDeps(
-          mergedConfig.optimizeDeps?.include,
-        ),
-        exclude: mergeTwigRuntimeOptimizeDepsExcludes(
-          mergedConfig.optimizeDeps?.exclude,
-        ),
-        esbuildOptions: {
-          ...(mergedConfig.optimizeDeps?.esbuildOptions || {}),
-          loader: {
-            ...(mergedConfig.optimizeDeps?.esbuildOptions?.loader || {}),
-            '.js': 'jsx',
-          },
-        },
-      },
-    };
-  },
+  viteFinal: createViteFinal(resolvedStorybookEnv),
 };
 
 /**

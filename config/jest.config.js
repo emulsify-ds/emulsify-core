@@ -17,6 +17,7 @@ export default {
     ],
   },
   moduleNameMapper: {
+    // Keep Jest mappings limited to virtual modules still used by Storybook.
     '^virtual:emulsify-twig-globs$':
       '<rootDir>/config/vite/test-utils/virtual-twig-globs.js',
     '^virtual:emulsify-twig-asset-sources$':
