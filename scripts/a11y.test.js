@@ -2,7 +2,6 @@
  * @file Unit tests for the pa11y accessibility reporting script.
  */
 
-import 'regenerator-runtime/runtime';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
