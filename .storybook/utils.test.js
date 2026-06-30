@@ -29,11 +29,12 @@ describe('Storybook utility helpers', () => {
     delete globalThis.__viteImportMetaGlob;
   });
 
-  it('loads dist CSS only for the none adapter', async () => {
+  it('loads dist CSS through Vite CSS imports for the none adapter', async () => {
     const { fetchCSSFiles } = await loadUtils();
 
     await fetchCSSFiles();
 
+    // The none adapter should use Vite's native CSS glob import, not link injection.
     expect(importMetaGlob).toHaveBeenCalledTimes(1);
     expect(importMetaGlob).toHaveBeenCalledWith('../../../../dist/**/*.css', {
       eager: true,
@@ -51,6 +52,7 @@ describe('Storybook utility helpers', () => {
 
     await fetchCSSFiles();
 
+    // Mirrored component CSS replaces only the generated dist component output.
     expect(importMetaGlob).toHaveBeenCalledTimes(2);
     expect(importMetaGlob).toHaveBeenCalledWith(
       '../../../../components/**/*.css',

@@ -14,12 +14,9 @@ import {
   applyStoryDecorators,
   renderPreviewStory,
 } from '../src/storybook/preview-decorator.js';
-import {
-  attachStorybookBehaviors,
-  fetchCSSFiles,
-  getStorybookPlatformAdapter,
-  setupTwig,
-} from './utils.js';
+import { attachStorybookBehaviors } from '../src/storybook/platform-behaviors.js';
+import { setupTwig } from '../src/storybook/twig/setup.js';
+import { fetchCSSFiles, getStorybookPlatformAdapter } from './utils.js';
 
 const previewOverrideModules = import.meta.glob(
   [

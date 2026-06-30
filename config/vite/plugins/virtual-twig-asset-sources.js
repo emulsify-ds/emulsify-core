@@ -16,6 +16,7 @@ export const VIRTUAL_TWIG_ASSET_SOURCES_ID =
   'virtual:emulsify-twig-asset-sources';
 const RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID = `\0${VIRTUAL_TWIG_ASSET_SOURCES_ID}`;
 const GENERATED_ASSET_ALIASES = new Set(['icons.svg']);
+const GENERATED_ASSET_ROOTS = ['/dist/assets'];
 const PUBLIC_ASSET_ROOTS = new Map([
   ['/assets', '/assets'],
   ['/dist/assets', '/assets'],
@@ -116,11 +117,18 @@ export function assetSourceRoots(env) {
  */
 export function generatedAssetSourceRoots(env) {
   return unique(
-    ['/dist/assets']
-      .map((root) => toAbsoluteAssetRoot(env?.projectDir, root))
+    GENERATED_ASSET_ROOTS.map((root) =>
+      toAbsoluteAssetRoot(env?.projectDir, root),
+    )
       .filter((root) => root && safeExists(root))
       .map((root) => toRootRelativePath(env?.projectDir, root))
       .filter(Boolean),
+  );
+}
+
+function generatedAssetRootPrefixes() {
+  return GENERATED_ASSET_ROOTS.map((root) =>
+    `${root}/`.replace(/\/{2,}/g, '/'),
   );
 }
 
@@ -216,6 +224,20 @@ export function publicAssetSourceEntries(env) {
     }
   }
 
+  for (const root of generatedAssetRootPrefixes()) {
+    const publicBase = publicAssetBaseForRoot(root);
+    if (!publicBase) continue;
+
+    for (const alias of GENERATED_ASSET_ALIASES) {
+      const key = `${root.replace(/\/+$/, '')}/${alias}`.replace(
+        /\/{2,}/g,
+        '/',
+      );
+      const url = `${publicBase}${alias}`.replace(/\/{2,}/g, '/');
+      entries.set(key, { key, url });
+    }
+  }
+
   return Array.from(entries.values());
 }
 
@@ -232,6 +254,10 @@ export function generateVirtualTwigAssetSourcesModule(env) {
   const generatedRootPrefixes = generatedAssetSourceRoots(env).map((root) =>
     `${root === '/' ? '' : root}/`.replace(/\/{2,}/g, '/'),
   );
+  const allGeneratedRootPrefixes = unique([
+    ...generatedRootPrefixes,
+    ...generatedAssetRootPrefixes(),
+  ]);
   const patterns = assetSourceGlobPatterns(env);
   const globEntries = patterns.length
     ? patterns
@@ -255,7 +281,7 @@ export function generateVirtualTwigAssetSourcesModule(env) {
  */
 
 export const assetRootPrefixes = ${JSON.stringify(rootPrefixes)};
-export const generatedAssetRootPrefixes = ${JSON.stringify(generatedRootPrefixes)};
+export const generatedAssetRootPrefixes = ${JSON.stringify(allGeneratedRootPrefixes)};
 export const generatedAssetAliases = ${JSON.stringify(
     Array.from(GENERATED_ASSET_ALIASES),
   )};

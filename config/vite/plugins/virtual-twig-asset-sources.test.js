@@ -75,6 +75,10 @@ describe('virtual Twig asset source module plugin', () => {
         key: '/assets/icons/arrow.svg',
         url: '/assets/icons/arrow.svg',
       },
+      {
+        key: '/dist/assets/icons.svg',
+        url: '/assets/icons.svg',
+      },
     ]);
     expect(source).toContain(
       '"/assets/icons/arrow.svg": fetchAssetText("/assets/icons/arrow.svg")',
@@ -107,6 +111,28 @@ describe('virtual Twig asset source module plugin', () => {
     expect(source).toContain(
       '"/dist/assets/icons.svg": fetchAssetText("/assets/icons.svg")',
     );
+  });
+
+  it('keeps the generated sprite alias available before dist assets exist', () => {
+    projectDir = makeTempProject();
+    const env = { projectDir, projectStructure: {} };
+    const source = generateVirtualTwigAssetSourcesModule(env);
+
+    expect(generatedAssetSourceRoots(env)).toEqual([]);
+    expect(assetSourceGlobPatterns(env)).toEqual([]);
+    expect(publicAssetSourceEntries(env)).toEqual([
+      {
+        key: '/dist/assets/icons.svg',
+        url: '/assets/icons.svg',
+      },
+    ]);
+    expect(source).toContain(
+      'export const generatedAssetRootPrefixes = ["/dist/assets/"];',
+    );
+    expect(source).toContain(
+      '"/dist/assets/icons.svg": fetchAssetText("/assets/icons.svg")',
+    );
+    expect(source).not.toContain('import.meta.glob');
   });
 
   it('uses configured asset roots when project structure provides them', () => {
@@ -153,7 +179,7 @@ describe('virtual Twig asset source module plugin', () => {
     ]);
   });
 
-  it('emits an empty asset map when no asset roots exist', () => {
+  it('emits no asset globs when no asset roots exist', () => {
     projectDir = makeTempProject();
     const source = generateVirtualTwigAssetSourcesModule({
       projectDir,

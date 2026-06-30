@@ -255,8 +255,8 @@ describe('Storybook main config', () => {
         to: '/assets',
       },
       {
-        from: `${projectRoot}/dist`,
-        to: '/dist',
+        from: `${projectRoot}/dist/assets`,
+        to: '/',
       },
     ]);
   });
@@ -292,6 +292,106 @@ describe('Storybook main config', () => {
     expect(build.emptyOutDir).toBe(false);
   });
 
+  it('serves generated dist assets that appear after Storybook config loads', async () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+      const finalConfig = await config.viteFinal({
+        mode: 'development',
+        server: {
+          fs: {
+            allow: [],
+          },
+        },
+        optimizeDeps: {},
+      });
+      const plugin = finalConfig.plugins.find(
+        (item) => item && item.name === 'emulsify-generated-dist-files',
+      );
+      let middleware;
+      // Capture the middleware directly so the test can exercise late dist files.
+      plugin.configureServer({
+        middlewares: {
+          use(fn) {
+            middleware = fn;
+          },
+        },
+        watcher: {
+          add() {},
+          on() {},
+        },
+      });
+
+      mkdirSync(path.join(projectRoot, 'dist/assets'), { recursive: true });
+      writeFileSync(path.join(projectRoot, 'dist/assets/icons.svg'), '<svg></svg>');
+
+      const results = ['/assets/icons.svg', '/icons.svg'].map((url) => {
+        let nextCalled = false;
+        const response = {
+          headers: {},
+          statusCode: 0,
+          setHeader(name, value) {
+            this.headers[name] = value;
+          },
+          end(value = '') {
+            this.body = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
+          },
+        };
+        middleware(
+          { method: 'GET', url },
+          response,
+          () => {
+            nextCalled = true;
+          },
+        );
+        return {
+          body: response.body,
+          contentType: response.headers['Content-Type'],
+          nextCalled,
+          url,
+        };
+      });
+
+      console.log(JSON.stringify({
+        results,
+        staticDirs: config.staticDirs,
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const result = JSON.parse(output.toString());
+
+    expect(result.staticDirs).toEqual([]);
+    expect(result.results).toEqual([
+      {
+        body: '<svg></svg>',
+        contentType: 'image/svg+xml; charset=utf-8',
+        nextCalled: false,
+        url: '/assets/icons.svg',
+      },
+      {
+        body: '<svg></svg>',
+        contentType: 'image/svg+xml; charset=utf-8',
+        nextCalled: false,
+        url: '/icons.svg',
+      },
+    ]);
+  });
+
+  // The final config must exclude only active Twig virtual modules from prebundling.
   it('dedupes React runtime modules in the final Vite config', async () => {
     const script = `
       const { default: config } = await import('./.storybook/main.js');
