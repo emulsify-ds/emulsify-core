@@ -111,8 +111,7 @@
     "src/storybook/twig/source-events.js",
     "src/storybook/twig/source-extensions.js",
     "src/storybook/twig/source-function.js",
-    "src/storybook/twig/source.js",
-    "src/storybook/vite/storybook-css-links-plugin.js"
+    "src/storybook/twig/source.js"
   ],
   "exports": {
     ".": "./src/extensions/index.js",

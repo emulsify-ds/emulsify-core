@@ -6,6 +6,11 @@
  * dist/components so the mirrored component CSS is not loaded twice.
  */
 
-import 'virtual:emulsify-storybook-css/shared-dist';
-
+// Load mirrored component output first so Drupal adapter stories match theme roots.
 import.meta.glob('../../../../components/**/*.css', { eager: true });
+
+// Keep shared dist CSS while avoiding duplicate generated component CSS.
+import.meta.glob(
+  ['../../../../dist/**/*.css', '!../../../../dist/components/**/*.css'],
+  { eager: true },
+);

@@ -25,10 +25,6 @@ import {
   applyStorybookConfigOverrides,
   normalizeStorybookConfigOverrideModule,
 } from '../src/storybook/main-config.js';
-import {
-  makeStorybookCssLinksPlugin,
-  storybookCssVirtualModuleIds,
-} from '../src/storybook/vite/storybook-css-links-plugin.js';
 
 // Twig glob maps are provided by config/vite/plugins/virtual-twig-globs.js.
 
@@ -40,7 +36,6 @@ const twigVirtualModuleIds = [
 
 const twigRuntimeOptimizeDepsExclude = [
   ...twigVirtualModuleIds,
-  ...storybookCssVirtualModuleIds,
   '@emulsify/core/storybook/twig/source-function',
   '@emulsify/core/storybook/twig/source',
   '@emulsify/core/storybook/twig/resolver',
@@ -184,6 +179,154 @@ function buildAssetStaticDirs(env) {
 }
 
 /**
+ * Checks whether a resolved file path stays inside an expected directory.
+ *
+ * @param {string} filePath - Resolved candidate file path.
+ * @param {string} directory - Resolved directory that must contain the file.
+ * @returns {boolean} Whether the file path is inside the directory.
+ */
+function isWithinDirectory(filePath, directory) {
+  // `path.relative()` exposes traversal attempts as `..` or absolute paths.
+  const relativePath = path.relative(directory, filePath);
+  return Boolean(
+    relativePath &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath),
+  );
+}
+
+/**
+ * Returns a browser content type for generated files served by Storybook.
+ *
+ * @param {string} filePath - Resolved file path being served.
+ * @returns {string} HTTP content type header value.
+ */
+function contentTypeForFile(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  // Keep this map small; unknown generated files can still download as binary.
+  const types = {
+    '.css': 'text/css; charset=utf-8',
+    '.gif': 'image/gif',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.js': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml; charset=utf-8',
+    '.webp': 'image/webp',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+  };
+
+  return types[extension] || 'application/octet-stream';
+}
+
+/**
+ * Serves generated dist files that may not exist when `staticDirs` is built.
+ *
+ * Storybook validates static directories during config load, but Emulsify
+ * projects often generate `dist` after Storybook starts. This middleware keeps
+ * those generated asset URLs available without replacing Vite's CSS HMR.
+ *
+ * @param {import('http').IncomingMessage} req - Vite dev server request.
+ * @param {import('http').ServerResponse} res - Vite dev server response.
+ * @param {Function} next - Next middleware callback.
+ * @returns {void}
+ */
+function serveGeneratedDistFile(req, res, next) {
+  const method = req.method || 'GET';
+  if (method !== 'GET' && method !== 'HEAD') {
+    next();
+    return;
+  }
+
+  let pathname = '';
+  try {
+    // Malformed URLs should fall through to Storybook's normal Vite server.
+    pathname = decodeURIComponent(
+      new URL(req.url || '/', 'http://localhost').pathname,
+    );
+  } catch {
+    next();
+    return;
+  }
+
+  // These URL shapes match Emulsify's compiled CSS and sprite references.
+  const routes = [
+    {
+      pathname: '/icons.svg',
+      file: path.resolve(projectRoot, 'dist/assets/icons.svg'),
+    },
+    {
+      prefix: '/assets/',
+      directory: path.resolve(projectRoot, 'dist/assets'),
+    },
+    {
+      prefix: '/dist/',
+      directory: path.resolve(projectRoot, 'dist'),
+    },
+  ];
+  const route = routes.find(({ prefix, pathname: routePathname }) =>
+    routePathname ? pathname === routePathname : pathname.startsWith(prefix),
+  );
+  if (!route) {
+    next();
+    return;
+  }
+
+  const filePath = route.file
+    ? route.file
+    : path.resolve(route.directory, pathname.slice(route.prefix.length));
+  // Resolve from known roots only, then reject traversal before reading.
+  if (route.directory && !isWithinDirectory(filePath, route.directory)) {
+    next();
+    return;
+  }
+
+  try {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      next();
+      return;
+    }
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', contentTypeForFile(filePath));
+    res.setHeader('Content-Length', stats.size);
+    if (method === 'HEAD') {
+      res.end();
+      return;
+    }
+    res.end(fs.readFileSync(filePath));
+  } catch {
+    next();
+  }
+}
+
+/**
+ * Adds Vite dev-server access to generated dist files.
+ *
+ * CSS itself is still imported through native `import.meta.glob()` calls in the
+ * preview runtime; this plugin only fills the static-file gap for late-created
+ * dist assets.
+ *
+ * @returns {import('vite').Plugin} Vite middleware plugin.
+ */
+function makeGeneratedDistFilesPlugin() {
+  return {
+    name: 'emulsify-generated-dist-files',
+    configureServer(server) {
+      server.middlewares.use(serveGeneratedDistFile);
+      // Watch generated assets so Vite notices files created after startup.
+      server.watcher.add([
+        path.join(projectRoot, 'dist/**/*.css'),
+        path.join(projectRoot, 'dist/assets/**/*'),
+      ]);
+    },
+  };
+}
+
+/**
  * Merge Storybook and project optimizeDeps excludes with Core Twig runtime IDs.
  *
  * Storybook's dependency optimizer runs before normal Vite virtual module
@@ -214,10 +357,7 @@ function makeTwigVirtualModuleOptimizerPlugin() {
     name: 'emulsify-twig-virtual-modules',
     setup(build) {
       build.onResolve(
-        {
-          filter:
-            /^virtual:emulsify-(?:twig-(?:globs|asset-sources)|storybook-css\/(?:dist|shared-dist))$/,
-        },
+        { filter: /^virtual:emulsify-twig-(?:globs|asset-sources)$/ },
         (args) => ({
           path: args.path,
           external: true,
@@ -499,7 +639,7 @@ ${managerStyles}
       assetsInclude,
       plugins: [
         ...(baseViteConfig?.plugins || []),
-        makeStorybookCssLinksPlugin({ projectRoot }),
+        makeGeneratedDistFilesPlugin(),
       ],
       esbuild: {
         // Some downstream code is authored as `.js` files containing JSX, so
