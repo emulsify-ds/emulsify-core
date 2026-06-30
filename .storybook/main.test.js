@@ -255,6 +255,10 @@ describe('Storybook main config', () => {
         to: '/assets',
       },
       {
+        from: `${projectRoot}/dist/assets`,
+        to: '/',
+      },
+      {
         from: `${projectRoot}/dist`,
         to: '/dist',
       },
@@ -396,29 +400,35 @@ describe('Storybook main config', () => {
       mkdirSync(path.join(projectRoot, 'dist/assets'), { recursive: true });
       writeFileSync(path.join(projectRoot, 'dist/assets/icons.svg'), '<svg></svg>');
 
-      let nextCalled = false;
-      const response = {
-        headers: {},
-        statusCode: 0,
-        setHeader(name, value) {
-          this.headers[name] = value;
-        },
-        end(value = '') {
-          this.body = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
-        },
-      };
-      middleware(
-        { method: 'GET', url: '/assets/icons.svg' },
-        response,
-        () => {
-          nextCalled = true;
-        },
-      );
+      const results = ['/assets/icons.svg', '/icons.svg'].map((url) => {
+        let nextCalled = false;
+        const response = {
+          headers: {},
+          statusCode: 0,
+          setHeader(name, value) {
+            this.headers[name] = value;
+          },
+          end(value = '') {
+            this.body = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
+          },
+        };
+        middleware(
+          { method: 'GET', url },
+          response,
+          () => {
+            nextCalled = true;
+          },
+        );
+        return {
+          body: response.body,
+          contentType: response.headers['Content-Type'],
+          nextCalled,
+          url,
+        };
+      });
 
       console.log(JSON.stringify({
-        body: response.body,
-        contentType: response.headers['Content-Type'],
-        nextCalled,
+        results,
         staticDirs: config.staticDirs,
       }));
     `;
@@ -430,9 +440,20 @@ describe('Storybook main config', () => {
     const result = JSON.parse(output.toString());
 
     expect(result.staticDirs).toEqual([]);
-    expect(result.nextCalled).toBe(false);
-    expect(result.contentType).toBe('image/svg+xml; charset=utf-8');
-    expect(result.body).toBe('<svg></svg>');
+    expect(result.results).toEqual([
+      {
+        body: '<svg></svg>',
+        contentType: 'image/svg+xml; charset=utf-8',
+        nextCalled: false,
+        url: '/assets/icons.svg',
+      },
+      {
+        body: '<svg></svg>',
+        contentType: 'image/svg+xml; charset=utf-8',
+        nextCalled: false,
+        url: '/icons.svg',
+      },
+    ]);
   });
 
   it('dedupes React runtime modules in the final Vite config', async () => {

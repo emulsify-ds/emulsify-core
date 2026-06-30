@@ -178,6 +178,10 @@ function buildAssetStaticDirs(env) {
       to: '/assets',
     },
     {
+      from: path.resolve(projectRoot, 'dist/assets'),
+      to: '/',
+    },
+    {
       from: path.resolve(projectRoot, 'dist'),
       to: '/dist',
     },
@@ -295,6 +299,10 @@ function serveGeneratedDistFile(req, res, next) {
 
   const routes = [
     {
+      pathname: '/icons.svg',
+      file: path.resolve(projectRoot, 'dist/assets/icons.svg'),
+    },
+    {
       prefix: '/assets/',
       directory: path.resolve(projectRoot, 'dist/assets'),
     },
@@ -303,15 +311,18 @@ function serveGeneratedDistFile(req, res, next) {
       directory: path.resolve(projectRoot, 'dist'),
     },
   ];
-  const route = routes.find(({ prefix }) => pathname.startsWith(prefix));
+  const route = routes.find(({ prefix, pathname: routePathname }) =>
+    routePathname ? pathname === routePathname : pathname.startsWith(prefix),
+  );
   if (!route) {
     next();
     return;
   }
 
-  const relativePath = pathname.slice(route.prefix.length);
-  const filePath = path.resolve(route.directory, relativePath);
-  if (!isWithinDirectory(filePath, route.directory)) {
+  const filePath = route.file
+    ? route.file
+    : path.resolve(route.directory, pathname.slice(route.prefix.length));
+  if (route.directory && !isWithinDirectory(filePath, route.directory)) {
     next();
     return;
   }
