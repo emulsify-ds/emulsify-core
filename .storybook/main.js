@@ -257,6 +257,85 @@ if (typeof document !== 'undefined') {
 `;
 }
 
+function contentTypeForFile(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  const types = {
+    '.css': 'text/css; charset=utf-8',
+    '.gif': 'image/gif',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.js': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml; charset=utf-8',
+    '.webp': 'image/webp',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+  };
+
+  return types[extension] || 'application/octet-stream';
+}
+
+function serveGeneratedDistFile(req, res, next) {
+  const method = req.method || 'GET';
+  if (method !== 'GET' && method !== 'HEAD') {
+    next();
+    return;
+  }
+
+  let pathname = '';
+  try {
+    pathname = decodeURIComponent(
+      new URL(req.url || '/', 'http://localhost').pathname,
+    );
+  } catch {
+    next();
+    return;
+  }
+
+  const routes = [
+    {
+      prefix: '/assets/',
+      directory: path.resolve(projectRoot, 'dist/assets'),
+    },
+    {
+      prefix: '/dist/',
+      directory: path.resolve(projectRoot, 'dist'),
+    },
+  ];
+  const route = routes.find(({ prefix }) => pathname.startsWith(prefix));
+  if (!route) {
+    next();
+    return;
+  }
+
+  const relativePath = pathname.slice(route.prefix.length);
+  const filePath = path.resolve(route.directory, relativePath);
+  if (!isWithinDirectory(filePath, route.directory)) {
+    next();
+    return;
+  }
+
+  try {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      next();
+      return;
+    }
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', contentTypeForFile(filePath));
+    res.setHeader('Content-Length', stats.size);
+    if (method === 'HEAD') {
+      res.end();
+      return;
+    }
+    res.end(fs.readFileSync(filePath));
+  } catch {
+    next();
+  }
+}
+
 function makeStorybookCssLinksPlugin() {
   return {
     name: 'emulsify-storybook-css-links',
@@ -289,29 +368,37 @@ function makeStorybookCssLinksPlugin() {
     },
     configureServer(server) {
       const distDir = path.resolve(projectRoot, 'dist');
-      if (!fs.existsSync(distDir)) return;
+      const distAssetsDir = path.resolve(distDir, 'assets');
 
-      server.watcher.add(path.join(distDir, '**/*.css'));
+      server.middlewares.use(serveGeneratedDistFile);
+      server.watcher.add([
+        path.join(distDir, '**/*.css'),
+        path.join(distAssetsDir, '**/*'),
+      ]);
 
-      const reloadCss = (filePath) => {
+      const reloadGeneratedDistFile = (filePath) => {
         const absolutePath = path.resolve(filePath);
-        if (
-          !absolutePath.endsWith('.css') ||
-          !isWithinDirectory(absolutePath, distDir)
-        ) {
+        const isDistCss =
+          absolutePath.endsWith('.css') &&
+          isWithinDirectory(absolutePath, distDir);
+        const isDistAsset = isWithinDirectory(absolutePath, distAssetsDir);
+
+        if (!isDistCss && !isDistAsset) {
           return;
         }
 
-        for (const id of storybookCssResolvedVirtualModuleIds.values()) {
-          const cssModule = server.moduleGraph.getModuleById(id);
-          if (cssModule) server.moduleGraph.invalidateModule(cssModule);
+        if (isDistCss) {
+          for (const id of storybookCssResolvedVirtualModuleIds.values()) {
+            const cssModule = server.moduleGraph.getModuleById(id);
+            if (cssModule) server.moduleGraph.invalidateModule(cssModule);
+          }
         }
         server.ws.send({ type: 'full-reload', path: '*' });
       };
 
-      server.watcher.on('add', reloadCss);
-      server.watcher.on('change', reloadCss);
-      server.watcher.on('unlink', reloadCss);
+      server.watcher.on('add', reloadGeneratedDistFile);
+      server.watcher.on('change', reloadGeneratedDistFile);
+      server.watcher.on('unlink', reloadGeneratedDistFile);
     },
   };
 }

@@ -347,6 +347,94 @@ describe('Storybook main config', () => {
     expect(modules.sharedDist).toContain('"dist/global/foundation.css"');
   });
 
+  it('serves generated dist assets that appear after Storybook config loads', async () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+      const finalConfig = await config.viteFinal({
+        mode: 'development',
+        server: {
+          fs: {
+            allow: [],
+          },
+        },
+        optimizeDeps: {},
+      });
+      const plugin = finalConfig.plugins.find(
+        (item) => item && item.name === 'emulsify-storybook-css-links',
+      );
+      let middleware;
+      plugin.configureServer({
+        middlewares: {
+          use(fn) {
+            middleware = fn;
+          },
+        },
+        watcher: {
+          add() {},
+          on() {},
+        },
+        moduleGraph: {
+          getModuleById() {},
+          invalidateModule() {},
+        },
+        ws: {
+          send() {},
+        },
+      });
+
+      mkdirSync(path.join(projectRoot, 'dist/assets'), { recursive: true });
+      writeFileSync(path.join(projectRoot, 'dist/assets/icons.svg'), '<svg></svg>');
+
+      let nextCalled = false;
+      const response = {
+        headers: {},
+        statusCode: 0,
+        setHeader(name, value) {
+          this.headers[name] = value;
+        },
+        end(value = '') {
+          this.body = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
+        },
+      };
+      middleware(
+        { method: 'GET', url: '/assets/icons.svg' },
+        response,
+        () => {
+          nextCalled = true;
+        },
+      );
+
+      console.log(JSON.stringify({
+        body: response.body,
+        contentType: response.headers['Content-Type'],
+        nextCalled,
+        staticDirs: config.staticDirs,
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const result = JSON.parse(output.toString());
+
+    expect(result.staticDirs).toEqual([]);
+    expect(result.nextCalled).toBe(false);
+    expect(result.contentType).toBe('image/svg+xml; charset=utf-8');
+    expect(result.body).toBe('<svg></svg>');
+  });
+
   it('dedupes React runtime modules in the final Vite config', async () => {
     const script = `
       const { default: config } = await import('./.storybook/main.js');
