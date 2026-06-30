@@ -21,6 +21,8 @@ export default {
       '<rootDir>/config/vite/test-utils/virtual-twig-globs.js',
     '^virtual:emulsify-twig-asset-sources$':
       '<rootDir>/config/vite/test-utils/virtual-twig-asset-sources.js',
+    '^virtual:emulsify-storybook-css/(dist|shared-dist)$':
+      '<rootDir>/config/vite/test-utils/empty-module.js',
   },
   coverageDirectory: '.coverage',
   coverageProvider: 'v8',

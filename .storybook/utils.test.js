@@ -29,15 +29,12 @@ describe('Storybook utility helpers', () => {
     delete globalThis.__viteImportMetaGlob;
   });
 
-  it('loads dist CSS only for the none adapter', async () => {
+  it('loads dist CSS through the virtual stylesheet loader for the none adapter', async () => {
     const { fetchCSSFiles } = await loadUtils();
 
     await fetchCSSFiles();
 
-    expect(importMetaGlob).toHaveBeenCalledTimes(1);
-    expect(importMetaGlob).toHaveBeenCalledWith('../../../../dist/**/*.css', {
-      eager: true,
-    });
+    expect(importMetaGlob).not.toHaveBeenCalled();
   });
 
   it('loads mirrored component CSS and shared dist CSS when the adapter enables it', async () => {
@@ -51,13 +48,9 @@ describe('Storybook utility helpers', () => {
 
     await fetchCSSFiles();
 
-    expect(importMetaGlob).toHaveBeenCalledTimes(2);
+    expect(importMetaGlob).toHaveBeenCalledTimes(1);
     expect(importMetaGlob).toHaveBeenCalledWith(
       '../../../../components/**/*.css',
-      { eager: true },
-    );
-    expect(importMetaGlob).toHaveBeenCalledWith(
-      ['../../../../dist/**/*.css', '!../../../../dist/components/**/*.css'],
       { eager: true },
     );
   });

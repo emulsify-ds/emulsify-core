@@ -6,8 +6,6 @@
  * dist/components so the mirrored component CSS is not loaded twice.
  */
 
+import 'virtual:emulsify-storybook-css/shared-dist';
+
 import.meta.glob('../../../../components/**/*.css', { eager: true });
-import.meta.glob(
-  ['../../../../dist/**/*.css', '!../../../../dist/components/**/*.css'],
-  { eager: true },
-);

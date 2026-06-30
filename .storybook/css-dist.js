@@ -1,5 +1,5 @@
 /**
- * @file Storybook compiled dist CSS side-effect loader.
+ * @file Storybook compiled dist CSS loader.
  */
 
-import.meta.glob('../../../../dist/**/*.css', { eager: true });
+import 'virtual:emulsify-storybook-css/dist';

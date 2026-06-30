@@ -34,8 +34,18 @@ const twigVirtualModuleIds = [
   'virtual:emulsify-twig-extension-installers',
 ];
 
+const storybookCssVirtualModuleIds = [
+  'virtual:emulsify-storybook-css/dist',
+  'virtual:emulsify-storybook-css/shared-dist',
+];
+
+const storybookCssResolvedVirtualModuleIds = new Map(
+  storybookCssVirtualModuleIds.map((id) => [id, `\0${id}`]),
+);
+
 const twigRuntimeOptimizeDepsExclude = [
   ...twigVirtualModuleIds,
+  ...storybookCssVirtualModuleIds,
   '@emulsify/core/storybook/twig/source-function',
   '@emulsify/core/storybook/twig/source',
   '@emulsify/core/storybook/twig/resolver',
@@ -174,6 +184,138 @@ function buildAssetStaticDirs(env) {
   ]);
 }
 
+function isWithinDirectory(filePath, directory) {
+  const relativePath = path.relative(directory, filePath);
+  return Boolean(
+    relativePath &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath),
+  );
+}
+
+function toPosixPath(filePath) {
+  return filePath.split(path.sep).join('/');
+}
+
+function walkCssFiles(directory) {
+  if (!fs.existsSync(directory)) return [];
+
+  const files = [];
+  const entries = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkCssFiles(entryPath));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith('.css')) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
+
+function buildDistStylesheetHrefs({ includeComponentCss = true } = {}) {
+  const distDir = path.resolve(projectRoot, 'dist');
+  const distComponentsDir = path.resolve(distDir, 'components');
+
+  return walkCssFiles(distDir)
+    .filter(
+      (filePath) =>
+        includeComponentCss || !isWithinDirectory(filePath, distComponentsDir),
+    )
+    .map((filePath) => toPosixPath(path.relative(projectRoot, filePath)));
+}
+
+function generateStylesheetLinkModule(hrefs, sourceName) {
+  return `
+const stylesheetHrefs = ${JSON.stringify(hrefs)};
+const sourceName = ${JSON.stringify(sourceName)};
+const loadedStylesheets =
+  (globalThis.__EMULSIFY_STORYBOOK_CSS_LINKS__ ||= new Set());
+const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\\/?$/, '/');
+
+if (typeof document !== 'undefined') {
+  for (const stylesheetHref of stylesheetHrefs) {
+    const href = \`\${baseUrl}\${String(stylesheetHref).replace(/^\\/+/, '')}\`;
+    const key = \`\${sourceName}:\${href}\`;
+
+    if (loadedStylesheets.has(key)) continue;
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.emulsifyStorybookCss = sourceName;
+    document.head.appendChild(link);
+    loadedStylesheets.add(key);
+  }
+}
+`;
+}
+
+function makeStorybookCssLinksPlugin() {
+  return {
+    name: 'emulsify-storybook-css-links',
+    resolveId(id) {
+      return storybookCssResolvedVirtualModuleIds.get(id) || null;
+    },
+    load(id) {
+      if (
+        id ===
+        storybookCssResolvedVirtualModuleIds.get(
+          'virtual:emulsify-storybook-css/dist',
+        )
+      ) {
+        return generateStylesheetLinkModule(buildDistStylesheetHrefs(), 'dist');
+      }
+
+      if (
+        id ===
+        storybookCssResolvedVirtualModuleIds.get(
+          'virtual:emulsify-storybook-css/shared-dist',
+        )
+      ) {
+        return generateStylesheetLinkModule(
+          buildDistStylesheetHrefs({ includeComponentCss: false }),
+          'shared-dist',
+        );
+      }
+
+      return null;
+    },
+    configureServer(server) {
+      const distDir = path.resolve(projectRoot, 'dist');
+      if (!fs.existsSync(distDir)) return;
+
+      server.watcher.add(path.join(distDir, '**/*.css'));
+
+      const reloadCss = (filePath) => {
+        const absolutePath = path.resolve(filePath);
+        if (
+          !absolutePath.endsWith('.css') ||
+          !isWithinDirectory(absolutePath, distDir)
+        ) {
+          return;
+        }
+
+        for (const id of storybookCssResolvedVirtualModuleIds.values()) {
+          const cssModule = server.moduleGraph.getModuleById(id);
+          if (cssModule) server.moduleGraph.invalidateModule(cssModule);
+        }
+        server.ws.send({ type: 'full-reload', path: '*' });
+      };
+
+      server.watcher.on('add', reloadCss);
+      server.watcher.on('change', reloadCss);
+      server.watcher.on('unlink', reloadCss);
+    },
+  };
+}
+
 /**
  * Merge Storybook and project optimizeDeps excludes with Core Twig runtime IDs.
  *
@@ -205,7 +347,10 @@ function makeTwigVirtualModuleOptimizerPlugin() {
     name: 'emulsify-twig-virtual-modules',
     setup(build) {
       build.onResolve(
-        { filter: /^virtual:emulsify-twig-(?:globs|asset-sources)$/ },
+        {
+          filter:
+            /^virtual:emulsify-(?:twig-(?:globs|asset-sources)|storybook-css\/(?:dist|shared-dist))$/,
+        },
         (args) => ({
           path: args.path,
           external: true,
@@ -582,7 +727,10 @@ const baseConfig = {
         },
       },
       assetsInclude,
-      plugins: [...(baseViteConfig?.plugins || [])],
+      plugins: [
+        ...(baseViteConfig?.plugins || []),
+        makeStorybookCssLinksPlugin(),
+      ],
       esbuild: {
         // Some downstream code is authored as `.js` files containing JSX, so
         // keep Storybook's esbuild settings aligned with the shared Vite config.

@@ -292,6 +292,61 @@ describe('Storybook main config', () => {
     expect(build.emptyOutDir).toBe(false);
   });
 
+  it('loads compiled dist CSS as stylesheet links instead of module imports', async () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-storybook-'));
+      mkdirSync(path.join(projectRoot, 'dist/components/card'), { recursive: true });
+      mkdirSync(path.join(projectRoot, 'dist/global'), { recursive: true });
+      writeFileSync(path.join(projectRoot, 'dist/components/card/card.css'), '.card {}');
+      writeFileSync(path.join(projectRoot, 'dist/global/foundation.css'), '.foundation {}');
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+      const finalConfig = await config.viteFinal({
+        mode: 'development',
+        server: {
+          fs: {
+            allow: [],
+          },
+        },
+        optimizeDeps: {},
+      });
+      const plugin = finalConfig.plugins.find(
+        (item) => item && item.name === 'emulsify-storybook-css-links',
+      );
+
+      console.log(JSON.stringify({
+        dist: plugin.load(
+          plugin.resolveId('virtual:emulsify-storybook-css/dist'),
+        ),
+        sharedDist: plugin.load(
+          plugin.resolveId('virtual:emulsify-storybook-css/shared-dist'),
+        ),
+      }));
+    `;
+    const output = execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    const modules = JSON.parse(output.toString());
+
+    expect(modules.dist).toContain('"dist/components/card/card.css"');
+    expect(modules.dist).toContain('"dist/global/foundation.css"');
+    expect(modules.dist).toMatch(/document\.createElement\('link'\)/);
+    expect(modules.dist).not.toContain('import.meta.glob');
+    expect(modules.sharedDist).not.toContain('dist/components/card/card.css');
+    expect(modules.sharedDist).toContain('"dist/global/foundation.css"');
+  });
+
   it('dedupes React runtime modules in the final Vite config', async () => {
     const script = `
       const { default: config } = await import('./.storybook/main.js');
@@ -345,6 +400,8 @@ describe('Storybook main config', () => {
       'virtual:emulsify-twig-globs',
       'virtual:emulsify-twig-asset-sources',
       'virtual:emulsify-twig-extension-installers',
+      'virtual:emulsify-storybook-css/dist',
+      'virtual:emulsify-storybook-css/shared-dist',
       '@emulsify/core/storybook/twig/source-function',
       '@emulsify/core/storybook/twig/source',
       '@emulsify/core/storybook/twig/resolver',
