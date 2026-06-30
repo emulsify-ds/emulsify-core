@@ -171,10 +171,6 @@ function buildAssetStaticDirs(env) {
       from: path.resolve(projectRoot, 'dist/assets'),
       to: '/',
     },
-    {
-      from: path.resolve(projectRoot, 'dist'),
-      to: '/dist',
-    },
   ]);
 }
 
@@ -286,6 +282,10 @@ function serveGeneratedDistFile(req, res, next) {
   try {
     const stats = fs.statSync(filePath);
     if (!stats.isFile()) {
+      next();
+      return;
+    }
+    if (path.extname(filePath).toLowerCase() === '.css') {
       next();
       return;
     }
