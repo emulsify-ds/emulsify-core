@@ -258,10 +258,6 @@ describe('Storybook main config', () => {
         from: `${projectRoot}/dist/assets`,
         to: '/',
       },
-      {
-        from: `${projectRoot}/dist`,
-        to: '/dist',
-      },
     ]);
   });
 
