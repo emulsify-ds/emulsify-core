@@ -151,6 +151,7 @@
     "prettier": "npm run check-node-version && prettier --check --config config/.prettierrc.json --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"",
     "prettier-fix": "npm run check-node-version && prettier --config config/.prettierrc.json --write --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"",
     "semantic-release": "npm run check-node-version && semantic-release --config ./release.config.cjs",
+    "smoke:pack": "npm run check-node-version && node scripts/smoke-pack.js",
     "version:develop": "npm run check-node-version && node scripts/bump-version-from-commits.js",
     "storybook": "npm run check-node-version && NODE_OPTIONS=--no-deprecation storybook dev -p 6006 --no-open --exact-port",
     "storybook-build": "npm run check-node-version && storybook build -o .out",

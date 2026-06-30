@@ -15,7 +15,7 @@ npm test
 npm run storybook-build
 npm run fixtures:release
 npm pack --dry-run --ignore-scripts --json
-npm pack
+npm run smoke:pack
 ```
 
 The release fixture suite validates the 4.x checklist items that are easy to automate:
@@ -28,45 +28,13 @@ The release fixture suite validates the 4.x checklist items that are easy to aut
 
 ## Tarball Smoke Test
 
-From the repository root, use `npm pack --json` to create the tarball, install the generated filename in a clean temporary project, and verify public imports resolve from the packed package:
+From the repository root, run the tarball smoke check to create the package tarball, install it in a clean temporary project, and verify public imports resolve from the packed package:
 
 ```sh
-tmp="$(mktemp -d)"
-npm pack --pack-destination "$tmp" --json > "$tmp/pack.json"
-tarball="$(
-  node -e "
-    const fs = require('node:fs');
-    const pack = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-    console.log(pack[0].filename);
-  " "$tmp/pack.json"
-)"
-
-cd "$tmp"
-npm init -y
-npm install "./$tarball"
-
-node --input-type=module -e "
-  const core = await import('@emulsify/core');
-  const storybook = await import('@emulsify/core/storybook');
-  const twig = await import('@emulsify/core/extensions/twig');
-  const react = await import('@emulsify/core/extensions/react');
-  const vite = await import('@emulsify/core/vite');
-  const plugins = await import('@emulsify/core/vite/plugins');
-  const platforms = await import('@emulsify/core/vite/platforms');
-
-  if (typeof storybook.renderTwig !== 'function') {
-    throw new Error('renderTwig missing from @emulsify/core/storybook');
-  }
-
-  if (typeof twig.registerTwigExtensions !== 'function') {
-    throw new Error('registerTwigExtensions missing from @emulsify/core/extensions/twig');
-  }
-
-  console.log('Public package imports resolved successfully.');
-"
+npm run smoke:pack
 ```
 
-The unused imported bindings intentionally prove each documented public package export resolves from an installed tarball.
+The smoke check removes its temporary project and generated tarball after verifying the documented public package exports.
 
 ## Semantic-Release Dry Run
 
