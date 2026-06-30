@@ -2,7 +2,11 @@
  * @file Tests for Emulsify platform adapter resolution.
  */
 
-import { getPlatformAdapter, normalizePlatformName } from './platforms.js';
+import {
+  adapters,
+  getPlatformAdapter,
+  normalizePlatformName,
+} from './platforms.js';
 
 describe('platform adapter resolution', () => {
   it('normalizes missing and legacy generic platforms to none', () => {
@@ -40,6 +44,49 @@ describe('platform adapter resolution', () => {
         registerDrupalTwigFilters: false,
         loadMirroredComponentCss: false,
         allowSyncXhrSource: false,
+      },
+      build: {
+        mirrorDistComponentsToRoot: false,
+      },
+    });
+  });
+
+  it('returns mutable adapter clones without changing later resolutions', () => {
+    const adapter = getPlatformAdapter('wordpress');
+
+    adapter.outputStrategy = 'changed';
+    adapter.storybook.loadDrupalBehaviorShim = true;
+    adapter.build.mirrorDistComponentsToRoot = true;
+
+    expect(getPlatformAdapter('wordpress')).toMatchObject({
+      name: 'wordpress',
+      outputStrategy: 'dist',
+      storybook: {
+        loadDrupalBehaviorShim: false,
+      },
+      build: {
+        mirrorDistComponentsToRoot: false,
+      },
+    });
+  });
+
+  it('prevents exported adapter definitions from changing later resolutions', () => {
+    expect(Reflect.set(adapters, 'wordpress', adapters.drupal)).toBe(false);
+    expect(Reflect.set(adapters.wordpress, 'outputStrategy', 'changed')).toBe(
+      false,
+    );
+    expect(
+      Reflect.set(adapters.wordpress.storybook, 'loadDrupalBehaviorShim', true),
+    ).toBe(false);
+    expect(
+      Reflect.set(adapters.wordpress.build, 'mirrorDistComponentsToRoot', true),
+    ).toBe(false);
+
+    expect(getPlatformAdapter('wordpress')).toMatchObject({
+      name: 'wordpress',
+      outputStrategy: 'dist',
+      storybook: {
+        loadDrupalBehaviorShim: false,
       },
       build: {
         mirrorDistComponentsToRoot: false,

@@ -5,7 +5,21 @@
  * decisions can be used by Node-side Vite config and Storybook browser code.
  */
 
-const noneAdapter = {
+/**
+ * Freeze adapter definition data while preserving cloneable plain objects.
+ *
+ * @param {object} adapter - Adapter definition.
+ * @returns {object} Frozen adapter definition.
+ */
+function freezeAdapter(adapter) {
+  return Object.freeze({
+    ...adapter,
+    storybook: Object.freeze({ ...adapter.storybook }),
+    build: Object.freeze({ ...adapter.build }),
+  });
+}
+
+const noneAdapter = freezeAdapter({
   name: 'none',
   outputStrategy: 'dist',
   storybook: {
@@ -18,9 +32,9 @@ const noneAdapter = {
   build: {
     mirrorDistComponentsToRoot: false,
   },
-};
+});
 
-const drupalAdapter = {
+const drupalAdapter = freezeAdapter({
   name: 'drupal',
   outputStrategy: 'drupal-sdc',
   storybook: {
@@ -33,9 +47,9 @@ const drupalAdapter = {
   build: {
     mirrorDistComponentsToRoot: true,
   },
-};
+});
 
-const wordpressAdapter = {
+const wordpressAdapter = freezeAdapter({
   name: 'wordpress',
   outputStrategy: 'dist',
   storybook: {
@@ -48,14 +62,14 @@ const wordpressAdapter = {
   build: {
     mirrorDistComponentsToRoot: false,
   },
-};
+});
 
-const adapters = {
+const adapters = Object.freeze({
   none: noneAdapter,
   generic: noneAdapter,
   drupal: drupalAdapter,
   wordpress: wordpressAdapter,
-};
+});
 
 /**
  * Deep-clone an adapter so callers can safely serialize or extend it.
