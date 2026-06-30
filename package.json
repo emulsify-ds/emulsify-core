@@ -1,6 +1,6 @@
 {
   "name": "@emulsify/core",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "Bundled tooling for Storybook development + Vite Build",
   "keywords": [
     "component library",
@@ -127,6 +127,7 @@
     "./storybook/twig/source": "./src/storybook/twig/source.js",
     "./vite": "./config/vite/vite.config.js",
     "./vite/plugins": "./config/vite/plugins.js",
+    "./vite/platforms": "./config/vite/platforms.js",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -153,6 +154,7 @@
     "prettier": "npm run check-node-version && prettier --check --config config/.prettierrc.json --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"",
     "prettier-fix": "npm run check-node-version && prettier --config config/.prettierrc.json --write --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"",
     "semantic-release": "npm run check-node-version && semantic-release --config ./release.config.cjs",
+    "smoke:pack": "npm run check-node-version && node scripts/smoke-pack.js",
     "version:develop": "npm run check-node-version && node scripts/bump-version-from-commits.js",
     "storybook": "npm run check-node-version && NODE_OPTIONS=--no-deprecation storybook dev -p 6006 --no-open --exact-port",
     "storybook-build": "npm run check-node-version && storybook build -o .out",
@@ -183,9 +185,7 @@
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-security": "^4.0.0",
     "eslint-plugin-storybook": "^10.1.4",
-    "fs-extra": "^11.3.1",
     "glob": "^13.0.6",
-    "graceful-fs": "^4.2.11",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "js-yaml": "^4.1.0",
@@ -194,8 +194,6 @@
     "pa11y": "^9.0.1",
     "postcss": "^8.5.4",
     "postcss-scss": "^4.0.9",
-    "ramda": "^0.32.0",
-    "regenerator-runtime": "^0.14.1",
     "sass": "^1.93.2",
     "storybook": "^10.1.4",
     "stylelint": "^17.12.0",

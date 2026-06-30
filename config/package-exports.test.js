@@ -135,6 +135,10 @@ describe('@emulsify/core package exports', () => {
         '@emulsify/core/vite/plugins',
         ['makePlugins', 'makeTwigNamespaces', 'makeTwigPluginOptions'],
       ],
+      [
+        '@emulsify/core/vite/platforms',
+        ['adapters', 'getPlatformAdapter', 'normalizePlatformName'],
+      ],
     ];
     const script = `
       const checks = ${JSON.stringify(checks)};
