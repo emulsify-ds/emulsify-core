@@ -39,6 +39,7 @@
     ".storybook/css-dist.js",
     ".storybook/emulsifyTheme.js",
     ".storybook/main.js",
+    ".storybook/manager-head.css",
     ".storybook/manager.js",
     ".storybook/preview.js",
     ".storybook/utils.js",
@@ -110,7 +111,8 @@
     "src/storybook/twig/source-events.js",
     "src/storybook/twig/source-extensions.js",
     "src/storybook/twig/source-function.js",
-    "src/storybook/twig/source.js"
+    "src/storybook/twig/source.js",
+    "src/storybook/vite/storybook-css-links-plugin.js"
   ],
   "exports": {
     ".": "./src/extensions/index.js",

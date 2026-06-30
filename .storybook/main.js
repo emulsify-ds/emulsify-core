@@ -25,6 +25,10 @@ import {
   applyStorybookConfigOverrides,
   normalizeStorybookConfigOverrideModule,
 } from '../src/storybook/main-config.js';
+import {
+  makeStorybookCssLinksPlugin,
+  storybookCssVirtualModuleIds,
+} from '../src/storybook/vite/storybook-css-links-plugin.js';
 
 // Twig glob maps are provided by config/vite/plugins/virtual-twig-globs.js.
 
@@ -33,15 +37,6 @@ const twigVirtualModuleIds = [
   'virtual:emulsify-twig-asset-sources',
   'virtual:emulsify-twig-extension-installers',
 ];
-
-const storybookCssVirtualModuleIds = [
-  'virtual:emulsify-storybook-css/dist',
-  'virtual:emulsify-storybook-css/shared-dist',
-];
-
-const storybookCssResolvedVirtualModuleIds = new Map(
-  storybookCssVirtualModuleIds.map((id) => [id, `\0${id}`]),
-);
 
 const twigRuntimeOptimizeDepsExclude = [
   ...twigVirtualModuleIds,
@@ -186,232 +181,6 @@ function buildAssetStaticDirs(env) {
       to: '/dist',
     },
   ]);
-}
-
-function isWithinDirectory(filePath, directory) {
-  const relativePath = path.relative(directory, filePath);
-  return Boolean(
-    relativePath &&
-    !relativePath.startsWith('..') &&
-    !path.isAbsolute(relativePath),
-  );
-}
-
-function toPosixPath(filePath) {
-  return filePath.split(path.sep).join('/');
-}
-
-function walkCssFiles(directory) {
-  if (!fs.existsSync(directory)) return [];
-
-  const files = [];
-  const entries = fs
-    .readdirSync(directory, { withFileTypes: true })
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkCssFiles(entryPath));
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith('.css')) {
-      files.push(entryPath);
-    }
-  }
-
-  return files;
-}
-
-function buildDistStylesheetHrefs({ includeComponentCss = true } = {}) {
-  const distDir = path.resolve(projectRoot, 'dist');
-  const distComponentsDir = path.resolve(distDir, 'components');
-
-  return walkCssFiles(distDir)
-    .filter(
-      (filePath) =>
-        includeComponentCss || !isWithinDirectory(filePath, distComponentsDir),
-    )
-    .map((filePath) => toPosixPath(path.relative(projectRoot, filePath)));
-}
-
-function generateStylesheetLinkModule(hrefs, sourceName) {
-  return `
-const stylesheetHrefs = ${JSON.stringify(hrefs)};
-const sourceName = ${JSON.stringify(sourceName)};
-const loadedStylesheets =
-  (globalThis.__EMULSIFY_STORYBOOK_CSS_LINKS__ ||= new Set());
-const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\\/?$/, '/');
-
-if (typeof document !== 'undefined') {
-  for (const stylesheetHref of stylesheetHrefs) {
-    const href = \`\${baseUrl}\${String(stylesheetHref).replace(/^\\/+/, '')}\`;
-    const key = \`\${sourceName}:\${href}\`;
-
-    if (loadedStylesheets.has(key)) continue;
-
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = href;
-    link.dataset.emulsifyStorybookCss = sourceName;
-    document.head.appendChild(link);
-    loadedStylesheets.add(key);
-  }
-}
-`;
-}
-
-function contentTypeForFile(filePath) {
-  const extension = path.extname(filePath).toLowerCase();
-  const types = {
-    '.css': 'text/css; charset=utf-8',
-    '.gif': 'image/gif',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.js': 'text/javascript; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml; charset=utf-8',
-    '.webp': 'image/webp',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-  };
-
-  return types[extension] || 'application/octet-stream';
-}
-
-function serveGeneratedDistFile(req, res, next) {
-  const method = req.method || 'GET';
-  if (method !== 'GET' && method !== 'HEAD') {
-    next();
-    return;
-  }
-
-  let pathname = '';
-  try {
-    pathname = decodeURIComponent(
-      new URL(req.url || '/', 'http://localhost').pathname,
-    );
-  } catch {
-    next();
-    return;
-  }
-
-  const routes = [
-    {
-      pathname: '/icons.svg',
-      file: path.resolve(projectRoot, 'dist/assets/icons.svg'),
-    },
-    {
-      prefix: '/assets/',
-      directory: path.resolve(projectRoot, 'dist/assets'),
-    },
-    {
-      prefix: '/dist/',
-      directory: path.resolve(projectRoot, 'dist'),
-    },
-  ];
-  const route = routes.find(({ prefix, pathname: routePathname }) =>
-    routePathname ? pathname === routePathname : pathname.startsWith(prefix),
-  );
-  if (!route) {
-    next();
-    return;
-  }
-
-  const filePath = route.file
-    ? route.file
-    : path.resolve(route.directory, pathname.slice(route.prefix.length));
-  if (route.directory && !isWithinDirectory(filePath, route.directory)) {
-    next();
-    return;
-  }
-
-  try {
-    const stats = fs.statSync(filePath);
-    if (!stats.isFile()) {
-      next();
-      return;
-    }
-
-    res.statusCode = 200;
-    res.setHeader('Content-Type', contentTypeForFile(filePath));
-    res.setHeader('Content-Length', stats.size);
-    if (method === 'HEAD') {
-      res.end();
-      return;
-    }
-    res.end(fs.readFileSync(filePath));
-  } catch {
-    next();
-  }
-}
-
-function makeStorybookCssLinksPlugin() {
-  return {
-    name: 'emulsify-storybook-css-links',
-    resolveId(id) {
-      return storybookCssResolvedVirtualModuleIds.get(id) || null;
-    },
-    load(id) {
-      if (
-        id ===
-        storybookCssResolvedVirtualModuleIds.get(
-          'virtual:emulsify-storybook-css/dist',
-        )
-      ) {
-        return generateStylesheetLinkModule(buildDistStylesheetHrefs(), 'dist');
-      }
-
-      if (
-        id ===
-        storybookCssResolvedVirtualModuleIds.get(
-          'virtual:emulsify-storybook-css/shared-dist',
-        )
-      ) {
-        return generateStylesheetLinkModule(
-          buildDistStylesheetHrefs({ includeComponentCss: false }),
-          'shared-dist',
-        );
-      }
-
-      return null;
-    },
-    configureServer(server) {
-      const distDir = path.resolve(projectRoot, 'dist');
-      const distAssetsDir = path.resolve(distDir, 'assets');
-
-      server.middlewares.use(serveGeneratedDistFile);
-      server.watcher.add([
-        path.join(distDir, '**/*.css'),
-        path.join(distAssetsDir, '**/*'),
-      ]);
-
-      const reloadGeneratedDistFile = (filePath) => {
-        const absolutePath = path.resolve(filePath);
-        const isDistCss =
-          absolutePath.endsWith('.css') &&
-          isWithinDirectory(absolutePath, distDir);
-        const isDistAsset = isWithinDirectory(absolutePath, distAssetsDir);
-
-        if (!isDistCss && !isDistAsset) {
-          return;
-        }
-
-        if (isDistCss) {
-          for (const id of storybookCssResolvedVirtualModuleIds.values()) {
-            const cssModule = server.moduleGraph.getModuleById(id);
-            if (cssModule) server.moduleGraph.invalidateModule(cssModule);
-          }
-        }
-        server.ws.send({ type: 'full-reload', path: '*' });
-      };
-
-      server.watcher.on('add', reloadGeneratedDistFile);
-      server.watcher.on('change', reloadGeneratedDistFile);
-      server.watcher.on('unlink', reloadGeneratedDistFile);
-    },
-  };
 }
 
 /**
@@ -610,109 +379,12 @@ const baseConfig = {
    * @returns {string} Manager head markup with Emulsify additions appended.
    */
   managerHead: (head) => {
-    // Keep the manager styling inline so consumers inherit the branded UI
-    // without having to maintain a separate manager-only stylesheet.
-    const inlineStyles = `
-      <style>
-      :root {
-        --colors-emulsify-blue-100: #e6f5fc;
-        --colors-emulsify-blue-200: #CCECFA;
-        --colors-emulsify-blue-300: #99D9F4;
-        --colors-emulsify-blue-400: #66c5ef;
-        --colors-emulsify-blue-500: #33b2e9;
-        --colors-emulsify-blue-600: #009fe4;
-        --colors-emulsify-blue-700: #007FB6;
-        --colors-emulsify-blue-800: #005f89;
-        --colors-emulsify-blue-900: #00405b;
-        --colors-emulsify-blue-1000: #00202e;
-        --colors-purple: #8B1E7E;
-      }
-      .sidebar-container {
-        background-color: var(--colors-emulsify-blue-900);
-      }
-      .sidebar-container .sidebar-subheading {
-        color: var(--colors-emulsify-blue-200);
-        font-size: 13px;
-        letter-spacing: 0.15em;
-      }
-      .sidebar-container .sidebar-subheading button:focus {
-        color: var(--colors-emulsify-blue-300);
-      }
-      /* Triangle icon. */
-      .sidebar-container .sidebar-subheading button span {
-        color: var(--colors-emulsify-blue-300);
-      }
-      .sidebar-container .search-field input {
-        border-color: var(--colors-emulsify-blue-700);
-      }
-      .sidebar-container .search-field input:active {
-        border-color: var(--colors-emulsify-blue-700);
-      }
-      .sidebar-container .search-result-recentlyOpened,
-      .sidebar-container .search-result-back,
-      .sidebar-container .search-result-clearHistory {
-        color: var(--colors-emulsify-blue-300) !important;
-        letter-spacing: 0.15em;
-      }
-      .sidebar-container .search-result-back span,
-      .sidebar-container .search-result-back svg,
-      .sidebar-container .search-result-clearHistory span,
-      .sidebar-container .search-result-clearHistory svg {
-        letter-spacing: normal;
-        color: white;
-      }
-      .sidebar-container .sidebar-item svg {
-        margin-top: 1px;
-      }
-      .sidebar-container .sidebar-item span {
-        margin-top: 4px;
-      }
-      .sidebar-container .sidebar-subheading-action svg {
-        color: var(--colors-emulsify-blue-400);
-      }
-      .sidebar-container .sidebar-subheading-action:hover svg {
-        color: var(--colors-emulsify-blue-300);
-      }
-      .sidebar-header button[title="Shortcuts"] {
-        box-shadow: none;
-        border: 1px solid var(--colors-emulsify-blue-700);
-      }
-      .sidebar-header button[title="Shortcuts"]:active {
-        border: 1px solid var(--colors-emulsify-blue-500);
-      }
-      .sidebar-header button[title="Shortcuts"]:focus {
-        background: transparent;
-      }
-      #shortcuts {
-        border-bottom-color: var(--colors-emulsify-blue-900) !important;
-      }
-      [role="main"]:not(:nth-child(3)) {
-        top: 1rem !important;
-        height: calc(100vh - 2rem) !important;
-      }
-      [role="main"] .os-host .os-content button:hover {
-        background: var(--colors-emulsify-blue-100);
-      }
-      [role="main"] .os-host .os-content button:hover svg {
-        color: var(--colors-emulsify-blue-900);
-      }
-      #panel-tab-content,
-      #panel-tab-content>* {
-        color: var(--colors-emulsify-blue-100) !important;
-      }
-      #panel-tab-content a,
-      #panel-tab-content a span,
-      #panel-tab-content a span svg {
-        color: var(--colors-emulsify-blue-800);
-      }
-      #panel-tab-content>div>div>div>div>div>div {
-        background: transparent;
-      }
-      #panel-tab-content>div>div>div>div>div>div>div {
-        color: var(--colors-emulsify-blue-1000) !important;
-      }
-    </style>
-    `;
+    const managerStyles = readOptionalHtmlFragment('./manager-head.css');
+    const inlineStyles = managerStyles
+      ? `<style>
+${managerStyles}
+</style>`
+      : '';
     const externalManagerHtml = readOptionalHtmlFragment(
       '../../../../config/emulsify-core/storybook/manager-head.html',
     );
@@ -827,7 +499,7 @@ const baseConfig = {
       assetsInclude,
       plugins: [
         ...(baseViteConfig?.plugins || []),
-        makeStorybookCssLinksPlugin(),
+        makeStorybookCssLinksPlugin({ projectRoot }),
       ],
       esbuild: {
         // Some downstream code is authored as `.js` files containing JSX, so
