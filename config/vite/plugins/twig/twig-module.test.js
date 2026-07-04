@@ -175,7 +175,7 @@ describe('Twig module plugin', () => {
     expect(makeTwigPluginOptions(env)).toBe(options);
   });
 
-  it('can transform the same Twig module more than once', () => {
+  it('can transform the same Twig module more than once', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -184,8 +184,8 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const first = transformTwigModule(twigPlugin, cardFile);
-    const second = transformTwigModule(twigPlugin, cardFile);
+    const first = await transformTwigModule(twigPlugin, cardFile);
+    const second = await transformTwigModule(twigPlugin, cardFile);
 
     expect(first.code).not.toContain('An error occurred whilst compiling');
     expect(second.code).not.toContain('An error occurred whilst compiling');
@@ -197,7 +197,7 @@ describe('Twig module plugin', () => {
     );
   });
 
-  it('compiles each unique Twig path once across shared include trees', () => {
+  it('compiles each unique Twig path once across shared include trees', async () => {
     projectDir = makeTempProject();
     const firstFile = join(projectDir, 'src/components/first/first.twig');
     const secondFile = join(projectDir, 'src/components/second/second.twig');
@@ -231,15 +231,15 @@ describe('Twig module plugin', () => {
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const factorySpy = jest.spyOn(Twig, 'factory');
-    transformTwigModule(twigPlugin, firstFile);
-    transformTwigModule(twigPlugin, secondFile);
+    await transformTwigModule(twigPlugin, firstFile);
+    await transformTwigModule(twigPlugin, secondFile);
 
     expect(factorySpy).toHaveBeenCalledTimes(
       new Set([firstFile, secondFile, wrapperFile, sharedFile]).size,
     );
   });
 
-  it('uses the compile cache when an unchanged file is transformed twice', () => {
+  it('uses the compile cache when an unchanged file is transformed twice', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -250,16 +250,16 @@ describe('Twig module plugin', () => {
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const factorySpy = jest.spyOn(Twig, 'factory');
 
-    transformTwigModule(twigPlugin, cardFile);
+    await transformTwigModule(twigPlugin, cardFile);
     expect(factorySpy).toHaveBeenCalledTimes(1);
 
     factorySpy.mockClear();
-    transformTwigModule(twigPlugin, cardFile);
+    await transformTwigModule(twigPlugin, cardFile);
 
     expect(factorySpy).not.toHaveBeenCalled();
   });
 
-  it('memoizes filesystem probes for repeated include resolution tuples', () => {
+  it('memoizes filesystem probes for repeated include resolution tuples', async () => {
     projectDir = makeTempProject();
     const componentDir = join(projectDir, 'src/components/card');
     const srcDir = join(projectDir, 'src');
@@ -294,21 +294,21 @@ describe('Twig module plugin', () => {
       statSpy.mock.calls.filter(([filePath]) => candidatePaths.has(filePath))
         .length;
 
-    transformTwigModule(twigPlugin, firstFile);
+    await transformTwigModule(twigPlugin, firstFile);
     const afterFirstTransform = candidateStatCount();
-    transformTwigModule(twigPlugin, secondFile);
+    await transformTwigModule(twigPlugin, secondFile);
     const afterSecondTransform = candidateStatCount();
 
     expect(afterFirstTransform).toBeLessThanOrEqual(candidatePaths.size);
     expect(afterSecondTransform).toBe(afterFirstTransform);
 
     twigPlugin.handleHotUpdate({ file: firstFile, server: {} });
-    transformTwigModule(twigPlugin, thirdFile);
+    await transformTwigModule(twigPlugin, thirdFile);
 
     expect(candidateStatCount()).toBeGreaterThan(afterSecondTransform);
   });
 
-  it('does not disable Twig caching in emitted module source', () => {
+  it('does not disable Twig caching in emitted module source', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -317,12 +317,12 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
 
     expect(transformed.code).not.toContain('Twig.cache(false)');
   });
 
-  it('imports dependency template params from shared virtual modules', () => {
+  it('emits deterministic module source after async compilation', async () => {
     projectDir = makeTempProject();
     const parentFile = join(projectDir, 'src/components/parent/parent.twig');
     const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
@@ -336,10 +336,72 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, parentFile);
+    const transformed = await transformTwigModule(twigPlugin, parentFile);
+    const normalizedCode = transformed.code
+      .replaceAll(projectDir, '<projectDir>')
+      .replaceAll(
+        encodeURIComponent(projectDir),
+        encodeURIComponent('<projectDir>'),
+      );
+
+    expect(normalizedCode).toMatchInlineSnapshot(`
+      "
+                import { templateId as __emulsifyDependencyTemplateId0, templateParams as __emulsifyDependencyTemplateParams0 } from "virtual:emulsify-twig-dep:%3CprojectDir%3E%2Fsrc%2Fcomponents%2Fshared%2Fshared.twig";
+                import { factory } from 'twig';
+                import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
+      	import { installProjectTwigExtensions } from 'virtual:emulsify-twig-extension-installers';
+                import { createTwigIncludeFunction } from '@emulsify/core/storybook/twig/include-function';
+                import { createTwigSourceFunction } from '@emulsify/core/storybook/twig/source-function';
+
+                const Twig = factory();
+                registerTwigExtensions(Twig);
+      	installProjectTwigExtensions(Twig);
+
+                
+                    const __emulsifyDependency0 = Twig.twig({ ...__emulsifyDependencyTemplateParams0, id: __emulsifyDependencyTemplateId0 });
+                  
+                const __emulsifyTemplate = Twig.twig({"allowInlineIncludes":true,"data":[{"type":"logic","token":{"type":"Twig.logic.type.include","only":false,"ignoreMissing":false,"stack":[{"type":"Twig.expression.type.string","value":"/src/components::shared/shared.twig"}],"position":{"start":0,"end":119}},"position":{"start":0,"end":119}}],"namespaces":{"components":"<projectDir>/src/components"},"precompiled":true,"rethrow":true,"id":"/src/components::parent/parent.twig"});
+                const __emulsifyIncludeTemplates = new Map();
+                const __emulsifySourceTemplates = new Map();
+                __emulsifyIncludeTemplates.set("<projectDir>/src/components/shared/shared.twig", (context = {}) => __emulsifyDependency0.render(context));
+      __emulsifyIncludeTemplates.set("/src/components::shared/shared.twig", (context = {}) => __emulsifyDependency0.render(context));
+                
+                const __emulsifyResolveInclude = (templateName) =>
+                  __emulsifyIncludeTemplates.get(templateName);
+                const __emulsifyResolveSource = (templateName) =>
+                  __emulsifySourceTemplates.get(templateName);
+                Twig.extendFunction('include', createTwigIncludeFunction(__emulsifyResolveInclude));
+                Twig.extendFunction('source', createTwigSourceFunction(__emulsifyResolveSource));
+
+                export default (context = {}) => {
+                  try {
+                    return __emulsifyTemplate.render(context);
+                  } catch (error) {
+                    return "An error occurred whilst rendering <projectDir>/src/components/parent/parent.twig: " + error.toString();
+                  }
+                };
+              "
+    `);
+  });
+
+  it('imports dependency template params from shared virtual modules', async () => {
+    projectDir = makeTempProject();
+    const parentFile = join(projectDir, 'src/components/parent/parent.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/parent'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(parentFile, twigInclude(sharedFile));
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, parentFile);
     const [dependencyImportId] = dependencyImportIds(transformed.code);
     const resolvedDependencyId = twigPlugin.resolveId(dependencyImportId);
-    const dependencyModuleSource = twigPlugin.load.call(
+    const dependencyModuleSource = await twigPlugin.load.call(
       { addWatchFile: jest.fn() },
       resolvedDependencyId,
     );
@@ -351,7 +413,7 @@ describe('Twig module plugin', () => {
     expect(dependencyModuleSource).toContain('<span>');
   });
 
-  it('emits isolated per-module Twig factories without runtime registry patches', () => {
+  it('emits isolated per-module Twig factories without runtime registry patches', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -360,7 +422,7 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
 
     expect(transformed.code).toMatch(/import \{ factory \} from 'twig';/);
     expect(transformed.code).toMatch(
@@ -386,7 +448,7 @@ describe('Twig module plugin', () => {
     expect(transformed.code).not.toContain('globalThis');
   });
 
-  it('compiles and renders configured Drupal-compatible Twig filters', () => {
+  it('compiles and renders configured Drupal-compatible Twig filters', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -403,7 +465,7 @@ describe('Twig module plugin', () => {
         },
       }),
     );
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
     const runtimeTwig = {
       factory: () => Twig.factory(),
       installProjectTwigExtensions: twigDrupalFilters,
@@ -417,7 +479,7 @@ describe('Twig module plugin', () => {
     expect(output).toBe('<article>hello-world</article>');
   });
 
-  it('renders updated context through the same generated module instance', () => {
+  it('renders updated context through the same generated module instance', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -429,7 +491,7 @@ describe('Twig module plugin', () => {
     );
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
     const render = createGeneratedTwigModuleRender(transformed.code);
 
     expect(render({ title: 'First', align: 'left' })).toContain(
@@ -440,7 +502,7 @@ describe('Twig module plugin', () => {
     );
   });
 
-  it('renders source() asset references through generated modules', () => {
+  it('renders source() asset references through generated modules', async () => {
     projectDir = makeTempProject();
     const iconFile = join(projectDir, 'src/components/icon/icon.twig');
     fs.mkdirSync(join(projectDir, 'src/components/icon'), {
@@ -456,7 +518,7 @@ describe('Twig module plugin', () => {
     );
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, iconFile);
+    const transformed = await transformTwigModule(twigPlugin, iconFile);
     const output = renderGeneratedTwigModule(transformed.code);
 
     expect(output).toContain('data-icon="refresh"');
@@ -465,7 +527,7 @@ describe('Twig module plugin', () => {
     );
   });
 
-  it('renders static source() template references through generated modules', () => {
+  it('renders static source() template references through generated modules', async () => {
     projectDir = makeTempProject();
     const previewFile = join(projectDir, 'src/components/preview/preview.twig');
     const codeFile = join(projectDir, 'src/components/code/code.twig');
@@ -479,13 +541,13 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(codeFile, '<button>{{ text }}</button>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, previewFile);
+    const transformed = await transformTwigModule(twigPlugin, previewFile);
     const output = renderGeneratedTwigModule(transformed.code);
 
     expect(output).toContain('<button>{{ text }}</button>');
   });
 
-  it('renders project-namespace include() function calls through generated modules', () => {
+  it('renders project-namespace include() function calls through generated modules', async () => {
     projectDir = makeTempProject();
     const actionsGridFile = join(
       projectDir,
@@ -514,7 +576,7 @@ describe('Twig module plugin', () => {
     );
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const actionsGrid = transformTwigModule(twigPlugin, actionsGridFile);
+    const actionsGrid = await transformTwigModule(twigPlugin, actionsGridFile);
 
     const output = renderGeneratedTwigModule(actionsGrid.code, {
       actions_grid_title: 'Actions Grid Title',
@@ -524,7 +586,7 @@ describe('Twig module plugin', () => {
     expect(output).not.toContain('include function does not exist');
   });
 
-  it('renders project-namespace tag includes from grouped component folders', () => {
+  it('renders project-namespace tag includes from grouped component folders', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/ui/card/card.twig');
     const buttonFile = join(projectDir, 'src/components/ui/button/button.twig');
@@ -538,7 +600,7 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, '{% include "project:button" %}');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
     const output = renderGeneratedTwigModule(transformed.code, {
       label: 'Read more',
     });
@@ -549,7 +611,7 @@ describe('Twig module plugin', () => {
     expect(output).toContain('<button>Read more</button>');
   });
 
-  it('renders @components tag includes from grouped component folders', () => {
+  it('renders @components tag includes from grouped component folders', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/ui/card/card.twig');
     const buttonFile = join(projectDir, 'src/components/ui/button/button.twig');
@@ -563,7 +625,7 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, twigInclude('@components/button/button.twig'));
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
     const output = renderGeneratedTwigModule(transformed.code, {
       label: 'Read more',
     });
@@ -574,7 +636,7 @@ describe('Twig module plugin', () => {
     expect(output).toContain('<button>Read more</button>');
   });
 
-  it('preserves runtime rethrow for precompiled templates', () => {
+  it('preserves runtime rethrow for precompiled templates', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -583,7 +645,7 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, '<article>{{ title|missing_filter }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, cardFile);
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
     const output = renderGeneratedTwigModule(transformed.code, {
       title: 'Card',
     });
@@ -592,7 +654,7 @@ describe('Twig module plugin', () => {
     expect(output).not.toContain('valueOf');
   });
 
-  it('refreshes rendered output after HMR recompilation', () => {
+  it('refreshes rendered output after HMR recompilation', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
@@ -601,7 +663,7 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(cardFile, '<article>{{ title }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const first = transformTwigModule(twigPlugin, cardFile);
+    const first = await transformTwigModule(twigPlugin, cardFile);
     const firstRender = createGeneratedTwigModuleRender(first.code);
 
     expect(firstRender({ title: 'Card' })).toContain('<article>Card</article>');
@@ -614,7 +676,7 @@ describe('Twig module plugin', () => {
     );
     twigPlugin.handleHotUpdate({ file: cardFile, server: {} });
 
-    const second = transformTwigModule(twigPlugin, cardFile);
+    const second = await transformTwigModule(twigPlugin, cardFile);
     const secondRender = createGeneratedTwigModuleRender(second.code);
 
     expect(secondRender({ title: 'Updated' })).toContain(
@@ -622,7 +684,7 @@ describe('Twig module plugin', () => {
     );
   });
 
-  it('renders embed dependencies before Twig falls back to the fs loader', () => {
+  it('renders embed dependencies before Twig falls back to the fs loader', async () => {
     projectDir = makeTempProject();
     const accordionDir = join(projectDir, 'src/components/accordion');
     const layoutDir = join(projectDir, 'src/layout/container');
@@ -645,7 +707,7 @@ describe('Twig module plugin', () => {
 
     const env = makeEnv(projectDir);
     const twigPlugin = makeTwigModulePlugin(env);
-    const transformed = transformTwigModule(twigPlugin, accordionFile);
+    const transformed = await transformTwigModule(twigPlugin, accordionFile);
     const runtimeTwig = Twig.factory();
     let fsLoaderUsed = false;
 
@@ -665,7 +727,7 @@ describe('Twig module plugin', () => {
     expect(fsLoaderUsed).toBe(false);
   });
 
-  it('can transform a child Twig module before a parent includes it', () => {
+  it('can transform a child Twig module before a parent includes it', async () => {
     projectDir = makeTempProject();
     const headingFile = join(projectDir, 'src/components/heading/heading.twig');
     const accordionFile = join(
@@ -682,8 +744,8 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(accordionFile, twigInclude(headingFile));
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const child = transformTwigModule(twigPlugin, headingFile);
-    const parent = transformTwigModule(twigPlugin, accordionFile);
+    const child = await transformTwigModule(twigPlugin, headingFile);
+    const parent = await transformTwigModule(twigPlugin, accordionFile);
 
     expect(child.code).not.toContain('An error occurred whilst compiling');
     expect(parent.code).not.toContain('An error occurred whilst compiling');
@@ -695,7 +757,7 @@ describe('Twig module plugin', () => {
     ).toContain('<h2>Included</h2>');
   });
 
-  it('clears cached Twig compilations for changed templates and their importers', () => {
+  it('clears cached Twig compilations for changed templates and their importers', async () => {
     projectDir = makeTempProject();
     const parentFile = join(projectDir, 'src/components/parent/parent.twig');
     const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
@@ -710,7 +772,7 @@ describe('Twig module plugin', () => {
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const factorySpy = jest.spyOn(Twig, 'factory');
-    transformTwigModule(twigPlugin, parentFile);
+    await transformTwigModule(twigPlugin, parentFile);
     factorySpy.mockClear();
 
     const changedModule = { id: 'changed-template' };
@@ -730,7 +792,7 @@ describe('Twig module plugin', () => {
       file: sharedFile,
       server,
     });
-    transformTwigModule(twigPlugin, parentFile);
+    await transformTwigModule(twigPlugin, parentFile);
 
     expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       importerModule,
@@ -741,7 +803,7 @@ describe('Twig module plugin', () => {
     expect(factorySpy).toHaveBeenCalledTimes(2);
   });
 
-  it('invalidates shared dependency modules and all importers during HMR', () => {
+  it('invalidates shared dependency modules and all importers during HMR', async () => {
     projectDir = makeTempProject();
     const firstFile = join(projectDir, 'src/components/first/first.twig');
     const secondFile = join(projectDir, 'src/components/second/second.twig');
@@ -760,8 +822,8 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const first = transformTwigModule(twigPlugin, firstFile);
-    const second = transformTwigModule(twigPlugin, secondFile);
+    const first = await transformTwigModule(twigPlugin, firstFile);
+    const second = await transformTwigModule(twigPlugin, secondFile);
 
     expect(renderGeneratedTwigModule(first.code, { label: 'First' })).toContain(
       '<span>First</span>',
@@ -798,8 +860,8 @@ describe('Twig module plugin', () => {
       file: sharedFile,
       server,
     });
-    const updatedFirst = transformTwigModule(twigPlugin, firstFile);
-    const updatedSecond = transformTwigModule(twigPlugin, secondFile);
+    const updatedFirst = await transformTwigModule(twigPlugin, firstFile);
+    const updatedSecond = await transformTwigModule(twigPlugin, secondFile);
 
     expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       dependencyModule,
@@ -826,7 +888,7 @@ describe('Twig module plugin', () => {
     ).toContain('<strong>Second</strong>');
   });
 
-  it('releases deleted dependency importer entries after unlink', () => {
+  it('releases deleted dependency importer entries after unlink', async () => {
     projectDir = makeTempProject();
     const parentFile = join(projectDir, 'src/components/parent/parent.twig');
     const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
@@ -848,7 +910,7 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(unrelatedFile, '<article>{{ title }}</article>');
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    transformTwigModule(twigPlugin, parentFile);
+    await transformTwigModule(twigPlugin, parentFile);
     fs.unlinkSync(sharedFile);
 
     const deletedModule = { id: 'deleted-template' };
@@ -868,7 +930,7 @@ describe('Twig module plugin', () => {
       file: sharedFile,
       server: unlinkServer,
     });
-    transformTwigModule(twigPlugin, unrelatedFile);
+    await transformTwigModule(twigPlugin, unrelatedFile);
 
     const staleServer = {
       moduleGraph: {
@@ -890,7 +952,7 @@ describe('Twig module plugin', () => {
     expect(staleServer.moduleGraph.invalidateModule).not.toHaveBeenCalled();
   });
 
-  it('uses independent Twig instances when stories share an included template', () => {
+  it('uses independent Twig instances when stories share an included template', async () => {
     projectDir = makeTempProject();
     const firstFile = join(projectDir, 'src/components/first/first.twig');
     const secondFile = join(projectDir, 'src/components/second/second.twig');
@@ -909,8 +971,8 @@ describe('Twig module plugin', () => {
     fs.writeFileSync(secondFile, twigInclude(sharedFile));
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const first = transformTwigModule(twigPlugin, firstFile);
-    const second = transformTwigModule(twigPlugin, secondFile);
+    const first = await transformTwigModule(twigPlugin, firstFile);
+    const second = await transformTwigModule(twigPlugin, secondFile);
     const [firstDependencyId] = dependencyImportIds(first.code);
     const [secondDependencyId] = dependencyImportIds(second.code);
     const runtimeInstances = [];
@@ -943,7 +1005,7 @@ describe('Twig module plugin', () => {
     expect(runtimeInstances[0]).not.toBe(runtimeInstances[1]);
   });
 
-  it('renders nested include and embed dependencies through namespaces', () => {
+  it('renders nested include and embed dependencies through namespaces', async () => {
     projectDir = makeTempProject();
     const accordionDir = join(projectDir, 'src/components/accordion');
     const headingDir = join(projectDir, 'src/components/heading');
@@ -971,7 +1033,7 @@ describe('Twig module plugin', () => {
     );
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, accordionFile);
+    const transformed = await transformTwigModule(twigPlugin, accordionFile);
     const output = renderGeneratedTwigModule(transformed.code, {
       title: 'Accordion',
       body: 'Panel body',
@@ -985,7 +1047,7 @@ describe('Twig module plugin', () => {
     expect(output).toContain('<p>Panel body</p>');
   });
 
-  it('renders self-recursive includes without duplicate template ids', () => {
+  it('renders self-recursive includes without duplicate template ids', async () => {
     projectDir = makeTempProject();
     const menuItemFile = join(
       projectDir,
@@ -1008,7 +1070,7 @@ describe('Twig module plugin', () => {
     );
 
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
-    const transformed = transformTwigModule(twigPlugin, menuItemFile);
+    const transformed = await transformTwigModule(twigPlugin, menuItemFile);
     const output = renderGeneratedTwigModule(transformed.code, {
       label: 'Parent',
       child: { label: 'Child' },

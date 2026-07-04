@@ -10,6 +10,7 @@
  */
 
 import fs from 'fs';
+import { readFile, stat } from 'fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve } from 'path';
 import Twig from 'twig';
 
@@ -24,6 +25,7 @@ import {
   installProjectTwigExtensions,
 } from './extensions.js';
 import { firstExistingPath, safeExists } from '../../utils/fs-safe.js';
+import { createLruCache } from '../../utils/lru.js';
 import { toPosixPath } from '../../utils/paths.js';
 import { unique } from '../../../../src/extensions/shared/lists.js';
 
@@ -40,6 +42,8 @@ const includeFunctionName = 'include';
 const sourceFunctionName = 'source';
 const VIRTUAL_TWIG_DEPENDENCY_PREFIX = 'virtual:emulsify-twig-dep:';
 const RESOLVED_VIRTUAL_TWIG_DEPENDENCY_PREFIX = `\0${VIRTUAL_TWIG_DEPENDENCY_PREFIX}`;
+const maxCompiledTemplateCacheEntries = 2000;
+const maxResolutionCacheEntries = 5000;
 const expressionTokenTypes = {
   arrayEnd: 'Twig.expression.type.array.end',
   arrayStart: 'Twig.expression.type.array.start',
@@ -65,16 +69,16 @@ const expressionClosingTokenTypes = new Set([
 /**
  * Cache compiled Twig templates by absolute path for the life of one build.
  *
- * @type {Map<string, { mtimeMs: number, compiled: { code: string, includes: string[], sourceReferences: string[], templateId: string, templateParams: object } }>}
+ * @type {ReturnType<typeof createLruCache>}
  */
-const compileCache = new Map();
+const compileCache = createLruCache(maxCompiledTemplateCacheEntries);
 
 /**
  * Cache resolved Twig include paths by source directory, reference, and roots.
  *
- * @type {Map<string, string|null>}
+ * @type {ReturnType<typeof createLruCache>}
  */
-const resolutionCache = new Map();
+const resolutionCache = createLruCache(maxResolutionCacheEntries);
 
 /**
  * Track Twig files that have been seen during this build/session.
@@ -433,8 +437,8 @@ const makeTemplateInstantiationFromParamsCode = (
   paramsExpression,
 ) => `Twig.twig({ ...${paramsExpression}, id: ${templateIdExpression} })`;
 
-const generateTwigDependencyModule = (filePath, options) => {
-  const compiled = compileTwigTemplate(filePath, options, compileCache);
+const generateTwigDependencyModule = async (filePath, options) => {
+  const compiled = await compileTwigTemplate(filePath, options, compileCache);
 
   return [
     `export const templateId = ${JSON.stringify(compiled.templateId)};`,
@@ -741,12 +745,12 @@ const invalidateKnownResolutionCacheEntries = (filePath) => {
  * @param {string} filePath - Absolute template file path.
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
  * @param {typeof compileCache} [cache=compileCache] - Shared compile cache.
- * @returns {{ code: string, includes: string[], sourceReferences: string[] }} Compiled template code and references.
+ * @returns {Promise<{ code: string, includes: string[], sourceReferences: string[] }>} Compiled template code and references.
  */
-const compileTwigTemplate = (filePath, options, cache = compileCache) => {
+const compileTwigTemplate = async (filePath, options, cache = compileCache) => {
   const absoluteFilePath = resolve(filePath);
   knownTwigFiles.add(absoluteFilePath);
-  const { mtimeMs } = fs.statSync(absoluteFilePath);
+  const { mtimeMs } = await stat(absoluteFilePath);
   const cached = cache.get(absoluteFilePath);
   if (cached?.mtimeMs === mtimeMs) {
     return cached.compiled;
@@ -756,7 +760,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
   registerTwigExtensions(compilerTwig);
   installProjectTwigExtensions(compilerTwig, options);
 
-  const source = fs.readFileSync(absoluteFilePath, 'utf8');
+  const source = await readFile(absoluteFilePath, 'utf8');
   const compileOptions = {
     allowInlineIncludes: true,
     namespaces: options.namespaces,
@@ -999,7 +1003,7 @@ export function emulsifyTwigModulePlugin(options) {
 
       return null;
     },
-    load(id) {
+    async load(id) {
       if (!id.startsWith(RESOLVED_VIRTUAL_TWIG_DEPENDENCY_PREFIX)) {
         return null;
       }
@@ -1012,7 +1016,7 @@ export function emulsifyTwigModulePlugin(options) {
       this.addWatchFile(dependencyPath);
       return generateTwigDependencyModule(dependencyPath, options);
     },
-    transform(...args) {
+    async transform(...args) {
       const [, id] = args;
       if (!isTwigModuleRequest(id)) {
         return null;
@@ -1020,10 +1024,11 @@ export function emulsifyTwigModulePlugin(options) {
 
       const filePath = stripRequestQuery(id);
       const sourceFilePath = resolve(filePath);
-      /** @type {Map<string, ReturnType<typeof compileTwigTemplate>>} */
+      /** @type {Map<string, Awaited<ReturnType<typeof compileTwigTemplate>>>} */
       const compiledDependencyTemplates = new Map();
       /** @type {Map<string, Set<string>>} */
       const compiledDependencyReferences = new Map();
+      const queuedDependencyTemplates = new Set();
       clearDependencyImporter(sourceFilePath);
 
       /**
@@ -1058,13 +1063,15 @@ export function emulsifyTwigModulePlugin(options) {
        * @param {string[]} templateReferences - Raw references found in tokens.
        * @param {string} fromFilePath - Absolute importer path.
        * @param {typeof compileCache} cache - Shared compile cache.
-       * @returns {void}
+       * @returns {Promise<void>}
        */
-      const compileDependencyTemplates = (
+      const compileDependencyTemplates = async (
         templateReferences,
         fromFilePath,
         cache,
       ) => {
+        const dependencyRecords = [];
+
         for (const templatePath of templateReferences) {
           const dependencyPath = resolveTwigTemplate(
             templatePath,
@@ -1075,22 +1082,38 @@ export function emulsifyTwigModulePlugin(options) {
           const absoluteDependencyPath = resolve(dependencyPath);
           addCompiledDependencyReference(absoluteDependencyPath, templatePath);
           if (absoluteDependencyPath === sourceFilePath) continue;
+          if (
+            compiledDependencyTemplates.has(absoluteDependencyPath) ||
+            queuedDependencyTemplates.has(absoluteDependencyPath)
+          ) {
+            continue;
+          }
 
-          const dependencyTemplate = compiledDependencyTemplates.get(
-            absoluteDependencyPath,
-          );
-          if (dependencyTemplate) continue;
+          queuedDependencyTemplates.add(absoluteDependencyPath);
 
           addDependencyImporter(absoluteDependencyPath, sourceFilePath);
           this.addWatchFile(absoluteDependencyPath);
 
-          const compiled = compileTwigTemplate(
+          dependencyRecords.push({ absoluteDependencyPath });
+        }
+
+        const compiledDependencyRecords = await Promise.all(
+          dependencyRecords.map(async ({ absoluteDependencyPath }) => ({
             absoluteDependencyPath,
-            options,
-            cache,
-          );
+            compiled: await compileTwigTemplate(
+              absoluteDependencyPath,
+              options,
+              cache,
+            ),
+          })),
+        );
+
+        for (const {
+          absoluteDependencyPath,
+          compiled,
+        } of compiledDependencyRecords) {
           compiledDependencyTemplates.set(absoluteDependencyPath, compiled);
-          compileDependencyTemplates(
+          await compileDependencyTemplates(
             compiled.includes,
             absoluteDependencyPath,
             cache,
@@ -1102,51 +1125,56 @@ export function emulsifyTwigModulePlugin(options) {
        * Emit raw Twig source registrations for static source() references.
        *
        * @param {string} fromFilePath - Absolute file that contains the reference.
-       * @param {ReturnType<typeof compileTwigTemplate>} compiledTemplate - Compiled template metadata.
-       * @returns {string[]} Generated source map registration statements.
+       * @param {Awaited<ReturnType<typeof compileTwigTemplate>>} compiledTemplate - Compiled template metadata.
+       * @returns {Promise<string[]>} Generated source map registration statements.
        */
-      const makeSourceTemplateRegistrations = (
+      const makeSourceTemplateRegistrations = async (
         fromFilePath,
         compiledTemplate,
-      ) =>
-        (compiledTemplate.sourceReferences || []).flatMap((reference) => {
-          if (
-            reference.startsWith('@assets/') ||
-            reference.startsWith('assets/')
-          ) {
-            return [];
-          }
+      ) => {
+        const registrations = await Promise.all(
+          (compiledTemplate.sourceReferences || []).map(async (reference) => {
+            if (
+              reference.startsWith('@assets/') ||
+              reference.startsWith('assets/')
+            ) {
+              return [];
+            }
 
-          const sourcePath = resolveTwigTemplate(
-            reference,
-            dirname(fromFilePath),
-            options,
-          );
-          if (!sourcePath) return [];
+            const sourcePath = resolveTwigTemplate(
+              reference,
+              dirname(fromFilePath),
+              options,
+            );
+            if (!sourcePath) return [];
 
-          const absoluteSourcePath = resolve(sourcePath);
-          addDependencyImporter(absoluteSourcePath, sourceFilePath);
-          this.addWatchFile(absoluteSourcePath);
-          const sourceText = fs.readFileSync(absoluteSourcePath, 'utf8');
+            const absoluteSourcePath = resolve(sourcePath);
+            addDependencyImporter(absoluteSourcePath, sourceFilePath);
+            this.addWatchFile(absoluteSourcePath);
+            const sourceText = await readFile(absoluteSourcePath, 'utf8');
 
-          return unique([
-            reference,
-            templateIdForPath(absoluteSourcePath, options),
-          ]).map(
-            (key) =>
-              `__emulsifySourceTemplates.set(${JSON.stringify(
-                key,
-              )}, ${JSON.stringify(sourceText)});`,
-          );
-        });
+            return unique([
+              reference,
+              templateIdForPath(absoluteSourcePath, options),
+            ]).map(
+              (key) =>
+                `__emulsifySourceTemplates.set(${JSON.stringify(
+                  key,
+                )}, ${JSON.stringify(sourceText)});`,
+            );
+          }),
+        );
+
+        return registrations.flat();
+      };
 
       try {
-        const compiled = compileTwigTemplate(
+        const compiled = await compileTwigTemplate(
           sourceFilePath,
           options,
           compileCache,
         );
-        compileDependencyTemplates(
+        await compileDependencyTemplates(
           compiled.includes,
           sourceFilePath,
           compileCache,
@@ -1203,16 +1231,20 @@ export function emulsifyTwigModulePlugin(options) {
               )}, (context = {}) => __emulsifyTemplate.render(context));`,
           ),
         ].join('\n');
-        const sourceTemplateRegistrations = [
-          ...dependencyTemplateRecords.flatMap(
-            ({ dependencyPath, compiledDependency }) =>
-              makeSourceTemplateRegistrations(
-                dependencyPath,
-                compiledDependency,
-              ),
-          ),
-          ...makeSourceTemplateRegistrations(sourceFilePath, compiled),
-        ].join('\n');
+        const sourceTemplateRegistrations = (
+          await Promise.all([
+            ...dependencyTemplateRecords.map(
+              ({ dependencyPath, compiledDependency }) =>
+                makeSourceTemplateRegistrations(
+                  dependencyPath,
+                  compiledDependency,
+                ),
+            ),
+            makeSourceTemplateRegistrations(sourceFilePath, compiled),
+          ])
+        )
+          .flat()
+          .join('\n');
         const renderErrorPrefix = JSON.stringify(
           `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
         );

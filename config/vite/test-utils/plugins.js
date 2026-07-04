@@ -77,7 +77,7 @@ const collectGeneratedTwigDependencyImports = (code) => {
   return imports;
 };
 
-const registerGeneratedTwigDependencyModules = (plugin, code) => {
+const registerGeneratedTwigDependencyModules = async (plugin, code) => {
   if (!code || typeof plugin?.resolveId !== 'function') {
     return;
   }
@@ -87,27 +87,29 @@ const registerGeneratedTwigDependencyModules = (plugin, code) => {
     return;
   }
 
-  const resolvedImports = imports.map((dependencyImport) => {
-    const resolvedId = plugin.resolveId(dependencyImport.moduleId);
-    const moduleId = resolvedId || dependencyImport.moduleId;
-    const source =
-      typeof plugin.load === 'function'
-        ? plugin.load.call({ addWatchFile: jest.fn() }, moduleId)
-        : '';
-    const cachedModule = generatedTwigDependencyModules.get(moduleId);
+  const resolvedImports = await Promise.all(
+    imports.map(async (dependencyImport) => {
+      const resolvedId = plugin.resolveId(dependencyImport.moduleId);
+      const moduleId = resolvedId || dependencyImport.moduleId;
+      const source =
+        typeof plugin.load === 'function'
+          ? await plugin.load.call({ addWatchFile: jest.fn() }, moduleId)
+          : '';
+      const cachedModule = generatedTwigDependencyModules.get(moduleId);
 
-    if (!cachedModule || cachedModule.source !== source) {
-      generatedTwigDependencyModules.set(moduleId, {
-        source,
-        exports: evaluateGeneratedTwigDependencyModule(source),
-      });
-    }
+      if (!cachedModule || cachedModule.source !== source) {
+        generatedTwigDependencyModules.set(moduleId, {
+          source,
+          exports: evaluateGeneratedTwigDependencyModule(source),
+        });
+      }
 
-    return {
-      ...dependencyImport,
-      exports: generatedTwigDependencyModules.get(moduleId).exports,
-    };
-  });
+      return {
+        ...dependencyImport,
+        exports: generatedTwigDependencyModules.get(moduleId).exports,
+      };
+    }),
+  );
 
   generatedTwigDependencyImportsByCode.set(code, resolvedImports);
 };
@@ -117,15 +119,15 @@ const registerGeneratedTwigDependencyModules = (plugin, code) => {
  *
  * @param {object} plugin - Twig module plugin.
  * @param {string} filePath - Absolute Twig file path.
- * @returns {object|null} Transform result.
+ * @returns {Promise<object|null>} Transform result.
  */
-export const transformTwigModule = (plugin, filePath) => {
-  const result = plugin.transform.call(
+export const transformTwigModule = async (plugin, filePath) => {
+  const result = await plugin.transform.call(
     { addWatchFile: jest.fn() },
     '',
     filePath,
   );
-  registerGeneratedTwigDependencyModules(plugin, result?.code);
+  await registerGeneratedTwigDependencyModules(plugin, result?.code);
   return result;
 };
 

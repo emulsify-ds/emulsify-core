@@ -75,6 +75,7 @@
     "config/vite/project-extensions.js",
     "config/vite/project-structure.js",
     "config/vite/utils/fs-safe.js",
+    "config/vite/utils/lru.js",
     "config/vite/utils/paths.js",
     "config/vite/utils/react-singleton.js",
     "config/vite/vite.config.js",
