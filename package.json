@@ -77,6 +77,7 @@
     "config/vite/utils/fs-safe.js",
     "config/vite/utils/paths.js",
     "config/vite/utils/react-singleton.js",
+    "config/vite/utils/root-relative.js",
     "config/vite/utils/unique.js",
     "config/vite/vite.config.js",
     "scripts/a11y.js",

@@ -5,7 +5,7 @@
  * virtual module instead of replacing placeholder strings in resolver source.
  */
 
-import { toPosixPath } from '../utils/paths.js';
+import { toRootRelativePath } from '../utils/root-relative.js';
 import { unique } from '../utils/unique.js';
 
 export const VIRTUAL_TWIG_GLOBS_ID = 'virtual:emulsify-twig-globs';
@@ -16,35 +16,6 @@ const RESOLVED_VIRTUAL_TWIG_GLOBS_ID = `\0${VIRTUAL_TWIG_GLOBS_ID}`;
  * @property {Record<string, unknown>} modules - Compiled Twig module map.
  * @property {Record<string, Function>} sources - Lazy raw Twig source loaders.
  */
-
-/**
- * Convert an absolute project path to a Vite root-relative glob base.
- *
- * @param {string} projectDir - Absolute project root.
- * @param {string} absolutePath - Absolute Twig root path.
- * @returns {string} Vite root-relative path.
- */
-function toRootRelativePath(projectDir, absolutePath) {
-  if (!absolutePath) return '';
-
-  const normalizedProjectDir = toPosixPath(projectDir || '').replace(
-    /\/+$/,
-    '',
-  );
-  const normalizedPath = toPosixPath(absolutePath).replace(/\/+$/, '');
-
-  if (
-    normalizedProjectDir &&
-    normalizedPath.startsWith(`${normalizedProjectDir}/`)
-  ) {
-    return `/${normalizedPath.slice(normalizedProjectDir.length + 1)}`.replace(
-      /\/{2,}/g,
-      '/',
-    );
-  }
-
-  return `/${normalizedPath.replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
-}
 
 /**
  * Build Vite glob patterns from a resolved Emulsify environment.

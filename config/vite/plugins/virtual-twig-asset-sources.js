@@ -9,6 +9,7 @@ import { readdirSync } from 'fs';
 import { relative, resolve } from 'path';
 import { safeExists } from '../utils/fs-safe.js';
 import { toPosixPath } from '../utils/paths.js';
+import { toRootRelativePath } from '../utils/root-relative.js';
 import { unique } from '../utils/unique.js';
 import { INLINE_ASSET_EXTS } from '../../../src/storybook/twig/source-extensions.js';
 
@@ -21,35 +22,6 @@ const PUBLIC_ASSET_ROOTS = new Map([
   ['/assets', '/assets'],
   ['/dist/assets', '/assets'],
 ]);
-
-/**
- * Convert an absolute project path to a Vite root-relative glob base.
- *
- * @param {string} projectDir - Absolute project root.
- * @param {string} absolutePath - Absolute asset root path.
- * @returns {string} Vite root-relative path.
- */
-function toRootRelativePath(projectDir, absolutePath) {
-  if (!absolutePath) return '';
-
-  const normalizedProjectDir = toPosixPath(projectDir || '').replace(
-    /\/+$/,
-    '',
-  );
-  const normalizedPath = toPosixPath(absolutePath).replace(/\/+$/, '');
-
-  if (
-    normalizedProjectDir &&
-    normalizedPath.startsWith(`${normalizedProjectDir}/`)
-  ) {
-    return `/${normalizedPath.slice(normalizedProjectDir.length + 1)}`.replace(
-      /\/{2,}/g,
-      '/',
-    );
-  }
-
-  return `/${normalizedPath.replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
-}
 
 /**
  * Resolve a configured asset root to an absolute filesystem path.
