@@ -11,7 +11,7 @@ import { safeExists } from '../../utils/fs-safe.js';
 import { toPosixPath } from '../../utils/paths.js';
 import { unique } from '../../../../src/extensions/shared/lists.js';
 import { toRootRelativePath } from '../../../../src/extensions/shared/root-relative.js';
-import { INLINE_ASSET_EXTS } from '../../../../src/storybook/twig/source-extensions.js';
+import { INLINE_ASSET_EXTS } from '../../../../src/storybook/twig/constants.js';
 
 export const VIRTUAL_TWIG_ASSET_SOURCES_ID =
   'virtual:emulsify-twig-asset-sources';
@@ -252,6 +252,8 @@ export function generateVirtualTwigAssetSourcesModule(env) {
  * Raw text assets stay lazy and load only when Twig source() requests them.
  */
 
+import { createAssetSourceRuntime } from '@emulsify/core/storybook/twig/asset-source-runtime';
+
 export const assetRootPrefixes = ${JSON.stringify(rootPrefixes)};
 export const generatedAssetRootPrefixes = ${JSON.stringify(allGeneratedRootPrefixes)};
 export const generatedAssetAliases = ${JSON.stringify(
@@ -271,107 +273,18 @@ ${globEntries}
 ${fetchEntries ? `${globEntries ? ',\n' : ''}{\n${fetchEntries}\n}` : ''}
 ]);
 
-const sourceTextCache = new Map();
-const sourceLoadPromises = new Map();
+const assetSourceRuntime = createAssetSourceRuntime({
+  assets,
+  assetRootPrefixes,
+  generatedAssetRootPrefixes,
+  generatedAssetAliases,
+});
 
-const unique = (values) => Array.from(new Set(values.filter(Boolean)));
-
-const normalizeAssetPath = (assetPath) =>
-  String(assetPath || '')
-    .replace(/^@assets\\//, '')
-    .replace(/^\\/?assets\\//, '')
-    .replace(/^\\/+/, '');
-
-const candidateKeysForAssetPath = (assetPath) => {
-  const rawPath = String(assetPath || '');
-  const normalized = normalizeAssetPath(rawPath);
-  const directPath = rawPath.startsWith('/') ? rawPath : \`/\${rawPath}\`;
-  const generatedCandidates = generatedAssetAliases.includes(normalized)
-    ? generatedAssetRootPrefixes.map((root) =>
-        \`\${root.replace(/\\/+$/, '')}/\${normalized}\`,
-      )
-    : [];
-
-  return unique([
-    rawPath,
-    directPath,
-    normalized ? \`/\${normalized}\` : '',
-    ...generatedCandidates,
-    ...assetRootPrefixes.map((root) =>
-      \`\${root.replace(/\\/+$/, '')}/\${normalized}\`,
-    ),
-  ]);
-};
-
-const findAssetKey = (assetPath) =>
-  candidateKeysForAssetPath(assetPath).find((key) =>
-    Object.hasOwnProperty.call(assets, key),
-  );
-
-const normalizeSourceText = (value) => {
-  const source = value?.default ?? value;
-  return typeof source === 'string' ? source : undefined;
-};
-
-export const coversAssetPath = (assetPath) =>
-  (assetRootPrefixes.length > 0 || generatedAssetRootPrefixes.length > 0) &&
-  normalizeAssetPath(assetPath).length > 0;
-
-export const hasAssetText = (assetPath) => Boolean(findAssetKey(assetPath));
-
-export const isAssetTextLoading = (assetPath) => {
-  const key = findAssetKey(assetPath);
-  return Boolean(key && sourceLoadPromises.has(key));
-};
-
-export const whenAssetTextLoaded = (assetPath) => {
-  const key = findAssetKey(assetPath);
-  return key ? sourceLoadPromises.get(key) : undefined;
-};
-
-export const getAssetText = (assetPath) => {
-  const key = findAssetKey(assetPath);
-  if (!key) return undefined;
-  if (sourceTextCache.has(key)) {
-    return sourceTextCache.get(key);
-  }
-
-  const loader = assets[key];
-  const sourceText = normalizeSourceText(loader);
-  if (typeof sourceText === 'string') {
-    sourceTextCache.set(key, sourceText);
-    return sourceText;
-  }
-
-  if (typeof loader === 'function' && !sourceLoadPromises.has(key)) {
-    let loadedSource;
-    try {
-      loadedSource = loader();
-    } catch (error) {
-      loadedSource = Promise.reject(error);
-    }
-
-    const sourceLoad = Promise.resolve(loadedSource)
-      .then((loaded) => {
-        const loadedText = normalizeSourceText(loaded);
-        if (typeof loadedText === 'string') {
-          sourceTextCache.set(key, loadedText);
-        }
-        return loadedText;
-      })
-      .catch((error) => {
-        console.error(\`source(): failed to load asset \${key}\`, error);
-        return undefined;
-      })
-      .finally(() => {
-        sourceLoadPromises.delete(key);
-      });
-
-    sourceLoadPromises.set(key, sourceLoad);
-  }
-
-  return undefined;
-};
+export const coversAssetPath = assetSourceRuntime.coversAssetPath;
+export const hasAssetText = assetSourceRuntime.hasAssetText;
+export const isAssetTextLoading = assetSourceRuntime.isAssetTextLoading;
+export const whenAssetTextLoaded = assetSourceRuntime.whenAssetTextLoaded;
+export const getAssetText = assetSourceRuntime.getAssetText;
 `;
 }
 

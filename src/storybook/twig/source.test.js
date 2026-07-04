@@ -3,7 +3,7 @@
  */
 
 import { createTwigSourceFunction, resolveAssetSource } from './source.js';
-import { TWIG_SOURCE_LOADED_EVENT } from './source-events.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './constants.js';
 import {
   resetVirtualTwigAssetSources,
   setVirtualTwigAssetSources,

@@ -70,6 +70,13 @@ describe('virtual Twig asset source module plugin', () => {
     expect(source).not.toContain('{ eager: true');
     expect(source).toContain('export const assetRootPrefixes =');
     expect(source).toContain('export const generatedAssetRootPrefixes =');
+    expect(source).toMatch(
+      /import \{ createAssetSourceRuntime \} from '@emulsify\/core\/storybook\/twig\/asset-source-runtime';/,
+    );
+    expect(source).toContain(
+      'const assetSourceRuntime = createAssetSourceRuntime({',
+    );
+    expect(source).not.toContain('const normalizeAssetPath =');
     expect(publicAssetSourceEntries(env)).toEqual([
       {
         key: '/assets/icons/arrow.svg',

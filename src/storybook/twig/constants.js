@@ -1,6 +1,8 @@
 /**
- * @file Shared file extension sets for Twig source() handling.
+ * @file Shared constants for Twig source() handling.
  */
+
+export const TWIG_SOURCE_LOADED_EVENT = 'emulsify:twig-source-loaded';
 
 // Text assets can be safely inlined; binary assets should remain URL-based.
 export const INLINE_ASSET_EXTS = new Set([

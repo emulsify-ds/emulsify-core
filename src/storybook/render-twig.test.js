@@ -13,7 +13,7 @@ import {
   legacyStringFromElement,
   withLegacyStoryToString,
 } from './render-twig.js';
-import { TWIG_SOURCE_LOADED_EVENT } from './twig/source-events.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './twig/constants.js';
 
 describe('renderTwig', () => {
   let container;

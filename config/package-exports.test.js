@@ -136,6 +136,10 @@ describe('@emulsify/core package exports', () => {
         '@emulsify/core/storybook/twig/include-function',
         ['createTwigIncludeFunction'],
       ],
+      [
+        '@emulsify/core/storybook/twig/asset-source-runtime',
+        ['createAssetSourceRuntime', 'normalizeAssetPath'],
+      ],
       ['@emulsify/core/storybook/twig/drupal-filters', ['default']],
       ['@emulsify/core/vite', ['default']],
       [
