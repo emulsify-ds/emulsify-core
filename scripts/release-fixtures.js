@@ -140,11 +140,18 @@ const releaseFixtures = [
     name: 'mixed-storybook',
     type: 'storybook',
     assert: ['.out/iframe.html'],
-    match: ['.out/storybook-assets/card.stories-*.js'],
+    match: [
+      '.out/storybook-assets/card.stories-*.js',
+      '.out/storybook-assets/greeting-card.stories-*.js',
+    ],
     assertContent: [
       {
         pattern: '.out/storybook-assets/card.stories-*.js',
         strings: ['Twig fixture', 'React fixture'],
+      },
+      {
+        pattern: '.out/storybook-assets/greeting-card.stories-*.js',
+        strings: ['Web component fixture'],
       },
     ],
   },

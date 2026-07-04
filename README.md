@@ -8,8 +8,8 @@ development.
 
 **Emulsify Core** provides shared [Vite](https://vite.dev/) build configuration
 and a [Storybook](https://storybook.js.org/) workspace for component-driven
-development. It supports Twig components, React components, and projects that
-need both in the same design system.
+development. It supports Twig components, React components, web components, and
+projects that need them in the same design system.
 
 ## How Emulsify Core Works
 
@@ -22,7 +22,9 @@ implementation details where they belong.
 - Storybook runs on the React/Vite framework.
 - Twig files render in React-based Storybook through `renderTwig()`.
 - React components render through Storybook's standard React support.
-- Twig and React stories can live together in one Storybook workspace.
+- Web components render in Storybook through `renderWebComponent()`.
+- Twig, React, and web component stories can live together in one Storybook
+  workspace.
 - `project.emulsify.json` is the source of truth for platform and structure
   configuration.
 - Platform adapters control CMS-specific behavior instead of assuming it
@@ -57,8 +59,8 @@ See [Version Evolution](docs/version-evolution.md) for more release history.
 
 ## Authoring Models
 
-Twig and React are both first-class authoring models in Emulsify Core. The right
-choice depends on how the design system will be used.
+Twig, React, and web components are first-class authoring models in Emulsify
+Core. The right choice depends on how the design system will be used.
 
 - Use Twig for CMS themes and server-rendered template systems. Drupal has a
   Drupal-specific adapter, and WordPress/Timber projects can use the
@@ -66,11 +68,13 @@ choice depends on how the design system will be used.
   belongs in `emulsify-wordpress-theme`.
 - Use React for standalone UI libraries, application components, or projects
   that already use React.
-- Use mixed Twig and React when a design system needs to document both
-  CMS-rendered and JavaScript-rendered components in the same Storybook
+- Use web components for framework-neutral browser components and design systems
+  consumed by multiple application stacks.
+- Use mixed authoring when a design system needs to document CMS-rendered,
+  framework-rendered, and framework-neutral components in the same Storybook
   instance.
 
-See [Component Authoring](docs/component-authoring.md) for Twig, React, mixed Storybook, and shared Sass examples.
+See [Component Authoring](docs/component-authoring.md) for Twig, React, web component, mixed Storybook, and shared Sass examples.
 
 ## Installation And Project Setup
 
@@ -142,19 +146,19 @@ Storybook foundation underneath.
 
 The documentation is split by task:
 
-| Topic                                                     | Use This When                                                                                                         |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [Version Evolution](docs/version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |
-| [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
-| [Storybook](docs/storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
-| [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
-| [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
-| [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
-| [Dependency Contract](docs/dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                                |
-| [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
-| [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
-| [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                     |
-| [Migration](docs/migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                                 |
+| Topic                                                     | Use This When                                                                                                     |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [Version Evolution](docs/version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                |
+| [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, web component, or mixed Storybook authoring and comparing component examples.               |
+| [Storybook](docs/storybook.md)                            | Rendering Twig and web component stories, using Storybook helpers, and mixing authoring models.                   |
+| [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths. |
+| [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                  |
+| [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                      |
+| [Dependency Contract](docs/dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                            |
+| [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.            |
+| [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                |
+| [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                 |
+| [Migration](docs/migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                             |
 
 ## Known Limitations
 
@@ -201,7 +205,7 @@ are supported:
 - `wordpress` platform Twig projects using `src/components`.
 - Root `./components` projects.
 - Projects using multiple `variant.structureImplementations`.
-- Mixed Twig + React Storybook projects.
+- Mixed Twig + React + web component Storybook projects.
 
 WordPress and Timber projects should use `platform: "wordpress"` when they want
 Core's neutral WordPress adapter. The adapter keeps output in `dist/`, loads
@@ -215,6 +219,7 @@ need to reach into internal files:
 
 ```js
 import { renderTwig } from '@emulsify/core/storybook';
+import { defineComponent, renderWebComponent } from '@emulsify/core/storybook';
 import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 import { defineReactExtension } from '@emulsify/core/extensions/react';
 ```

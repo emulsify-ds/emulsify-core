@@ -113,6 +113,7 @@
     "src/storybook/preview-decorator.js",
     "src/storybook/preview-parameters.js",
     "src/storybook/render-twig.js",
+    "src/storybook/render-web-component.js",
     "src/storybook/twig/asset-source-runtime.js",
     "src/storybook/twig/constants.js",
     "src/storybook/twig/drupal-filters.js",

@@ -1,6 +1,6 @@
 # Storybook
 
-Emulsify Core uses `@storybook/react-vite`. React components render directly through Storybook's React framework, and Twig templates render through Emulsify's Twig story helper.
+Emulsify Core uses `@storybook/react-vite`. React components render directly through Storybook's React framework, Twig templates render through Emulsify's Twig story helper, and web components render through Emulsify's web component story helper.
 
 ## Twig Stories
 
@@ -155,6 +155,50 @@ export const Default = {};
 ```
 
 Twig and React stories are discovered from the same normalized story roots. They can share title hierarchy, Sass conventions, global preview configuration, and addons.
+
+## Web Component Stories
+
+Web component stories use vanilla custom elements plus `defineComponent()` and `renderWebComponent()` from `@emulsify/core/storybook`.
+
+```js
+import { defineComponent, renderWebComponent } from '@emulsify/core/storybook';
+import { GreetingCardElement } from './greeting-card.js';
+
+defineComponent('greeting-card', GreetingCardElement);
+
+export default {
+  title: 'Components/Greeting Card',
+  render: renderWebComponent('greeting-card', {
+    argsAs: 'properties',
+  }),
+  args: {
+    heading: 'Hello',
+    body: 'Rendered as a vanilla custom element.',
+  },
+};
+
+export const Default = {};
+```
+
+`defineComponent()` is idempotent. If the tag is already registered, it returns the existing constructor instead of redefining it. This keeps repeated Storybook evaluation and HMR updates from throwing. The browser custom element registry is permanent, so class-body changes usually need a full browser refresh before the new class definition is used.
+
+`renderWebComponent()` applies Storybook args through a React ref in a layout effect. Property mode is the default and preserves object, array, and function references:
+
+```js
+render: renderWebComponent('greeting-card', {
+  argsAs: 'properties',
+});
+```
+
+Attribute mode is available for elements that use attributes as their public API. It stringifies values, writes `true` booleans as empty attributes, and removes attributes for `false`, `null`, and `undefined`:
+
+```js
+render: renderWebComponent('greeting-card', {
+  argsAs: 'attributes',
+});
+```
+
+Shadow DOM components may need extra accessibility test configuration. Storybook's a11y addon and axe-based checks do not automatically inspect every shadow root in every setup; configure axe traversal for shadow DOM when the component's accessible UI lives inside a shadow tree.
 
 ## Storybook Twig Runtime
 
