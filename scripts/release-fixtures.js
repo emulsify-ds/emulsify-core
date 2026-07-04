@@ -7,18 +7,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { globSync } from 'glob';
 import { safeExists } from '../config/vite/utils/fs-safe.js';
+import { createUsage, parseArgs as parseCliArgs } from './lib/cli.js';
+import { directorySize } from './lib/fs.js';
+import { run } from './lib/proc.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixturesRoot = join(repoRoot, '.github/fixtures/release');
@@ -157,14 +157,14 @@ const releaseFixtures = [
 ];
 
 function usage() {
-  return [
+  return createUsage(
     'Usage: node scripts/release-fixtures.js [--fixture <name>] [--list]',
-    '',
-    'Options:',
-    '  --fixture <name>  Run one fixture by name. Can be repeated or comma-separated.',
-    '  --list            Print fixture names and exit.',
-    '  --help            Print this help text.',
-  ].join('\n');
+    [
+      '  --fixture <name>  Run one fixture by name. Can be repeated or comma-separated.',
+      '  --list            Print fixture names and exit.',
+      '  --help            Print this help text.',
+    ],
+  );
 }
 
 function parseFixtureNames(value) {
@@ -175,39 +175,24 @@ function parseFixtureNames(value) {
 }
 
 function parseArgs(argv) {
-  const fixtureNames = [];
-  let list = false;
-  let help = false;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-
-    if (arg === '--list') {
-      list = true;
-      continue;
-    }
-    if (arg === '--help' || arg === '-h') {
-      help = true;
-      continue;
-    }
-    if (arg === '--fixture') {
-      const value = argv[index + 1];
-      if (!value || value.startsWith('--')) {
-        throw new Error('--fixture requires a fixture name.');
-      }
-      fixtureNames.push(...parseFixtureNames(value));
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith('--fixture=')) {
-      fixtureNames.push(...parseFixtureNames(arg.slice('--fixture='.length)));
-      continue;
-    }
-
-    throw new Error(`Unknown option: ${arg}`);
-  }
-
-  return { fixtureNames, help, list };
+  return parseCliArgs(argv, {
+    defaults: {
+      fixtureNames: [],
+      help: false,
+      list: false,
+    },
+    flags: {
+      '--list': 'list',
+    },
+    options: {
+      '--fixture': {
+        key: 'fixtureNames',
+        append: true,
+        parse: parseFixtureNames,
+        missingMessage: '--fixture requires a fixture name.',
+      },
+    },
+  });
 }
 
 function selectedFixtures(fixtureNames) {
@@ -310,27 +295,19 @@ function linkPackage(source, target) {
   }
 }
 
-function run(command, args, cwd) {
-  const result = spawnSync(command, args, {
+function fixtureRunOptions(cwd) {
+  return {
     cwd,
-    encoding: 'utf8',
     env: {
       ...process.env,
       CI: '1',
       FORCE_COLOR: '0',
       NODE_OPTIONS: '--no-deprecation',
     },
-  });
-
-  if (result.status !== 0) {
-    process.stdout.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
-    throw new Error(
-      `${command} ${args.join(' ')} failed in ${cwd} with exit ${result.status}`,
-    );
-  }
-
-  return result;
+    echoOutputOnFailure: true,
+    failureMessage: ({ args, command, status }) =>
+      `${command} ${args.join(' ')} failed in ${cwd} with exit ${status}`,
+  };
 }
 
 function assertExists(projectDir, relPaths) {
@@ -406,22 +383,6 @@ function assertNoContent(projectDir, assertions = []) {
   }
 }
 
-function directorySize(directory) {
-  let total = 0;
-
-  for (const entryName of readdirSync(directory)) {
-    const entryPath = join(directory, entryName);
-    const stats = statSync(entryPath);
-    if (stats.isDirectory()) {
-      total += directorySize(entryPath);
-    } else {
-      total += stats.size;
-    }
-  }
-
-  return total;
-}
-
 function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB'];
   let value = bytes;
@@ -442,7 +403,7 @@ function runViteFixture(fixture) {
     run(
       process.execPath,
       [viteBin, 'build', '--config', viteConfig],
-      projectDir,
+      fixtureRunOptions(projectDir),
     );
     assertExists(projectDir, fixture.assert);
     assertMissing(projectDir, fixture.reject);
@@ -463,7 +424,7 @@ function runStorybookFixture(fixture) {
     run(
       storybookBin,
       ['build', '--config-dir', storybookConfigDir, '-o', outputDir],
-      projectDir,
+      fixtureRunOptions(projectDir),
     );
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     assertExists(projectDir, fixture.assert);

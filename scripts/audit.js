@@ -4,7 +4,7 @@
  * @file Combined Emulsify project readiness audit.
  */
 
-import { lstatSync, readdirSync, statSync } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import {
   basename,
   dirname,
@@ -28,6 +28,13 @@ import {
 import { toPosixPath } from '../config/vite/utils/paths.js';
 import { candidateKeysForReference } from '../src/storybook/twig/reference-paths.js';
 import { analyzeStorySource, collectStoryFiles } from './audit-twig-stories.js';
+import {
+  createUsage,
+  isCliEntrypoint,
+  parseArgs as parseCliArgs,
+} from './lib/cli.js';
+import { directorySize } from './lib/fs.js';
+import { lineNumberAt } from './lib/text.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
 const CODE_GLOB = '**/*.{js,jsx,ts,tsx,mjs,cjs}';
@@ -138,17 +145,6 @@ function safeIsDirectory(filePath) {
   } catch {
     return false;
   }
-}
-
-/**
- * Find the 1-based line number for a character index.
- *
- * @param {string} source - File source.
- * @param {number} index - Character index.
- * @returns {number} 1-based line number.
- */
-function lineNumberAt(source, index) {
-  return source.slice(0, index).split('\n').length;
 }
 
 /**
@@ -1354,28 +1350,6 @@ function isNonComponentTwigFile(projectDir, filePath) {
 }
 
 /**
- * Recursively measure a directory size.
- *
- * @param {string} directory - Directory path.
- * @returns {number} Size in bytes.
- */
-function directorySize(directory) {
-  let total = 0;
-
-  try {
-    for (const entry of readdirSync(directory)) {
-      const entryPath = resolve(directory, entry);
-      const stats = statSync(entryPath);
-      total += stats.isDirectory() ? directorySize(entryPath) : stats.size;
-    }
-  } catch {
-    return total;
-  }
-
-  return total;
-}
-
-/**
  * Audit Twig volume under Storybook roots.
  *
  * @param {object} context - Audit context.
@@ -1573,16 +1547,16 @@ export function formatAuditReport(result) {
  * @returns {string} Usage text.
  */
 function usage() {
-  return [
+  return createUsage(
     'Usage: emulsify-audit [--root <dir>] [--json] [--fail-on-found] [--twig-threshold <count>]',
-    '',
-    'Options:',
-    '  --root <dir>              Project root to scan. Defaults to the current directory.',
-    '  --json                    Print machine-readable JSON.',
-    '  --fail-on-found           Exit with code 1 when any finding is reported.',
-    `  --twig-threshold <count>  Warn when Storybook roots contain more than this many Twig files. Default: ${DEFAULT_TWIG_THRESHOLD}.`,
-    '  --help                    Print this help text.',
-  ].join('\n');
+    [
+      '  --root <dir>              Project root to scan. Defaults to the current directory.',
+      '  --json                    Print machine-readable JSON.',
+      '  --fail-on-found           Exit with code 1 when any finding is reported.',
+      `  --twig-threshold <count>  Warn when Storybook roots contain more than this many Twig files. Default: ${DEFAULT_TWIG_THRESHOLD}.`,
+      '  --help                    Print this help text.',
+    ],
+  );
 }
 
 /**
@@ -1592,64 +1566,33 @@ function usage() {
  * @returns {object} Parsed options.
  */
 function parseArgs(argv) {
-  const options = {
-    projectDir: process.cwd(),
-    failOnFound: false,
-    json: false,
-    help: false,
-    twigThreshold: DEFAULT_TWIG_THRESHOLD,
-  };
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-
-    if (arg === '--help' || arg === '-h') {
-      options.help = true;
-      continue;
-    }
-    if (arg === '--fail-on-found') {
-      options.failOnFound = true;
-      continue;
-    }
-    if (arg === '--json') {
-      options.json = true;
-      continue;
-    }
-    if (arg === '--root') {
-      const value = argv[index + 1];
-      if (!value || value.startsWith('--')) {
-        throw new Error('--root requires a project directory.');
-      }
-      options.projectDir = value;
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith('--root=')) {
-      options.projectDir = arg.slice('--root='.length);
-      continue;
-    }
-    if (arg === '--twig-threshold') {
-      const value = Number(argv[index + 1]);
-      if (!Number.isFinite(value)) {
-        throw new Error('--twig-threshold requires a number.');
-      }
-      options.twigThreshold = value;
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith('--twig-threshold=')) {
-      const value = Number(arg.slice('--twig-threshold='.length));
-      if (!Number.isFinite(value)) {
-        throw new Error('--twig-threshold requires a number.');
-      }
-      options.twigThreshold = value;
-      continue;
-    }
-
-    throw new Error(`Unknown option: ${arg}`);
-  }
-
-  return options;
+  return parseCliArgs(argv, {
+    defaults: {
+      projectDir: process.cwd(),
+      failOnFound: false,
+      json: false,
+      help: false,
+      twigThreshold: DEFAULT_TWIG_THRESHOLD,
+    },
+    flags: {
+      '--fail-on-found': 'failOnFound',
+      '--json': 'json',
+    },
+    options: {
+      '--root': {
+        key: 'projectDir',
+        missingMessage: '--root requires a project directory.',
+      },
+      '--twig-threshold': {
+        key: 'twigThreshold',
+        parse: Number,
+        validate: Number.isFinite,
+        rejectEmptyValue: false,
+        rejectOptionLikeValue: false,
+        missingMessage: '--twig-threshold requires a number.',
+      },
+    },
+  });
 }
 
 /**
@@ -1677,7 +1620,7 @@ export function runCli(argv = process.argv.slice(2)) {
   return options.failOnFound && result.findings.length ? 1 : 0;
 }
 
-if (process.argv[1]?.split(/[\\/]/).pop() === 'audit.js') {
+if (isCliEntrypoint(['audit.js', 'emulsify-audit'])) {
   try {
     process.exitCode = runCli();
   } catch (error) {

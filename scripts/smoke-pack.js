@@ -3,11 +3,11 @@
  * @file Verify public package imports from an installed tarball.
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { run } from './lib/proc.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, '..');
@@ -15,14 +15,11 @@ const packageRoot = resolve(__dirname, '..');
 let tempDir;
 let tarballPath;
 
-function run(command, args, options = {}) {
-  return execFileSync(command, args, {
-    cwd: packageRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-    ...options,
-  });
-}
+const runOptions = {
+  cwd: packageRoot,
+  mode: 'exec',
+  stdio: ['ignore', 'pipe', 'inherit'],
+};
 
 const smokeScript = `
 function assertFunction(module, exportName, specifier) {
@@ -73,19 +70,27 @@ function assertFunction(module, exportName, specifier) {
 `;
 
 async function main() {
-  const [pack] = JSON.parse(run('npm', ['pack', '--json']));
+  const [pack] = JSON.parse(run('npm', ['pack', '--json'], runOptions));
   tarballPath = isAbsolute(pack.filename)
     ? pack.filename
     : join(packageRoot, pack.filename);
   tempDir = mkdtempSync(join(tmpdir(), 'emulsify-core-pack-'));
 
-  run('npm', ['init', '-y'], { cwd: tempDir, stdio: 'ignore' });
-  run('npm', ['install', tarballPath], { cwd: tempDir, stdio: 'inherit' });
-  execFileSync(
-    process.execPath,
-    ['--input-type=module', '--eval', smokeScript],
-    { cwd: tempDir, stdio: 'inherit' },
-  );
+  run('npm', ['init', '-y'], {
+    ...runOptions,
+    cwd: tempDir,
+    stdio: 'ignore',
+  });
+  run('npm', ['install', tarballPath], {
+    ...runOptions,
+    cwd: tempDir,
+    stdio: 'inherit',
+  });
+  run(process.execPath, ['--input-type=module', '--eval', smokeScript], {
+    ...runOptions,
+    cwd: tempDir,
+    stdio: 'inherit',
+  });
 
   console.log('Public package imports resolved successfully.');
 }
