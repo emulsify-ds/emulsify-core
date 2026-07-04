@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -27,6 +28,8 @@ const storybookBin = join(repoRoot, 'node_modules/.bin/storybook');
 const viteConfig = join(repoRoot, 'config/vite/vite.config.js');
 const storybookConfigDir = join(repoRoot, '.storybook');
 const largeTwigComponentCount = 80;
+// Measured before shared virtual Twig dependency AST modules were introduced.
+const largeTwigStorybookBaselineJsBytes = 7_529_579;
 
 const releaseFixtures = [
   {
@@ -153,6 +156,7 @@ const releaseFixtures = [
     match: ['.out/storybook-assets/gallery.stories-*.js'],
     measure: true,
     metricComponentCount: largeTwigComponentCount,
+    maxJavaScriptBytes: largeTwigStorybookBaselineJsBytes,
   },
 ];
 
@@ -396,6 +400,15 @@ function formatBytes(bytes) {
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function javascriptOutputSize(outputDir) {
+  return globSync('**/*.js', {
+    cwd: outputDir,
+    nodir: true,
+  }).reduce((totalBytes, filePath) => {
+    return totalBytes + statSync(join(outputDir, filePath)).size;
+  }, 0);
+}
+
 function runViteFixture(fixture) {
   const projectDir = copyFixture(fixture);
   try {
@@ -433,10 +446,19 @@ function runStorybookFixture(fixture) {
     assertNoContent(projectDir, fixture.rejectContent);
     if (fixture.measure) {
       const outputSize = directorySize(outputDir);
+      const jsBytes = javascriptOutputSize(outputDir);
+      if (
+        Number.isFinite(fixture.maxJavaScriptBytes) &&
+        jsBytes >= fixture.maxJavaScriptBytes
+      ) {
+        throw new Error(
+          `${fixture.name} emitted ${jsBytes} JS bytes; expected less than baseline ${fixture.maxJavaScriptBytes}.`,
+        );
+      }
       console.log(
         `  Storybook metrics (${fixture.name}): ${(durationMs / 1000).toFixed(
           2,
-        )}s, ${formatBytes(outputSize)} output${
+        )}s, ${formatBytes(outputSize)} output, ${formatBytes(jsBytes)} JS${
           fixture.metricComponentCount
             ? `, ${fixture.metricComponentCount} generated Twig components`
             : ''

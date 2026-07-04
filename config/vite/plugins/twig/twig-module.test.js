@@ -57,6 +57,11 @@ describe('Twig module plugin', () => {
     return plugin;
   };
 
+  const dependencyImportIds = (code) =>
+    Array.from(
+      code.matchAll(/from ["'](virtual:emulsify-twig-dep:[^"']+)["']/g),
+    ).map((match) => match[1]);
+
   it('builds Twig namespaces for src/components projects', () => {
     projectDir = makeTempProject();
     fs.mkdirSync(join(projectDir, 'src/components'), { recursive: true });
@@ -315,6 +320,35 @@ describe('Twig module plugin', () => {
     const transformed = transformTwigModule(twigPlugin, cardFile);
 
     expect(transformed.code).not.toContain('Twig.cache(false)');
+  });
+
+  it('imports dependency template params from shared virtual modules', () => {
+    projectDir = makeTempProject();
+    const parentFile = join(projectDir, 'src/components/parent/parent.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/parent'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(parentFile, twigInclude(sharedFile));
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = transformTwigModule(twigPlugin, parentFile);
+    const [dependencyImportId] = dependencyImportIds(transformed.code);
+    const resolvedDependencyId = twigPlugin.resolveId(dependencyImportId);
+    const dependencyModuleSource = twigPlugin.load.call(
+      { addWatchFile: jest.fn() },
+      resolvedDependencyId,
+    );
+
+    expect(dependencyImportId).toMatch(/^virtual:emulsify-twig-dep:/);
+    expect(transformed.code).toContain('templateParams as');
+    expect(transformed.code).not.toContain('<span>');
+    expect(dependencyModuleSource).toContain('export const templateParams =');
+    expect(dependencyModuleSource).toContain('<span>');
   });
 
   it('emits isolated per-module Twig factories without runtime registry patches', () => {
@@ -707,6 +741,91 @@ describe('Twig module plugin', () => {
     expect(factorySpy).toHaveBeenCalledTimes(2);
   });
 
+  it('invalidates shared dependency modules and all importers during HMR', () => {
+    projectDir = makeTempProject();
+    const firstFile = join(projectDir, 'src/components/first/first.twig');
+    const secondFile = join(projectDir, 'src/components/second/second.twig');
+    const sharedFile = join(projectDir, 'src/components/shared/shared.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/first'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/second'), {
+      recursive: true,
+    });
+    fs.mkdirSync(join(projectDir, 'src/components/shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(firstFile, twigInclude(sharedFile));
+    fs.writeFileSync(secondFile, twigInclude(sharedFile));
+    fs.writeFileSync(sharedFile, '<span>{{ label }}</span>');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const first = transformTwigModule(twigPlugin, firstFile);
+    const second = transformTwigModule(twigPlugin, secondFile);
+
+    expect(renderGeneratedTwigModule(first.code, { label: 'First' })).toContain(
+      '<span>First</span>',
+    );
+    expect(
+      renderGeneratedTwigModule(second.code, { label: 'Second' }),
+    ).toContain('<span>Second</span>');
+
+    fs.writeFileSync(sharedFile, '<strong>{{ label }}</strong>');
+    fs.utimesSync(
+      sharedFile,
+      new Date(Date.now() + 1000),
+      new Date(Date.now() + 1000),
+    );
+
+    const changedModule = { id: 'changed-template' };
+    const firstModule = { id: 'first-importer' };
+    const secondModule = { id: 'second-importer' };
+    const dependencyModule = { id: 'virtual-dependency' };
+    const server = {
+      moduleGraph: {
+        getModuleById: jest.fn(() => dependencyModule),
+        getModulesByFile: jest.fn((filePath) => {
+          if (filePath === sharedFile) return [changedModule];
+          if (filePath === firstFile) return [firstModule];
+          if (filePath === secondFile) return [secondModule];
+          return [];
+        }),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    const updatedModules = twigPlugin.handleHotUpdate({
+      file: sharedFile,
+      server,
+    });
+    const updatedFirst = transformTwigModule(twigPlugin, firstFile);
+    const updatedSecond = transformTwigModule(twigPlugin, secondFile);
+
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      dependencyModule,
+    );
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      firstModule,
+    );
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      secondModule,
+    );
+    expect(updatedModules).toEqual(
+      expect.arrayContaining([
+        changedModule,
+        dependencyModule,
+        firstModule,
+        secondModule,
+      ]),
+    );
+    expect(
+      renderGeneratedTwigModule(updatedFirst.code, { label: 'First' }),
+    ).toContain('<strong>First</strong>');
+    expect(
+      renderGeneratedTwigModule(updatedSecond.code, { label: 'Second' }),
+    ).toContain('<strong>Second</strong>');
+  });
+
   it('releases deleted dependency importer entries after unlink', () => {
     projectDir = makeTempProject();
     const parentFile = join(projectDir, 'src/components/parent/parent.twig');
@@ -792,6 +911,8 @@ describe('Twig module plugin', () => {
     const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
     const first = transformTwigModule(twigPlugin, firstFile);
     const second = transformTwigModule(twigPlugin, secondFile);
+    const [firstDependencyId] = dependencyImportIds(first.code);
+    const [secondDependencyId] = dependencyImportIds(second.code);
     const runtimeInstances = [];
     /**
      * Return a fresh Twig runtime for each generated module evaluation.
@@ -814,6 +935,10 @@ describe('Twig module plugin', () => {
 
     expect(firstRender({ label: 'First' })).toContain('<span>First</span>');
     expect(secondRender({ label: 'Second' })).toContain('<span>Second</span>');
+    expect(firstRender({ label: 'First again' })).toContain(
+      '<span>First again</span>',
+    );
+    expect(firstDependencyId).toBe(secondDependencyId);
     expect(runtimeInstances).toHaveLength(2);
     expect(runtimeInstances[0]).not.toBe(runtimeInstances[1]);
   });

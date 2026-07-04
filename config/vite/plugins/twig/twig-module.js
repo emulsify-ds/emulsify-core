@@ -38,6 +38,8 @@ const templateReferenceTokenTypes = [
 
 const includeFunctionName = 'include';
 const sourceFunctionName = 'source';
+const VIRTUAL_TWIG_DEPENDENCY_PREFIX = 'virtual:emulsify-twig-dep:';
+const RESOLVED_VIRTUAL_TWIG_DEPENDENCY_PREFIX = `\0${VIRTUAL_TWIG_DEPENDENCY_PREFIX}`;
 const expressionTokenTypes = {
   arrayEnd: 'Twig.expression.type.array.end',
   arrayStart: 'Twig.expression.type.array.start',
@@ -114,6 +116,13 @@ const canMemoizeByEnv = (env) => env && typeof env === 'object';
  * @returns {boolean} TRUE when the request is a renderable Twig module.
  */
 const isTwigModuleRequest = (id) => {
+  if (
+    id.startsWith(VIRTUAL_TWIG_DEPENDENCY_PREFIX) ||
+    id.startsWith(RESOLVED_VIRTUAL_TWIG_DEPENDENCY_PREFIX)
+  ) {
+    return false;
+  }
+
   const [filePath, query = ''] = id.split('?');
   if (!filePath.endsWith('.twig')) return false;
   return !query || query === 'twig' || !/(^|&)(raw|url)\b/.test(query);
@@ -126,6 +135,24 @@ const isTwigModuleRequest = (id) => {
  * @returns {string} Filesystem path without query parameters.
  */
 const stripRequestQuery = (id) => id.split('?')[0];
+
+const encodeVirtualTwigDependencyId = (filePath) =>
+  `${VIRTUAL_TWIG_DEPENDENCY_PREFIX}${encodeURIComponent(resolve(filePath))}`;
+
+const resolvedVirtualTwigDependencyId = (filePath) =>
+  `${RESOLVED_VIRTUAL_TWIG_DEPENDENCY_PREFIX}${encodeURIComponent(
+    resolve(filePath),
+  )}`;
+
+const decodeVirtualTwigDependencyId = (id) => {
+  const normalizedId = id.startsWith('\0') ? id.slice(1) : id;
+
+  return normalizedId.startsWith(VIRTUAL_TWIG_DEPENDENCY_PREFIX)
+    ? decodeURIComponent(
+        normalizedId.slice(VIRTUAL_TWIG_DEPENDENCY_PREFIX.length),
+      )
+    : '';
+};
 
 /**
  * Extract the first argument from a Twig function token parameter list.
@@ -400,6 +427,21 @@ const templateIdForPath = (filePath, options) => {
  */
 const makeTemplateInstantiationCode = (templateId, params) =>
   `Twig.twig(${JSON.stringify({ ...params, id: templateId })})`;
+
+const makeTemplateInstantiationFromParamsCode = (
+  templateIdExpression,
+  paramsExpression,
+) => `Twig.twig({ ...${paramsExpression}, id: ${templateIdExpression} })`;
+
+const generateTwigDependencyModule = (filePath, options) => {
+  const compiled = compileTwigTemplate(filePath, options, compileCache);
+
+  return [
+    `export const templateId = ${JSON.stringify(compiled.templateId)};`,
+    `export const templateParams = ${JSON.stringify(compiled.templateParams)};`,
+    '',
+  ].join('\n');
+};
 
 /**
  * Rewrite static include/import/embed references to module-local template IDs.
@@ -950,6 +992,26 @@ export function emulsifyTwigModulePlugin(options) {
       resolutionCache.clear();
       knownTwigFiles.clear();
     },
+    resolveId(id) {
+      if (id.startsWith(VIRTUAL_TWIG_DEPENDENCY_PREFIX)) {
+        return `\0${id}`;
+      }
+
+      return null;
+    },
+    load(id) {
+      if (!id.startsWith(RESOLVED_VIRTUAL_TWIG_DEPENDENCY_PREFIX)) {
+        return null;
+      }
+
+      const dependencyPath = decodeVirtualTwigDependencyId(id);
+      if (!dependencyPath) {
+        return null;
+      }
+
+      this.addWatchFile(dependencyPath);
+      return generateTwigDependencyModule(dependencyPath, options);
+    },
     transform(...args) {
       const [, id] = args;
       if (!isTwigModuleRequest(id)) {
@@ -1097,28 +1159,39 @@ export function emulsifyTwigModulePlugin(options) {
           .map(([dependencyPath, compiledDependency], index) => ({
             dependencyPath,
             compiledDependency,
-            variableName: `__emulsifyDependency${index}`,
+            idVariableName: `__emulsifyDependencyTemplateId${index}`,
+            paramsVariableName: `__emulsifyDependencyTemplateParams${index}`,
+            templateVariableName: `__emulsifyDependency${index}`,
+            virtualModuleId: encodeVirtualTwigDependencyId(dependencyPath),
           }));
+        const dependencyTemplateImports = dependencyTemplateRecords
+          .map(
+            ({ idVariableName, paramsVariableName, virtualModuleId }) =>
+              `import { templateId as ${idVariableName}, templateParams as ${paramsVariableName} } from ${JSON.stringify(
+                virtualModuleId,
+              )};`,
+          )
+          .join('\n');
         const dependencyTemplateCode = dependencyTemplateRecords
           .map(
-            ({ compiledDependency, variableName }) => `
-              const ${variableName} = ${makeTemplateInstantiationCode(
-                compiledDependency.templateId,
-                compiledDependency.templateParams,
+            ({ idVariableName, paramsVariableName, templateVariableName }) => `
+              const ${templateVariableName} = ${makeTemplateInstantiationFromParamsCode(
+                idVariableName,
+                paramsVariableName,
               )};
             `,
           )
           .join('\n');
         const includeTemplateRegistrations = [
           ...dependencyTemplateRecords.flatMap(
-            ({ dependencyPath, variableName }) =>
+            ({ dependencyPath, templateVariableName }) =>
               Array.from(
                 compiledDependencyReferences.get(dependencyPath) || [],
               ).map(
                 (reference) =>
                   `__emulsifyIncludeTemplates.set(${JSON.stringify(
                     reference,
-                  )}, (context = {}) => ${variableName}.render(context));`,
+                  )}, (context = {}) => ${templateVariableName}.render(context));`,
               ),
           ),
           ...Array.from(
@@ -1144,6 +1217,7 @@ export function emulsifyTwigModulePlugin(options) {
           `An error occurred whilst rendering ${toPosixPath(filePath)}: `,
         );
         const moduleCode = `
+          ${dependencyTemplateImports}
           import { factory } from 'twig';
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
 	import { installProjectTwigExtensions } from 'virtual:emulsify-twig-extension-installers';
@@ -1200,6 +1274,7 @@ export function emulsifyTwigModulePlugin(options) {
       const fileExists = safeExists(filePath);
       const knownFile = knownTwigFiles.has(filePath);
       compileCache.delete(filePath);
+      const dependencyModuleId = resolvedVirtualTwigDependencyId(filePath);
       const importers = dependencyImporters.get(filePath);
       if (!fileExists) {
         dependencyImporters.delete(filePath);
@@ -1227,6 +1302,12 @@ export function emulsifyTwigModulePlugin(options) {
       const modules = new Set(
         server.moduleGraph.getModulesByFile(filePath) || [],
       );
+      const dependencyModule =
+        server.moduleGraph.getModuleById?.(dependencyModuleId);
+      if (dependencyModule) {
+        server.moduleGraph.invalidateModule(dependencyModule);
+        modules.add(dependencyModule);
+      }
       for (const importer of importers) {
         compileCache.delete(importer);
 
