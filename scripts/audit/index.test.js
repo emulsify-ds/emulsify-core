@@ -5,6 +5,7 @@
 import { formatAuditReport } from './report.js';
 import { runAudits } from './index.js';
 import { makeTempProject, removeTempProject, writeFile } from './test-utils.js';
+import { runCli as runAuditCli } from '../audit.js';
 
 describe('audit orchestrator', () => {
   let projectDir;
@@ -15,9 +16,10 @@ describe('audit orchestrator', () => {
 
   afterEach(() => {
     removeTempProject(projectDir);
+    jest.restoreAllMocks();
   });
 
-  it('runs all checks and formats a stable report', () => {
+  const writeConfiguredProject = () => {
     writeFile(
       projectDir,
       'project.emulsify.json',
@@ -29,6 +31,40 @@ describe('audit orchestrator', () => {
         },
       }),
     );
+  };
+
+  const writeLegacyTwigStory = () => {
+    writeConfiguredProject();
+    writeFile(
+      projectDir,
+      'src/components/card/card.twig',
+      '<p>{{ title }}</p>',
+    );
+    writeFile(
+      projectDir,
+      'src/components/card/card.stories.js',
+      [
+        'import cardTwig from "./card.twig";',
+        'export const Card = (args) => cardTwig(args);',
+      ].join('\n'),
+    );
+  };
+
+  const summaryFromFindings = (findings) =>
+    findings.reduce(
+      (summary, finding) => ({
+        ...summary,
+        [finding.severity]: summary[finding.severity] + 1,
+      }),
+      {
+        error: 0,
+        warn: 0,
+        info: 0,
+      },
+    );
+
+  it('runs all checks and formats a stable report', () => {
+    writeConfiguredProject();
     writeFile(
       projectDir,
       'src/components/card/card.twig',
@@ -76,5 +112,56 @@ describe('audit orchestrator', () => {
     expect(
       formatAuditReport(result).replaceAll(projectDir, '<projectDir>'),
     ).toMatchSnapshot();
+  });
+
+  it('prints a machine-readable JSON report', () => {
+    writeLegacyTwigStory();
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const exitCode = runAuditCli(['--root', projectDir, '--json']);
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+
+    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
+
+    expect(Object.keys(parsed)).toEqual([
+      'version',
+      'projectDir',
+      'summary',
+      'findings',
+    ]);
+    expect(parsed.version).toEqual(expect.any(String));
+    expect(parsed.projectDir).toBe(projectDir);
+    expect(parsed.summary).toEqual(summaryFromFindings(parsed.findings));
+    expect(parsed.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'legacy-twig-story',
+          severity: 'warn',
+          filePath: expect.stringContaining('card.stories.js'),
+          message: expect.any(String),
+          details: expect.any(Array),
+          docs: expect.any(String),
+        }),
+      ]),
+    );
+  });
+
+  it('preserves fail-on-found exit semantics for JSON output', () => {
+    writeLegacyTwigStory();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(
+      runAuditCli(['--root', projectDir, '--json', '--fail-on-found']),
+    ).toBe(1);
+
+    removeTempProject(projectDir);
+    projectDir = makeTempProject();
+    writeConfiguredProject();
+
+    expect(
+      runAuditCli(['--root', projectDir, '--json', '--fail-on-found']),
+    ).toBe(0);
   });
 });

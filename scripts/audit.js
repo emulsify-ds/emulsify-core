@@ -10,10 +10,10 @@ import {
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
 import { DEFAULT_TWIG_THRESHOLD, runAudits } from './audit/index.js';
-import { formatAuditReport } from './audit/report.js';
+import { formatAuditJsonReport, formatAuditReport } from './audit/report.js';
 
 export { auditProject, runAudits } from './audit/index.js';
-export { formatAuditReport } from './audit/report.js';
+export { formatAuditJsonReport, formatAuditReport } from './audit/report.js';
 export { collectProjectFiles } from './audit/lib/files.js';
 export { findCssUrlReferences } from './audit/lib/css.js';
 export {
@@ -93,7 +93,7 @@ export function runCli(argv = process.argv.slice(2)) {
   const result = runAudits(options);
 
   if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(formatAuditJsonReport(result));
   } else {
     console.log(formatAuditReport(result));
   }

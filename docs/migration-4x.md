@@ -104,6 +104,19 @@ to `renderTwig()`.
 
 Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
 
+For CI dashboards or follow-up tooling, use `--json` to emit a single
+machine-readable document instead of the human report:
+
+```sh
+npx --no-install emulsify-audit --json > audit-report.json
+jq '.summary.error' audit-report.json
+```
+
+The JSON document includes the Core version, project directory, summary counts
+for `error`, `warn`, and `info`, and the raw structured finding objects. Combine
+`--json` with `--fail-on-found` when CI needs both parseable output and the same
+non-zero exit behavior as the text report.
+
 ## Manual package.json Updates
 
 Generated themes copy their root `package.json` from the starter theme when the

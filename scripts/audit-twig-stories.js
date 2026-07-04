@@ -14,6 +14,7 @@ import {
   isCliEntrypoint,
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
+import { formatAuditJsonReport } from './audit/report.js';
 import { lineNumberAt } from './lib/text.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
@@ -331,7 +332,7 @@ export function runCli(argv = process.argv.slice(2)) {
   });
 
   if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(formatAuditJsonReport(result, { defaultSeverity: 'warn' }));
   } else {
     console.log(formatAuditReport(result));
   }
