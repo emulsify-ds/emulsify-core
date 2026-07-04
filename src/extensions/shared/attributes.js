@@ -4,7 +4,7 @@
  */
 
 import { escapeAttributeValue, isSafeAttributeName } from './html.js';
-import { flattenList, uniqueList } from './lists.js';
+import { flattenList, unique } from './lists.js';
 import { isPlainObject } from './object.js';
 
 /**
@@ -59,7 +59,7 @@ export function classTokensFromValue(value) {
     return value.getClassList();
   }
 
-  return uniqueList(
+  return unique(
     flattenList(value)
       .flatMap((item) => String(item || '').split(/\s+/))
       .map((item) => cleanClassToken(item))
@@ -181,7 +181,7 @@ export class AttributeBag {
     if (!tokens.length) return this;
 
     const existing = this.attributes.get('class') || [];
-    this.attributes.set('class', uniqueList([...existing, ...tokens]));
+    this.attributes.set('class', unique([...existing, ...tokens]));
     return this;
   }
 

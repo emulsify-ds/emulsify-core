@@ -6,7 +6,7 @@
  */
 
 import { unique } from '../../extensions/shared/lists.js';
-import { toRootRelativePath as toProjectRootRelativePath } from '../../../config/vite/utils/root-relative.js';
+import { toRootRelativePath as toProjectRootRelativePath } from '../../extensions/shared/root-relative.js';
 
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 

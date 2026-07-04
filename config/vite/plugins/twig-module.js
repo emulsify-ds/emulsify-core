@@ -25,7 +25,7 @@ import {
 } from '../twig-extensions.js';
 import { firstExistingPath, safeExists } from '../utils/fs-safe.js';
 import { toPosixPath } from '../utils/paths.js';
-import { unique } from '../utils/unique.js';
+import { unique } from '../../../src/extensions/shared/lists.js';
 
 /** Twig token types that can reference another template file. */
 const templateReferenceTokenTypes = [

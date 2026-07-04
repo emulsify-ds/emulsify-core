@@ -9,8 +9,8 @@ import { readdirSync } from 'fs';
 import { relative, resolve } from 'path';
 import { safeExists } from '../utils/fs-safe.js';
 import { toPosixPath } from '../utils/paths.js';
-import { toRootRelativePath } from '../utils/root-relative.js';
-import { unique } from '../utils/unique.js';
+import { unique } from '../../../src/extensions/shared/lists.js';
+import { toRootRelativePath } from '../../../src/extensions/shared/root-relative.js';
 import { INLINE_ASSET_EXTS } from '../../../src/storybook/twig/source-extensions.js';
 
 export const VIRTUAL_TWIG_ASSET_SOURCES_ID =

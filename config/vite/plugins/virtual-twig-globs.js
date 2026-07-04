@@ -5,8 +5,8 @@
  * virtual module instead of replacing placeholder strings in resolver source.
  */
 
-import { toRootRelativePath } from '../utils/root-relative.js';
-import { unique } from '../utils/unique.js';
+import { unique } from '../../../src/extensions/shared/lists.js';
+import { toRootRelativePath } from '../../../src/extensions/shared/root-relative.js';
 
 export const VIRTUAL_TWIG_GLOBS_ID = 'virtual:emulsify-twig-globs';
 const RESOLVED_VIRTUAL_TWIG_GLOBS_ID = `\0${VIRTUAL_TWIG_GLOBS_ID}`;

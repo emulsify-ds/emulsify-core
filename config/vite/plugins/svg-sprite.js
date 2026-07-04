@@ -10,7 +10,7 @@ import { basename } from 'path';
 import { globSync } from 'glob';
 
 import { toPosixPath } from '../utils/paths.js';
-import { unique } from '../utils/unique.js';
+import { unique } from '../../../src/extensions/shared/lists.js';
 
 /**
  * Builds a single SVG sprite file from a set of icon globs.

@@ -4,9 +4,11 @@
 
 import {
   generateVirtualTwigGlobsModule,
+  twigGlobPatterns,
   VIRTUAL_TWIG_GLOBS_ID,
   virtualTwigGlobsPlugin,
 } from './virtual-twig-globs.js';
+import { toRootRelativePath as toTemplateRootRelativePath } from '../../../src/storybook/twig/reference-paths.js';
 
 const env = {
   projectDir: '/project',
@@ -54,4 +56,57 @@ describe('virtual Twig glob module plugin', () => {
     expect(source).toContain('export const modules = globMaps.modules;');
     expect(source).toContain('export const sources = globMaps.sources;');
   });
+
+  it.each([
+    {
+      label: 'trailing project slash',
+      projectDir: '/project/',
+      absolutePath: '/project/src/components',
+      expectedRoot: '/src/components',
+    },
+    {
+      label: 'double slashes',
+      projectDir: '/project//',
+      absolutePath: '/project//src//components//',
+      expectedRoot: '/src/components',
+    },
+    {
+      label: 'Windows backslashes',
+      projectDir: 'C:\\project\\theme',
+      absolutePath: 'C:\\project\\theme\\src\\components',
+      expectedRoot: '/src/components',
+    },
+    {
+      label: 'project root',
+      projectDir: '/project',
+      absolutePath: '/project',
+      expectedRoot: '/',
+    },
+    {
+      label: 'outside project root',
+      projectDir: '/project',
+      absolutePath: '/other/src/components',
+      expectedRoot: '/other/src/components',
+    },
+  ])(
+    'uses one key algorithm for template IDs and glob keys: $label',
+    ({ projectDir, absolutePath, expectedRoot }) => {
+      const edgeEnv = {
+        projectDir,
+        projectStructure: {
+          twigRoots: [absolutePath],
+        },
+      };
+      const [globPattern] = twigGlobPatterns(edgeEnv);
+      const globRoot =
+        globPattern === '/**/*.twig'
+          ? '/'
+          : globPattern.replace(/\/\*\*\/\*\.twig$/, '');
+
+      expect(toTemplateRootRelativePath(absolutePath, edgeEnv)).toBe(
+        expectedRoot,
+      );
+      expect(globRoot).toBe(expectedRoot);
+    },
+  );
 });

@@ -5,9 +5,7 @@
 import {
   buildTwigRootRecords,
   resetTwigRootRecordsCache,
-  toRootRelativePath,
 } from './reference-paths.js';
-import { twigGlobPatterns } from '../../../config/vite/plugins/virtual-twig-globs.js';
 
 const makeEnv = (projectDir, rootName = 'components') => ({
   projectDir,
@@ -50,55 +48,4 @@ describe('Twig reference path helpers', () => {
       rootRel: '/src/foundation',
     });
   });
-
-  it.each([
-    {
-      label: 'trailing project slash',
-      projectDir: '/project/',
-      absolutePath: '/project/src/components',
-      expectedRoot: '/src/components',
-    },
-    {
-      label: 'double slashes',
-      projectDir: '/project//',
-      absolutePath: '/project//src//components//',
-      expectedRoot: '/src/components',
-    },
-    {
-      label: 'Windows backslashes',
-      projectDir: 'C:\\project\\theme',
-      absolutePath: 'C:\\project\\theme\\src\\components',
-      expectedRoot: '/src/components',
-    },
-    {
-      label: 'project root',
-      projectDir: '/project',
-      absolutePath: '/project',
-      expectedRoot: '/',
-    },
-    {
-      label: 'outside project root',
-      projectDir: '/project',
-      absolutePath: '/other/src/components',
-      expectedRoot: '/other/src/components',
-    },
-  ])(
-    'uses one key algorithm for template IDs and glob keys: $label',
-    ({ projectDir, absolutePath, expectedRoot }) => {
-      const env = {
-        projectDir,
-        projectStructure: {
-          twigRoots: [absolutePath],
-        },
-      };
-      const [globPattern] = twigGlobPatterns(env);
-      const globRoot =
-        globPattern === '/**/*.twig'
-          ? '/'
-          : globPattern.replace(/\/\*\*\/\*\.twig$/, '');
-
-      expect(toRootRelativePath(absolutePath, env)).toBe(expectedRoot);
-      expect(globRoot).toBe(expectedRoot);
-    },
-  );
 });
