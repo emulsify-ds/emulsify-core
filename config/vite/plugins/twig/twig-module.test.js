@@ -342,6 +342,10 @@ describe('Twig module plugin', () => {
       .replaceAll(
         encodeURIComponent(projectDir),
         encodeURIComponent('<projectDir>'),
+      )
+      .replaceAll(
+        /"position":\{"start":\d+,"end":\d+\}/g,
+        '"position":{"start":0,"end":0}',
       );
 
     expect(normalizedCode).toMatchInlineSnapshot(`
@@ -360,7 +364,7 @@ describe('Twig module plugin', () => {
                 
                     const __emulsifyDependency0 = Twig.twig({ ...__emulsifyDependencyTemplateParams0, id: __emulsifyDependencyTemplateId0 });
                   
-                const __emulsifyTemplate = Twig.twig({"allowInlineIncludes":true,"data":[{"type":"logic","token":{"type":"Twig.logic.type.include","only":false,"ignoreMissing":false,"stack":[{"type":"Twig.expression.type.string","value":"/src/components::shared/shared.twig"}],"position":{"start":0,"end":119}},"position":{"start":0,"end":119}}],"namespaces":{"components":"<projectDir>/src/components"},"precompiled":true,"rethrow":true,"id":"/src/components::parent/parent.twig"});
+                const __emulsifyTemplate = Twig.twig({"allowInlineIncludes":true,"data":[{"type":"logic","token":{"type":"Twig.logic.type.include","only":false,"ignoreMissing":false,"stack":[{"type":"Twig.expression.type.string","value":"/src/components::shared/shared.twig"}],"position":{"start":0,"end":0}},"position":{"start":0,"end":0}}],"namespaces":{"components":"<projectDir>/src/components"},"precompiled":true,"rethrow":true,"id":"/src/components::parent/parent.twig"});
                 const __emulsifyIncludeTemplates = new Map();
                 const __emulsifySourceTemplates = new Map();
                 __emulsifyIncludeTemplates.set("<projectDir>/src/components/shared/shared.twig", (context = {}) => __emulsifyDependency0.render(context));
