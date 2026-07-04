@@ -8,7 +8,7 @@ import {
   VIRTUAL_TWIG_GLOBS_ID,
   virtualTwigGlobsPlugin,
 } from './virtual-twig-globs.js';
-import { toRootRelativePath as toTemplateRootRelativePath } from '../../../src/storybook/twig/reference-paths.js';
+import { toRootRelativePath as toTemplateRootRelativePath } from '../../../../src/storybook/twig/reference-paths.js';
 
 const env = {
   projectDir: '/project',

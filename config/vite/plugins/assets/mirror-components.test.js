@@ -16,7 +16,7 @@ import { join } from 'path';
 import {
   filesHaveSameBytes,
   mirrorComponentsToRoot,
-} from '../mirror-components.js';
+} from './mirror-components.js';
 import { makeTempProject } from '../../test-utils/plugins.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';

@@ -1,8 +1,8 @@
 /**
- * @file Static source asset copy plugin.
+ * @file Twig template and component metadata copy plugin.
  *
- * Copies non-code source assets beside the JS/CSS/Twig output that references
- * them, preserving component and global routing semantics.
+ * Copies canonical source Twig files and component metadata to the emitted dist
+ * structure using the same routing rules as compiled JS and CSS entries.
  */
 
 import { copyFileSync, mkdirSync } from 'fs';
@@ -11,20 +11,23 @@ import { dirname, join } from 'path';
 import {
   copiedComponentOutputPath,
   copiedGlobalOutputPath,
-  findSourceRoot,
-} from '../project-structure.js';
+} from '../../project-structure.js';
 import {
   createSourceFileIndex,
-  isStaticSourceAsset,
+  isComponentMetadataFile,
 } from './source-file-index.js';
 
+/** Determine whether a Twig file is a partial (filename starts with `_`). */
+const isPartial = (filePath) =>
+  (filePath.split('/')?.pop() || '').trim().startsWith('_');
+
 /**
- * Copy non-code assets from source roots to `dist/`.
+ * Copy Twig templates and component metadata to `dist/`.
  *
  * @param {{ structure: object, sourceFileIndex?: object }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Copy plugin.
  */
-export function copyAllSrcAssetsPlugin({
+export function copyTwigFilesPlugin({
   structure,
   sourceFileIndex = createSourceFileIndex(structure),
 }) {
@@ -42,11 +45,11 @@ export function copyAllSrcAssetsPlugin({
   };
 
   return {
-    name: 'emulsify-copy-all-src-assets',
+    name: 'emulsify-copy-twig-files',
     apply: 'build',
     enforce: 'post',
 
-    /** Capture outDir. */
+    /** Capture the final outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
     },
@@ -54,18 +57,23 @@ export function copyAllSrcAssetsPlugin({
     /** Copy before the mirror plugin moves dist/components to the project root. */
     writeBundle() {
       for (const file of sourceFileIndex.componentFiles()) {
-        if (!isStaticSourceAsset(file.absPath)) continue;
-        copyToOutDir(
-          file.absPath,
-          copiedComponentOutputPath(file.absPath, structure),
-        );
+        if (file.absPath.endsWith('.twig')) {
+          if (isPartial(file.relPath)) continue;
+          copyToOutDir(
+            file.absPath,
+            copiedComponentOutputPath(file.absPath, structure),
+          );
+        } else if (isComponentMetadataFile(file.absPath)) {
+          copyToOutDir(
+            file.absPath,
+            copiedComponentOutputPath(file.absPath, structure),
+          );
+        }
       }
 
       for (const file of sourceFileIndex.globalFiles()) {
-        if (!isStaticSourceAsset(file.absPath)) continue;
-        if (findSourceRoot(file.absPath, structure.componentRootRecords)) {
-          continue;
-        }
+        if (!file.absPath.endsWith('.twig')) continue;
+        if (isPartial(file.relPath)) continue;
         copyToOutDir(
           file.absPath,
           copiedGlobalOutputPath(file.absPath, structure),

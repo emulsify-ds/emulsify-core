@@ -8,7 +8,7 @@
 import { readdirSync } from 'fs';
 import { join, relative, sep } from 'path';
 
-import { relativeFrom } from '../project-structure.js';
+import { relativeFrom } from '../../project-structure.js';
 
 const DEFAULT_SKIP_DIRS = [
   'node_modules',

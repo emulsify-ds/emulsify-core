@@ -9,4 +9,4 @@ export { makePlugins } from './plugins/index.js';
 export {
   makeTwigNamespaces,
   makeTwigPluginOptions,
-} from './plugins/twig-module.js';
+} from './plugins/twig/twig-module.js';

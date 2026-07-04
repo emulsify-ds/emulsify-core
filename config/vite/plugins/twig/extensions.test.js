@@ -5,10 +5,10 @@
 import {
   DRUPAL_TWIG_FILTERS_MODULE_SPECIFIER,
   generateTwigExtensionInstallersModule,
-  registerConfiguredTwigExtensions,
+  installProjectTwigExtensions,
   shouldRegisterDrupalTwigFilters,
   twigExtensionModuleSpecifiers,
-} from './twig-extensions.js';
+} from './extensions.js';
 
 describe('Twig.js extension configuration', () => {
   it('enables Drupal filters from the platform adapter or explicit Storybook config', () => {
@@ -74,7 +74,7 @@ describe('Twig.js extension configuration', () => {
       extendFunction: jest.fn(),
     };
 
-    registerConfiguredTwigExtensions(Twig, {
+    installProjectTwigExtensions(Twig, {
       registerDrupalTwigFilters: true,
     });
 

@@ -60,7 +60,7 @@ function normalizeInstaller(moduleValue) {
  * @param {object} [env={}] - Normalized Emulsify environment or Twig options.
  * @returns {object} The provided Twig.js instance.
  */
-export function registerConfiguredTwigExtensions(twig, env = {}) {
+export function installProjectTwigExtensions(twig, env = {}) {
   if (shouldRegisterDrupalTwigFilters(env)) {
     const installer = normalizeInstaller(require('twig-drupal-filters'));
     if (installer) {
@@ -98,7 +98,7 @@ const installers = [${installerNames}].filter(
 
 export const twigExtensionInstallers = installers;
 
-export function registerConfiguredTwigExtensions(Twig) {
+export function installProjectTwigExtensions(Twig) {
   for (const installer of installers) {
     installer(Twig);
   }

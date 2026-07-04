@@ -16,16 +16,16 @@ import Twig from 'twig';
 import {
   getTwigFunctionMap,
   registerTwigExtensions,
-} from '../../../src/extensions/twig/index.js';
-import { toRootRelativePath } from '../../../src/storybook/twig/reference-paths.js';
-import { resolveProjectStructure } from '../project-structure.js';
+} from '../../../../src/extensions/twig/index.js';
+import { toRootRelativePath } from '../../../../src/storybook/twig/reference-paths.js';
+import { resolveProjectStructure } from '../../project-structure.js';
 import {
-  registerConfiguredTwigExtensions,
   shouldRegisterDrupalTwigFilters,
-} from '../twig-extensions.js';
-import { firstExistingPath, safeExists } from '../utils/fs-safe.js';
-import { toPosixPath } from '../utils/paths.js';
-import { unique } from '../../../src/extensions/shared/lists.js';
+  installProjectTwigExtensions,
+} from './extensions.js';
+import { firstExistingPath, safeExists } from '../../utils/fs-safe.js';
+import { toPosixPath } from '../../utils/paths.js';
+import { unique } from '../../../../src/extensions/shared/lists.js';
 
 /** Twig token types that can reference another template file. */
 const templateReferenceTokenTypes = [
@@ -712,7 +712,7 @@ const compileTwigTemplate = (filePath, options, cache = compileCache) => {
 
   const compilerTwig = Twig.factory();
   registerTwigExtensions(compilerTwig);
-  registerConfiguredTwigExtensions(compilerTwig, options);
+  installProjectTwigExtensions(compilerTwig, options);
 
   const source = fs.readFileSync(absoluteFilePath, 'utf8');
   const compileOptions = {
@@ -1146,13 +1146,13 @@ export function emulsifyTwigModulePlugin(options) {
         const moduleCode = `
           import { factory } from 'twig';
           import { registerTwigExtensions } from '@emulsify/core/extensions/twig';
-          import { registerConfiguredTwigExtensions } from 'virtual:emulsify-twig-extension-installers';
+	import { installProjectTwigExtensions } from 'virtual:emulsify-twig-extension-installers';
           import { createTwigIncludeFunction } from '@emulsify/core/storybook/twig/include-function';
           import { createTwigSourceFunction } from '@emulsify/core/storybook/twig/source-function';
 
           const Twig = factory();
           registerTwigExtensions(Twig);
-          registerConfiguredTwigExtensions(Twig);
+	installProjectTwigExtensions(Twig);
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};

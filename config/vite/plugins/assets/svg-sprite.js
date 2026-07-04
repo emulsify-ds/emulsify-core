@@ -9,8 +9,8 @@ import { readFileSync } from 'fs';
 import { basename } from 'path';
 import { globSync } from 'glob';
 
-import { toPosixPath } from '../utils/paths.js';
-import { unique } from '../../../src/extensions/shared/lists.js';
+import { toPosixPath } from '../../utils/paths.js';
+import { unique } from '../../../../src/extensions/shared/lists.js';
 
 /**
  * Builds a single SVG sprite file from a set of icon globs.

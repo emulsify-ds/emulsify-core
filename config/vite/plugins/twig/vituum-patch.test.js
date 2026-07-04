@@ -2,7 +2,7 @@
  * @file Tests for guarded Vituum Twig plugin patching.
  */
 
-import { makeTwigPlugins } from '../vituum-patch.js';
+import { makeTwigPlugins } from './vituum-patch.js';
 
 let mockTwigPluginResult;
 

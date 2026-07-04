@@ -22,7 +22,7 @@ import {
 } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 
-import { safeExists, safeReadJson } from '../utils/fs-safe.js';
+import { safeExists, safeReadJson } from '../../utils/fs-safe.js';
 import { walkFiles } from './source-file-index.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';

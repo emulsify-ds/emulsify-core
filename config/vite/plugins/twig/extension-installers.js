@@ -2,7 +2,7 @@
  * @file Virtual Twig.js extension installer module for Storybook.
  */
 
-import { generateTwigExtensionInstallersModule } from '../twig-extensions.js';
+import { generateTwigExtensionInstallersModule } from './extensions.js';
 
 export const VIRTUAL_TWIG_EXTENSION_INSTALLERS_ID =
   'virtual:emulsify-twig-extension-installers';

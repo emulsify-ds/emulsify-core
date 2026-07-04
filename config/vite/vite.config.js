@@ -23,7 +23,7 @@ import path from 'node:path';
 import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
 import { buildInputs } from './entries.js';
-import { createSourceFileIndex } from './plugins/source-file-index.js';
+import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 

@@ -108,9 +108,9 @@ const generatedTwigFactory = (runtimeTwigOrOptions) => {
  * @returns {Function} Generated render function.
  */
 export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
-  const registerConfiguredTwigExtensions =
-    typeof runtimeTwigOrOptions?.registerConfiguredTwigExtensions === 'function'
-      ? runtimeTwigOrOptions.registerConfiguredTwigExtensions
+  const installProjectTwigExtensions =
+    typeof runtimeTwigOrOptions?.installProjectTwigExtensions === 'function'
+      ? runtimeTwigOrOptions.installProjectTwigExtensions
       : () => {};
   const executable = code
     .replace(/^\s*import (?:Twig|\{ factory \}) from 'twig';\s*/m, '')
@@ -119,7 +119,7 @@ export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
       '',
     )
     .replace(
-      /^\s*import \{ registerConfiguredTwigExtensions \} from 'virtual:emulsify-twig-extension-installers';\s*/m,
+      /^\s*import \{ installProjectTwigExtensions \} from 'virtual:emulsify-twig-extension-installers';\s*/m,
       '',
     )
     .replace(
@@ -137,14 +137,14 @@ export const createGeneratedTwigModuleRender = (code, runtimeTwigOrOptions) => {
   const render = new Function(
     'factory',
     'registerTwigExtensions',
-    'registerConfiguredTwigExtensions',
+    'installProjectTwigExtensions',
     'createTwigIncludeFunction',
     'createTwigSourceFunction',
     executable,
   )(
     generatedTwigFactory(runtimeTwigOrOptions),
     registerTwigExtensions,
-    registerConfiguredTwigExtensions,
+    installProjectTwigExtensions,
     createTwigIncludeFunction,
     createTwigSourceFunction,
   );

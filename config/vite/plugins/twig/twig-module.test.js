@@ -13,7 +13,7 @@ import {
   makeTwigNamespaces,
   makeTwigPluginOptions,
   resetTwigOptionCaches,
-} from '../twig-module.js';
+} from './twig-module.js';
 import {
   createGeneratedTwigModuleRender,
   makeEnv,
@@ -333,7 +333,7 @@ describe('Twig module plugin', () => {
       /import \{ registerTwigExtensions \} from '@emulsify\/core\/extensions\/twig';/,
     );
     expect(transformed.code).toMatch(
-      /import \{ registerConfiguredTwigExtensions \} from 'virtual:emulsify-twig-extension-installers';/,
+      /import \{ installProjectTwigExtensions \} from 'virtual:emulsify-twig-extension-installers';/,
     );
     expect(transformed.code).toMatch(
       /import \{ createTwigIncludeFunction \} from '@emulsify\/core\/storybook\/twig\/include-function';/,
@@ -343,9 +343,7 @@ describe('Twig module plugin', () => {
     );
     expect(transformed.code).toContain('const Twig = factory();');
     expect(transformed.code).toContain('registerTwigExtensions(Twig);');
-    expect(transformed.code).toContain(
-      'registerConfiguredTwigExtensions(Twig);',
-    );
+    expect(transformed.code).toContain('installProjectTwigExtensions(Twig);');
     expect(transformed.code).toMatch(/Twig\.extendFunction\('source'/);
     expect(transformed.code).toMatch(/Twig\.extendFunction\('include'/);
     expect(transformed.code).toContain('const __emulsifyTemplate = Twig.twig(');
@@ -372,17 +370,17 @@ describe('Twig module plugin', () => {
       }),
     );
     const transformed = transformTwigModule(twigPlugin, cardFile);
+    const runtimeTwig = {
+      factory: () => Twig.factory(),
+      installProjectTwigExtensions: twigDrupalFilters,
+    };
+    const output = renderGeneratedTwigModule(
+      transformed.code,
+      { title: 'Hello World!' },
+      runtimeTwig,
+    );
 
-    expect(
-      renderGeneratedTwigModule(
-        transformed.code,
-        { title: 'Hello World!' },
-        {
-          factory: () => Twig.factory(),
-          registerConfiguredTwigExtensions: twigDrupalFilters,
-        },
-      ),
-    ).toBe('<article>hello-world</article>');
+    expect(output).toBe('<article>hello-world</article>');
   });
 
   it('renders updated context through the same generated module instance', () => {

@@ -1,13 +1,13 @@
 import path from 'path';
 import viteConfig from '../config/vite/vite.config.js';
-import { twigExtensionModuleSpecifiers } from '../config/vite/twig-extensions.js';
+import { twigExtensionModuleSpecifiers } from '../config/vite/plugins/twig/extensions.js';
 import {
   mergeReactSingletonOptimizeDeps,
   mergeReactSingletonResolve,
 } from '../config/vite/utils/react-singleton.js';
 import { makeGeneratedDistFilesPlugin } from './main-static-assets.js';
 
-// Twig glob maps are provided by config/vite/plugins/virtual-twig-globs.js.
+// Twig glob maps are provided by config/vite/plugins/twig/virtual-twig-globs.js.
 const twigVirtualModuleIds = [
   'virtual:emulsify-twig-globs',
   'virtual:emulsify-twig-asset-sources',

@@ -24,7 +24,7 @@ import {
   resolveProjectStructure,
   storybookStyleOutputPath,
 } from './project-structure.js';
-import { createSourceFileIndex } from './plugins/source-file-index.js';
+import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { replaceLastSlash, toPosixPath } from './utils/paths.js';
 
 export { replaceLastSlash, toPosixPath };

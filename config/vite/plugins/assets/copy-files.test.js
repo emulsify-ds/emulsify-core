@@ -7,8 +7,8 @@ import { join } from 'path';
 
 import { resolveProjectConfig } from '../../project-config.js';
 import { resolveProjectStructure } from '../../project-structure.js';
-import { copyAllSrcAssetsPlugin } from '../copy-src-assets.js';
-import { copyTwigFilesPlugin } from '../copy-twig-files.js';
+import { copyAllSrcAssetsPlugin } from './copy-src-assets.js';
+import { copyTwigFilesPlugin } from './copy-twig-files.js';
 import {
   makeEnv,
   makeTempProject,

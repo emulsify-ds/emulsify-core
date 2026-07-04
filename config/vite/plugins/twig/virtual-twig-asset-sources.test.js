@@ -8,7 +8,7 @@ import { join } from 'path';
 import {
   resetProjectConfigCache,
   resolveProjectConfig,
-} from '../project-config.js';
+} from '../../project-config.js';
 import {
   assetSourceRoots,
   assetSourceGlobPatterns,

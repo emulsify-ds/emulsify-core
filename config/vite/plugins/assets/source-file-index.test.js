@@ -6,7 +6,7 @@ import fs from 'fs';
 import { join } from 'path';
 
 import { makeTempProject } from '../../test-utils/plugins.js';
-import { createSourceFileIndex, walkFiles } from '../source-file-index.js';
+import { createSourceFileIndex, walkFiles } from './source-file-index.js';
 
 describe('source file index helpers', () => {
   let projectDir;
