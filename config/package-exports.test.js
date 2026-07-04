@@ -21,7 +21,14 @@ function isPackagedFile(filePath, packageFiles) {
   const normalized = normalizePackagePath(filePath);
 
   return packageFiles.some((entry) => {
+    if (entry.startsWith('!')) return false;
     if (entry === normalized) return true;
+    if (entry.endsWith('/**/*.js')) {
+      return (
+        normalized.startsWith(entry.replace('/**/*.js', '/')) &&
+        normalized.endsWith('.js')
+      );
+    }
     if (entry.endsWith('/**/*')) {
       return normalized.startsWith(entry.replace('/**/*', '/'));
     }
@@ -184,7 +191,10 @@ describe('@emulsify/core package exports', () => {
   it('packages relative JavaScript imports used by packaged files', () => {
     const packageFiles = packageJson.files.map(normalizePackagePath);
     const packageJsFiles = packageFiles.filter(
-      (filePath) => filePath.endsWith('.js') && !filePath.includes('*'),
+      (filePath) =>
+        filePath.endsWith('.js') &&
+        !filePath.includes('*') &&
+        !filePath.startsWith('!'),
     );
     const missingImports = [];
 
