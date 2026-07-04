@@ -29,7 +29,7 @@ implementation details where they belong.
   configuration.
 - Platform adapters control CMS-specific behavior instead of assuming it
   globally.
-- Node.js 24 or later is required.
+- Node.js 24.11.0 or later is required.
 
 ## Project Evolution
 

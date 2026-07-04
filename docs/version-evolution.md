@@ -18,7 +18,7 @@ This version also continued dependency and Storybook upgrades while making more 
 
 ## 3.x: Runtime Modernization
 
-The third major version moved the package into a more modern JavaScript runtime model. It adopted ESM, raised the runtime floor to Node 24, kept dependencies current, refined PostCSS and Sass handling, improved component asset copying, and continued to preserve existing Drupal SDC behavior.
+The third major version moved the package into a more modern JavaScript runtime model. It adopted ESM, raised the runtime floor to Node 24.11.0, kept dependencies current, refined PostCSS and Sass handling, improved component asset copying, and continued to preserve existing Drupal SDC behavior.
 
 It also set up the architectural runway for the current build model by cleaning up module scope, Storybook behavior, asset resolution, and package compatibility work.
 

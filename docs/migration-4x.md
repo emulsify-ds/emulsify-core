@@ -4,7 +4,7 @@ Emulsify Core now runs on Vite and React/Vite Storybook while preserving existin
 
 ## Requirements
 
-Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.js` before doing work.
+Use Node.js 24.11.0 or later. All maintained scripts run `scripts/check-node-version.js` before doing work.
 
 ## Upgrade Summary
 
@@ -12,7 +12,7 @@ Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Build tool              | Vite replaces the Webpack build.                                                                                            | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `config/emulsify-core/vite/plugins.*`.                                            |
 | Storybook               | Storybook uses `@storybook/react-vite`.                                                                                     | Twig stories and React stories can live in the same Storybook instance. Existing Twig stories that return HTML strings are wrapped for compatibility. | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook` when stories are actively migrated. |
-| Runtime                 | Node.js 24 is the supported floor.                                                                                          | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Local developer machines and CI images must use Node.js 24 or later.                                                             |
+| Runtime                 | Node.js 24.11.0 is the supported floor.                                                                                     | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Local developer machines and CI images must use Node.js 24.11.0 or later.                                                        |
 | Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                                    | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
 | Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `none`, `wordpress`, and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | WordPress/Timber projects can use `wordpress`; other non-Drupal projects can use `none` unless they need a dedicated adapter.    |
 | Extension configuration | Vite extension files live under `config/emulsify-core/vite/plugins.*`.                                                      | Storybook overrides still live under `config/emulsify-core/storybook/...`; a11y config still lives at `config/emulsify-core/a11y.config.js`.          | Projects with old Webpack override files should replace them with Vite extensions.                                               |
@@ -41,7 +41,7 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 
 ## What May Require Changes
 
-- Update CI and local development to Node.js 24 or later.
+- Update CI and local development to Node.js 24.11.0 or later.
 - Move custom Webpack configuration to Vite plugins or `extendConfig()`.
 - Existing Twig stories that return HTML strings can continue working during the upgrade. Use `npx --no-install emulsify-audit` to find stories that should move to `renderTwig()` and other upgrade-readiness items.
 - Review any project code that assumed Drupal behavior in Storybook. Drupal behavior now comes from the Drupal adapter.
@@ -139,7 +139,7 @@ themes. At minimum:
 {
   "description": "Storybook and a Vite-based build workflow powered by Emulsify Core 4",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.11.0"
   },
   "type": "module",
   "scripts": {

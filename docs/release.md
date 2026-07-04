@@ -1,6 +1,6 @@
 # Release Verification
 
-Emulsify Core 4.x supports Node.js 24 or later. This is the project policy for maintained 4.x scripts, CI, and release automation.
+Emulsify Core 4.x supports Node.js 24.11.0 or later. This is the project policy for maintained 4.x scripts, CI, and release automation.
 
 Do not publish from a local checkout unless maintainers have explicitly approved the release. Use these steps to verify release readiness before publishing.
 
