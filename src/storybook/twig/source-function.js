@@ -84,7 +84,7 @@ function warnTextAssetSource(relPath, reason) {
 
   warnedAssetSources.add(relPath);
   console.warn(
-    `source(): ${reason} for @assets/${relPath}. Synchronous XHR fallback is disabled by default because it blocks Storybook rendering. Move the asset under a configured asset root such as src/assets or assets, or temporarily enable platformAdapter.storybook.allowSyncXhrSource. The sync-XHR fallback is deprecated and will be removed in 4.2.`,
+    `source(): ${reason} for @assets/${relPath}. Synchronous XHR fallback is disabled by default because it blocks Storybook rendering. Move the asset under a configured asset root such as src/assets or assets, or temporarily enable platformAdapter.storybook.allowSyncXhrSource. The sync-XHR fallback is deprecated and scheduled for removal in a future major release.`,
   );
 }
 

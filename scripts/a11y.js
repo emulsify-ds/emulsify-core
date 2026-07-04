@@ -8,7 +8,6 @@
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import * as R from 'ramda';
 import pa11y from 'pa11y';
 
 import a11yConfig from '../config/a11y.config.js';
@@ -210,11 +209,12 @@ const resolvePa11yStoryIds = ({
  * @param {'error'|'warning'|'notice'} severity
  * @returns {'red'|'yellow'|'blue'|undefined}
  */
-const severityToColor = R.cond([
-  [R.equals('error'), R.always('red')],
-  [R.equals('warning'), R.always('yellow')],
-  [R.equals('notice'), R.always('blue')],
-]);
+const severityToColor = (severity) =>
+  ({
+    error: 'red',
+    warning: 'yellow',
+    notice: 'blue',
+  })[severity];
 
 /**
  * @typedef {Object} Pa11yIssue
@@ -297,25 +297,20 @@ const lintComponent = async (name) =>
  * @param {string[]} names - List of Storybook story IDs.
  * @returns {Promise<void>}
  */
-const lintReportAndExit = R.pipe(
-  /** @param {string[]} list */
-  (list) => list.map(lintComponent),
-  (promises) => Promise.all(promises),
-  R.andThen(
-    R.pipe(
-      /** @param {Array<{issues: Pa11yIssue[], pageUrl: string}>} results */
-      (results) => results.map(logReport),
-      R.reject(R.equals(false)),
-      R.unless(R.isEmpty, () => process.exit(1)),
-    ),
-  ),
-);
+const lintReportAndExit = async (names) => {
+  const results = await Promise.all(names.map(lintComponent));
+  const hasIssues = results.map(logReport).some(Boolean);
+
+  if (hasIssues) {
+    process.exit(1);
+  }
+};
 
 // Only perform linting/reporting when instructed via "-r".
 /* istanbul ignore next */
-if (R.includes(process.argv[2], ['-h', '--help'])) {
+if (['-h', '--help'].includes(process.argv[2])) {
   printHelp();
-} else if (R.pathEq(['argv', 2], '-r')(process)) {
+} else if (process.argv[2] === '-r') {
   loadProjectA11yConfig().then((projectConfig) => {
     applyProjectA11yConfig(projectConfig);
     return lintReportAndExit(resolvePa11yStoryIds());

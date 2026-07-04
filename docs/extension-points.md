@@ -213,13 +213,14 @@ Projects using the `drupal` platform adapter get those filters automatically:
 }
 ```
 
-`none` projects can opt into only the Twig.js filters without enabling Drupal
-behavior attachment, mirrored SDC output, or other Drupal adapter behavior:
+`none` and `wordpress` projects can opt into only the Twig.js filters without
+enabling Drupal behavior attachment, mirrored SDC output, or other Drupal
+adapter behavior:
 
 ```json
 {
   "project": {
-    "platform": "none"
+    "platform": "wordpress"
   },
   "storybook": {
     "registerDrupalTwigFilters": true

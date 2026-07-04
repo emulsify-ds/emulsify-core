@@ -307,7 +307,7 @@ URLs behave in Storybook and built platform CSS.
 
 Legacy stories that use `require.context()` to list static assets are converted to a static key list for common asset extensions. This lets stories enumerate files such as `assets/icons/*.svg` without loading those SVGs as JavaScript modules.
 
-The old synchronous XHR fallback for text assets is disabled by default because it blocks Storybook rendering. It remains available for one release cycle only for assets outside the virtual asset roots:
+The old synchronous XHR fallback for text assets is disabled by default because it blocks Storybook rendering. It remains available as a temporary compatibility fallback for assets outside the virtual asset roots:
 
 ```js
 export const platformAdapter = {
@@ -317,7 +317,7 @@ export const platformAdapter = {
 };
 ```
 
-Move text assets used by `source('@assets/...')` into `src/assets`, `assets`, or a configured asset root instead. The sync-XHR fallback is deprecated and will be removed in 4.2.
+Move text assets used by `source('@assets/...')` into `src/assets`, `assets`, or a configured asset root instead. The sync-XHR fallback is deprecated and scheduled for removal in a future major release.
 
 ## Mixed Twig And React Folder Example
 

@@ -5,7 +5,21 @@
  * decisions can be used by Node-side Vite config and Storybook browser code.
  */
 
-const noneAdapter = {
+/**
+ * Freeze adapter definition data while preserving cloneable plain objects.
+ *
+ * @param {object} adapter - Adapter definition.
+ * @returns {object} Frozen adapter definition.
+ */
+function freezeAdapter(adapter) {
+  return Object.freeze({
+    ...adapter,
+    storybook: Object.freeze({ ...adapter.storybook }),
+    build: Object.freeze({ ...adapter.build }),
+  });
+}
+
+const noneAdapter = freezeAdapter({
   name: 'none',
   outputStrategy: 'dist',
   storybook: {
@@ -18,9 +32,9 @@ const noneAdapter = {
   build: {
     mirrorDistComponentsToRoot: false,
   },
-};
+});
 
-const drupalAdapter = {
+const drupalAdapter = freezeAdapter({
   name: 'drupal',
   outputStrategy: 'drupal-sdc',
   storybook: {
@@ -33,13 +47,29 @@ const drupalAdapter = {
   build: {
     mirrorDistComponentsToRoot: true,
   },
-};
+});
 
-const adapters = {
+const wordpressAdapter = freezeAdapter({
+  name: 'wordpress',
+  outputStrategy: 'dist',
+  storybook: {
+    loadDrupalBehaviorShim: false,
+    attachDrupalBehaviors: false,
+    registerDrupalTwigFilters: false,
+    loadMirroredComponentCss: false,
+    allowSyncXhrSource: false,
+  },
+  build: {
+    mirrorDistComponentsToRoot: false,
+  },
+});
+
+const adapters = Object.freeze({
   none: noneAdapter,
   generic: noneAdapter,
   drupal: drupalAdapter,
-};
+  wordpress: wordpressAdapter,
+});
 
 /**
  * Deep-clone an adapter so callers can safely serialize or extend it.
@@ -80,10 +110,7 @@ export function normalizePlatformName(platform = 'none') {
  */
 export function getPlatformAdapter(platform = 'none') {
   const key = normalizePlatformName(platform);
-  if (key === 'drupal') {
-    return cloneAdapter(drupalAdapter);
-  }
-  return cloneAdapter(noneAdapter);
+  return cloneAdapter(adapters[key] || noneAdapter);
 }
 
 export { adapters };

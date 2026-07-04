@@ -4,7 +4,7 @@ Emulsify Core supports component-driven development with Vite and Storybook. Twi
 
 ## Choosing An Authoring Model
 
-Twig is a good fit for CMS themes and server-rendered template systems where production markup is rendered by Twig. Drupal has a dedicated adapter today. Craft CMS, WordPress + Timber, and other Twig-based CMS projects can use the `none` adapter unless they need project-specific integration code.
+Twig is a good fit for CMS themes and server-rendered template systems where production markup is rendered by Twig. Drupal has a Drupal-specific adapter, WordPress + Timber projects can use the neutral `wordpress` adapter, and Craft CMS or other Twig-based CMS projects can use `none` unless they need project-specific integration code.
 
 React is a good fit for standalone UI packages, application components, and design systems consumed by React applications.
 
@@ -37,7 +37,7 @@ export const Default = {};
 
 The recommended Twig story shape is `render: renderTwig(template, { context })`. The `context` function keeps the Storybook control names and the Twig variable names connected in one predictable place. Emulsify can then render the Twig output through React, which keeps controls, HMR, lazy `source()` re-renders, and platform behavior attachment working consistently.
 
-Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()` and `source()` through the normalized project structure model. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior.
+Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()` and `source()` through the normalized project structure model. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior. The WordPress adapter keeps these Core Twig authoring features available without emulating WordPress or Timber PHP runtime behavior.
 
 ## Component Metadata Imports
 
@@ -94,6 +94,24 @@ src/
 ```
 
 Both stories appear in the same Storybook instance. Twig stories should use `renderTwig(template, { context })` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview, but the `renderTwig()` shape is easier to maintain because it makes the Twig context mapping explicit. React stories use standard Storybook React component or render-function patterns. A colocated `.jsx` mount file can be used as the production Vite entry when a CMS needs a browser bundle for that React component.
+
+## WordPress And Timber Themes
+
+WordPress and Timber projects should use `platform: "wordpress"` when they want Core's first-class WordPress adapter:
+
+```json
+{
+  "project": {
+    "platform": "wordpress",
+    "name": "whisk",
+    "machineName": "whisk"
+  }
+}
+```
+
+The adapter is intentionally neutral. It keeps Vite output in `dist/`, uses normal `dist/**/*.css` Storybook CSS loading, supports Core Twig authoring, Storybook, Vite, `bem()`, `add_attributes()`, `include()`, and `source()`, and does not enable Drupal behavior, Drupal Twig filters, or SDC mirroring.
+
+Core does not provide WordPress template loading, Timber context, PHP filters, or theme runtime shims. WordPress runtime integration belongs in `emulsify-wordpress-theme`.
 
 ## Twig Button Example
 

@@ -34,7 +34,7 @@ See [Version Evolution](docs/version-evolution.md) for more release history.
 
 Twig and React are equally valid ways to build component libraries with Emulsify Core. The right authoring model depends on the consuming project:
 
-- Use Twig for CMS themes and server-rendered template systems. Drupal has a dedicated adapter today. WordPress and Timber projects should currently use `platform: "none"` unless a project adds its own platform-specific behavior.
+- Use Twig for CMS themes and server-rendered template systems. Drupal has a Drupal-specific adapter, and WordPress/Timber projects can use the intentionally neutral `wordpress` adapter. WordPress runtime integration belongs in `emulsify-wordpress-theme`.
 - Use React for standalone UI libraries, application components, or projects that already use React.
 - Use mixed Twig and React when a design system needs to document both CMS-rendered and JavaScript-rendered components in the same Storybook instance.
 
@@ -85,7 +85,7 @@ The documentation is split by task:
 | [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
 | [Storybook](docs/storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
 | [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
-| [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `drupal`, platform resolution order, and Drupal SDC behavior.                                   |
+| [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
 | [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
 | [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
@@ -94,24 +94,25 @@ The documentation is split by task:
 
 ## Known Limitations
 
-- Implemented platform adapters are currently `none` and `drupal`. WordPress and Timber projects should currently use `platform: "none"`. This keeps Emulsify Core in platform-neutral mode while still supporting Twig-oriented component development. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced. See [Platform Adapters](docs/platform-adapters.md).
+- Implemented platform adapters are `none`, `wordpress`, and `drupal`. The `wordpress` adapter is intentionally neutral: it supports Core Twig authoring, Storybook, Vite, `bem()`, `add_attributes()`, `include()`, and `source()`, but it does not emulate WordPress or Timber PHP runtime behavior. Runtime integration belongs in `emulsify-wordpress-theme`. See [Platform Adapters](docs/platform-adapters.md).
 - Storybook's Twig resolver eagerly imports Twig modules and raw Twig source. This is reliable for `include()` and `source()`, but large Twig libraries should keep Storybook source roots intentional. See [Performance](docs/performance.md).
 - Production sourcemaps are enabled by default unless a project overrides Vite config through `config/emulsify-core/vite/plugins.*`. See [Performance](docs/performance.md).
 - Project extensions use the public `config/emulsify-core` directory: `config/emulsify-core/vite/plugins.*` for Vite, `config/emulsify-core/storybook/...` for Storybook, and `config/emulsify-core/a11y.config.js` for a11y. See [Extension Points](docs/extension-points.md).
 - Webpack-specific customizations must be migrated manually to Vite plugins or `extendConfig()`. See [Migration](docs/migration-4x.md).
-- Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are enabled. `none` projects should expect output to remain in `dist/`. See [Platform Adapters](docs/platform-adapters.md).
+- Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are enabled. `none` and `wordpress` projects should expect output to remain in `dist/`. See [Platform Adapters](docs/platform-adapters.md).
 
 ## Supported Project Shapes
 
-Release-readiness coverage validates:
+Core supports these project shapes:
 
 - Drupal SDC projects using `src/components`.
 - `none` platform Twig projects using `src/components`.
+- `wordpress` platform Twig projects using `src/components`.
 - Root `./components` projects.
 - Projects using multiple `variant.structureImplementations`.
 - Mixed Twig + React Storybook projects.
 
-WordPress and Timber projects should currently use `platform: "none"`. This keeps Emulsify Core in platform-neutral mode while still supporting Twig-oriented component development. A dedicated WordPress adapter may be added later when WordPress-specific behavior is introduced. The implemented adapters in this package are currently `none` and `drupal`.
+WordPress and Timber projects should use `platform: "wordpress"` when they want Core's neutral WordPress adapter. The adapter keeps output in `dist/`, loads Storybook CSS from `dist/**/*.css`, and leaves WordPress runtime behavior to `emulsify-wordpress-theme`.
 
 ## Public Imports
 
@@ -125,7 +126,7 @@ import { defineReactExtension } from '@emulsify/core/extensions/react';
 
 `defineReactExtension` is reserved for future React extension support. It currently returns the input unchanged. Adopting the import path is safe; the runtime is intentionally a no-op until the registry lands. See [Extension Points](docs/extension-points.md#public-imports).
 
-Vite consumers can import the shared config from `@emulsify/core/vite` and public Vite plugin helpers from `@emulsify/core/vite/plugins`.
+Vite consumers can import the shared config from `@emulsify/core/vite`, public Vite plugin helpers from `@emulsify/core/vite/plugins`, and platform adapter helpers from `@emulsify/core/vite/platforms`.
 
 ## Contributing
 

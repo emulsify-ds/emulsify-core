@@ -61,11 +61,13 @@ platformAdapter: {
 }
 ```
 
-That fallback blocks the main thread, is deprecated, and is scheduled for removal in 4.2.
+That fallback blocks the main thread, is deprecated, and is scheduled for removal in a future major release.
 
 ## Storybook CSS Loading
 
-Storybook eagerly loads CSS from the selected render path by default so component styles are available in the iframe. `none` projects import compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output import component CSS from `components/**/*.css` and shared compiled CSS from `dist/**/*.css` excluding `dist/components/**/*.css`, because `dist/components` and root `components` represent the same component CSS through different paths.
+Storybook eagerly imports CSS from the selected render path by default so component styles are available in the iframe. `none` and `wordpress` projects load compiled CSS from `dist/**/*.css`. Drupal projects that mirror component output load component CSS from `components/**/*.css` and shared compiled CSS from `dist/**/*.css` excluding `dist/components/**/*.css`, because `dist/components` and root `components` represent the same component CSS through different paths.
+
+The eager glob performs the CSS imports directly; no runtime iteration is needed after the glob runs.
 
 Projects with very large CSS libraries can opt out and import CSS from their own Storybook preview override:
 

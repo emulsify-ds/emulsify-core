@@ -27,10 +27,13 @@ for Storybook-rendered Twig. This is useful when templates use Drupal-style
 filters or functions and the project still runs Storybook outside Drupal.
 
 Drupal platform projects enable this automatically through the adapter. `none`
-projects can opt in with `project.emulsify.json`:
+and `wordpress` projects can opt in with `project.emulsify.json`:
 
 ```json
 {
+  "project": {
+    "platform": "wordpress"
+  },
   "storybook": {
     "registerDrupalTwigFilters": true
   }

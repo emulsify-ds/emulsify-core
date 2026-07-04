@@ -75,6 +75,37 @@ const releaseFixtures = [
     ],
   },
   {
+    name: 'wordpress-src-components',
+    type: 'vite',
+    assert: [
+      'dist/components/card/js/card.js',
+      'dist/components/card/js/ReactCard.js',
+      'dist/components/card/js/mount.js',
+      'dist/components/card/css/card.css',
+      'dist/components/card/card.twig',
+      'dist/components/card/card.asset.txt',
+      'dist/global/base/js/base.js',
+      'dist/global/base/css/base.css',
+      'dist/extension-marker.txt',
+    ],
+    reject: [
+      'components/card/card.js',
+      'components/card/ReactCard.js',
+      'components/card/mount.js',
+      'components/card/card.css',
+      'components/card/card.twig',
+      'components/card/card.asset.txt',
+      'dist/components/card/ReactCard.jsx',
+      'dist/components/card/mount.jsx',
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/**/*.js',
+        strings: ['window.Drupal', 'Drupal.behaviors', 'attachBehaviors'],
+      },
+    ],
+  },
+  {
     name: 'legacy-components',
     type: 'vite',
     assert: [

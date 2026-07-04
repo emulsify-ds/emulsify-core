@@ -36,6 +36,7 @@ jobs:
         fixture:
           - drupal-sdc-src-components
           - no-platform-src-components
+          - wordpress-src-components
           - legacy-components
           - structure-implementations
           - mixed-storybook

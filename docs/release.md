@@ -15,47 +15,26 @@ npm test
 npm run storybook-build
 npm run fixtures:release
 npm pack --dry-run --ignore-scripts --json
-npm pack
+npm run smoke:pack
 ```
 
 The release fixture suite validates the 4.x checklist items that are easy to automate:
 
 - `drupal-sdc-src-components` builds Drupal SDC component sources and verifies mirrored root `components/` output while rejecting stale `dist/components/` component files.
 - The default Vite fixture verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
+- `wordpress-src-components` verifies the WordPress adapter keeps global assets under `dist/global`, component output under `dist/components`, avoids root `components/` mirroring, and rejects Drupal globals in emitted JavaScript.
 - `mixed-storybook` verifies Twig stories using `renderTwig()` and React stories build together in one Storybook instance.
 - Twig helper and tag support is covered by unit tests and fixtures for `bem()`, `add_attributes()`, `switch`, `case`, `default`, and `endswitch`.
 
 ## Tarball Smoke Test
 
-After `npm pack`, install the generated tarball in a clean temporary project and verify public imports resolve from the packed package:
+From the repository root, run the tarball smoke check to create the package tarball, install it in a clean temporary project, and verify public imports resolve from the packed package:
 
 ```sh
-tmp="$(mktemp -d)"
-cd "$tmp"
-npm init -y
-npm install /path/to/emulsify-core-4.0.0.tgz
-
-node --input-type=module -e "
-  const core = await import('@emulsify/core');
-  const storybook = await import('@emulsify/core/storybook');
-  const twig = await import('@emulsify/core/extensions/twig');
-  const react = await import('@emulsify/core/extensions/react');
-  const vite = await import('@emulsify/core/vite');
-  const plugins = await import('@emulsify/core/vite/plugins');
-
-  if (typeof storybook.renderTwig !== 'function') {
-    throw new Error('renderTwig missing from @emulsify/core/storybook');
-  }
-
-  if (typeof twig.registerTwigExtensions !== 'function') {
-    throw new Error('registerTwigExtensions missing from @emulsify/core/extensions/twig');
-  }
-
-  console.log('Public package imports resolved successfully.');
-"
+npm run smoke:pack
 ```
 
-The unused imported bindings intentionally prove each documented public package export resolves from an installed tarball.
+The smoke check removes its temporary project and generated tarball after verifying the documented public package exports.
 
 ## Semantic-Release Dry Run
 
