@@ -150,6 +150,7 @@ The documentation is split by task:
 | [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths.     |
 | [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
 | [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
+| [Dependency Contract](docs/dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                                |
 | [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                    |
 | [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                     |
@@ -184,6 +185,11 @@ package using it.
 - Drupal SDC mirroring only applies when the Drupal adapter and SDC settings are
   enabled. `none` and `wordpress` projects should expect output to remain in
   `dist/`. See [Platform Adapters](docs/platform-adapters.md).
+- Generated themes that depend only on `@emulsify/core` assume npm's flat
+  `node_modules` hoisting for script binaries and shared config packages. pnpm's
+  isolated linker and Yarn Plug'n'Play are unsupported for that one-dependency
+  generated-theme pattern unless the consuming project declares each tool
+  package itself. See [Dependency Contract](docs/dependency-contract.md).
 
 ## Supported Project Shapes
 
