@@ -47,6 +47,10 @@ jobs:
       - name: Install
         # npm ci keeps packed-package checks locked to package-lock.json.
         run: npm ci
+      - name: Verify package contents
+        run: npm run pack:dry-run
+      - name: Test packed package
+        run: npm run smoke:pack
       - name: Verify release calculation
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
         env:
@@ -54,10 +58,6 @@ jobs:
           RELEASE_TO: HEAD
           RELEASE_SQUASH_MESSAGE: ${{ github.event.pull_request.title }}
         run: npm run release:analyze
-      - name: Verify package contents
-        run: npm run pack:dry-run
-      - name: Test packed package
-        run: npm run smoke:pack
   fixture-builds:
     name: Fixture / ${{ matrix.fixture }}
     runs-on: ubuntu-latest

@@ -35,8 +35,9 @@ npm run release:verify
 - the packed-package smoke test; and
 - the non-publishing release analysis.
 
-These are the same checks required by CI, although CI keeps the expensive
-fixture and packed-package work in parallel jobs for faster feedback.
+CI runs the corresponding checks, although it keeps the expensive fixture and
+packed-package work in parallel jobs for faster feedback and limits release
+analysis to pull requests targeting `main`.
 
 ## CI Release Readiness
 
@@ -53,11 +54,12 @@ readiness into five groups:
 - `react-peer-fixtures` builds the packed mixed Storybook consumer with React
   and React DOM 18.3.1 and 19.2.7.
 
-For pull requests targeting `main`, the packed-package job also predicts the
-semantic release from the latest release tag through Actions' checked-out
-prospective merge commit. It separately combines current base history with the
-pull request title as a prospective squash commit, guarding against an
-accidental merge-strategy change that would discard the analyzed commits.
+For pull requests targeting `main`, the packed-package job runs both tarball
+checks before predicting the semantic release from the latest release tag
+through Actions' checked-out prospective merge commit. It separately combines
+current base history with the pull request title as a prospective squash
+commit, guarding against an accidental merge-strategy change that would
+discard the analyzed commits.
 
 The CI workflow has only `contents: read` permission. It cannot publish to npm,
 push a tag, or create a GitHub release. The separate publish workflow runs only
@@ -149,8 +151,11 @@ release, or publishing to npm.
 Emulsify's established `develop`-to-`main` release strategy uses GitHub's
 **Create a merge commit** option. That preserves the individual conventional
 commits analyzed by semantic-release. If a release pull request is squashed
-instead, its title becomes the release commit and must independently produce
-the same release type. For example, this title does not produce a release:
+instead, its title becomes the release commit. The title must itself produce a
+semantic release, and the release calculated from unreleased base history plus
+that title must match the full prospective merge range. This accounts for
+release-producing commits that may already exist on the base branch. For
+example, this title does not produce a release:
 
 ```text
 Release(4.3.0): prepare the release
@@ -164,8 +169,8 @@ feat(release): prepare 4.3.0
 
 Use `fix(release): ...` for a patch. Breaking releases must retain an explicit
 `BREAKING CHANGE:` footer by using the established merge-commit strategy. CI
-rejects a `main` pull request when the analyzed commit range and prospective
-squash title do not calculate the same release type.
+rejects a `main` pull request when its title produces no release or when the
+prospective squash history changes the full range's calculated release type.
 
 ## Semantic-Release Dry Run
 
