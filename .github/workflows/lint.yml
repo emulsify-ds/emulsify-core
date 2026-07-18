@@ -94,3 +94,54 @@ jobs:
           name: mixed-storybook-browser-diagnostics
           path: .out/fixture-browser-diagnostics/mixed-storybook
           if-no-files-found: ignore
+  consumer-fixtures:
+    name: Packed consumer / ${{ matrix.fixture }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - whisk-drupal
+          - none
+          - wordpress-twig
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - name: Install
+        # npm ci keeps packed-consumer checks locked to package-lock.json.
+        run: npm ci
+      - name: Test packed consumer
+        run: npm run fixtures:consumer -- --fixture ${{ matrix.fixture }}
+  react-peer-fixtures:
+    name: React peer / ${{ matrix.react }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        react:
+          - '18'
+          - '19'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - name: Install
+        # npm ci keeps React peer checks locked to package-lock.json.
+        run: npm ci
+      - name: Test packed Storybook consumer
+        run: npm run fixtures:consumer -- --fixture mixed-storybook --react ${{ matrix.react }}

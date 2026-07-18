@@ -1,4 +1,54 @@
 {
+  "fixtures": {
+    "whisk-drupal": {
+      "source": ".github/fixtures/release/drupal-sdc-src-components",
+      "directory": ".github/fixtures/consumer/whisk-drupal",
+      "model": "emulsify-ds/emulsify-drupal/whisk",
+      "verify": ["lint-js", "lint-styles", "test", "a11y"],
+      "assert": ["components/card/card.js", ".out/index.json"],
+      "stories": ["fixtures-consumer-whisk--twig-card"]
+    },
+    "none": {
+      "source": ".github/fixtures/release/no-platform-src-components",
+      "directory": ".github/fixtures/consumer/none",
+      "model": "a generated platform-none theme",
+      "verify": ["build"],
+      "assert": [
+        "dist/components/card/js/card.js",
+        "dist/components/card/css/card.css",
+        "dist/global/contract/css/normalize.css"
+      ]
+    },
+    "wordpress-twig": {
+      "source": ".github/fixtures/release/wordpress-src-components",
+      "directory": ".github/fixtures/consumer/wordpress-twig",
+      "model": "emulsify-ds/emulsify-wordpress/whisk",
+      "verify": ["build"],
+      "assert": [
+        "dist/components/card/js/card.js",
+        "dist/components/card/card.twig"
+      ]
+    },
+    "mixed-storybook": {
+      "source": ".github/fixtures/release/mixed-storybook",
+      "directory": ".github/fixtures/consumer/mixed-storybook",
+      "model": "a mixed Twig, React, and custom-element Storybook",
+      "verify": ["storybook-build"],
+      "assert": [".out/index.json"],
+      "stories": [
+        "fixtures-mixed-storybook--twig-card",
+        "fixtures-mixed-storybook--react-card",
+        "fixtures-mixed-storybook-custom-element--custom-element-card"
+      ]
+    }
+  },
+  "reactMatrix": {
+    "fixture": "mixed-storybook",
+    "versions": {
+      "18": "18.3.1",
+      "19": "19.2.7"
+    }
+  },
   "dependencies": {
     "concurrently": ["develop"],
     "vite": ["build", "vite", "develop"],

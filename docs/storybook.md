@@ -123,6 +123,10 @@ By default, Pa11y reads Storybook story IDs from the built Storybook
 deduplicated, so projects can keep explicit coverage for stories that are not
 present in the generated index:
 
+Both paths are resolved from the consuming project's current working
+directory. During the scan, Core serves the static Storybook build on a
+loopback-only HTTP origin so its browser modules load normally.
+
 ```js
 export default {
   components: ['components-manual-card--default'],

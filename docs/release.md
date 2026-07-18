@@ -30,6 +30,7 @@ npm run release:verify
 - linting and unit tests;
 - the repository Storybook build;
 - every release fixture;
+- every packed generated-consumer fixture and supported React peer version;
 - a no-script package dry run;
 - the packed-package smoke test; and
 - the non-publishing release analysis.
@@ -40,13 +41,17 @@ fixture and packed-package work in parallel jobs for faster feedback.
 ## CI Release Readiness
 
 The read-only CI workflow in `.github/workflows/lint.yml` divides release
-readiness into three groups:
+readiness into five groups:
 
 - `release-readiness` runs linting, unit tests, and the repository Storybook
   build.
 - `fixture-builds` runs each release fixture in its own matrix job.
 - `package-readiness` inspects the package manifest, installs the tarball in a
   clean temporary consumer, and tests the packed package.
+- `consumer-fixtures` installs the packed package into the Whisk-like Drupal,
+  `none`, and WordPress/Twig consumer shapes in separate matrix jobs.
+- `react-peer-fixtures` builds the packed mixed Storybook consumer with React
+  and React DOM 18.3.1 and 19.2.7.
 
 For pull requests targeting `main`, the packed-package job also predicts the
 semantic release from the latest release tag through Actions' checked-out
@@ -78,6 +83,28 @@ automate:
   targeted assertion does not claim that the Storybook accessibility addon
   scans every shadow-root implementation.
 - Twig helper and tag support is covered by unit tests and fixtures for `bem()`, `add_attributes()`, `switch`, `case`, `default`, and `endswitch`.
+
+### Packed Consumer Fixtures
+
+The executable consumer-contract suite verifies the package through the
+installation model used by generated themes:
+
+```sh
+npm run fixtures:consumer
+```
+
+It packs Core, installs the tarball into clean temporary npm projects without
+repository-local symlinks, and exercises representative Vite, Storybook,
+ESLint, Stylelint, Jest, and Pa11y/axe workflows. The fixture shapes model
+Drupal Whisk, a `none` platform theme, WordPress/Twig, and a mixed Twig, React,
+and custom-element Storybook. The mixed fixture is built with the exact React
+peer test versions 18.3.1 and 19.2.7.
+
+CI splits the three platform shapes and the two React peer versions into
+parallel jobs. The aggregate `release:verify` command runs the same contract
+sequentially. See [Dependency Contract](./dependency-contract.md) for the
+fixture-to-consumer mapping, npm flat-layout support boundary, and snapshot
+update procedure.
 
 ## Tarball Smoke Test
 

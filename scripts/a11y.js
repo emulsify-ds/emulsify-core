@@ -5,15 +5,13 @@
  * and reports issues.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'fs';
+import { createServer } from 'http';
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { pathToFileURL } from 'url';
 import pa11y from 'pa11y';
 
 import a11yConfig from '../config/a11y.config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Project-specific configuration.
 let {
@@ -24,23 +22,27 @@ let {
   pa11y: pa11yConfig = {},
 } = a11yConfig;
 
-/** Project-specific accessibility config path used by generated themes. */
-const PROJECT_A11Y_CONFIG = path.resolve(
-  __dirname,
-  '../../../config/emulsify-core/a11y.config.js',
-);
+/**
+ * Resolve the project-specific accessibility config used by generated themes.
+ *
+ * @param {string} [projectDir=process.cwd()] - Consuming project root.
+ * @returns {string} Absolute project config path.
+ */
+const resolveProjectA11yConfig = (projectDir = process.cwd()) =>
+  path.resolve(projectDir, 'config/emulsify-core/a11y.config.js');
 
 /**
  * Load project-specific accessibility config when a consuming project provides one.
  *
  * @returns {Promise<object>} Project accessibility config, when present.
  */
-const loadProjectA11yConfig = async () => {
-  if (!existsSync(PROJECT_A11Y_CONFIG)) {
+const loadProjectA11yConfig = async (projectDir = process.cwd()) => {
+  const configPath = resolveProjectA11yConfig(projectDir);
+  if (!existsSync(configPath)) {
     return {};
   }
 
-  const configModule = await import(pathToFileURL(PROJECT_A11Y_CONFIG).href);
+  const configModule = await import(pathToFileURL(configPath).href);
   return configModule.default || configModule;
 };
 
@@ -90,10 +92,13 @@ const printHelp = () => {
  * Resolve the configured Storybook build directory.
  *
  * @param {string} [buildDir=storybookBuildDir] - Configured build directory.
+ * @param {string} [projectDir=process.cwd()] - Consuming project root.
  * @returns {string} Absolute Storybook build directory.
  */
-const resolveStorybookBuildDir = (buildDir = storybookBuildDir) =>
-  path.resolve(__dirname, '../', buildDir);
+const resolveStorybookBuildDir = (
+  buildDir = storybookBuildDir,
+  projectDir = process.cwd(),
+) => path.resolve(projectDir, buildDir);
 
 /**
  * Resolve Storybook's iframe file used for per-story rendering.
@@ -103,6 +108,75 @@ const resolveStorybookBuildDir = (buildDir = storybookBuildDir) =>
  */
 const resolveStorybookIframe = (buildDir = storybookBuildDir) =>
   path.join(resolveStorybookBuildDir(buildDir), 'iframe.html');
+
+const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+};
+
+/**
+ * Start a loopback-only server for a built Storybook.
+ *
+ * Storybook's module graph cannot run reliably from a file URL, so generated
+ * consumers need an HTTP origin before Pa11y evaluates a story.
+ *
+ * @param {string} [buildDir=storybookBuildDir] - Storybook build directory.
+ * @returns {Promise<{baseUrl: string, close: Function}>} Server controls.
+ */
+const startStorybookServer = (buildDir = storybookBuildDir) =>
+  new Promise((resolve, reject) => {
+    const root = resolveStorybookBuildDir(buildDir);
+    const server = createServer((request, response) => {
+      try {
+        const requestUrl = new URL(request.url || '/', 'http://127.0.0.1');
+        const requestedPath =
+          decodeURIComponent(requestUrl.pathname) === '/'
+            ? 'index.html'
+            : decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '');
+        const filePath = path.resolve(root, requestedPath);
+        const relativePath = path.relative(root, filePath);
+
+        if (
+          !relativePath ||
+          relativePath.startsWith('..') ||
+          path.isAbsolute(relativePath) ||
+          !existsSync(filePath) ||
+          !statSync(filePath).isFile()
+        ) {
+          response.writeHead(404);
+          response.end('Not found');
+          return;
+        }
+
+        response.writeHead(200, {
+          'Content-Type':
+            contentTypes[path.extname(filePath)] || 'application/octet-stream',
+        });
+        createReadStream(filePath).pipe(response);
+      } catch {
+        response.writeHead(400);
+        response.end('Bad request');
+      }
+    });
+
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      resolve({
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        close: () =>
+          new Promise((closeResolve, closeReject) => {
+            server.close((error) =>
+              error ? closeReject(error) : closeResolve(),
+            );
+          }),
+      });
+    });
+  });
 
 /**
  * Return unique non-empty Storybook IDs in first-seen order.
@@ -282,10 +356,11 @@ const logReport = ({ issues, pageUrl }) => {
 /**
  * Run pa11y on a single Storybook story by its ID.
  * @param {string} name - Story ID (e.g., "components-button--primary").
+ * @param {{baseUrl?: string}} [options={}] - Storybook origin options.
  * @returns {Promise<{ issues: Pa11yIssue[], pageUrl: string }>} Pa11y result.
  */
-const lintComponent = async (name) =>
-  pa11y(`${resolveStorybookIframe()}?id=${name}`, {
+const lintComponent = async (name, { baseUrl } = {}) =>
+  pa11y(`${baseUrl || resolveStorybookIframe()}?id=${name}`, {
     includeNotices: true,
     includeWarnings: true,
     runners: ['axe'],
@@ -295,10 +370,13 @@ const lintComponent = async (name) =>
 /**
  * Lint a list of components, log reports, and exit(1) if any have issues.
  * @param {string[]} names - List of Storybook story IDs.
+ * @param {{baseUrl?: string}} [options={}] - Storybook origin options.
  * @returns {Promise<void>}
  */
-const lintReportAndExit = async (names) => {
-  const results = await Promise.all(names.map(lintComponent));
+const lintReportAndExit = async (names, options = {}) => {
+  const results = await Promise.all(
+    names.map((name) => lintComponent(name, options)),
+  );
   const hasIssues = results.map(logReport).some(Boolean);
 
   if (hasIssues) {
@@ -311,10 +389,22 @@ const lintReportAndExit = async (names) => {
 if (['-h', '--help'].includes(process.argv[2])) {
   printHelp();
 } else if (process.argv[2] === '-r') {
-  loadProjectA11yConfig().then((projectConfig) => {
-    applyProjectA11yConfig(projectConfig);
-    return lintReportAndExit(resolvePa11yStoryIds());
-  });
+  loadProjectA11yConfig()
+    .then(async (projectConfig) => {
+      applyProjectA11yConfig(projectConfig);
+      const storybookServer = await startStorybookServer();
+      try {
+        await lintReportAndExit(resolvePa11yStoryIds(), {
+          baseUrl: `${storybookServer.baseUrl}/iframe.html`,
+        });
+      } finally {
+        await storybookServer.close();
+      }
+    })
+    .catch((error) => {
+      console.error(error?.stack || error);
+      process.exitCode = 1;
+    });
 }
 
 export {
@@ -328,7 +418,9 @@ export {
   lintReportAndExit,
   normalizeStoryIds,
   resolvePa11yStoryIds,
+  resolveProjectA11yConfig,
   resolveStorybookBuildDir,
   resolveStorybookIframe,
+  startStorybookServer,
   storyIdsFromStorybookIndex,
 };

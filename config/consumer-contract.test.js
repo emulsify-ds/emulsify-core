@@ -4,9 +4,11 @@
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-
-const CONTRACT_DOC =
-  'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/dependency-contract.md';
+import {
+  assertContractDependencies,
+  assertFixtureCoverage,
+  contractScriptNames,
+} from '../scripts/lib/consumer-contract.js';
 
 const readJson = (relativePath) =>
   JSON.parse(readFileSync(resolve(process.cwd(), relativePath), 'utf8'));
@@ -19,24 +21,17 @@ const hasOnlyScriptNames = (scripts) =>
 describe('consumer dependency contract', () => {
   const contract = readJson('config/consumer-contract.json');
   const packageJson = readJson('package.json');
+  const fixturePackages = new Map(
+    Object.entries(contract.fixtures || {}).map(([fixtureName, fixture]) => [
+      fixtureName,
+      readJson(`${fixture.directory}/package.json`),
+    ]),
+  );
 
   it('keeps every consumer-contract package in dependencies', () => {
-    const contractDependencies = Object.keys(contract.dependencies || {});
-    const packageDependencies = packageJson.dependencies || {};
-    const missing = contractDependencies.filter(
-      (dependency) => !packageDependencies[dependency],
-    );
-
-    if (missing.length) {
-      throw new Error(
-        [
-          `Missing consumer-contract dependencies in package.json#dependencies: ${missing.join(', ')}.`,
-          'Generated themes such as Whisk declare only @emulsify/core and rely on npm hoisting to resolve the binaries and config packages their scripts invoke.',
-          'Keep these packages in dependencies unless verified consumer evidence changes the contract.',
-          `Docs: ${CONTRACT_DOC}`,
-        ].join('\n'),
-      );
-    }
+    expect(() =>
+      assertContractDependencies(contract, packageJson, fixturePackages),
+    ).not.toThrow();
   });
 
   it('records one-line notes for every kept contract package', () => {
@@ -57,5 +52,74 @@ describe('consumer dependency contract', () => {
       .map(([dependency]) => dependency);
 
     expect(invalidScripts).toEqual([]);
+  });
+
+  it('represents every contract script in a behavioral fixture', () => {
+    expect(() =>
+      assertFixtureCoverage(contract, fixturePackages),
+    ).not.toThrow();
+    expect(contractScriptNames(contract)).toEqual([
+      'develop',
+      'build',
+      'vite',
+      'storybook',
+      'storybook-build',
+      'lint-js',
+      'lint-styles',
+      'test',
+      'coverage',
+      'twatch',
+      'a11y',
+    ]);
+  });
+
+  it('reports the affected scripts and fixtures for a removed dependency', () => {
+    const packageWithoutVite = {
+      ...packageJson,
+      dependencies: { ...packageJson.dependencies },
+    };
+    delete packageWithoutVite.dependencies.vite;
+
+    expect(() =>
+      assertContractDependencies(contract, packageWithoutVite, fixturePackages),
+    ).toThrow(
+      [
+        'Missing consumer-contract dependencies in package.json#dependencies:',
+        '- vite (scripts: build, vite, develop; fixtures: whisk-drupal, none, wordpress-twig)',
+      ].join('\n'),
+    );
+  });
+
+  it('fails when a mapped script disappears from all fixture packages', () => {
+    const packagesWithoutDevelop = new Map(fixturePackages);
+    const whiskPackage = packagesWithoutDevelop.get('whisk-drupal');
+    packagesWithoutDevelop.set('whisk-drupal', {
+      ...whiskPackage,
+      scripts: Object.fromEntries(
+        Object.entries(whiskPackage.scripts).filter(
+          ([scriptName]) => scriptName !== 'develop',
+        ),
+      ),
+    });
+
+    expect(() =>
+      assertFixtureCoverage(contract, packagesWithoutDevelop),
+    ).toThrow(
+      'Consumer contract scripts are not represented by a fixture package: develop.',
+    );
+  });
+
+  it('pins both supported React peer majors for the mixed fixture', () => {
+    expect(contract.reactMatrix).toEqual({
+      fixture: 'mixed-storybook',
+      versions: {
+        18: '18.3.1',
+        19: '19.2.7',
+      },
+    });
+    expect(packageJson.peerDependencies.react).toContain('^18.0.0');
+    expect(packageJson.peerDependencies.react).toContain('^19.0.0');
+    expect(packageJson.peerDependencies['react-dom']).toContain('^18.0.0');
+    expect(packageJson.peerDependencies['react-dom']).toContain('^19.0.0');
   });
 });
