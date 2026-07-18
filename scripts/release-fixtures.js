@@ -27,6 +27,10 @@ const viteBin = join(repoRoot, 'node_modules/vite/bin/vite.js');
 const storybookBin = join(repoRoot, 'node_modules/.bin/storybook');
 const viteConfig = join(repoRoot, 'config/vite/vite.config.js');
 const storybookConfigDir = join(repoRoot, '.storybook');
+const customElementBrowserTest = join(
+  repoRoot,
+  'scripts/test-custom-element-storybook.js',
+);
 const largeTwigComponentCount = 80;
 // Measured before shared virtual Twig dependency AST modules were introduced.
 const largeTwigStorybookBaselineJsBytes = 7_529_579;
@@ -158,6 +162,7 @@ const releaseFixtures = [
         ],
       },
     ],
+    browserTest: customElementBrowserTest,
   },
   {
     name: 'large-twig-storybook',
@@ -455,6 +460,15 @@ function runStorybookFixture(fixture) {
     assertMatches(projectDir, fixture.match);
     assertContent(projectDir, fixture.assertContent);
     assertNoContent(projectDir, fixture.rejectContent);
+    if (fixture.browserTest) {
+      console.log(`  → Running browser assertions: ${fixture.name}`);
+      run(
+        process.execPath,
+        [fixture.browserTest, outputDir],
+        fixtureRunOptions(projectDir),
+      );
+      console.log(`  ✓ Browser assertions passed: ${fixture.name}`);
+    }
     if (fixture.measure) {
       const outputSize = directorySize(outputDir);
       const jsBytes = javascriptOutputSize(outputDir);

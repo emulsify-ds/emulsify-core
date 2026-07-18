@@ -56,3 +56,10 @@ jobs:
         run: npm ci
       - name: Fixture build
         run: npm run fixtures:release -- --fixture ${{ matrix.fixture }}
+      - name: Upload mixed Storybook browser diagnostics
+        if: failure() && matrix.fixture == 'mixed-storybook'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mixed-storybook-browser-diagnostics
+          path: .out/fixture-browser-diagnostics/mixed-storybook
+          if-no-files-found: ignore

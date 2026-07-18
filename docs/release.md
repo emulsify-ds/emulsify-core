@@ -32,9 +32,17 @@ The release fixture suite validates the 4.x checklist items that are easy to aut
 - `drupal-sdc-src-components` builds Drupal SDC component sources and verifies mirrored root `components/` output while rejecting stale `dist/components/` component files.
 - The default Vite fixture verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
 - `wordpress-src-components` verifies the WordPress adapter keeps global assets under `dist/global`, component output under `dist/components`, avoids root `components/` mirroring, and rejects Drupal globals in emitted JavaScript.
-- `mixed-storybook` verifies Twig stories using `renderTwig()`, React stories,
-  and an autonomous custom-element story using default-slot content and a
-  native event mapping build together in one Storybook instance.
+- `mixed-storybook` first verifies that Twig stories using `renderTwig()`,
+  React stories, and autonomous custom-element stories build together. It then
+  serves that built Storybook in headless Chromium and exercises real
+  Storybook controls. The browser assertions cover a no-reload property update,
+  object/array property preservation, omitted-property cleanup, boolean
+  attribute addition and removal, default-slot assignment, and a mapped native
+  `CustomEvent`.
+- The mixed Storybook browser check also runs axe directly against the fixture
+  custom element and proves that scan reaches its open shadow-root button. This
+  targeted assertion does not claim that the Storybook accessibility addon
+  scans every shadow-root implementation.
 - Twig helper and tag support is covered by unit tests and fixtures for `bem()`, `add_attributes()`, `switch`, `case`, `default`, and `endswitch`.
 
 ## Tarball Smoke Test
