@@ -4,16 +4,28 @@
  * @file Bin entry for the combined Emulsify project readiness audit.
  */
 
+import { resolve } from 'node:path';
 import {
   createUsage,
   isCliEntrypoint,
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
 import { DEFAULT_TWIG_THRESHOLD, runAudits } from './audit/index.js';
-import { formatAuditJsonReport, formatAuditReport } from './audit/report.js';
+import {
+  formatAuditJsonErrorReport,
+  formatAuditJsonReport,
+  formatAuditReport,
+} from './audit/report.js';
 
 export { auditProject, runAudits } from './audit/index.js';
-export { formatAuditJsonReport, formatAuditReport } from './audit/report.js';
+export {
+  AUDIT_REPORT_SCHEMA_VERSION,
+  createAuditJsonErrorReport,
+  createAuditJsonReport,
+  formatAuditJsonErrorReport,
+  formatAuditJsonReport,
+  formatAuditReport,
+} from './audit/report.js';
 export { collectProjectFiles } from './audit/lib/files.js';
 export { findCssUrlReferences } from './audit/lib/css.js';
 export {
@@ -22,6 +34,10 @@ export {
   resolvesTwigReference,
 } from './audit/lib/twig.js';
 
+const failOnValues = ['error', 'warn', 'info', 'any'];
+const findingSeverities = ['error', 'warn', 'info'];
+const cliFailureExitCode = 2;
+
 /**
  * CLI usage text.
  *
@@ -29,11 +45,12 @@ export {
  */
 function usage() {
   return createUsage(
-    'Usage: emulsify-audit [--root <dir>] [--json] [--fail-on-found] [--twig-threshold <count>]',
+    'Usage: emulsify-audit [--root <dir>] [--json] [--fail-on <severity>] [--fail-on-found] [--twig-threshold <count>]',
     [
       '  --root <dir>              Project root to scan. Defaults to the current directory.',
       '  --json                    Print machine-readable JSON.',
-      '  --fail-on-found           Exit with code 1 when any finding is reported.',
+      '  --fail-on <severity>       Exit with code 1 for error, warn, info, or any findings at that threshold.',
+      '  --fail-on-found           Compatibility alias for --fail-on any.',
       `  --twig-threshold <count>  Warn when Storybook roots contain more than this many Twig files. Default: ${DEFAULT_TWIG_THRESHOLD}.`,
       '  --help                    Print this help text.',
     ],
@@ -50,16 +67,25 @@ function parseArgs(argv) {
   return parseCliArgs(argv, {
     defaults: {
       projectDir: process.cwd(),
-      failOnFound: false,
+      failOn: null,
       json: false,
       help: false,
       twigThreshold: DEFAULT_TWIG_THRESHOLD,
     },
     flags: {
-      '--fail-on-found': 'failOnFound',
+      '--fail-on-found': {
+        key: 'failOn',
+        value: 'any',
+      },
       '--json': 'json',
     },
     options: {
+      '--fail-on': {
+        key: 'failOn',
+        validate: (value) => failOnValues.includes(value),
+        missingMessage: '--fail-on requires one of: error, warn, info, any.',
+        invalidMessage: '--fail-on must be one of: error, warn, info, any.',
+      },
       '--root': {
         key: 'projectDir',
         missingMessage: '--root requires a project directory.',
@@ -77,37 +103,105 @@ function parseArgs(argv) {
 }
 
 /**
+ * Decide whether completed findings meet a configured failure threshold.
+ *
+ * @param {object[]} [findings=[]] - Audit findings.
+ * @param {'error'|'warn'|'info'|'any'|null} [failOn=null] - Threshold.
+ * @returns {boolean} TRUE when the completed scan should exit with code 1.
+ */
+export function shouldFailAudit(findings = [], failOn = null) {
+  if (!failOn) {
+    return false;
+  }
+  if (failOn === 'any') {
+    return findings.length > 0;
+  }
+
+  const includedSeverities = {
+    error: ['error'],
+    warn: ['error', 'warn'],
+    info: ['error', 'warn', 'info'],
+  }[failOn];
+
+  return findings.some((finding) => {
+    const severity = findingSeverities.includes(finding.severity)
+      ? finding.severity
+      : 'warn';
+    return includedSeverities?.includes(severity);
+  });
+}
+
+/**
+ * Print an argument failure in the requested output mode.
+ *
+ * @param {*} error - Argument failure.
+ * @param {boolean} json - Whether JSON output was requested.
+ * @returns {number} Exit code.
+ */
+function reportArgumentFailure(error, json) {
+  if (json) {
+    console.log(
+      formatAuditJsonErrorReport(error, {
+        code: 'invalid-arguments',
+      }),
+    );
+  } else {
+    console.error(`${error.message || error}\n\n${usage()}`);
+  }
+
+  return cliFailureExitCode;
+}
+
+/**
  * Run the CLI.
  *
  * @param {string[]} argv - CLI arguments.
  * @returns {number} Exit code.
  */
 export function runCli(argv = process.argv.slice(2)) {
-  const options = parseArgs(argv);
+  const jsonRequested = argv.includes('--json');
+  let options;
+
+  try {
+    options = parseArgs(argv);
+    if (options.help && options.json) {
+      throw new Error('--json cannot be combined with --help.');
+    }
+  } catch (error) {
+    return reportArgumentFailure(error, jsonRequested);
+  }
 
   if (options.help) {
     console.log(usage());
     return 0;
   }
 
-  const result = runAudits(options);
+  try {
+    const result = runAudits(options);
 
-  if (options.json) {
-    console.log(formatAuditJsonReport(result));
-  } else {
-    console.log(formatAuditReport(result));
+    if (options.json) {
+      console.log(formatAuditJsonReport(result));
+    } else {
+      console.log(formatAuditReport(result));
+    }
+
+    return shouldFailAudit(result.findings, options.failOn) ? 1 : 0;
+  } catch (error) {
+    if (options.json) {
+      console.log(
+        formatAuditJsonErrorReport(error, {
+          code: 'audit-failed',
+          projectDir: resolve(options.projectDir),
+        }),
+      );
+    } else {
+      console.error(`Audit failed: ${error.message || error}`);
+    }
+
+    return cliFailureExitCode;
   }
-
-  return options.failOnFound && result.findings.length ? 1 : 0;
 }
 
 if (isCliEntrypoint(['audit.js', 'emulsify-audit'])) {
-  try {
-    process.exitCode = runCli();
-  } catch (error) {
-    console.error(error.message || error);
-    console.error('');
-    console.error(usage());
-    process.exitCode = 1;
-  }
+  process.exitCode = runCli();
 }

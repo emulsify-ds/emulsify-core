@@ -96,7 +96,10 @@ node scripts/audit.js --root /path/to/project
 
 For only the Twig story migration report, use `npm run audit:twig-stories` from this repo or `npx --no-install emulsify-audit-twig-stories` from a consuming project.
 
-Add `--fail-on-found` when using the audit in CI during a migration push.
+For the combined project audit, use `emulsify-audit --fail-on warn` when errors
+and warnings should fail CI. The focused `emulsify-audit-twig-stories` command
+continues to use `--fail-on-found`. See [Project Audit](audit.md) for the
+versioned JSON schema and complete exit behavior.
 
 ## Pa11y Accessibility Checks
 

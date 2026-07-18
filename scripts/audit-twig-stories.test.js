@@ -3,6 +3,7 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -11,6 +12,9 @@ import {
   formatAuditReport,
   runCli as runTwigStoriesCli,
 } from './audit-twig-stories.js';
+
+const require = createRequire(import.meta.url);
+const corePackage = require('../package.json');
 
 describe('audit-twig-stories', () => {
   let projectDir;
@@ -107,27 +111,46 @@ describe('audit-twig-stories', () => {
     const parsed = JSON.parse(logSpy.mock.calls[0][0]);
 
     expect(Object.keys(parsed)).toEqual([
-      'version',
-      'projectDir',
+      'schemaVersion',
+      'tool',
+      'root',
       'summary',
+      'files',
       'findings',
     ]);
-    expect(parsed.version).toEqual(expect.any(String));
-    expect(parsed.projectDir).toBe(projectDir);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.tool).toEqual({
+      name: corePackage.name,
+      version: corePackage.version,
+    });
+    expect(parsed.root).toBe('.');
     expect(parsed.summary).toEqual({
       error: 0,
       warn: parsed.findings.length,
       info: 0,
     });
+    expect(parsed.files).toEqual({
+      stories: 1,
+      twig: 0,
+      code: 1,
+      styles: 0,
+    });
     expect(parsed.findings).toEqual([
-      expect.objectContaining({
-        filePath: expect.stringContaining('card.stories.js'),
-        twigImports: expect.any(Array),
-        directTemplateReturns: expect.any(Array),
-        reasons: expect.any(Array),
-        shouldUpgrade: true,
-      }),
+      {
+        id: 'legacy-twig-story',
+        severity: 'warn',
+        path: 'src/components/card/card.stories.js',
+        line: 4,
+        message:
+          'Twig story appears to return an HTML string directly. This remains compatible, but renderTwig() is preferred for active migrations.',
+        details: [
+          'imports Twig templates without renderTwig()',
+          'appears to return Twig HTML strings directly',
+        ],
+        docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility',
+      },
     ]);
+    expect(logSpy.mock.calls[0][0]).not.toContain(projectDir);
   });
 
   it('preserves fail-on-found exit semantics for JSON output', () => {

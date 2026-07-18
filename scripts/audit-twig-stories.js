@@ -14,11 +14,17 @@ import {
   isCliEntrypoint,
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
-import { formatAuditJsonReport } from './audit/report.js';
+import {
+  formatAuditJsonErrorReport,
+  formatAuditJsonReport,
+} from './audit/report.js';
 import { lineNumberAt } from './lib/text.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
 const IDENTIFIER_PATTERN = '[A-Za-z_$][\\w$]*';
+const LEGACY_TWIG_STORY_DOCS =
+  'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility';
+const cliFailureExitCode = 2;
 const DEFAULT_IGNORES = [
   '**/node_modules/**',
   '**/dist/**',
@@ -223,6 +229,35 @@ export function auditTwigStories(options = {}) {
 }
 
 /**
+ * Adapt the focused Twig analysis to the shared machine-readable contract.
+ *
+ * @param {{projectDir: string, files: string[], findings: object[]}} result
+ * Twig story audit result.
+ * @returns {object} Combined audit-compatible result.
+ */
+function createJsonAuditResult(result) {
+  return {
+    projectDir: result.projectDir,
+    files: {
+      stories: result.files.length,
+      twig: 0,
+      code: result.files.length,
+      styles: 0,
+    },
+    findings: result.findings.map((finding) => ({
+      id: 'legacy-twig-story',
+      severity: 'warn',
+      filePath: finding.filePath,
+      line: finding.directTemplateReturns[0]?.line,
+      message:
+        'Twig story appears to return an HTML string directly. This remains compatible, but renderTwig() is preferred for active migrations.',
+      details: finding.reasons,
+      docs: LEGACY_TWIG_STORY_DOCS,
+    })),
+  };
+}
+
+/**
  * Format audit findings for terminal output.
  *
  * @param {{projectDir: string, files: string[], findings: object[]}} result
@@ -320,33 +355,61 @@ function usage() {
  * @returns {number} Process exit code.
  */
 export function runCli(argv = process.argv.slice(2)) {
-  const options = parseArgs(argv);
+  const jsonRequested = argv.includes('--json');
+  let options;
+
+  try {
+    options = parseArgs(argv);
+    if (options.help && options.json) {
+      throw new Error('--json cannot be combined with --help.');
+    }
+  } catch (error) {
+    if (jsonRequested) {
+      console.log(
+        formatAuditJsonErrorReport(error, {
+          code: 'invalid-arguments',
+        }),
+      );
+    } else {
+      console.error(`${error.message || error}\n\n${usage()}`);
+    }
+
+    return cliFailureExitCode;
+  }
 
   if (options.help) {
     console.log(usage());
     return 0;
   }
 
-  const result = auditTwigStories({
-    projectDir: options.projectDir,
-  });
+  try {
+    const result = auditTwigStories({
+      projectDir: options.projectDir,
+    });
 
-  if (options.json) {
-    console.log(formatAuditJsonReport(result, { defaultSeverity: 'warn' }));
-  } else {
-    console.log(formatAuditReport(result));
+    if (options.json) {
+      console.log(formatAuditJsonReport(createJsonAuditResult(result)));
+    } else {
+      console.log(formatAuditReport(result));
+    }
+
+    return options.failOnFound && result.findings.length ? 1 : 0;
+  } catch (error) {
+    if (options.json) {
+      console.log(
+        formatAuditJsonErrorReport(error, {
+          code: 'audit-failed',
+          projectDir: resolve(options.projectDir),
+        }),
+      );
+    } else {
+      console.error(`Audit failed: ${error.message || error}`);
+    }
+
+    return cliFailureExitCode;
   }
-
-  return options.failOnFound && result.findings.length ? 1 : 0;
 }
 
 if (isCliEntrypoint(['audit-twig-stories.js', 'emulsify-audit-twig-stories'])) {
-  try {
-    process.exitCode = runCli();
-  } catch (error) {
-    console.error(error.message || error);
-    console.error('');
-    console.error(usage());
-    process.exitCode = 1;
-  }
+  process.exitCode = runCli();
 }

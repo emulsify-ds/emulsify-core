@@ -69,9 +69,9 @@ describe('auditGeneratedPackageScripts', () => {
         name: 'current-theme',
         scripts: {
           audit:
-            'sh -c \'node_modules/@emulsify/core/scripts/audit.js "$@"; status=$?; printf "\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\\n"; exit $status\' --',
+            'sh -c \'node_modules/@emulsify/core/scripts/audit.js "$@"; status=$?; printf "\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/audit.md\\n" >&2; exit $status\' --',
           'audit:twig-stories':
-            'sh -c \'node_modules/@emulsify/core/scripts/audit-twig-stories.js "$@"; status=$?; printf "\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n"; exit $status\' --',
+            'sh -c \'node_modules/@emulsify/core/scripts/audit-twig-stories.js "$@"; status=$?; printf "\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n" >&2; exit $status\' --',
           build:
             'npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js',
           develop:

@@ -112,20 +112,24 @@ internals, Drupal assumptions in non-Drupal projects, missing configured
 structure roots, large Twig Storybook roots, and Twig stories that should move
 to `renderTwig()`.
 
-Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
+Use `--fail-on warn` to make errors and warnings enforce migration progress in
+CI. The existing `--fail-on-found` option remains a compatibility alias for
+`--fail-on any`. If you only want the Twig story migration report, run
+`npx --no-install emulsify-audit-twig-stories`.
 
-For CI dashboards or follow-up tooling, use `--json` to emit a single
-machine-readable document instead of the human report:
+For CI dashboards or downstream tooling, use the
+[versioned JSON report contract](audit.md):
 
 ```sh
-npx --no-install emulsify-audit --json > audit-report.json
-jq '.summary.error' audit-report.json
+npx --no-install emulsify-audit --json --fail-on warn > audit-report.json
+jq '{summary, files}' audit-report.json
 ```
 
-The JSON document includes the Core version, project directory, summary counts
-for `error`, `warn`, and `info`, and the raw structured finding objects. Combine
-`--json` with `--fail-on-found` when CI needs both parseable output and the same
-non-zero exit behavior as the text report.
+Schema version 1 separates its machine-readable contract version from the
+installed Core package version, uses project-relative POSIX paths, includes
+scan counts, and emits structured JSON errors for invalid arguments or audit
+failures. See [Project Audit](audit.md) for the complete schema, stability
+expectations, exit codes, and `jq` examples.
 
 ## Manual package.json Updates
 
@@ -140,7 +144,8 @@ themes. At minimum:
 - Replace Webpack build scripts with Vite scripts.
 - Remove `build-dev` and `webpack` scripts.
 - Add `audit` and `audit:twig-stories` wrappers so project audits can print the
-  relevant migration docs after running.
+  relevant migration docs to stderr after running without contaminating JSON
+  stdout.
 - Update `@emulsify/core` to a Core 4-compatible version.
 - Keep the root-level npm `overrides` listed in
   [Install Warning Controls](#install-warning-controls).
@@ -153,8 +158,8 @@ themes. At minimum:
   },
   "type": "module",
   "scripts": {
-    "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\\n\"; exit $status' --",
-    "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\"; exit $status' --",
+    "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/audit.md\\n\" >&2; exit $status' --",
+    "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\" >&2; exit $status' --",
     "build": "npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js",
     "develop": "npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook",
     "vite": "vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js"
