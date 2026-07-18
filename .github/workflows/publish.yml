@@ -23,6 +23,12 @@ jobs:
           node-version-file: '.nvmrc'
       - name: Install
         run: npm ci
+      - name: Verify semantic-release calculation
+        # Dry-run mode verifies the trusted main history without publishing.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm run semantic-release -- --dry-run
       - name: Publish
         # Semantic Release reads commit history and publishing tokens from CI.
         env:

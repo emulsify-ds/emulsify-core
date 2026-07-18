@@ -5,6 +5,10 @@ on:
     branches: [develop, main]
   pull_request:
     branches: [4.x, develop, main]
+
+permissions:
+  contents: read
+
 jobs:
   release-readiness:
     runs-on: ubuntu-latest
@@ -27,6 +31,33 @@ jobs:
         run: npm test
       - name: Storybook build
         run: npm run storybook-build
+  package-readiness:
+    name: Packed package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - name: Install
+        # npm ci keeps packed-package checks locked to package-lock.json.
+        run: npm ci
+      - name: Verify release calculation
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        env:
+          RELEASE_FROM: ${{ github.event.pull_request.base.sha }}
+          RELEASE_TO: HEAD
+          RELEASE_SQUASH_MESSAGE: ${{ github.event.pull_request.title }}
+        run: npm run release:analyze
+      - name: Verify package contents
+        run: npm run pack:dry-run
+      - name: Test packed package
+        run: npm run smoke:pack
   fixture-builds:
     name: Fixture / ${{ matrix.fixture }}
     runs-on: ubuntu-latest

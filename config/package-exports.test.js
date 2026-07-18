@@ -17,28 +17,10 @@ function normalizePackagePath(filePath) {
   return posix.normalize(filePath).replace(/^\.\//, '');
 }
 
-function isPackagedFile(filePath, packageFiles) {
-  const normalized = normalizePackagePath(filePath);
-
-  return packageFiles.some((entry) => {
-    if (entry.startsWith('!')) return false;
-    if (entry === normalized) return true;
-    if (entry.endsWith('/**/*.js')) {
-      return (
-        normalized.startsWith(entry.replace('/**/*.js', '/')) &&
-        normalized.endsWith('.js')
-      );
-    }
-    if (entry.endsWith('/**/*')) {
-      return normalized.startsWith(entry.replace('/**/*', '/'));
-    }
-    return false;
-  });
-}
-
 function isRelativeJsSpecifier(value) {
   return (
-    (value.startsWith('./') || value.startsWith('../')) && value.endsWith('.js')
+    (value.startsWith('./') || value.startsWith('../')) &&
+    (value.endsWith('.js') || !posix.extname(value))
   );
 }
 
@@ -108,10 +90,11 @@ function dryRunPackFiles() {
   return pack.files.map(({ path: filePath }) => normalizePackagePath(filePath));
 }
 
-function matchesForbiddenPackagePath(filePath, prefixes, suffixes) {
+function matchesForbiddenPackagePath(filePath, prefixes, suffixes, segments) {
   return (
     prefixes.some((prefix) => filePath.startsWith(prefix)) ||
-    suffixes.some((suffix) => filePath.endsWith(suffix))
+    suffixes.some((suffix) => filePath.endsWith(suffix)) ||
+    segments.some((segment) => filePath.split('/').includes(segment))
   );
 }
 
@@ -203,12 +186,10 @@ describe('@emulsify/core package exports', () => {
   });
 
   it('packages relative JavaScript imports used by packaged files', () => {
-    const packageFiles = packageJson.files.map(normalizePackagePath);
-    const packageJsFiles = packageFiles.filter(
-      (filePath) =>
-        filePath.endsWith('.js') &&
-        !filePath.includes('*') &&
-        !filePath.startsWith('!'),
+    const packageFiles = dryRunPackFiles();
+    const packageFileSet = new Set(packageFiles);
+    const packageJsFiles = packageFiles.filter((filePath) =>
+      filePath.endsWith('.js'),
     );
     const missingImports = [];
 
@@ -220,9 +201,16 @@ describe('@emulsify/core package exports', () => {
           posix.join(posix.dirname(filePath), specifier),
         );
 
+        // Some packaged Storybook files intentionally load consumer-project
+        // overrides outside the package root.
         if (resolvedPath.startsWith('../')) continue;
 
-        if (!isPackagedFile(resolvedPath, packageFiles)) {
+        const importCandidates = posix.extname(resolvedPath)
+          ? [resolvedPath]
+          : [resolvedPath, `${resolvedPath}.js`, `${resolvedPath}/index.js`];
+        if (
+          !importCandidates.some((candidate) => packageFileSet.has(candidate))
+        ) {
           missingImports.push(
             `${filePath} imports ${specifier} (${resolvedPath})`,
           );
@@ -245,7 +233,13 @@ describe('@emulsify/core package exports', () => {
       '.storybook/preview.js',
       'config/vite/vite.config.js',
       'config/vite/plugins.js',
+      'scripts/audit.js',
+      'scripts/audit-twig-stories.js',
+      'scripts/audit/index.js',
+      'scripts/audit/report.js',
       'src/storybook/index.js',
+      'src/storybook/render-web-component.js',
+      'src/storybook/twig/asset-source-runtime.js',
       'src/extensions/index.js',
       'src/extensions/react/index.js',
       'src/extensions/twig/index.js',
@@ -254,11 +248,15 @@ describe('@emulsify/core package exports', () => {
       '.github/workflows/lint.yml',
       'config/jest.config.js',
       'config/jest-transform-import-meta-url.js',
+      'config/release-analysis.cjs',
       'config/vite/test-utils/virtual-twig-asset-sources.js',
       'config/vite/test-utils/virtual-twig-globs.js',
       'release.config.cjs',
       'scripts/bump-version-from-commits.js',
       'scripts/release-fixtures.js',
+      'scripts/smoke-pack.js',
+      'scripts/test-custom-element-storybook.js',
+      'scripts/verify-release-analysis.js',
     ];
     const forbiddenPrefixes = [
       '.coverage/',
@@ -268,7 +266,18 @@ describe('@emulsify/core package exports', () => {
       'dist/',
       'src/components/',
     ];
-    const forbiddenSuffixes = ['.test.js', '.test.jsx'];
+    const forbiddenSuffixes = [
+      '.snap',
+      '.spec.js',
+      '.spec.jsx',
+      '.spec.ts',
+      '.spec.tsx',
+      '.test.js',
+      '.test.jsx',
+      '.test.ts',
+      '.test.tsx',
+    ];
+    const forbiddenSegments = ['__snapshots__'];
 
     for (const filePath of requiredFiles) {
       expect(packFileSet.has(filePath)).toBe(true);
@@ -276,6 +285,10 @@ describe('@emulsify/core package exports', () => {
 
     for (const exportTarget of collectExportTargets(packageJson.exports)) {
       expect(packFileSet.has(exportTarget)).toBe(true);
+    }
+
+    for (const binTarget of Object.values(packageJson.bin)) {
+      expect(packFileSet.has(normalizePackagePath(binTarget))).toBe(true);
     }
 
     for (const filePath of forbiddenFiles) {
@@ -287,6 +300,7 @@ describe('@emulsify/core package exports', () => {
         filePath,
         forbiddenPrefixes,
         forbiddenSuffixes,
+        forbiddenSegments,
       ),
     );
 

@@ -7,23 +7,12 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import releaseAnalysisConfig from '../config/release-analysis.cjs';
 
 const ZERO_SHA = /^0+$/;
 const RELEASE_TYPES = new Set(['major', 'minor', 'patch']);
-export const releaseRules = [
-  {
-    type: 'feat',
-    subject: 'remove storybook-html in favor of storybook-react v9.x',
-    release: 'major',
-  },
-];
-const semanticReleaseConfig = {
-  preset: 'angular',
-  releaseRules,
-  parserOpts: {
-    noteKeywords: ['BREAKING CHANGE', 'BREAKING CHANGES', 'BREAKING'],
-  },
-};
+const { commitAnalyzerOptions, releaseRules } = releaseAnalysisConfig;
+export { releaseRules };
 
 const logger = {
   log: () => {},
@@ -98,7 +87,7 @@ export function getCommitsInRange({ cwd, from, to = 'HEAD' }) {
 export async function analyzeReleaseType(commits, cwd) {
   const { analyzeCommits } = await import('@semantic-release/commit-analyzer');
 
-  return analyzeCommits(semanticReleaseConfig, {
+  return analyzeCommits(commitAnalyzerOptions, {
     commits,
     cwd,
     logger,

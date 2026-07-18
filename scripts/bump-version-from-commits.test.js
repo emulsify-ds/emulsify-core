@@ -2,6 +2,7 @@
  * @file Tests for develop branch semantic version bumping.
  */
 
+import releaseAnalysisConfig from '../config/release-analysis.cjs';
 import {
   buildCommitRange,
   incrementVersion,
@@ -52,6 +53,16 @@ describe('develop version bump helpers', () => {
       type: 'feat',
       subject: 'remove storybook-html in favor of storybook-react v9.x',
       release: 'major',
+    });
+  });
+
+  it('uses the shared semantic-release parser options', () => {
+    expect(releaseAnalysisConfig.commitAnalyzerOptions).toMatchObject({
+      preset: 'angular',
+      releaseRules,
+      parserOpts: {
+        noteKeywords: ['BREAKING CHANGE', 'BREAKING CHANGES', 'BREAKING'],
+      },
     });
   });
 

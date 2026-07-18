@@ -3,14 +3,27 @@
  * @file Verify public package imports from an installed tarball.
  */
 
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { run } from './lib/proc.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, '..');
+const mixedStorybookFixture = join(
+  packageRoot,
+  '.github/fixtures/release/mixed-storybook',
+);
+const customElementStoryId =
+  'fixtures-mixed-storybook-custom-element--custom-element-card';
 
 let tempDir;
 let tarballPath;
@@ -30,9 +43,19 @@ function assertFunction(module, exportName, specifier) {
 
 {
   const core = await import('@emulsify/core');
+  const extensions = await import('@emulsify/core/extensions');
   const storybook = await import('@emulsify/core/storybook');
   const twig = await import('@emulsify/core/extensions/twig');
   const react = await import('@emulsify/core/extensions/react');
+  const assetSourceRuntime = await import(
+    '@emulsify/core/storybook/twig/asset-source-runtime'
+  );
+  const includeFunction = await import(
+    '@emulsify/core/storybook/twig/include-function'
+  );
+  const drupalFilters = await import(
+    '@emulsify/core/storybook/twig/drupal-filters'
+  );
   const vite = await import('@emulsify/core/vite');
   const plugins = await import('@emulsify/core/vite/plugins');
   const platforms = await import('@emulsify/core/vite/platforms');
@@ -40,8 +63,18 @@ function assertFunction(module, exportName, specifier) {
   if (!core.react || !core.twig) {
     throw new Error('extension namespaces missing from @emulsify/core');
   }
+  if (!extensions.react || !extensions.twig) {
+    throw new Error(
+      'extension namespaces missing from @emulsify/core/extensions',
+    );
+  }
   if (!vite.default) {
     throw new Error('default export missing from @emulsify/core/vite');
+  }
+  if (!drupalFilters.default) {
+    throw new Error(
+      'default export missing from @emulsify/core/storybook/twig/drupal-filters',
+    );
   }
 
   assertFunction(
@@ -56,11 +89,102 @@ function assertFunction(module, exportName, specifier) {
     '@emulsify/core/storybook',
   );
   assertFunction(
+    storybook,
+    'getActiveStorybookAdapter',
+    '@emulsify/core/storybook',
+  );
+  assertFunction(
+    storybook,
+    'renderHtmlStoryResult',
+    '@emulsify/core/storybook',
+  );
+  assertFunction(
+    storybook,
+    'renderTwigHtml',
+    '@emulsify/core/storybook',
+  );
+  assertFunction(
+    storybook,
+    'renderTwigToHtml',
+    '@emulsify/core/storybook',
+  );
+  assertFunction(
+    storybook,
+    'TwigHtmlStory',
+    '@emulsify/core/storybook',
+  );
+  assertFunction(storybook, 'TwigStory', '@emulsify/core/storybook');
+  assertFunction(
+    twig,
+    'getTwigFunctionMap',
+    '@emulsify/core/extensions/twig',
+  );
+  assertFunction(
     twig,
     'registerTwigExtensions',
     '@emulsify/core/extensions/twig',
   );
+  assertFunction(
+    twig,
+    'addAttributes',
+    '@emulsify/core/extensions/twig',
+  );
+  assertFunction(
+    twig,
+    'addAttributesTwigFunction',
+    '@emulsify/core/extensions/twig',
+  );
+  assertFunction(
+    twig,
+    'bemAttributes',
+    '@emulsify/core/extensions/twig',
+  );
+  assertFunction(
+    twig,
+    'bemTwigFunction',
+    '@emulsify/core/extensions/twig',
+  );
+  assertFunction(
+    react,
+    'defineReactExtension',
+    '@emulsify/core/extensions/react',
+  );
+  assertFunction(
+    includeFunction,
+    'createTwigIncludeFunction',
+    '@emulsify/core/storybook/twig/include-function',
+  );
+  assertFunction(
+    assetSourceRuntime,
+    'createAssetSourceRuntime',
+    '@emulsify/core/storybook/twig/asset-source-runtime',
+  );
+  assertFunction(
+    assetSourceRuntime,
+    'candidateKeysForAssetPath',
+    '@emulsify/core/storybook/twig/asset-source-runtime',
+  );
+  assertFunction(
+    assetSourceRuntime,
+    'findAssetKey',
+    '@emulsify/core/storybook/twig/asset-source-runtime',
+  );
+  assertFunction(
+    assetSourceRuntime,
+    'normalizeAssetPath',
+    '@emulsify/core/storybook/twig/asset-source-runtime',
+  );
   assertFunction(plugins, 'makePlugins', '@emulsify/core/vite/plugins');
+  assertFunction(
+    plugins,
+    'makeTwigNamespaces',
+    '@emulsify/core/vite/plugins',
+  );
+  assertFunction(
+    plugins,
+    'makeTwigPluginOptions',
+    '@emulsify/core/vite/plugins',
+  );
   assertFunction(
     platforms,
     'getPlatformAdapter',
@@ -76,11 +200,107 @@ function assertFunction(module, exportName, specifier) {
     'createReactExtensionRegistry',
     '@emulsify/core/extensions/react',
   );
+  if (!platforms.adapters || typeof platforms.adapters !== 'object') {
+    throw new Error('adapters missing from @emulsify/core/vite/platforms');
+  }
+
+  const normalizedAssetPath =
+    assetSourceRuntime.normalizeAssetPath('@assets/example.txt');
+  if (normalizedAssetPath !== 'example.txt') {
+    throw new Error('normalizeAssetPath returned an unexpected value');
+  }
+  const runtime = assetSourceRuntime.createAssetSourceRuntime({
+    assets: {
+      '/example.txt': 'Packed asset source',
+    },
+    assetRootPrefixes: [''],
+  });
+  if (runtime.getAssetText('@assets/example.txt') !== 'Packed asset source') {
+    throw new Error('createAssetSourceRuntime did not resolve packed source');
+  }
 }
 `;
 
+function assertInstalledPackageIsExtracted(installedPackageRoot) {
+  const relativeToSource = relative(
+    realpathSync(packageRoot),
+    realpathSync(installedPackageRoot),
+  );
+
+  if (
+    relativeToSource === '' ||
+    (!relativeToSource.startsWith('..') && !isAbsolute(relativeToSource))
+  ) {
+    throw new Error(
+      `Packed package resolved into the source checkout: ${installedPackageRoot}`,
+    );
+  }
+}
+
+function copyMixedStorybookFixture(projectDir) {
+  cpSync(
+    join(mixedStorybookFixture, 'project.emulsify.json'),
+    join(projectDir, 'project.emulsify.json'),
+  );
+  cpSync(join(mixedStorybookFixture, 'src'), join(projectDir, 'src'), {
+    recursive: true,
+  });
+  cpSync(join(mixedStorybookFixture, 'assets'), join(projectDir, 'assets'), {
+    recursive: true,
+  });
+}
+
+function assertAuditCli() {
+  const auditBin = join(tempDir, 'node_modules/.bin/emulsify-audit');
+  const auditOutput = run(auditBin, ['--json', '--root', tempDir], {
+    ...runOptions,
+    cwd: tempDir,
+  });
+  const report = JSON.parse(auditOutput);
+
+  if (report.schemaVersion !== 1 || report.tool?.name !== '@emulsify/core') {
+    throw new Error('Installed emulsify-audit returned an invalid JSON report');
+  }
+}
+
+function buildPackedStorybook(installedPackageRoot) {
+  const outputDir = join(tempDir, '.out');
+  const storybookBin = join(tempDir, 'node_modules/.bin/storybook');
+  const storybookConfigDir = join(installedPackageRoot, '.storybook');
+
+  run(
+    storybookBin,
+    ['build', '--config-dir', storybookConfigDir, '-o', outputDir],
+    {
+      ...runOptions,
+      cwd: tempDir,
+      echoOutputOnFailure: true,
+      env: {
+        ...process.env,
+        CI: '1',
+        FORCE_COLOR: '0',
+        NODE_OPTIONS: '--no-deprecation',
+      },
+      failureMessage: 'Packed Storybook consumer build failed.',
+      mode: 'spawn',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+
+  const storyIndex = JSON.parse(
+    readFileSync(join(outputDir, 'index.json'), 'utf8'),
+  );
+  if (!storyIndex.entries?.[customElementStoryId]) {
+    throw new Error(
+      `Packed Storybook output is missing story ${customElementStoryId}`,
+    );
+  }
+}
+
 async function main() {
-  const [pack] = JSON.parse(run('npm', ['pack', '--json'], runOptions));
+  const [pack] = JSON.parse(
+    run('npm', ['pack', '--ignore-scripts', '--json'], runOptions),
+  );
   tarballPath = isAbsolute(pack.filename)
     ? pack.filename
     : join(packageRoot, pack.filename);
@@ -96,13 +316,21 @@ async function main() {
     cwd: tempDir,
     stdio: 'inherit',
   });
+  const installedPackageRoot = join(tempDir, 'node_modules/@emulsify/core');
+  assertInstalledPackageIsExtracted(installedPackageRoot);
+  copyMixedStorybookFixture(tempDir);
+
   run(process.execPath, ['--input-type=module', '--eval', smokeScript], {
     ...runOptions,
     cwd: tempDir,
     stdio: 'inherit',
   });
+  assertAuditCli();
+  buildPackedStorybook(installedPackageRoot);
 
-  console.log('Public package imports resolved successfully.');
+  console.log(
+    'Packed package imports, audit CLI, and Storybook consumer build passed.',
+  );
 }
 
 try {
