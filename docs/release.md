@@ -1,6 +1,15 @@
 # Release Verification
 
-Emulsify Core 4.x supports Node.js 24.11.0 or later. This is the project policy for maintained 4.x scripts, CI, and release automation.
+Emulsify Core 4.x supports consumers on Node.js 24.13.0 or later. The strictest
+published toolchain dependency, `stylelint-selector-bem-pattern` 5, requires
+that patch. The published Babel 8 dependencies independently exclude Node.js
+24.0 through 24.10, while the Stylelint plugin also excludes Node.js 24.11 and
+24.12.
+
+Repository development recommends the exact Node.js 24.13.0 version pinned in
+`.nvmrc`. Every CI and release workflow reads `.nvmrc`, so automation uses that
+same exact version. Maintained scripts derive the supported consumer floor from
+`package.json#engines.node`.
 
 Do not publish from a local checkout unless maintainers have explicitly approved the release. Use these steps to verify release readiness before publishing.
 

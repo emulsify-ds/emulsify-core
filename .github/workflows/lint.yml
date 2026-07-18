@@ -16,7 +16,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Install
         # npm ci keeps release-readiness checks locked to package-lock.json.
@@ -49,7 +49,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Install
         # npm ci keeps fixture checks locked to package-lock.json.

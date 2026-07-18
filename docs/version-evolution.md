@@ -18,13 +18,19 @@ This version also continued dependency and Storybook upgrades while making more 
 
 ## 3.x: Runtime Modernization
 
-The third major version moved the package into a more modern JavaScript runtime model. It adopted ESM, raised the runtime floor to Node 24.11.0, kept dependencies current, refined PostCSS and Sass handling, improved component asset copying, and continued to preserve existing Drupal SDC behavior.
+The third major version moved the package into a more modern JavaScript runtime model. It adopted ESM, raised the runtime floor to Node 24, kept dependencies current, refined PostCSS and Sass handling, improved component asset copying, and continued to preserve existing Drupal SDC behavior. That historical policy set a major-version floor; it did not require a specific Node 24 patch release.
 
 It also set up the architectural runway for the current build model by cleaning up module scope, Storybook behavior, asset resolution, and package compatibility work.
 
 ## Current Release: Vite, React/Vite Storybook, And Platform Adapters
 
 The current release is the next evolution of Emulsify Core. Vite replaces Webpack as the build engine. Storybook runs on the React/Vite framework. Twig templates render through Emulsify's Storybook helper, and React components render through normal Storybook React patterns.
+
+The current published dependency set includes Babel 8, whose engine range
+excludes Node.js 24.0 through 24.10, and
+`stylelint-selector-bem-pattern` 5, which requires Node.js 24.13.0. The current
+consumer floor is therefore Node.js 24.13.0, while repository development and CI
+use the exact 24.13.0 version pinned in `.nvmrc`.
 
 The project model is also more explicit. `project.emulsify.json` drives platform and structure configuration. The normalized structure model supports `src/components`, root `./components`, and custom `variant.structureImplementations`. Platform adapters own platform-specific behavior such as Drupal behavior attachment, Drupal Twig filters, and Drupal SDC output mirroring. WordPress projects have an explicit neutral adapter that keeps Core focused on Twig authoring, Storybook, Vite, and `dist/` output while leaving WordPress runtime integration to `emulsify-wordpress-theme`.
 

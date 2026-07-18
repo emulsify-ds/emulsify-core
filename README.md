@@ -29,7 +29,15 @@ implementation details where they belong.
   configuration.
 - Platform adapters control CMS-specific behavior instead of assuming it
   globally.
-- Node.js 24.11.0 or later is required.
+
+## Node.js Runtime Policy
+
+- Consumers are supported on Node.js 24.13.0 or later. The strictest published
+  toolchain dependency, `stylelint-selector-bem-pattern` 5, requires that patch;
+  Babel 8 also excludes Node.js 24.0 through 24.10.
+- Contributors should use Node.js 24.13.0, the exact version pinned in `.nvmrc`.
+- CI also uses Node.js 24.13.0 by reading `.nvmrc`, so local development and
+  automated checks share the same recommended runtime.
 
 ## Project Evolution
 
