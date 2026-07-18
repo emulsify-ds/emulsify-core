@@ -12,4 +12,7 @@ export {
   TwigHtmlStory,
   TwigStory,
 } from './render-twig.js';
-export { defineComponent, renderWebComponent } from './render-web-component.js';
+export {
+  defineCustomElement,
+  renderWebComponent,
+} from './render-web-component.js';

@@ -5,8 +5,8 @@ These docs expand on the short project README and are organized by the task a pr
 | Topic                                                | Use This When                                                                                                         |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | [Version Evolution](version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |
-| [Component Authoring](component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
-| [Storybook](storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
+| [Component Authoring](component-authoring.md)        | Choosing Twig, React, custom-element, or mixed Storybook authoring and comparing component examples.                  |
+| [Storybook](storybook.md)                            | Rendering Twig and custom-element stories, using public helpers, and mixing authoring models.                         |
 | [Project Structure And Output](project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, asset roots, and output paths. |
 | [Asset References](asset-references.md)              | Referencing fonts, SVGs, images, and other files from project root or configured asset roots in Sass, CSS, and Twig.  |
 | [Platform Adapters](platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |

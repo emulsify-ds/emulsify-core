@@ -151,7 +151,11 @@ const releaseFixtures = [
       },
       {
         pattern: '.out/storybook-assets/greeting-card.stories-*.js',
-        strings: ['Web component fixture'],
+        strings: [
+          'Custom element fixture',
+          'Default slot content',
+          'greeting-select',
+        ],
       },
     ],
   },

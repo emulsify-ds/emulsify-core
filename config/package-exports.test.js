@@ -130,7 +130,14 @@ describe('@emulsify/core package exports', () => {
       ],
       [
         '@emulsify/core/storybook',
-        ['renderHtmlStoryResult', 'renderTwig', 'TwigHtmlStory', 'TwigStory'],
+        [
+          'defineCustomElement',
+          'renderHtmlStoryResult',
+          'renderTwig',
+          'renderWebComponent',
+          'TwigHtmlStory',
+          'TwigStory',
+        ],
       ],
       [
         '@emulsify/core/storybook/twig/include-function',
@@ -181,9 +188,12 @@ describe('@emulsify/core package exports', () => {
   });
 
   it('exposes renderTwig from the Storybook public entry', async () => {
-    const { renderTwig } = await import('@emulsify/core/storybook');
+    const { defineCustomElement, renderTwig, renderWebComponent } =
+      await import('@emulsify/core/storybook');
 
+    expect(typeof defineCustomElement).toBe('function');
     expect(typeof renderTwig).toBe('function');
+    expect(typeof renderWebComponent).toBe('function');
   });
 
   it('does not expose internal implementation subpaths to Jest resolution', async () => {

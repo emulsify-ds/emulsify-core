@@ -1,19 +1,28 @@
-import { defineComponent, renderWebComponent } from '@emulsify/core/storybook';
+import {
+  defineCustomElement,
+  renderWebComponent,
+} from '@emulsify/core/storybook';
+import { fn } from 'storybook/test';
 import { GreetingCardElement } from './greeting-card.js';
 
-defineComponent('fixture-greeting-card', GreetingCardElement);
+defineCustomElement('fixture-greeting-card', GreetingCardElement);
 
 export default {
-  title: 'Fixtures/Mixed Storybook/Web Component',
+  title: 'Fixtures/Mixed Storybook/Custom Element',
   render: renderWebComponent('fixture-greeting-card', {
-    className: 'fixture-web-component-story',
+    className: 'fixture-custom-element-story',
+    events: {
+      'greeting-select': 'onGreetingSelect',
+    },
   }),
 };
 
-export const WebComponentCard = {
+export const CustomElementCard = {
   args: {
-    heading: 'Web component fixture',
+    heading: 'Custom element fixture',
     body: 'Rendered as a vanilla custom element.',
+    children: 'Default slot content',
     featured: true,
+    onGreetingSelect: fn(),
   },
 };

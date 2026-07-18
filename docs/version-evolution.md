@@ -24,7 +24,12 @@ It also set up the architectural runway for the current build model by cleaning 
 
 ## Current Release: Vite, React/Vite Storybook, And Platform Adapters
 
-The current release is the next evolution of Emulsify Core. Vite replaces Webpack as the build engine. Storybook runs on the React/Vite framework. Twig templates render through Emulsify's Storybook helper, and React components render through normal Storybook React patterns.
+The current release is the next evolution of Emulsify Core. Vite replaces
+Webpack as the build engine. Storybook runs on the React/Vite framework. Twig
+templates render through Emulsify's Storybook helper, React components render
+through normal Storybook React patterns, and a focused adapter renders
+autonomous custom elements with documented property, attribute, default-slot,
+and native event boundaries.
 
 The current published dependency set includes Babel 8, whose engine range
 excludes Node.js 24.0 through 24.10, and
@@ -34,4 +39,8 @@ use the exact 24.13.0 version pinned in `.nvmrc`.
 
 The project model is also more explicit. `project.emulsify.json` drives platform and structure configuration. The normalized structure model supports `src/components`, root `./components`, and custom `variant.structureImplementations`. Platform adapters own platform-specific behavior such as Drupal behavior attachment, Drupal Twig filters, and Drupal SDC output mirroring. WordPress projects have an explicit neutral adapter that keeps Core focused on Twig authoring, Storybook, Vite, and `dist/` output while leaving WordPress runtime integration to `emulsify-wordpress-theme`.
 
-That combination keeps existing Drupal and Twig-heavy projects viable while making Emulsify Core a better fit for standalone Twig libraries, standalone React libraries, and mixed design systems. It is not a break from the project history; it is the same shared-tooling idea updated for the way modern component libraries are built.
+That combination keeps existing Drupal and Twig-heavy projects viable while
+making Emulsify Core a better fit for standalone Twig libraries, standalone
+React libraries, custom-element stories, and mixed design systems. It is not a
+break from the project history; it is the same shared-tooling idea updated for
+the way modern component libraries are built.

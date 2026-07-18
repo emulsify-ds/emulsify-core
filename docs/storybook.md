@@ -1,6 +1,9 @@
 # Storybook
 
-Emulsify Core uses `@storybook/react-vite`. React components render directly through Storybook's React framework, Twig templates render through Emulsify's Twig story helper, and web components render through Emulsify's web component story helper.
+Emulsify Core uses `@storybook/react-vite`. React components render directly
+through Storybook's React framework, Twig templates render through Emulsify's
+Twig story helper, and autonomous custom elements render through a focused
+custom-element adapter.
 
 ## Twig Stories
 
@@ -156,33 +159,52 @@ export const Default = {};
 
 Twig and React stories are discovered from the same normalized story roots. They can share title hierarchy, Sass conventions, global preview configuration, and addons.
 
-## Web Component Stories
+## Custom Element Stories
 
-Web component stories use vanilla custom elements plus `defineComponent()` and `renderWebComponent()` from `@emulsify/core/storybook`.
+Custom-element stories use the browser custom element registry plus
+`defineCustomElement()` and `renderWebComponent()` from
+`@emulsify/core/storybook`.
 
 ```js
-import { defineComponent, renderWebComponent } from '@emulsify/core/storybook';
+import {
+  defineCustomElement,
+  renderWebComponent,
+} from '@emulsify/core/storybook';
+import { fn } from 'storybook/test';
 import { GreetingCardElement } from './greeting-card.js';
 
-defineComponent('greeting-card', GreetingCardElement);
+defineCustomElement('greeting-card', GreetingCardElement);
 
 export default {
   title: 'Components/Greeting Card',
   render: renderWebComponent('greeting-card', {
     argsAs: 'properties',
+    events: {
+      'greeting-select': 'onGreetingSelect',
+    },
   }),
   args: {
     heading: 'Hello',
     body: 'Rendered as a vanilla custom element.',
+    children: 'Content for the default slot',
+    onGreetingSelect: fn(),
   },
 };
 
 export const Default = {};
 ```
 
-`defineComponent()` is idempotent. If the tag is already registered, it returns the existing constructor instead of redefining it. This keeps repeated Storybook evaluation and HMR updates from throwing. The browser custom element registry is permanent, so class-body changes usually need a full browser refresh before the new class definition is used.
+`defineCustomElement()` validates the browser's custom-element name rules and
+requires a constructable class whose prototype inherits from `HTMLElement`. It
+is idempotent when the same tag and constructor are evaluated again. If HMR
+supplies a different constructor for an existing tag, the helper warns and
+returns the constructor already in the browser registry. The registry cannot
+replace a definition, so refresh Storybook to use the new class.
 
-`renderWebComponent()` applies Storybook args through a React ref in a layout effect. Property mode is the default and preserves object, array, and function references:
+`renderWebComponent()` applies Storybook args through the custom element's DOM
+API. The `argsAs` option accepts only `properties` or `attributes` and reports a
+configuration error for any other value. Property mode is the default and
+preserves object, array, and function references:
 
 ```js
 render: renderWebComponent('greeting-card', {
@@ -190,7 +212,14 @@ render: renderWebComponent('greeting-card', {
 });
 ```
 
-Attribute mode is available for elements that use attributes as their public API. It stringifies values, writes `true` booleans as empty attributes, and removes attributes for `false`, `null`, and `undefined`:
+When a later args object omits a property that was previously applied, the
+renderer assigns `undefined`. This lets custom setters clear their internal
+state instead of retaining an earlier control value.
+
+Attribute mode is available for elements that use attributes as their public
+API. It stringifies values, writes `true` booleans as empty attributes, and
+removes attributes for `false`, `null`, `undefined`, or a key omitted by a
+later args object:
 
 ```js
 render: renderWebComponent('greeting-card', {
@@ -198,7 +227,83 @@ render: renderWebComponent('greeting-card', {
 });
 ```
 
-Shadow DOM components may need extra accessibility test configuration. Storybook's a11y addon and axe-based checks do not automatically inspect every shadow root in every setup; configure axe traversal for shadow DOM when the component's accessible UI lives inside a shadow tree.
+### Children And The Default Slot
+
+`args.children` becomes React-managed light DOM inside the custom element. A
+component with an unnamed `<slot>` can use it as straightforward default-slot
+content:
+
+```js
+export const WithSupportingText = {
+  args: {
+    children: 'Supporting text',
+  },
+};
+```
+
+Strings are inserted as text, not HTML. React-renderable nodes are also
+supported. When a later args object omits `children`, the old light DOM is
+removed.
+
+### Native Custom Events
+
+Use the `events` option to map native event types to Storybook callback args:
+
+```js
+render: renderWebComponent('greeting-card', {
+  events: {
+    'greeting-select': 'onGreetingSelect',
+  },
+});
+```
+
+The mapped callback receives the original native `Event` or `CustomEvent`, so
+custom payloads remain available through `event.detail`. The renderer updates
+the listener when controls change and removes it on unmount. Mapped callback
+args are not assigned as DOM properties or attributes, and React synthetic
+event naming is not inferred. Assign Storybook's `fn()` to the callback arg, as
+shown above, to record calls in the Actions panel and make the callback
+available to interaction tests.
+
+For events created inside a shadow root, dispatch from the custom-element host
+or configure the event to bubble and cross the shadow boundary when that is the
+component's intended public behavior.
+
+### Wrapper, Class, And ID
+
+Without a wrapper, renderer `id` and `className` options apply to the custom
+element. With `wrapper`, those two options apply to the wrapper:
+
+```js
+render: renderWebComponent('greeting-card', {
+  wrapper: 'section',
+  id: 'greeting-card-story',
+  className: 'story-frame',
+});
+```
+
+Storybook args always target the custom element, even in wrapper mode. An arg
+for `id` or `className` in property mode, or `id` or `class` in attribute mode,
+wins while it is present. Renderer options such as `argsAs`, `events`, and
+`wrapper` are never forwarded to the custom element.
+
+### Known Limitations
+
+- The adapter supports autonomous custom-element tags.
+  `defineCustomElement()` rejects customized built-in constructors and
+  registration options such as `{ extends: 'button' }`; markup such as
+  `<button is="custom-button">` is not supported.
+- `args.children` covers an unnamed default slot. There is no named-slot
+  composition API in this initial release.
+- Native events require an explicit `events` mapping. The renderer does not
+  convert React-style `on*` args into native listeners.
+- The custom element registry is permanent for the page. A different
+  constructor supplied during HMR produces a warning and requires a full
+  Storybook refresh.
+- Shadow DOM components may need extra accessibility test configuration.
+  Storybook's a11y addon and axe-based checks do not automatically inspect
+  every shadow root in every setup; configure axe traversal when accessible UI
+  lives inside a shadow tree.
 
 ## Storybook Twig Runtime
 

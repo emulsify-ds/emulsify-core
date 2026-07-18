@@ -44,7 +44,17 @@ function assertFunction(module, exportName, specifier) {
     throw new Error('default export missing from @emulsify/core/vite');
   }
 
+  assertFunction(
+    storybook,
+    'defineCustomElement',
+    '@emulsify/core/storybook',
+  );
   assertFunction(storybook, 'renderTwig', '@emulsify/core/storybook');
+  assertFunction(
+    storybook,
+    'renderWebComponent',
+    '@emulsify/core/storybook',
+  );
   assertFunction(
     twig,
     'registerTwigExtensions',
