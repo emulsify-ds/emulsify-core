@@ -21,6 +21,7 @@ import { run } from './lib/proc.js';
 import {
   assertContractDependencies,
   assertFixtureCoverage,
+  assertProvidedBinaries,
 } from './lib/consumer-contract.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -337,6 +338,7 @@ export function main(argv = process.argv.slice(2)) {
 
   const fixturePackages = loadFixturePackages();
   assertContractDependencies(contract, packageJson, fixturePackages);
+  assertProvidedBinaries(contract, packageJson);
   assertFixtureCoverage(contract, fixturePackages);
 
   if (options.list) {

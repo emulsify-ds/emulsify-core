@@ -242,6 +242,39 @@ function assertAuditCli() {
   }
 }
 
+function assertEmulsifyCli() {
+  const cliBin = join(tempDir, 'node_modules/.bin/emulsify');
+  const installedCliRoot = join(tempDir, 'node_modules/@emulsify/cli');
+
+  if (!existsSync(cliBin)) {
+    throw new Error('Packed Core install did not provide the emulsify binary');
+  }
+
+  const resolvedBin = realpathSync(cliBin);
+  const relativeToInstalledCli = relative(
+    realpathSync(installedCliRoot),
+    resolvedBin,
+  );
+  if (
+    relativeToInstalledCli.startsWith('..') ||
+    isAbsolute(relativeToInstalledCli)
+  ) {
+    throw new Error(
+      `Installed emulsify binary resolved outside @emulsify/cli: ${resolvedBin}`,
+    );
+  }
+
+  const helpOutput = run('npx', ['--no-install', 'emulsify', '--help'], {
+    ...runOptions,
+    cwd: tempDir,
+  });
+  if (!helpOutput.includes('Emulsify CLI')) {
+    throw new Error(
+      'Installed emulsify --help output did not identify Emulsify CLI',
+    );
+  }
+}
+
 function buildPackedStorybook(installedPackageRoot) {
   const outputDir = join(tempDir, '.out');
   const storybookBin = join(tempDir, 'node_modules/.bin/storybook');
@@ -305,10 +338,11 @@ async function main() {
     stdio: 'inherit',
   });
   assertAuditCli();
+  assertEmulsifyCli();
   buildPackedStorybook(installedPackageRoot);
 
   console.log(
-    'Packed package imports, audit CLI, and Storybook consumer build passed.',
+    'Packed package imports, Core audit CLIs, Emulsify CLI, and Storybook consumer build passed.',
   );
 }
 

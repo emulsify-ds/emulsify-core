@@ -17,6 +17,16 @@ The machine-readable source for this contract is
 package to the generated-consumer script names that need it, its `notes` object
 records why the package is intentionally kept, and its `fixtures` and
 `reactMatrix` objects connect that metadata to executable compatibility checks.
+The separate `providedBinaries` object records compatibility executables that
+Core installs without falsely attributing them to a generated Whisk script.
+
+Core 4.x keeps `@emulsify/cli` as a direct dependency so installing Core
+provides the project-local `node_modules/.bin/emulsify` command, matching the
+installed behavior of Core 4.2. The packed smoke test installs only Core's
+tarball, rejects source-checkout resolution, and proves that
+`npx --no-install emulsify --help` runs the CLI supplied by that dependency.
+Core's own `emulsify-audit` and `emulsify-audit-twig-stories` package
+executables remain separate commands with separate responsibilities.
 
 ## Executable Consumer Fixtures
 
@@ -56,6 +66,12 @@ Long-running or side-effecting scripts such as `develop`, `vite`, `storybook`,
 the metadata test can prove that every script named by the dependency contract
 still exists. The fixture runner executes only the finite scripts listed in
 each fixture's `verify` field.
+
+The `emulsify` binary is deliberately absent from the Whisk script table:
+current representative Whisk scripts do not invoke it. Global or direct
+installation of `@emulsify/cli` remains the supported path for running
+`emulsify init` before a Core-backed project exists. The transitive local binary
+is maintained as a Core 4.x compatibility bridge for installed projects.
 
 ### React Peer Matrix
 

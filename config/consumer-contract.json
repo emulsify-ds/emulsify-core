@@ -49,6 +49,12 @@
       "19": "19.2.7"
     }
   },
+  "providedBinaries": {
+    "emulsify": {
+      "package": "@emulsify/cli",
+      "description": "Core 4.x compatibility bridge for the project-local Emulsify CLI binary."
+    }
+  },
   "dependencies": {
     "concurrently": ["develop"],
     "vite": ["build", "vite", "develop"],

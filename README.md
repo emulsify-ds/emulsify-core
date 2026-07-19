@@ -132,6 +132,14 @@ Then initialize a project from a starter:
 emulsify init "My Project" ./path/to/projects --platform none
 ```
 
+Global or direct CLI installation is still the supported way to run
+`emulsify init` before a project exists. For Core 4.x compatibility, projects
+that install `@emulsify/core` also receive a project-local `emulsify` binary
+through Core's `@emulsify/cli` dependency. That local binary can be invoked with
+`npx --no-install emulsify --help`; it is a compatibility bridge for existing
+Core consumers, not a replacement for choosing an explicit CLI installation
+when scaffolding a new project.
+
 The CLI supports built-in `drupal`, `wordpress`, and `none` platforms. It can
 create starter projects, install component systems, list available components,
 install system components, and generate local components. The starter owns the

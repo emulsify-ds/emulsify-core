@@ -7,6 +7,7 @@ import { resolve } from 'path';
 import {
   assertContractDependencies,
   assertFixtureCoverage,
+  assertProvidedBinaries,
   contractScriptNames,
 } from '../scripts/lib/consumer-contract.js';
 
@@ -32,6 +33,28 @@ describe('consumer dependency contract', () => {
     expect(() =>
       assertContractDependencies(contract, packageJson, fixturePackages),
     ).not.toThrow();
+  });
+
+  it('keeps provided binaries separate from Whisk script mappings', () => {
+    expect(contract.providedBinaries).toEqual({
+      emulsify: {
+        package: '@emulsify/cli',
+        description:
+          'Core 4.x compatibility bridge for the project-local Emulsify CLI binary.',
+      },
+    });
+    expect(contract.dependencies['@emulsify/cli']).toBeUndefined();
+    expect(() => assertProvidedBinaries(contract, packageJson)).not.toThrow();
+
+    const packageWithoutCli = {
+      ...packageJson,
+      dependencies: { ...packageJson.dependencies },
+    };
+    delete packageWithoutCli.dependencies['@emulsify/cli'];
+
+    expect(() => assertProvidedBinaries(contract, packageWithoutCli)).toThrow(
+      'emulsify requires package.json#dependencies["@emulsify/cli"]',
+    );
   });
 
   it('records one-line notes for every kept contract package', () => {

@@ -77,6 +77,38 @@ export function assertContractDependencies(
 }
 
 /**
+ * Assert that separately declared compatibility binaries have direct providers.
+ *
+ * These binaries are not attributed to generated Whisk scripts unless a real
+ * script invokes them.
+ *
+ * @param {object} contract - Consumer contract metadata.
+ * @param {object} packageJson - Core package manifest.
+ * @returns {void}
+ */
+export function assertProvidedBinaries(contract, packageJson) {
+  const packageDependencies = packageJson.dependencies || {};
+  const invalid = Object.entries(contract.providedBinaries || {}).filter(
+    ([binary, definition]) =>
+      !binary ||
+      typeof definition?.package !== 'string' ||
+      !packageDependencies[definition.package],
+  );
+
+  if (!invalid.length) return;
+
+  throw new Error(
+    [
+      'Invalid provided-binary contracts:',
+      ...invalid.map(
+        ([binary, definition]) =>
+          `- ${binary} requires package.json#dependencies["${definition?.package || 'missing provider'}"]`,
+      ),
+    ].join('\n'),
+  );
+}
+
+/**
  * Assert that fixture manifests cover and execute the declared contract.
  *
  * Watch-mode and side-effecting scripts only need to be represented in a
