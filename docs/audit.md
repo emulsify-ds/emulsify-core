@@ -90,8 +90,9 @@ Each finding contains:
 - `docs`: Optional documentation URL.
 
 Optional finding fields are omitted when unavailable. They are not emitted as
-`null` or as internal `undefined` values. Reports do not expose internal
-absolute file paths or the machine-specific selected-root path.
+`null` or as internal `undefined` values. The formatter removes the selected
+project root from finding messages and details. Other configured values in that
+human-readable text are not structured paths and should not be parsed as such.
 
 ### Compatibility Expectations
 

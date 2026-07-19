@@ -8,8 +8,7 @@ development.
 
 **Emulsify Core** provides shared [Vite](https://vite.dev/) build configuration
 and a [Storybook](https://storybook.js.org/) workspace for component-driven
-development. It supports Twig components, React components, autonomous custom
-elements in Storybook, and projects that need them in the same design system.
+development with Twig, React, and autonomous custom elements.
 
 ## How Emulsify Core Works
 
@@ -24,7 +23,7 @@ implementation details where they belong.
 - React components render through Storybook's standard React support.
 - Autonomous custom elements render in Storybook through
   `renderWebComponent()`.
-- Twig, React, and custom-element stories can live together in one Storybook
+- Twig, React, and custom element stories can live together in one Storybook
   workspace.
 - `project.emulsify.json` is the source of truth for platform and structure
   configuration.
@@ -42,36 +41,20 @@ implementation details where they belong.
 
 ## Project Evolution
 
-For years, Emulsify has helped teams build design systems in real project
-environments. Emulsify Core has grown through that work while keeping the same
-practical goal: make component-library tooling easier to share, extend, and
-maintain.
+Emulsify Core began as shared Webpack and Storybook tooling, adopted ESM in
+3.x, and moved to Vite and React/Vite Storybook in 4.x. The current project
+model supports CMS themes, standalone component libraries, and mixed Twig,
+React, and custom element Storybook workspaces.
 
-- `1.x` established Emulsify Core as a reusable package for Storybook, Webpack,
-  linting, a11y checks, project overrides, and asset handling.
-- `2.x` expanded component structure support, improved Drupal SDC compatibility,
-  upgraded Storybook, and made more project files configurable from consuming
-  projects.
-- `3.x` modernized the runtime around ESM and Node 24, continued Storybook and
-  dependency upgrades, improved component asset copying, and strengthened
-  compatibility for existing Drupal-oriented builds.
-- The current release moves the build system to Vite, runs Storybook on
-  React/Vite, supports Twig, React, and autonomous custom-element stories side
-  by side, and normalizes platform and project-structure behavior through
-  `project.emulsify.json`.
-
-This release is a new foundation, not a reset. Existing Emulsify teams get a
-modern Vite-based build layer, clearer public APIs, and a more explicit platform
-model. New projects get a broader starting point for CMS themes, standalone UI
-libraries, and mixed Twig, React, and custom-element Storybook workspaces.
-
-See [Version Evolution](docs/version-evolution.md) for more release history.
+See [Version Evolution](docs/version-evolution.md) for major-version history
+and the [4.3.0 release notes](docs/releases/4.3.0.md) for the compatibility
+changes and additions in that release.
 
 ## Authoring Models
 
-Emulsify Core supports complete Twig and React authoring workflows and a
-focused Storybook adapter for autonomous custom elements. The right choice
-depends on how the design system will be used.
+Emulsify Core supports Twig and React authoring workflows plus a focused
+Storybook adapter for web components built with autonomous custom elements. The
+right choice depends on how the design system will be used.
 
 - Use Twig for CMS themes and server-rendered template systems. Drupal has a
   Drupal-specific adapter, and WordPress/Timber projects can use the
@@ -79,15 +62,15 @@ depends on how the design system will be used.
   belongs in `emulsify-wordpress-theme`.
 - Use React for standalone UI libraries, application components, or projects
   that already use React.
-- Use autonomous custom elements for framework-neutral browser components that
-  fit the adapter's documented property, attribute, default-slot, and native
-  event boundaries.
+- Use web components built with autonomous custom elements for
+  framework-neutral browser components that fit the adapter's documented
+  property, attribute, default-slot, and native event boundaries.
 - Use mixed authoring when a design system needs to document CMS-rendered,
   framework-rendered, and framework-neutral components in the same Storybook
   instance.
 
-See [Component Authoring](docs/component-authoring.md) for Twig, React,
-custom-element, mixed Storybook, and shared Sass examples.
+See [Component Authoring](docs/component-authoring.md) for Twig, React, custom
+element, mixed Storybook, and shared Sass examples.
 
 ## Installation And Project Setup
 
@@ -162,8 +145,8 @@ The documentation is split by task:
 | Topic                                                     | Use This When                                                                                                     |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | [Version Evolution](docs/version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                |
-| [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, custom-element, or mixed Storybook authoring and comparing component examples.              |
-| [Storybook](docs/storybook.md)                            | Rendering Twig and custom-element stories, using Storybook helpers, and mixing authoring models.                  |
+| [Component Authoring](docs/component-authoring.md)        | Choosing Twig, React, custom element, or mixed Storybook authoring and comparing component examples.              |
+| [Storybook](docs/storybook.md)                            | Rendering Twig and custom element stories, using Storybook helpers, and mixing authoring models.                  |
 | [Project Structure And Output](docs/project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, and expected output paths. |
 | [Platform Adapters](docs/platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                  |
 | [Extension Points](docs/extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                      |
@@ -172,7 +155,8 @@ The documentation is split by task:
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                |
 | [Project Audit](docs/audit.md)                            | Running human or versioned JSON project audits and configuring CI failure thresholds.                             |
 | [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                 |
-| [Migration](docs/migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                             |
+| [Migration To 4.x](docs/migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                         |
+| [4.3.0 Release Notes](docs/releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.            |
 
 ## Known Limitations
 
@@ -186,10 +170,10 @@ package using it.
   it does not emulate WordPress or Timber PHP runtime behavior. Runtime
   integration belongs in `emulsify-wordpress-theme`. See
   [Platform Adapters](docs/platform-adapters.md).
-- Storybook's Twig resolver eagerly imports Twig modules and raw Twig source.
-  This is reliable for `include()` and `source()`, but large Twig libraries
-  should keep Storybook source roots intentional. See
-  [Performance](docs/performance.md).
+- Storybook eagerly imports compiled Twig modules for synchronous rendering,
+  while raw Twig and text asset sources load lazily when `source()` requests
+  them. Large Twig libraries should still keep Storybook source roots
+  intentional. See [Performance](docs/performance.md).
 - Production sourcemaps are enabled by default unless a project overrides Vite
   config through `config/emulsify-core/vite/plugins.*`. See
   [Performance](docs/performance.md).
@@ -208,7 +192,7 @@ package using it.
   isolated linker and Yarn Plug'n'Play are unsupported for that one-dependency
   generated-theme pattern unless the consuming project declares each tool
   package itself. See [Dependency Contract](docs/dependency-contract.md).
-- The custom-element Storybook renderer supports autonomous custom elements,
+- The Storybook renderer for custom elements supports autonomous custom elements,
   light DOM children for an unnamed default slot, and explicitly mapped native
   events. It does not provide a named-slot composition API or support
   customized built-in elements. See
@@ -224,7 +208,7 @@ are supported:
 - `wordpress` platform Twig projects using `src/components`.
 - Root `./components` projects.
 - Projects using multiple `variant.structureImplementations`.
-- Mixed Twig + React + custom-element Storybook projects.
+- Mixed Storybook projects with Twig, React, and custom elements.
 
 WordPress and Timber projects should use `platform: "wordpress"` when they want
 Core's neutral WordPress adapter. The adapter keeps output in `dist/`, loads
@@ -254,6 +238,11 @@ runtime is intentionally a no-op until the registry lands. See
 Vite consumers can import the shared config from `@emulsify/core/vite`, public
 Vite plugin helpers from `@emulsify/core/vite/plugins`, and platform adapter
 helpers from `@emulsify/core/vite/platforms`.
+
+`defineCustomElement()` and `renderWebComponent()` use the existing
+`@emulsify/core/storybook` entry point; they do not require a dedicated package
+subpath. The generated Twig asset-source runtime is internal and is not a
+public package export.
 
 ## Contributing
 

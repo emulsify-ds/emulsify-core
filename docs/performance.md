@@ -54,7 +54,9 @@ JavaScript, JSON, TXT, and Markdown files are lazy `?raw` imports.
 
 This removes the common synchronous XHR path for inline assets. A first render that requests a new text asset may render without it while the import resolves; the Storybook Twig renderer re-renders and subsequent reads are synchronous from memory.
 
-The sync-XHR fallback is disabled by default and should only be enabled temporarily for assets outside configured roots:
+The sync-XHR fallback is disabled by default. Its deprecated opt-in is reached
+only when the generated module reports no asset-root coverage; it is not a
+general fallback for a missing file in an active asset map:
 
 ```js
 platformAdapter: {
@@ -64,7 +66,8 @@ platformAdapter: {
 }
 ```
 
-That fallback blocks the main thread, is deprecated, and is scheduled for removal in a future major release.
+That fallback blocks the main thread and is scheduled for removal in a future
+major release.
 
 ## Storybook CSS Loading
 

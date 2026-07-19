@@ -1,10 +1,10 @@
 # Release Verification
 
-Emulsify Core 4.x supports consumers on Node.js 24.13.0 or later. The strictest
-published toolchain dependency, `stylelint-selector-bem-pattern` 5, requires
-that patch. The published Babel 8 dependencies independently exclude Node.js
-24.0 through 24.10, while the Stylelint plugin also excludes Node.js 24.11 and
-24.12.
+Emulsify Core 4.3.0 supports consumers on Node.js 24.13.0 or later. The
+strictest published toolchain dependency, `stylelint-selector-bem-pattern` 5,
+requires that patch. The published Babel 8 dependencies independently exclude
+Node.js 24.0 through 24.10, while the Stylelint plugin also excludes Node.js
+24.11 and 24.12.
 
 Repository development recommends the exact Node.js 24.13.0 version pinned in
 `.nvmrc`. Every CI and release workflow reads `.nvmrc`, so automation uses that
@@ -15,7 +15,7 @@ Do not publish from a local checkout unless maintainers have explicitly
 approved the release. Use these steps to verify release readiness before
 publishing.
 
-## Required Checks
+## Required Local Verification
 
 Install the locked dependencies in a clean checkout, then run the aggregate
 release verification command:
@@ -36,19 +36,23 @@ npm run release:verify
 - the non-publishing release analysis.
 
 CI runs the corresponding checks, although it keeps the expensive fixture and
-packed-package work in parallel jobs for faster feedback and limits release
-analysis to pull requests targeting `main`.
+packed-package work in parallel jobs for faster feedback. The authenticated
+semantic-release dry run and real publish are not pull-request checks; they are
+reserved for the trusted `main` workflow or the maintainer-only local
+verification described below.
 
-## CI Release Readiness
+## Required CI Checks
 
 The read-only CI workflow in `.github/workflows/lint.yml` divides release
 readiness into five groups:
 
-- `release-readiness` runs linting, unit tests, and the repository Storybook
-  build.
+- `release-readiness` runs linting, unit tests—including package-export and
+  package-content assertions—and the repository Storybook build.
 - `fixture-builds` runs each release fixture in its own matrix job.
-- `package-readiness` inspects the package manifest, installs the tarball in a
-  clean temporary consumer, and tests the packed package.
+- `package-readiness` generates npm's no-script dry-run package manifest,
+  installs the tarball in a clean temporary consumer, and tests the packed
+  package. Release analysis also runs in this job for pull requests targeting
+  `main`.
 - `consumer-fixtures` installs the packed package into the Whisk-like Drupal,
   `none`, and WordPress/Twig consumer shapes in separate matrix jobs.
 - `react-peer-fixtures` builds the packed mixed Storybook consumer with React
@@ -71,8 +75,12 @@ The release fixture suite validates the 4.x checklist items that are easy to
 automate:
 
 - `drupal-sdc-src-components` builds Drupal SDC component sources and verifies mirrored root `components/` output while rejecting stale `dist/components/` component files.
-- The default Vite fixture verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
+- `no-platform-src-components` verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
 - `wordpress-src-components` verifies the WordPress adapter keeps global assets under `dist/global`, component output under `dist/components`, avoids root `components/` mirroring, and rejects Drupal globals in emitted JavaScript.
+- `legacy-components` verifies that projects using the legacy `components/`
+  source layout continue to build into `dist/components/`.
+- `structure-implementations` verifies custom structure mappings for component
+  JavaScript, CSS, Twig, Storybook CSS, foundation assets, and design tokens.
 - `mixed-storybook` first verifies that Twig stories using `renderTwig()`,
   React stories, and autonomous custom-element stories build together. It then
   serves that built Storybook in headless Chromium and exercises real
@@ -84,6 +92,9 @@ automate:
   custom element and proves that scan reaches its open shadow-root button. This
   targeted assertion does not claim that the Storybook accessibility addon
   scans every shadow-root implementation.
+- `large-twig-storybook` generates 80 Twig components, builds their stories,
+  and guards the emitted JavaScript size against the recorded pre-optimization
+  baseline.
 - Twig helper and tag support is covered by unit tests and fixtures for `bem()`, `add_attributes()`, `switch`, `case`, `default`, and `endswitch`.
 
 ### Packed Consumer Fixtures
@@ -117,23 +128,30 @@ npm run pack:dry-run
 npm run smoke:pack
 ```
 
-The package dry run verifies that every public export and its required runtime
-imports are present while test files, snapshots, coverage output, and
-release-only internals remain excluded. This includes the audit modules needed
-by the packaged command-line tools.
+The package dry run asks npm to calculate and print the exact package manifest
+without running lifecycle scripts. Package-export tests in the unit suite use
+the same manifest to assert that every public export, executable, and required
+runtime import is included while tests, snapshots, coverage output, and
+release-only internals are excluded. Those assertions include the audit
+modules needed by the packaged command-line tools.
 
 The smoke check creates the package tarball and installs it into a clean
-temporary consumer without repository-local symlinks. It imports the public
-Twig, React, Storybook, Vite, plugin, and platform APIs from that installed
-tarball, including `defineCustomElement()` and `renderWebComponent()`. It also
-confirms that Core's internal Twig asset-source runtime is not exposed as a
-package subpath.
+temporary consumer without repository-local symlinks. It exercises
+representative public Twig, React, Storybook, Vite, plugin, and platform APIs
+from that installed tarball, including `defineCustomElement()` and
+`renderWebComponent()`. It also runs the installed `emulsify-audit` executable
+in JSON mode and confirms that Core's internal Twig asset-source runtime is not
+exposed as a package subpath.
 
-The packed consumer also builds a mixed Twig and custom-element Storybook using
-the installed package. That build proves Core's generated Twig module can load
-its internal asset-source runtime without creating a consumer API, then confirms
-that the expected stories are present in the generated output. The smoke check
-removes its temporary consumer and tarball when it finishes.
+The packed consumer also builds a mixed Twig, React, and custom-element
+Storybook using the installed package. That production build proves Core's
+generated Twig module can load its internal asset-source runtime without
+creating a consumer API, then confirms stable Twig and custom-element story
+IDs are present in the generated output. Browser-level behavior for
+control-driven DOM updates, native events, slot content, and accessibility is
+covered by the `mixed-storybook` release fixture rather than repeated in this
+packed smoke test. The smoke check removes its temporary consumer and tarball
+when it finishes.
 
 ## Release Calculation
 
@@ -147,8 +165,9 @@ npm run release:analyze
 The analyzer reads the commit range from the latest release tag through the
 current revision and uses the same conventional-commit analyzer and custom
 release rules as semantic-release. It reports the release type and predicted
-version without changing package metadata, creating a tag, creating a GitHub
-release, or publishing to npm.
+version, and verifies that the prediction matches `package.json`, without
+changing package metadata, creating a tag, creating a GitHub release, or
+publishing to npm.
 
 Emulsify's established `develop`-to-`main` release strategy uses GitHub's
 **Create a merge commit** option. That preserves the individual conventional
@@ -174,7 +193,7 @@ Use `fix(release): ...` for a patch. Breaking releases must retain an explicit
 rejects a `main` pull request when its title produces no release or when the
 prospective squash history changes the full range's calculated release type.
 
-## Semantic-Release Dry Run
+## Maintainer-Only Semantic-Release Dry Run
 
 The publish workflow lives at `.github/workflows/publish.yml` and runs only
 after changes land on `main`. Before its separate publish step, the workflow

@@ -5,8 +5,8 @@ These docs expand on the short project README and are organized by the task a pr
 | Topic                                                | Use This When                                                                                                         |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | [Version Evolution](version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |
-| [Component Authoring](component-authoring.md)        | Choosing Twig, React, custom-element, or mixed Storybook authoring and comparing component examples.                  |
-| [Storybook](storybook.md)                            | Rendering Twig and custom-element stories, using public helpers, and mixing authoring models.                         |
+| [Component Authoring](component-authoring.md)        | Choosing Twig, React, custom element, or mixed Storybook authoring and comparing component examples.                  |
+| [Storybook](storybook.md)                            | Rendering Twig and custom element stories, using public helpers, and mixing authoring models.                         |
 | [Project Structure And Output](project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, asset roots, and output paths. |
 | [Asset References](asset-references.md)              | Referencing fonts, SVGs, images, and other files from project root or configured asset roots in Sass, CSS, and Twig.  |
 | [Platform Adapters](platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
@@ -16,4 +16,5 @@ These docs expand on the short project README and are organized by the task a pr
 | [Native Twig Extensions](native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, Storybook `include()`/`source()`, and `switch/case/default/endswitch` in Twig.js.  |
 | [Project Audit](audit.md)                            | Running human or versioned JSON project audits and configuring CI failure thresholds.                                 |
 | [Release Verification](release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                     |
-| [Migration](migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                                 |
+| [Migration To 4.x](migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                             |
+| [4.3.0 Release Notes](releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.                |

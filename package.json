@@ -1,10 +1,11 @@
 {
   "name": "@emulsify/core",
   "version": "4.3.0",
-  "description": "Bundled tooling for Storybook development + Vite Build",
+  "description": "Shared Vite build tooling and Storybook support for Twig, React, and custom elements",
   "keywords": [
     "component library",
     "craftcms",
+    "custom elements",
     "design system",
     "drupal",
     "pattern library",
@@ -12,6 +13,7 @@
     "styleguide",
     "twig",
     "vite",
+    "web components",
     "wordpress"
   ],
   "author": "Four Kitchens <shout@fourkitchens.com>",
