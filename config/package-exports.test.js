@@ -99,7 +99,28 @@ function matchesForbiddenPackagePath(filePath, prefixes, suffixes, segments) {
 }
 
 describe('@emulsify/core package exports', () => {
-  it('imports each public export with native Node ESM resolution', () => {
+  it('resolves every public export with native Node ESM', () => {
+    const specifiers = Object.keys(packageJson.exports).map((exportPath) =>
+      exportPath === '.'
+        ? packageJson.name
+        : `${packageJson.name}${exportPath.slice(1)}`,
+    );
+    const script = `
+      const specifiers = ${JSON.stringify(specifiers)};
+      for (const specifier of specifiers) {
+        const resolved = import.meta.resolve(specifier);
+        if (!resolved.startsWith('file:')) {
+          throw new Error(\`Unexpected resolution for \${specifier}: \${resolved}\`);
+        }
+      }
+    `;
+
+    expect(() => {
+      execFileSync(process.execPath, ['--input-type=module', '--eval', script]);
+    }).not.toThrow();
+  });
+
+  it('imports each Node-loadable public export with native Node ESM', () => {
     const checks = [
       ['@emulsify/core', ['react', 'twig']],
       ['@emulsify/core/extensions', ['react', 'twig']],
@@ -126,10 +147,6 @@ describe('@emulsify/core package exports', () => {
         '@emulsify/core/storybook/twig/include-function',
         ['createTwigIncludeFunction'],
       ],
-      [
-        '@emulsify/core/storybook/twig/asset-source-runtime',
-        ['createAssetSourceRuntime', 'normalizeAssetPath'],
-      ],
       ['@emulsify/core/storybook/twig/drupal-filters', ['default']],
       ['@emulsify/core/vite', ['default']],
       [
@@ -155,12 +172,18 @@ describe('@emulsify/core package exports', () => {
       if (typeof renderTwig !== 'function') {
         throw new Error('renderTwig is not a function');
       }
-      try {
-        await import('@emulsify/core/config/vite/project-config.js');
-        throw new Error('Internal project-config import unexpectedly succeeded');
-      } catch (error) {
-        if (error?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
-          throw error;
+      const internalSpecifiers = [
+        '@emulsify/core/config/vite/project-config.js',
+        '@emulsify/core/storybook/twig/asset-source-runtime',
+      ];
+      for (const specifier of internalSpecifiers) {
+        try {
+          await import(specifier);
+          throw new Error(\`Internal import unexpectedly succeeded: \${specifier}\`);
+        } catch (error) {
+          if (error?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+            throw error;
+          }
         }
       }
     `;
@@ -180,9 +203,12 @@ describe('@emulsify/core package exports', () => {
   });
 
   it('does not expose internal implementation subpaths to Jest resolution', async () => {
-    await expect(
-      import('@emulsify/core/config/vite/project-config.js'),
-    ).rejects.toThrow();
+    for (const specifier of [
+      '@emulsify/core/config/vite/project-config.js',
+      '@emulsify/core/storybook/twig/asset-source-runtime',
+    ]) {
+      await expect(import(specifier)).rejects.toThrow();
+    }
   });
 
   it('packages relative JavaScript imports used by packaged files', () => {

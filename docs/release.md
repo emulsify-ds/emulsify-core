@@ -125,13 +125,15 @@ by the packaged command-line tools.
 The smoke check creates the package tarball and installs it into a clean
 temporary consumer without repository-local symlinks. It imports the public
 Twig, React, Storybook, Vite, plugin, and platform APIs from that installed
-tarball, including `defineCustomElement()`, `renderWebComponent()`, and the
-public Twig asset-source runtime.
+tarball, including `defineCustomElement()` and `renderWebComponent()`. It also
+confirms that Core's internal Twig asset-source runtime is not exposed as a
+package subpath.
 
-The packed consumer also builds a minimal custom-element Storybook using the
-installed package and confirms that the expected story is present in the
-generated output. The smoke check removes its temporary consumer and tarball
-when it finishes.
+The packed consumer also builds a mixed Twig and custom-element Storybook using
+the installed package. That build proves Core's generated Twig module can load
+its internal asset-source runtime without creating a consumer API, then confirms
+that the expected stories are present in the generated output. The smoke check
+removes its temporary consumer and tarball when it finishes.
 
 ## Release Calculation
 

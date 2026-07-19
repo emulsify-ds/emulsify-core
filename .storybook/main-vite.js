@@ -11,6 +11,7 @@ import { makeGeneratedDistFilesPlugin } from './main-static-assets.js';
 const twigVirtualModuleIds = [
   'virtual:emulsify-twig-globs',
   'virtual:emulsify-twig-asset-sources',
+  'virtual:emulsify-twig-asset-source-runtime',
   'virtual:emulsify-twig-extension-installers',
 ];
 
@@ -62,7 +63,10 @@ function makeTwigVirtualModuleOptimizerPlugin() {
     name: 'emulsify-twig-virtual-modules',
     setup(build) {
       build.onResolve(
-        { filter: /^virtual:emulsify-twig-(?:globs|asset-sources)$/ },
+        {
+          filter:
+            /^virtual:emulsify-twig-(?:globs|asset-sources|asset-source-runtime)$/,
+        },
         (args) => ({
           path: args.path,
           external: true,

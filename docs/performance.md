@@ -47,7 +47,10 @@ For large libraries:
 
 ## Storybook Text Asset Sources
 
-`source('@assets/foo.svg')` first checks the build-time `virtual:emulsify-twig-asset-sources` map. That map is generated from configured `assets.roots` plus existing `assets` and `src/assets` directories. SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown files are lazy `?raw` imports.
+`source('@assets/foo.svg')` first checks a Core-generated build-time asset
+source map. That internal map is generated from configured `assets.roots` plus
+existing `assets` and `src/assets` directories. SVG, HTML, Twig, CSS,
+JavaScript, JSON, TXT, and Markdown files are lazy `?raw` imports.
 
 This removes the common synchronous XHR path for inline assets. A first render that requests a new text asset may render without it while the import resolves; the Storybook Twig renderer re-renders and subsequent reads are synchronous from memory.
 

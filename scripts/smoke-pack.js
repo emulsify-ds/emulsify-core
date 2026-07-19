@@ -22,8 +22,10 @@ const mixedStorybookFixture = join(
   packageRoot,
   '.github/fixtures/release/mixed-storybook',
 );
-const customElementStoryId =
-  'fixtures-mixed-storybook-custom-element--custom-element-card';
+const expectedStoryIds = [
+  'fixtures-mixed-storybook--twig-card',
+  'fixtures-mixed-storybook-custom-element--custom-element-card',
+];
 
 let tempDir;
 let tarballPath;
@@ -41,15 +43,23 @@ function assertFunction(module, exportName, specifier) {
   }
 }
 
+async function assertPackagePathNotExported(specifier) {
+  try {
+    await import(specifier);
+  } catch (error) {
+    if (error?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') return;
+    throw error;
+  }
+
+  throw new Error('Internal package path unexpectedly resolved: ' + specifier);
+}
+
 {
   const core = await import('@emulsify/core');
   const extensions = await import('@emulsify/core/extensions');
   const storybook = await import('@emulsify/core/storybook');
   const twig = await import('@emulsify/core/extensions/twig');
   const react = await import('@emulsify/core/extensions/react');
-  const assetSourceRuntime = await import(
-    '@emulsify/core/storybook/twig/asset-source-runtime'
-  );
   const includeFunction = await import(
     '@emulsify/core/storybook/twig/include-function'
   );
@@ -154,26 +164,6 @@ function assertFunction(module, exportName, specifier) {
     'createTwigIncludeFunction',
     '@emulsify/core/storybook/twig/include-function',
   );
-  assertFunction(
-    assetSourceRuntime,
-    'createAssetSourceRuntime',
-    '@emulsify/core/storybook/twig/asset-source-runtime',
-  );
-  assertFunction(
-    assetSourceRuntime,
-    'candidateKeysForAssetPath',
-    '@emulsify/core/storybook/twig/asset-source-runtime',
-  );
-  assertFunction(
-    assetSourceRuntime,
-    'findAssetKey',
-    '@emulsify/core/storybook/twig/asset-source-runtime',
-  );
-  assertFunction(
-    assetSourceRuntime,
-    'normalizeAssetPath',
-    '@emulsify/core/storybook/twig/asset-source-runtime',
-  );
   assertFunction(plugins, 'makePlugins', '@emulsify/core/vite/plugins');
   assertFunction(
     plugins,
@@ -204,20 +194,9 @@ function assertFunction(module, exportName, specifier) {
     throw new Error('adapters missing from @emulsify/core/vite/platforms');
   }
 
-  const normalizedAssetPath =
-    assetSourceRuntime.normalizeAssetPath('@assets/example.txt');
-  if (normalizedAssetPath !== 'example.txt') {
-    throw new Error('normalizeAssetPath returned an unexpected value');
-  }
-  const runtime = assetSourceRuntime.createAssetSourceRuntime({
-    assets: {
-      '/example.txt': 'Packed asset source',
-    },
-    assetRootPrefixes: [''],
-  });
-  if (runtime.getAssetText('@assets/example.txt') !== 'Packed asset source') {
-    throw new Error('createAssetSourceRuntime did not resolve packed source');
-  }
+  await assertPackagePathNotExported(
+    '@emulsify/core/storybook/twig/asset-source-runtime',
+  );
 }
 `;
 
@@ -290,10 +269,10 @@ function buildPackedStorybook(installedPackageRoot) {
   const storyIndex = JSON.parse(
     readFileSync(join(outputDir, 'index.json'), 'utf8'),
   );
-  if (!storyIndex.entries?.[customElementStoryId]) {
-    throw new Error(
-      `Packed Storybook output is missing story ${customElementStoryId}`,
-    );
+  for (const storyId of expectedStoryIds) {
+    if (!storyIndex.entries?.[storyId]) {
+      throw new Error(`Packed Storybook output is missing story ${storyId}`);
+    }
   }
 }
 

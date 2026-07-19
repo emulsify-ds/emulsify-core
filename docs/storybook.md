@@ -438,6 +438,10 @@ Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown ar
 
 Configured asset roots must resolve inside the project root. Unsafe paths are ignored.
 
+The generated asset map and its cache runtime are Core implementation details,
+not supported JavaScript import paths. Projects configure `assets.roots` and
+consume this behavior through Twig's `source()` function.
+
 The generated sprite is a special asset alias: `source('@assets/icons.svg')` resolves `dist/assets/icons.svg` before checking root `assets/icons.svg`. Other `@assets/...` SVG references resolve through the project asset roots, so `source('@assets/icons/arrow.svg')` reads `assets/icons/arrow.svg` when that file exists.
 
 The first text source call lazy-loads the raw text and triggers a re-render; later calls return the cached text synchronously.

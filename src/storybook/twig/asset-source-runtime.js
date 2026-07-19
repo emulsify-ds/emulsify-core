@@ -1,5 +1,6 @@
 /**
  * @file Shared runtime for virtual Twig source() text assets.
+ * This module is loaded by Core's Vite plugin and is not a package export.
  */
 
 const collectionHas = (values, value) =>
