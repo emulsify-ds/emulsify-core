@@ -188,7 +188,7 @@
     "@storybook/addon-themes": "^10.1.4",
     "@storybook/react": "^10.1.4",
     "@storybook/react-vite": "^10.1.4",
-    "@vituum/vite-plugin-twig": "^1.1.0",
+    "@vituum/vite-plugin-twig": "^2.0.1",
     "autoprefixer": "^10.5.4",
     "axe-core": "^4.11.4",
     "babel-preset-minify": "^0.5.2",
