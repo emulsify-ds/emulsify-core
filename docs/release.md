@@ -58,10 +58,11 @@ npm run release:verify
 - the non-publishing release analysis.
 
 CI runs the corresponding checks, although it keeps the expensive fixture and
-packed-package work in parallel jobs for faster feedback. The authenticated
-semantic-release dry run and real publish are not pull-request checks; they are
-reserved for the trusted `main` workflow or the maintainer-only local
-verification described below.
+packed-package work in parallel jobs for faster feedback. After a merge, the
+publish workflow repeats the aggregate `release:verify` command against the
+exact pushed `main` SHA before making publishing credentials available to its
+separate release job. The authenticated semantic-release dry run and real
+publish are never pull-request checks.
 
 ## Required CI Checks
 
@@ -89,7 +90,9 @@ discard the analyzed commits.
 
 The CI workflow has only `contents: read` permission. It cannot publish to npm,
 push a tag, or create a GitHub release. The separate publish workflow runs only
-after a push to `main`.
+for a push to `main`; merging to `main` is the explicit publication
+authorization. No protected GitHub environment or new maintainer ownership
+rule is assumed.
 
 ### Release Fixtures
 
@@ -223,18 +226,32 @@ Use `fix(release): ...` for a patch. Breaking releases must retain an explicit
 rejects a `main` pull request when its title produces no release or when the
 prospective squash history changes the full range's calculated release type.
 
-## Maintainer-Only Semantic-Release Dry Run
+## Validated Main Publication
 
-The publish workflow lives at `.github/workflows/publish.yml` and runs only
-after changes land on `main`. Before its separate publish step, the workflow
-runs semantic-release with `--dry-run` using the trusted branch history and
-release credentials. Dry-run mode calculates and verifies the release but does
-not publish to npm, push a tag, or create a GitHub release.
+The publish workflow lives at `.github/workflows/publish.yml` and is triggered
+only by a push to `main`. Its first job checks out the event's exact
+`github.sha`, installs from the lockfile, and runs the complete
+`release:verify` suite. A failed or cancelled validation prevents the release
+job from starting.
 
-The publish job grants `id-token: write` for npm trusted publishing, provides
-`GITHUB_TOKEN` so the later publish step can push tags and create GitHub
-releases, and provides `NPM_TOKEN` as the fallback token-based npm
-authentication path.
+Only the dependent release job receives write and trusted-publishing
+permissions. It checks out the same SHA, confirms that `origin/main` still
+points to that validated commit, and runs authenticated semantic-release with
+`--dry-run`. Dry-run mode calculates and verifies the release without
+publishing to npm, pushing a tag, or creating a GitHub release. The workflow
+checks `origin/main` again immediately after dry-run and refuses real
+publication if a newer commit has landed.
+
+Publish runs share one concurrency group with `cancel-in-progress: true`, so a
+new push to `main` supersedes an older validation or release run. Together with
+the explicit SHA checks, this prevents a completed out-of-order or stale run
+from publishing an older commit.
+
+The validation job has only `contents: read` permission and receives no npm or
+GitHub publishing credentials. The release job grants `id-token: write` for npm
+trusted publishing, provides `GITHUB_TOKEN` so semantic-release can push tags
+and create GitHub releases, and provides `NPM_TOKEN` as the fallback
+token-based npm authentication path.
 
 When configuring npm trusted publishing for `@emulsify/core`, use `publish.yml` as the GitHub Actions workflow filename.
 
@@ -257,3 +274,18 @@ publishing credentials.
 
 Do not run `npm run semantic-release` without `--dry-run` until maintainers are
 ready to publish the npm release.
+
+### Publication Recovery
+
+If main validation fails, fix the failure on `develop` and merge the correction
+to `main`; the new main SHA receives a fresh validation and publish run. If a
+run is cancelled because a newer main commit landed, allow the newer run to
+continue instead of rerunning the stale one.
+
+For a transient Actions, registry, or network failure, a maintainer may rerun
+the failed publish workflow only while its SHA is still the current
+`origin/main`. The release job's SHA guards stop that rerun if main has advanced.
+Before rerunning a failure after the real publish step began, check npm, the Git
+tag, and the GitHub release first; semantic-release is designed to resume from
+published release state, but maintainers should verify which side effects
+already completed.
