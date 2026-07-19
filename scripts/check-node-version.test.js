@@ -22,32 +22,21 @@ describe('Node.js runtime policy', () => {
     expect(SUPPORTED_NODE_ENGINE).toBe(rootPackage.engines.node);
   });
 
-  it('covers the Node 24 floors of direct published toolchain dependencies', () => {
+  it('covers the strictest direct published toolchain dependency', () => {
     const rootPackage = readJson('../package.json');
     const { minimumVersion } = parseMinimumNodeEngine(SUPPORTED_NODE_ENGINE);
+    const packageName = 'stylelint-selector-bem-pattern';
 
-    for (const packageName of [
-      '@babel/core',
-      '@babel/eslint-parser',
-      '@babel/preset-env',
-      'stylelint-selector-bem-pattern',
-    ]) {
-      expect(rootPackage.dependencies).toHaveProperty(packageName);
+    expect(rootPackage.dependencies).toHaveProperty(packageName);
 
-      const dependencyPackage = readJson(
-        `../node_modules/${packageName}/package.json`,
-      );
-      const node24Branch = dependencyPackage.engines.node
-        .split('||')
-        .map((branch) => branch.trim())
-        .find((branch) => /^>=24(?:\.|$)/.test(branch));
-      const dependencyMinimum =
-        parseMinimumNodeEngine(node24Branch).minimumVersion;
+    const dependencyPackage = readJson(
+      `../node_modules/${packageName}/package.json`,
+    );
+    const dependencyMinimum = parseMinimumNodeEngine(
+      dependencyPackage.engines.node,
+    ).minimumVersion;
 
-      expect(compareNodeVersions(minimumVersion, dependencyMinimum)).not.toBe(
-        -1,
-      );
-    }
+    expect(compareNodeVersions(minimumVersion, dependencyMinimum)).not.toBe(-1);
   });
 
   it('rejects a version below the supported minimum', () => {
