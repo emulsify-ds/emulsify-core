@@ -155,6 +155,7 @@ The documentation is split by task:
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                |
 | [Project Audit](docs/audit.md)                            | Running human or versioned JSON project audits and configuring CI failure thresholds.                             |
 | [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                 |
+| [Release Pull Request Review](docs/release-review.md)     | Reviewing large release pull requests by independent API, runtime, consumer, accessibility, and release risks.    |
 | [Migration To 4.x](docs/migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                         |
 | [4.3.0 Release Notes](docs/releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.            |
 

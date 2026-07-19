@@ -15,6 +15,28 @@ Do not publish from a local checkout unless maintainers have explicitly
 approved the release. Use these steps to verify release readiness before
 publishing.
 
+## Release Pull Request Review
+
+A release branch merging into `main` must follow the
+[Release Pull Request Review](release-review.md) checklist. The checklist
+separates review of the Storybook API, Twig and Vite runtime, audit contract,
+package surface, generated consumers, Node.js and dependencies, accessibility,
+documentation, and release automation.
+
+The release pull request must record evidence or a not-applicable reason for
+every track. Its description must keep user-facing changes, migration impact,
+internal architecture and performance changes, public exports, known
+limitations, completed checks, outstanding work, and originating issues or
+feature pull requests distinct. If no originating issue exists, explain that
+briefly instead of writing only "None."
+
+Review coverage may be divided among maintainers according to the repository's
+existing practices; this checklist does not create new ownership assignments.
+Before merge, maintainers should confirm that unresolved decisions and manual
+checks remain visible, and that the proposed merge strategy produces the
+intended semantic version. Passing automated checks is necessary release
+evidence, but it does not by itself establish that the release is ready.
+
 ## Required Local Verification
 
 Install the locked dependencies in a clean checkout, then run the aggregate
