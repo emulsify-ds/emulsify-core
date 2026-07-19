@@ -191,6 +191,14 @@ version, and verifies that the prediction matches `package.json`, without
 changing package metadata, creating a tag, creating a GitHub release, or
 publishing to npm.
 
+The develop-version workflow uses that same complete unreleased range after
+each push to `develop`. It calculates the prospective version from the latest
+stable release tag reachable on `main`, not from the version already present in
+`package.json`. As a result, a feature and any later fixes remain one minor
+release instead of accumulating an additional patch bump. When package
+metadata already matches the prediction, the workflow leaves both package
+files unchanged and does not open or update its version-bump pull request.
+
 Emulsify's established `develop`-to-`main` release strategy uses GitHub's
 **Create a merge commit** option. That preserves the individual conventional
 commits analyzed by semantic-release. If a release pull request is squashed

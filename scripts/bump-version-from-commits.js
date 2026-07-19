@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * @file Update package versions from semantic commits in a git range.
+ * @file Update package versions from complete unreleased semantic history.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import releaseAnalysisConfig from '../config/release-analysis.cjs';
 
-const ZERO_SHA = /^0+$/;
+const RELEASE_TAG = /^v(\d+\.\d+\.\d+)$/;
 const RELEASE_TYPES = new Set(['major', 'minor', 'patch']);
 const { commitAnalyzerOptions, releaseRules } = releaseAnalysisConfig;
 export { releaseRules };
@@ -17,27 +17,6 @@ export { releaseRules };
 const logger = {
   log: () => {},
 };
-
-/**
- * Determine whether a git SHA is the all-zero value used for new refs.
- *
- * @param {string} value - Git SHA value.
- * @returns {boolean} TRUE when the value is empty or all zeroes.
- */
-export function isZeroSha(value) {
-  return !value || ZERO_SHA.test(value);
-}
-
-/**
- * Build the git revision range used by a develop push event.
- *
- * @param {string} from - Previous SHA from the push event.
- * @param {string} to - Current SHA from the push event.
- * @returns {string} Git revision or revision range.
- */
-export function buildCommitRange(from, to = 'HEAD') {
-  return isZeroSha(from) ? to : `${from}..${to}`;
-}
 
 /**
  * Parse git log output into semantic-release commit objects.
@@ -68,13 +47,53 @@ export function parseGitLog(output) {
  * @returns {{hash: string, message: string}[]} Commit objects.
  */
 export function getCommitsInRange({ cwd, from, to = 'HEAD' }) {
-  const range = buildCommitRange(from, to);
+  const range = from ? `${from}..${to}` : to;
   const output = execFileSync('git', ['log', '--format=%x1e%H%x00%B', range], {
     cwd,
     encoding: 'utf8',
   });
 
   return parseGitLog(output);
+}
+
+/**
+ * Parse the stable version from a semantic-release tag.
+ *
+ * @param {string} tag - Git tag.
+ * @returns {string} Semantic version without its v prefix.
+ */
+export function parseReleaseTag(tag) {
+  const match = RELEASE_TAG.exec(String(tag).trim());
+
+  if (!match) {
+    throw new Error(
+      `Unsupported release tag "${tag}". Expected a stable tag such as v4.3.0.`,
+    );
+  }
+
+  return match[1];
+}
+
+/**
+ * Find the latest release tag reachable from a ref.
+ *
+ * @param {{cwd: string, base?: string}} options - Git options.
+ * @returns {string} Reachable release tag.
+ */
+export function getLatestReleaseTag({ cwd, base = 'origin/main' }) {
+  try {
+    return execFileSync(
+      'git',
+      ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', base],
+      {
+        cwd,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    ).trim();
+  } catch {
+    throw new Error(`No semantic release tag is reachable from "${base}".`);
+  }
 }
 
 /**
@@ -134,6 +153,37 @@ export function incrementVersion(version, releaseType) {
 }
 
 /**
+ * Analyze all unreleased commits from main's latest stable tag to a target.
+ *
+ * @param {object} options - Analysis options.
+ * @param {string} options.cwd - Repository root.
+ * @param {string} [options.base='origin/main'] - Ref used to find the last tag.
+ * @param {string} [options.head='HEAD'] - Prospective release head.
+ * @returns {Promise<object>} Release history and predicted version.
+ */
+export async function analyzeReleaseHistory({
+  cwd,
+  base = 'origin/main',
+  head = 'HEAD',
+}) {
+  const releaseTag = getLatestReleaseTag({ cwd, base });
+  const previousVersion = parseReleaseTag(releaseTag);
+  const commits = getCommitsInRange({ cwd, from: releaseTag, to: head });
+  const releaseType = await analyzeReleaseType(commits, cwd);
+
+  return {
+    releaseTag,
+    previousVersion,
+    releaseType,
+    predictedVersion: releaseType
+      ? incrementVersion(previousVersion, releaseType)
+      : null,
+    range: `${releaseTag}..${head}`,
+    commits,
+  };
+}
+
+/**
  * Update package metadata objects with a new version.
  *
  * @param {Object} packageJson - Parsed package.json data.
@@ -178,13 +228,21 @@ function writeJson(filePath, data) {
 /**
  * Update package files when semantic commits in a range require a bump.
  *
- * @param {{cwd: string, from?: string, to?: string}} options - Runtime options.
+ * @param {{cwd: string, base?: string, to?: string}} options - Runtime options.
  * @returns {Promise<{changed: boolean, releaseType: string|null, version?: string}>}
  *   Result metadata.
  */
-export async function runVersionBump({ cwd, from, to = 'HEAD' }) {
-  const commits = getCommitsInRange({ cwd, from, to });
-  const releaseType = await analyzeReleaseType(commits, cwd);
+export async function runVersionBump({
+  cwd,
+  base = 'origin/main',
+  to = 'HEAD',
+}) {
+  const { releaseType, predictedVersion, releaseTag } =
+    await analyzeReleaseHistory({
+      cwd,
+      base,
+      head: to,
+    });
 
   if (!releaseType) {
     console.log('No semantic version bump detected.');
@@ -199,7 +257,22 @@ export async function runVersionBump({ cwd, from, to = 'HEAD' }) {
   const packageJson = readJson(packageJsonPath);
   const packageLock = readJson(packageLockPath);
   const currentVersion = packageJson.version;
-  const nextVersion = incrementVersion(currentVersion, releaseType);
+  const nextVersion = predictedVersion;
+  const versionsMatch =
+    currentVersion === nextVersion &&
+    packageLock.version === nextVersion &&
+    packageLock.packages?.['']?.version === nextVersion;
+
+  if (versionsMatch) {
+    console.log(
+      `Package metadata already matches ${nextVersion} (${releaseType} from ${releaseTag}).`,
+    );
+    return {
+      changed: false,
+      releaseType,
+      version: nextVersion,
+    };
+  }
 
   updatePackageVersions(packageJson, packageLock, nextVersion);
   writeJson(packageJsonPath, packageJson);
@@ -219,7 +292,7 @@ export async function runVersionBump({ cwd, from, to = 'HEAD' }) {
 if (process.argv[1]?.split(/[\\/]/).pop() === 'bump-version-from-commits.js') {
   runVersionBump({
     cwd: process.cwd(),
-    from: process.argv[2] || process.env.GITHUB_EVENT_BEFORE,
+    base: process.argv[2] || process.env.RELEASE_BASE || 'origin/main',
     to: process.argv[3] || process.env.GITHUB_SHA || 'HEAD',
   }).catch((error) => {
     console.error(error);

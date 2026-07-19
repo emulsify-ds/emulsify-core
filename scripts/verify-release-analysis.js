@@ -4,13 +4,13 @@
  * @file Predict semantic-release output without running publishing plugins.
  */
 
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  analyzeReleaseHistory,
   analyzeReleaseType,
   getCommitsInRange,
-  incrementVersion,
+  parseReleaseTag,
 } from './bump-version-from-commits.js';
 import {
   createUsage,
@@ -18,47 +18,7 @@ import {
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
 
-const RELEASE_TAG = /^v(\d+\.\d+\.\d+)$/;
-
-/**
- * Parse the stable version from a semantic-release tag.
- *
- * @param {string} tag - Git tag.
- * @returns {string} Semantic version without its v prefix.
- */
-export function parseReleaseTag(tag) {
-  const match = RELEASE_TAG.exec(String(tag).trim());
-
-  if (!match) {
-    throw new Error(
-      `Unsupported release tag "${tag}". Expected a stable tag such as v4.3.0.`,
-    );
-  }
-
-  return match[1];
-}
-
-/**
- * Find the latest release tag reachable from a ref.
- *
- * @param {{cwd: string, base?: string}} options - Git options.
- * @returns {string} Reachable release tag.
- */
-export function getLatestReleaseTag({ cwd, base = 'origin/main' }) {
-  try {
-    return execFileSync(
-      'git',
-      ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', base],
-      {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    ).trim();
-  } catch {
-    throw new Error(`No semantic release tag is reachable from "${base}".`);
-  }
-}
+export { parseReleaseTag };
 
 /**
  * Read the package version from a project.
@@ -146,11 +106,14 @@ export async function predictRelease({
   head = 'HEAD',
   squashTitle,
 }) {
-  const releaseTag = getLatestReleaseTag({ cwd, base });
-  const previousVersion = parseReleaseTag(releaseTag);
-  const commits = getCommitsInRange({ cwd, from: releaseTag, to: head });
-  const releaseType = await analyzeReleaseType(commits, cwd);
-  const range = `${releaseTag}..${head}`;
+  const {
+    releaseTag,
+    previousVersion,
+    releaseType,
+    predictedVersion,
+    range,
+    commits,
+  } = await analyzeReleaseHistory({ cwd, base, head });
 
   if (!releaseType) {
     throw new Error(
@@ -158,7 +121,6 @@ export async function predictRelease({
     );
   }
 
-  const predictedVersion = incrementVersion(previousVersion, releaseType);
   const packageVersion = readPackageVersion(cwd);
   assertPackageVersion({
     packageVersion,
