@@ -5,7 +5,7 @@
  * each individual plugin concern to focused internal modules.
  */
 
-import sassGlobImports from 'vite-plugin-sass-glob-import';
+import sassGlobImports from '@mlnop/vite-plugin-sass-glob-import';
 
 import { getPlatformAdapter } from '../platforms.js';
 import { resolveProjectStructure } from '../project-structure.js';

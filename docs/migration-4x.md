@@ -226,6 +226,12 @@ export default ({ env }) => [
 
 See [Extension Points](extension-points.md) for Vite plugins, Tailwind CSS, Storybook preview overrides, and framework integrations.
 
+Sass glob expansion supports modern `@use` patterns such as
+`@use "./components/**/*.scss";` and retains legacy globbed `@import` support
+for existing themes. Prefer `@use` in new code. Migrating existing `@import`
+globs requires reviewing Sass namespace and scoping changes rather than only
+changing the at-rule.
+
 ## CSS Asset URLs
 
 Use project-root `/assets/...` URLs for fonts, SVGs, background images, and

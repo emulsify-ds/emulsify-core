@@ -8,9 +8,9 @@ import { join } from 'path';
 import * as pluginsModule from './plugins.js';
 import { makeEnv, makeTempProject, pluginNames } from './test-utils/plugins.js';
 
-jest.mock('vite-plugin-sass-glob-import', () => ({
+jest.mock('@mlnop/vite-plugin-sass-glob-import', () => ({
   __esModule: true,
-  default: jest.fn(() => ({ name: 'vite-plugin-sass-glob-import' })),
+  default: jest.fn(() => ({ name: 'sass-glob-import' })),
 }));
 jest.mock('@vituum/vite-plugin-twig', () => ({
   __esModule: true,
@@ -54,7 +54,7 @@ describe('Vite plugin public barrel', () => {
         'emulsify-twig-module',
         '@vituum/vite-plugin-twig',
         'emulsify-svg-sprite-file',
-        'vite-plugin-sass-glob-import',
+        'sass-glob-import',
         'emulsify-yaml',
         'emulsify-require-context-compat',
         'emulsify-css-asset-url-relativizer',
