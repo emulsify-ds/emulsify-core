@@ -119,12 +119,13 @@ describe('Storybook Twig resolver', () => {
     const resolver = createTwigResolver({
       env: createEnv(),
       modules: {
-        '/src/components/ui/heading/heading.twig': {
+        '/src/components/atoms/text/heading/heading.twig': {
           default: headingTemplate,
         },
       },
       sources: {
-        '/src/components/ui/heading/heading.twig': '<h2>{{ heading }}</h2>',
+        '/src/components/atoms/text/heading/heading.twig':
+          '<h2>{{ heading }}</h2>',
       },
     });
 
@@ -150,6 +151,28 @@ describe('Storybook Twig resolver', () => {
     });
 
     expect(resolver.resolveTemplate('whisk:heading')).toBe(exactTemplate);
+  });
+
+  it('resolves duplicate grouped component names deterministically', () => {
+    const deeperTemplate = jest.fn(() => '<h2>Deeper</h2>');
+    const betaTemplate = jest.fn(() => '<h2>Beta</h2>');
+    const alphaTemplate = jest.fn(() => '<h2>Alpha</h2>');
+    const resolver = createTwigResolver({
+      env: createEnv(),
+      modules: {
+        '/src/components/aardvark/text/heading/heading.twig': {
+          default: deeperTemplate,
+        },
+        '/src/components/beta/heading/heading.twig': {
+          default: betaTemplate,
+        },
+        '/src/components/alpha/heading/heading.twig': {
+          default: alphaTemplate,
+        },
+      },
+    });
+
+    expect(resolver.resolveTemplate('whisk:heading')).toBe(alphaTemplate);
   });
 
   it('loads lazy raw Twig source once and caches it for later sync reads', async () => {

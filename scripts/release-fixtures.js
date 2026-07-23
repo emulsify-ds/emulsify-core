@@ -143,6 +143,10 @@ const releaseFixtures = [
         pattern: '.out/storybook-assets/card.stories-*.js',
         strings: ['Twig fixture', 'React fixture'],
       },
+      {
+        pattern: '.out/storybook-assets/*.js',
+        strings: ['data-nested-project-alias'],
+      },
     ],
   },
   {

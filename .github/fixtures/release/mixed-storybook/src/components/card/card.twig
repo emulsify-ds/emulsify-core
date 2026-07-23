@@ -1,5 +1,6 @@
 <article {{ add_attributes({ class: bem('card', ['storybook']) }) }}>
   <h2>{{ heading }}</h2>
+  {% include 'mixed_storybook:headings' with { text: heading } %}
   <p>{{ body }}</p>
   {% if renderedBy %}
     <span data-rendered-by="{{ renderedBy }}">{{ renderedBy }}</span>
