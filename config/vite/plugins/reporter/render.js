@@ -73,12 +73,24 @@ function renderDetailRows(entries, projectDir, styler) {
   const lines = [];
 
   for (const entry of entries.slice(0, MAX_DETAIL_ROWS)) {
-    const location = displayLocation(entry.file, entry.line, projectDir);
     const repeat = entry.count > 1 ? styler('gray', ` (×${entry.count})`) : '';
-    lines.push(`${DETAIL_INDENT}${styler('gray', location)}${repeat}`);
 
+    if (entry.file) {
+      const location = displayLocation(entry.file, entry.line, projectDir);
+      lines.push(`${DETAIL_INDENT}${styler('gray', location)}${repeat}`);
+
+      if (entry.message) {
+        lines.push(`${DETAIL_INDENT}${entry.message}`);
+      }
+      continue;
+    }
+
+    // Some warnings arrive with no span. Printing a "<unknown>" path row for
+    // those wastes a line and reads like a failure to resolve something, so the
+    // message carries the repeat count instead. An entry with neither a
+    // location nor a message has nothing to act on and is dropped.
     if (entry.message) {
-      lines.push(`${DETAIL_INDENT}${entry.message}`);
+      lines.push(`${DETAIL_INDENT}${entry.message}${repeat}`);
     }
   }
 

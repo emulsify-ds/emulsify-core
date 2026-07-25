@@ -328,6 +328,38 @@ describe('rendering helpers', () => {
     expect(output).toContain('+2 more');
   });
 
+  it('never prints an unknown location row for a locationless warning', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordWarning({ message: 'no span here' });
+    collector.recordWarning({ message: 'no span here' });
+
+    const output = renderSummary({
+      snapshot: collector.snapshot(),
+      durationMs: 10,
+      projectDir: '/project',
+      styler: plain,
+    }).join('\n');
+
+    expect(output).not.toContain('<unknown>');
+    // The repeat count moves onto the message line instead of a path row.
+    expect(output).toContain('no span here (×2)');
+  });
+
+  it('drops entries carrying neither a location nor a message', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordWarning({});
+
+    const output = renderSummary({
+      snapshot: collector.snapshot(),
+      durationMs: 10,
+      projectDir: '/project',
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('! 1 warning');
+    expect(output).not.toContain('<unknown>');
+  });
+
   it('falls back to a generic label when no changed file is known', () => {
     const output = renderRebuild({
       snapshot: emptySnapshot,

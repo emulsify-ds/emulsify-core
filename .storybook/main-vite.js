@@ -54,24 +54,32 @@ function mergeTwigRuntimeOptimizeDepsExcludes(...excludeLists) {
 }
 
 /**
+ * Virtual module IDs that must stay external during dependency optimization.
+ *
+ * @type {RegExp}
+ */
+const TWIG_VIRTUAL_MODULE_PATTERN =
+  /^virtual:emulsify-twig-(?:globs|asset-sources|asset-source-runtime)$/;
+
+/**
  * Keep Emulsify Twig virtual imports out of Storybook dependency prebundles.
  *
- * @returns {import('esbuild').Plugin} Esbuild plugin for optimizeDeps.
+ * Vite 8 optimizes dependencies with Rolldown rather than esbuild, so this is a
+ * Rolldown plugin using the Rollup-compatible `resolveId` hook. It replaces the
+ * previous esbuild `onResolve` plugin, which reached Vite through the
+ * deprecated `optimizeDeps.esbuildOptions` escape hatch.
+ *
+ * @returns {import('rolldown').Plugin} Rolldown plugin for optimizeDeps.
  */
 function makeTwigVirtualModuleOptimizerPlugin() {
   return {
     name: 'emulsify-twig-virtual-modules',
-    setup(build) {
-      build.onResolve(
-        {
-          filter:
-            /^virtual:emulsify-twig-(?:globs|asset-sources|asset-source-runtime)$/,
-        },
-        (args) => ({
-          path: args.path,
-          external: true,
-        }),
-      );
+    resolveId(source) {
+      if (!TWIG_VIRTUAL_MODULE_PATTERN.test(source)) return null;
+
+      // Marking these external leaves them in the module graph for Emulsify's
+      // virtual plugins to resolve during the normal Vite pipeline.
+      return { id: source, external: true };
     },
   };
 }
@@ -177,19 +185,21 @@ export function createViteFinal(resolvedStorybookEnv) {
           baseViteConfig?.optimizeDeps?.exclude,
           config?.optimizeDeps?.exclude,
         ),
-        esbuildOptions: {
-          ...(baseViteConfig?.optimizeDeps?.esbuildOptions || {}),
-          ...(config?.optimizeDeps?.esbuildOptions || {}),
+        rolldownOptions: {
+          ...(baseViteConfig?.optimizeDeps?.rolldownOptions || {}),
+          ...(config?.optimizeDeps?.rolldownOptions || {}),
           plugins: [
-            ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.plugins || []),
-            ...(config?.optimizeDeps?.esbuildOptions?.plugins || []),
+            ...(baseViteConfig?.optimizeDeps?.rolldownOptions?.plugins || []),
+            ...(config?.optimizeDeps?.rolldownOptions?.plugins || []),
             makeTwigVirtualModuleOptimizerPlugin(),
           ],
-          loader: {
-            ...(baseViteConfig?.optimizeDeps?.esbuildOptions?.loader || {}),
-            ...(config?.optimizeDeps?.esbuildOptions?.loader || {}),
-            // Pre-bundle `.js` dependencies with the JSX loader for packages
-            // that ship JSX without a `.jsx` extension.
+          moduleTypes: {
+            ...(baseViteConfig?.optimizeDeps?.rolldownOptions?.moduleTypes ||
+              {}),
+            ...(config?.optimizeDeps?.rolldownOptions?.moduleTypes || {}),
+            // Pre-bundle `.js` dependencies as JSX for packages that ship JSX
+            // without a `.jsx` extension. Rolldown's `moduleTypes` is the
+            // successor to esbuild's `loader` map.
             '.js': 'jsx',
           },
         },
@@ -215,10 +225,10 @@ export function createViteFinal(resolvedStorybookEnv) {
         exclude: mergeTwigRuntimeOptimizeDepsExcludes(
           mergedConfig.optimizeDeps?.exclude,
         ),
-        esbuildOptions: {
-          ...(mergedConfig.optimizeDeps?.esbuildOptions || {}),
-          loader: {
-            ...(mergedConfig.optimizeDeps?.esbuildOptions?.loader || {}),
+        rolldownOptions: {
+          ...(mergedConfig.optimizeDeps?.rolldownOptions || {}),
+          moduleTypes: {
+            ...(mergedConfig.optimizeDeps?.rolldownOptions?.moduleTypes || {}),
             '.js': 'jsx',
           },
         },

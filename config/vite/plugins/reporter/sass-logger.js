@@ -86,6 +86,29 @@ export function condenseMessage(message) {
 }
 
 /**
+ * Detect Dart Sass's own truncation notice.
+ *
+ * Without `verbose`, Sass prints at most five instances of each deprecation and
+ * then emits `"N repetitive deprecation warnings omitted."` as a warning with no
+ * span attached. That notice is not a problem in the stylesheet — it is Sass
+ * reporting that it hid some. Recording it would put a locationless row in the
+ * summary and, worse, imply the reporter's totals are complete when they are
+ * short by exactly the number Sass suppressed.
+ *
+ * {@link createSassOptions} sets `verbose` so the notice should never appear,
+ * but a project that overrides `preprocessorOptions` could reintroduce it.
+ *
+ * @param {string|undefined} message - Raw Sass message.
+ * @returns {boolean} TRUE when the message is a truncation notice.
+ */
+export function isRepetitionNotice(message) {
+  if (typeof message !== 'string') return false;
+  return /^\s*\d+\s+repetitive\s+deprecation\s+warnings?\s+omitted\b/i.test(
+    message,
+  );
+}
+
+/**
  * Create a Sass logger that records into a diagnostics collector.
  *
  * @param {ReturnType<import('./diagnostics.js').createDiagnosticsCollector>} collector - Shared collector.
@@ -102,6 +125,9 @@ export function createSassLogger(collector, { passthrough } = {}) {
      * @returns {void}
      */
     warn(message, options = {}) {
+      // Sass counting its own suppressed warnings is not a finding to report.
+      if (isRepetitionNotice(message)) return;
+
       const file = spanUrlToPath(options.span?.url);
       const line = spanLineNumber(options.span);
 
@@ -133,5 +159,26 @@ export function createSassLogger(collector, { passthrough } = {}) {
      * @returns {void}
      */
     debug() {},
+  };
+}
+
+/**
+ * Build the Sass preprocessor options used by the develop watcher.
+ *
+ * `verbose` and the custom logger have to travel together. Dart Sass caps each
+ * deprecation at five reported instances by default, so a reporter that counts
+ * what the logger receives would silently undercount — a project with 135 real
+ * occurrences would be told it had 85. Turning `verbose` on hands every
+ * occurrence to the logger, which then deduplicates them properly. The console
+ * stays quiet either way, because the logger prints nothing.
+ *
+ * @param {ReturnType<import('./diagnostics.js').createDiagnosticsCollector>} collector - Shared collector.
+ * @param {{passthrough?: (message: string, options: object) => void}} [options] - Logger options.
+ * @returns {{logger: {warn: Function, debug: Function}, verbose: boolean}} Sass options.
+ */
+export function createSassOptions(collector, options = {}) {
+  return {
+    logger: createSassLogger(collector, options),
+    verbose: true,
   };
 }

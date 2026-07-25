@@ -25,7 +25,7 @@ import { makePlugins } from './plugins.js';
 import { buildInputs } from './entries.js';
 import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
-import { createSassLogger } from './plugins/reporter/sass-logger.js';
+import { createSassOptions } from './plugins/reporter/sass-logger.js';
 import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
@@ -101,11 +101,7 @@ export default defineConfig(async () => {
       // occurrence. The reporter prints one deduplicated tally per cycle, so
       // the deprecation debt stays visible without the repetition.
       ...(diagnostics
-        ? {
-            preprocessorOptions: {
-              scss: { logger: createSassLogger(diagnostics) },
-            },
-          }
+        ? { preprocessorOptions: { scss: createSassOptions(diagnostics) } }
         : {}),
     },
 

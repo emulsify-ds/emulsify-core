@@ -8,6 +8,8 @@ import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import {
   condenseMessage,
   createSassLogger,
+  createSassOptions,
+  isRepetitionNotice,
   spanLineNumber,
   spanUrlToPath,
 } from '../reporter/sass-logger.js';
@@ -205,6 +207,74 @@ describe('sass logger', () => {
     logger.debug('inspecting', {});
 
     expect(collector.snapshot().hasProblems).toBe(false);
+  });
+
+  it('drops Sass truncation notices instead of recording locationless warnings', () => {
+    const collector = createDiagnosticsCollector();
+    const logger = createSassLogger(collector);
+
+    // Emitted by Sass with no span once it stops reporting a repeated
+    // deprecation. Recording it produced the "<unknown> (×2)" summary rows.
+    logger.warn(
+      '4 repetitive deprecation warnings omitted.\nRun in verbose mode to see all warnings.',
+      {},
+    );
+    logger.warn('20 repetitive deprecation warnings omitted.', {});
+
+    expect(collector.snapshot().warnings).toHaveLength(0);
+    expect(collector.snapshot().hasProblems).toBe(false);
+  });
+
+  it('still records genuine warnings that merely lack a span', () => {
+    const collector = createDiagnosticsCollector();
+    const logger = createSassLogger(collector);
+
+    logger.warn('something real happened', {});
+
+    expect(collector.snapshot().warnings[0]).toMatchObject({
+      message: 'something real happened',
+      file: undefined,
+    });
+  });
+});
+
+describe('repetition notice detection', () => {
+  it('matches the Sass truncation notice in its known forms', () => {
+    expect(
+      isRepetitionNotice('4 repetitive deprecation warnings omitted.'),
+    ).toBe(true);
+    expect(
+      isRepetitionNotice('1 repetitive deprecation warning omitted.'),
+    ).toBe(true);
+    expect(
+      isRepetitionNotice(
+        '  20 Repetitive Deprecation Warnings Omitted.\nRun in verbose mode.',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match real warnings', () => {
+    expect(isRepetitionNotice('lighten() is deprecated.')).toBe(false);
+    expect(isRepetitionNotice('repetitive deprecation warnings omitted.')).toBe(
+      false,
+    );
+    expect(isRepetitionNotice(undefined)).toBe(false);
+  });
+});
+
+describe('sass preprocessor options', () => {
+  it('pairs the quiet logger with verbose so counts are complete', () => {
+    const collector = createDiagnosticsCollector();
+    const options = createSassOptions(collector);
+
+    // Without verbose, Sass caps each deprecation at five reported instances
+    // and the reporter would undercount by everything it suppressed.
+    expect(options.verbose).toBe(true);
+    expect(typeof options.logger.warn).toBe('function');
+    expect(typeof options.logger.debug).toBe('function');
+
+    options.logger.warn('boom', {});
+    expect(collector.snapshot().warnings).toHaveLength(1);
   });
 });
 
