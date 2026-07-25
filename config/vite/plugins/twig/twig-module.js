@@ -1495,8 +1495,7 @@ export function emulsifyTwigModulePlugin(options) {
       }
 
       const modules = new Set(moduleGraph.getModulesByFile(filePath) || []);
-      const dependencyModule =
-        moduleGraph.getModuleById?.(dependencyModuleId);
+      const dependencyModule = moduleGraph.getModuleById?.(dependencyModuleId);
       if (dependencyModule) {
         moduleGraph.invalidateModule?.(dependencyModule);
         modules.add(dependencyModule);
