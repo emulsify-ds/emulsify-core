@@ -17,7 +17,7 @@
  * - CSS assets keep their path and drop the internal `__style` suffix if present.
  */
 
-import { defineConfig, mergeConfig } from 'vite';
+import { createLogger, defineConfig, mergeConfig } from 'vite';
 import path from 'node:path';
 
 import { resolveEnvironment } from './environment.js';
@@ -26,6 +26,7 @@ import { buildInputs } from './entries.js';
 import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
 import { createSassOptions } from './plugins/reporter/sass-logger.js';
+import { createReporterLogger } from './plugins/reporter/vite-logger.js';
 import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
@@ -88,6 +89,12 @@ export default defineConfig(async () => {
 
     // Core plugin set + project-provided plugins (if any).
     plugins: [...makePlugins(envWithSourceFileIndex), ...projectPlugins],
+
+    // Route Vite's own diagnostics through the reporter during a watch build so
+    // unresolved CSS asset URLs are summarized rather than printed mid-build.
+    ...(diagnostics
+      ? { customLogger: createReporterLogger(diagnostics, createLogger()) }
+      : {}),
 
     // Keep React-based story helpers on the consumer project's React singleton.
     resolve: mergeReactSingletonResolve(),

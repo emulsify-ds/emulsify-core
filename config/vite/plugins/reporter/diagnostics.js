@@ -139,9 +139,11 @@ const groupDeprecationsByFile = (deprecationList) => {
  *   recordDeprecation: (entry: {id?: string, file?: string, line?: number}) => void,
  *   recordWarning: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
+ *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
  *   snapshot: () => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
  *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
+ *     unresolvedAssets: Array<{url: string, importer: string|undefined, count: number}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     deprecationTotal: number,
@@ -158,6 +160,8 @@ export function createDiagnosticsCollector() {
   let warnings = new Map();
   /** @type {Map<string, object>} */
   let errors = new Map();
+  /** @type {Map<string, {url: string, importer: string|undefined, count: number}>} */
+  let unresolvedAssets = new Map();
 
   /**
    * Record one deprecation occurrence.
@@ -204,6 +208,28 @@ export function createDiagnosticsCollector() {
 
     recordError: (entry) => recordEntry(errors, entry),
 
+    /**
+     * Record one CSS `url()` that Vite could not resolve at build time.
+     *
+     * Keyed by URL, because the same asset referenced from two stylesheets with
+     * different relative paths is two separate things for an author to fix.
+     *
+     * @param {{url?: string, importer?: string}} entry - Unresolved asset.
+     * @returns {void}
+     */
+    recordUnresolvedAsset({ url, importer } = {}) {
+      if (!url) return;
+
+      const existing = unresolvedAssets.get(url);
+      if (existing) {
+        existing.count += 1;
+        existing.importer = existing.importer || importer;
+        return;
+      }
+
+      unresolvedAssets.set(url, { url, importer, count: 1 });
+    },
+
     snapshot() {
       const deprecationList = [...deprecations.values()]
         .map((bucket) => ({
@@ -224,10 +250,14 @@ export function createDiagnosticsCollector() {
 
       const errorList = [...errors.values()];
       const warningList = [...warnings.values()];
+      const unresolvedAssetList = [...unresolvedAssets.values()].sort(
+        (a, b) => b.count - a.count || a.url.localeCompare(b.url),
+      );
 
       return {
         deprecations: deprecationList,
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
+        unresolvedAssets: unresolvedAssetList,
         warnings: warningList,
         errors: errorList,
         deprecationTotal: deprecationList.reduce(
@@ -238,7 +268,8 @@ export function createDiagnosticsCollector() {
         hasProblems:
           errorList.length > 0 ||
           warningList.length > 0 ||
-          deprecationList.length > 0,
+          deprecationList.length > 0 ||
+          unresolvedAssetList.length > 0,
       };
     },
 
@@ -246,6 +277,7 @@ export function createDiagnosticsCollector() {
       deprecations = new Map();
       warnings = new Map();
       errors = new Map();
+      unresolvedAssets = new Map();
     },
   };
 }

@@ -70,6 +70,7 @@
     "config/vite/plugins/reporter/index.js",
     "config/vite/plugins/reporter/render.js",
     "config/vite/plugins/reporter/sass-logger.js",
+    "config/vite/plugins/reporter/vite-logger.js",
     "config/vite/plugins/reporter/watch-mode.js",
     "config/vite/plugins/require-context.js",
     "config/vite/plugins/twig/extension-installers.js",

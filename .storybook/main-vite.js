@@ -54,6 +54,37 @@ function mergeTwigRuntimeOptimizeDepsExcludes(...excludeLists) {
 }
 
 /**
+ * Drop Vite's legacy `rollupOptions` alias from an `optimizeDeps` object.
+ *
+ * Vite 8 installs a compat shim on resolved `optimizeDeps` that defines
+ * `rollupOptions` as an *enumerable accessor* forwarding to `rolldownOptions`.
+ * Spreading such an object — which is how Storybook's config is merged here —
+ * copies the alias out as an ordinary data property. Vite then sees an
+ * `optimizeDeps` carrying two distinct objects and logs:
+ *
+ *   `optimizeDeps.rollupOptions` / `ssr.optimizeDeps.rollupOptions` is
+ *   deprecated. Use `optimizeDeps.rolldownOptions` instead.
+ *
+ * `ssr.optimizeDeps` inherits from `optimizeDeps`, so clearing the alias here
+ * settles both. Anything the alias was carrying is folded into
+ * `rolldownOptions` rather than discarded, so behavior is unchanged.
+ *
+ * That deprecation is emitted with `console.warn` rather than through Vite's
+ * logger, so it cannot be intercepted downstream — it has to be prevented.
+ *
+ * @param {object} [optimizeDeps] - Resolved or partial optimizeDeps config.
+ * @returns {object} Copy with the alias resolved into `rolldownOptions`.
+ */
+export function stripRollupOptionsAlias(optimizeDeps) {
+  if (!optimizeDeps) return {};
+
+  const { rollupOptions, rolldownOptions, ...rest } = optimizeDeps;
+  const resolved = rolldownOptions || rollupOptions;
+
+  return resolved ? { ...rest, rolldownOptions: resolved } : rest;
+}
+
+/**
  * Virtual module IDs that must stay external during dependency optimization.
  *
  * @type {RegExp}
@@ -137,9 +168,16 @@ export function createViteFinal(resolvedStorybookEnv) {
         '**/*.twig',
       ]),
     );
+    // Clear Vite's legacy `rollupOptions` alias before either object is
+    // spread, so the merged result never carries both it and `rolldownOptions`.
+    const baseOptimizeDeps = stripRollupOptionsAlias(
+      baseViteConfig?.optimizeDeps,
+    );
+    const storybookOptimizeDeps = stripRollupOptionsAlias(config?.optimizeDeps);
+
     const optimizeDepsInclude = mergeReactSingletonOptimizeDeps(
-      baseViteConfig?.optimizeDeps?.include,
-      config?.optimizeDeps?.include,
+      baseOptimizeDeps.include,
+      storybookOptimizeDeps.include,
       [
         'twig',
         '@emulsify/core/extensions/twig',
@@ -178,25 +216,24 @@ export function createViteFinal(resolvedStorybookEnv) {
         exclude: [],
       },
       optimizeDeps: {
-        ...(baseViteConfig?.optimizeDeps || {}),
-        ...(config?.optimizeDeps || {}),
+        ...baseOptimizeDeps,
+        ...storybookOptimizeDeps,
         include: optimizeDepsInclude,
         exclude: mergeTwigRuntimeOptimizeDepsExcludes(
-          baseViteConfig?.optimizeDeps?.exclude,
-          config?.optimizeDeps?.exclude,
+          baseOptimizeDeps.exclude,
+          storybookOptimizeDeps.exclude,
         ),
         rolldownOptions: {
-          ...(baseViteConfig?.optimizeDeps?.rolldownOptions || {}),
-          ...(config?.optimizeDeps?.rolldownOptions || {}),
+          ...(baseOptimizeDeps.rolldownOptions || {}),
+          ...(storybookOptimizeDeps.rolldownOptions || {}),
           plugins: [
-            ...(baseViteConfig?.optimizeDeps?.rolldownOptions?.plugins || []),
-            ...(config?.optimizeDeps?.rolldownOptions?.plugins || []),
+            ...(baseOptimizeDeps.rolldownOptions?.plugins || []),
+            ...(storybookOptimizeDeps.rolldownOptions?.plugins || []),
             makeTwigVirtualModuleOptimizerPlugin(),
           ],
           moduleTypes: {
-            ...(baseViteConfig?.optimizeDeps?.rolldownOptions?.moduleTypes ||
-              {}),
-            ...(config?.optimizeDeps?.rolldownOptions?.moduleTypes || {}),
+            ...(baseOptimizeDeps.rolldownOptions?.moduleTypes || {}),
+            ...(storybookOptimizeDeps.rolldownOptions?.moduleTypes || {}),
             // Pre-bundle `.js` dependencies as JSX for packages that ship JSX
             // without a `.jsx` extension. Rolldown's `moduleTypes` is the
             // successor to esbuild's `loader` map.
@@ -205,6 +242,10 @@ export function createViteFinal(resolvedStorybookEnv) {
         },
       },
     });
+
+    const mergedOptimizeDeps = stripRollupOptionsAlias(
+      mergedConfig.optimizeDeps,
+    );
 
     return {
       ...mergedConfig,
@@ -218,17 +259,17 @@ export function createViteFinal(resolvedStorybookEnv) {
       },
       resolve: mergeReactSingletonResolve(mergedConfig),
       optimizeDeps: {
-        ...(mergedConfig.optimizeDeps || {}),
-        include: mergeReactSingletonOptimizeDeps(
-          mergedConfig.optimizeDeps?.include,
-        ),
+        // `mergeConfig` walks enumerable keys, so the alias can reappear on the
+        // merged result even though both inputs were cleaned above.
+        ...mergedOptimizeDeps,
+        include: mergeReactSingletonOptimizeDeps(mergedOptimizeDeps.include),
         exclude: mergeTwigRuntimeOptimizeDepsExcludes(
-          mergedConfig.optimizeDeps?.exclude,
+          mergedOptimizeDeps.exclude,
         ),
         rolldownOptions: {
-          ...(mergedConfig.optimizeDeps?.rolldownOptions || {}),
+          ...(mergedOptimizeDeps.rolldownOptions || {}),
           moduleTypes: {
-            ...(mergedConfig.optimizeDeps?.rolldownOptions?.moduleTypes || {}),
+            ...(mergedOptimizeDeps.rolldownOptions?.moduleTypes || {}),
             '.js': 'jsx',
           },
         },

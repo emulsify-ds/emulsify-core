@@ -31,6 +31,17 @@ const SEPARATOR = ' · ';
 const MAX_DETAIL_ROWS = 5;
 
 /**
+ * Maximum number of unresolved asset URLs listed before collapsing.
+ *
+ * Higher than the general detail cap because these rows are single short
+ * paths, and the same image referenced from two stylesheets with different
+ * relative spellings is two separate edits — hiding either is unhelpful.
+ *
+ * @type {number}
+ */
+const MAX_ASSET_ROWS = 8;
+
+/**
  * Maximum number of files listed in the deprecation worklist.
  *
  * @type {number}
@@ -281,6 +292,54 @@ function renderMigratorCommand(deprecations, sourceGlob, styler) {
 }
 
 /**
+ * Render the unresolved CSS asset block.
+ *
+ * Vite prints one of these per `url()` it cannot resolve, mid-build and in
+ * whatever order the transforms finish. Collapsing them into one block also
+ * lets the reporter say what the notice actually means: the path is emitted
+ * into the CSS untouched, so it is only correct if it resolves from the output
+ * directory in the browser.
+ *
+ * @param {Array<{url: string, importer: string|undefined, count: number}>} assets - Unresolved assets.
+ * @param {string} projectDir - Project root.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Unresolved asset lines.
+ */
+function renderUnresolvedAssets(assets, projectDir, styler) {
+  if (assets.length === 0) return [];
+
+  const lines = [
+    `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler(
+      'yellow',
+      `${pluralize(assets.length, 'unresolved css url')}${SEPARATOR}emitted unchanged`,
+    )}`,
+  ];
+
+  for (const asset of assets.slice(0, MAX_ASSET_ROWS)) {
+    const from = asset.importer
+      ? styler('gray', `  in ${displayPath(asset.importer, projectDir)}`)
+      : '';
+    lines.push(`${DETAIL_INDENT}${asset.url}${from}`);
+  }
+
+  const hidden = assets.length - MAX_ASSET_ROWS;
+  if (hidden > 0) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+    );
+  }
+
+  lines.push(
+    `${DETAIL_INDENT}${styler(
+      'gray',
+      'these must resolve from the built css, not the source file',
+    )}`,
+  );
+
+  return lines;
+}
+
+/**
  * Render the problem blocks shared by first builds and rebuilds.
  *
  * @param {object} snapshot - Diagnostics snapshot.
@@ -306,6 +365,16 @@ function renderProblems(snapshot, projectDir, styler, sourceGlob) {
       `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler('yellow', pluralize(snapshot.warnings.length, 'warning'))}`,
     );
     lines.push(...renderDetailRows(snapshot.warnings, projectDir, styler));
+  }
+
+  const assetLines = renderUnresolvedAssets(
+    snapshot.unresolvedAssets || [],
+    projectDir,
+    styler,
+  );
+  if (assetLines.length > 0) {
+    lines.push('');
+    lines.push(...assetLines);
   }
 
   const deprecationLines = renderDeprecations(
