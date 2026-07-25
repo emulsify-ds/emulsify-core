@@ -27,6 +27,7 @@
 
 import { relative } from 'node:path';
 
+import { buildAssetRows, createAssetResolver } from './asset-resolver.js';
 import { renderBanner, renderRebuild, renderSummary } from './render.js';
 import { createStyler, supportsColor, supportsUnicode } from './format.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
@@ -166,6 +167,14 @@ export function developReporterPlugin({
       );
     } else {
       firstCycleComplete = true;
+      // Enriching costs a filesystem read per stylesheet, so it only runs when
+      // the build actually produced unresolved URLs. A resolver is built per
+      // cycle so its read cache never serves stale contents after an edit.
+      const assetRows =
+        snapshot.unresolvedAssets.length > 0
+          ? buildAssetRows(snapshot.unresolvedAssets, createAssetResolver(env))
+          : [];
+
       emit(
         renderSummary({
           snapshot,
@@ -173,6 +182,7 @@ export function developReporterPlugin({
           outDir,
           projectDir: env.projectDir,
           sourceGlob: resolveSourceGlob(env),
+          assetRows,
           styler,
         }),
       );

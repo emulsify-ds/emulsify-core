@@ -1,5 +1,7 @@
 /**
- * @file Tests for the Vite logger wrapper and unresolved CSS asset reporting.
+ * @file Tests for the Vite logger wrapper and its capture of asset notices.
+ *
+ * Rendering of the captured notices is covered in reporter-asset-resolver.test.js.
  */
 
 import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
@@ -7,10 +9,6 @@ import {
   createReporterLogger,
   parseUnresolvedAsset,
 } from '../reporter/vite-logger.js';
-import { renderSummary } from '../reporter/render.js';
-import { createStyler } from '../reporter/format.js';
-
-const plain = createStyler(false);
 
 /**
  * Build a stub Vite logger that records what reaches it.
@@ -144,93 +142,5 @@ describe('reporter logger', () => {
 
     // Each spelling is a separate edit for the author to make.
     expect(collector.snapshot().unresolvedAssets).toHaveLength(2);
-  });
-});
-
-describe('unresolved asset rendering', () => {
-  /**
-   * Collect a snapshot containing the given urls.
-   *
-   * @param {number} count - How many urls to record.
-   * @returns {object} Diagnostics snapshot.
-   */
-  const snapshotWithAssets = (count) => {
-    const collector = createDiagnosticsCollector();
-    for (let index = 0; index < count; index += 1) {
-      collector.recordUnresolvedAsset({ url: `../images/a${index}.png` });
-    }
-    return collector.snapshot();
-  };
-
-  it('groups the notices into one block with an explanation', () => {
-    const output = renderSummary({
-      snapshot: snapshotWithAssets(3),
-      durationMs: 100,
-      projectDir: '/project',
-      styler: plain,
-    }).join('\n');
-
-    expect(output).toContain('! 3 unresolved css urls · emitted unchanged');
-    expect(output).toContain('../images/a0.png');
-    expect(output).toContain(
-      'these must resolve from the built css, not the source file',
-    );
-    // The raw Vite phrasing never reaches the user.
-    expect(output).not.toContain('resolved at runtime');
-  });
-
-  it('names the referencing stylesheet when Vite knows it', () => {
-    const collector = createDiagnosticsCollector();
-    collector.recordUnresolvedAsset({
-      url: '../images/bg.png',
-      importer: '/project/src/components/base/base.scss',
-    });
-
-    const output = renderSummary({
-      snapshot: collector.snapshot(),
-      durationMs: 10,
-      projectDir: '/project',
-      styler: plain,
-    }).join('\n');
-
-    expect(output).toContain(
-      '../images/bg.png  in src/components/base/base.scss',
-    );
-  });
-
-  it('shows a typical run in full without collapsing', () => {
-    // Three images spelled two ways each is the common real-world shape.
-    const output = renderSummary({
-      snapshot: snapshotWithAssets(6),
-      durationMs: 10,
-      projectDir: '/project',
-      styler: plain,
-    }).join('\n');
-
-    expect(output).toContain('! 6 unresolved css urls');
-    expect(output).not.toContain('more');
-  });
-
-  it('caps a runaway list and reports the remainder', () => {
-    const output = renderSummary({
-      snapshot: snapshotWithAssets(12),
-      durationMs: 10,
-      projectDir: '/project',
-      styler: plain,
-    }).join('\n');
-
-    expect(output).toContain('! 12 unresolved css urls');
-    expect(output).toContain('+4 more');
-  });
-
-  it('says nothing when every url resolved', () => {
-    const output = renderSummary({
-      snapshot: createDiagnosticsCollector().snapshot(),
-      durationMs: 10,
-      projectDir: '/project',
-      styler: plain,
-    }).join('\n');
-
-    expect(output).not.toContain('unresolved css');
   });
 });

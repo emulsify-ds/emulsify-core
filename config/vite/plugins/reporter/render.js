@@ -292,37 +292,81 @@ function renderMigratorCommand(deprecations, sourceGlob, styler) {
 }
 
 /**
+ * Column headings for the unresolved asset table.
+ *
+ * `on disk` has to label both a directory and a not-found state, which is why
+ * it is not called something like "found in".
+ *
+ * @type {{where: string, url: string, disk: string}}
+ */
+const ASSET_HEADINGS = {
+  where: 'referenced in',
+  url: 'url',
+  disk: 'on disk',
+};
+
+/**
+ * Colors for each on-disk resolution state.
+ *
+ * @type {Record<string, string>}
+ */
+const ASSET_STATUS_COLORS = {
+  found: 'green',
+  missing: 'red',
+  ambiguous: 'yellow',
+  unknown: 'gray',
+};
+
+/**
  * Render the unresolved CSS asset block.
  *
  * Vite prints one of these per `url()` it cannot resolve, mid-build and in
- * whatever order the transforms finish. Collapsing them into one block also
- * lets the reporter say what the notice actually means: the path is emitted
- * into the CSS untouched, so it is only correct if it resolves from the output
- * directory in the browser.
+ * whatever order the transforms finish. Collapsing them into one table also
+ * lets the reporter answer what the raw notice cannot: which stylesheet writes
+ * the URL, and whether the file exists anywhere in the project.
  *
- * @param {Array<{url: string, importer: string|undefined, count: number}>} assets - Unresolved assets.
- * @param {string} projectDir - Project root.
+ * @param {Array<{where: string, url: string, status: string, label: string}>} rows - Enriched rows.
  * @param {(format: string|string[], text: string) => string} styler - Styling function.
  * @returns {string[]} Unresolved asset lines.
  */
-function renderUnresolvedAssets(assets, projectDir, styler) {
-  if (assets.length === 0) return [];
+function renderUnresolvedAssets(rows, styler) {
+  if (rows.length === 0) return [];
+
+  const shown = rows.slice(0, MAX_ASSET_ROWS);
+  const found = rows.filter((row) => row.status === 'found').length;
+  const missing = rows.filter((row) => row.status === 'missing').length;
+
+  const tally = [`${found} found`, `${missing} missing`].join(', ');
+  const headline = `${pluralize(rows.length, 'unresolved css url')}${SEPARATOR}${tally}`;
+
+  // Padding is applied before styling so ANSI escapes never skew the columns.
+  const whereWidth = Math.max(
+    ASSET_HEADINGS.where.length,
+    ...shown.map((row) => row.where.length),
+  );
+  const urlWidth = Math.max(
+    ASSET_HEADINGS.url.length,
+    ...shown.map((row) => row.url.length),
+  );
 
   const lines = [
-    `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler(
-      'yellow',
-      `${pluralize(assets.length, 'unresolved css url')}${SEPARATOR}emitted unchanged`,
+    `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler('yellow', headline)}`,
+    '',
+    `${DETAIL_INDENT}${styler(
+      'gray',
+      `${ASSET_HEADINGS.where.padEnd(whereWidth)}  ${ASSET_HEADINGS.url.padEnd(urlWidth)}  ${ASSET_HEADINGS.disk}`,
     )}`,
   ];
 
-  for (const asset of assets.slice(0, MAX_ASSET_ROWS)) {
-    const from = asset.importer
-      ? styler('gray', `  in ${displayPath(asset.importer, projectDir)}`)
-      : '';
-    lines.push(`${DETAIL_INDENT}${asset.url}${from}`);
+  for (const row of shown) {
+    const where = styler('cyan', row.where.padEnd(whereWidth));
+    const url = row.url.padEnd(urlWidth);
+    const disk = styler(ASSET_STATUS_COLORS[row.status] || 'gray', row.label);
+
+    lines.push(`${DETAIL_INDENT}${where}  ${url}  ${disk}`.trimEnd());
   }
 
-  const hidden = assets.length - MAX_ASSET_ROWS;
+  const hidden = rows.length - MAX_ASSET_ROWS;
   if (hidden > 0) {
     lines.push(
       `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
@@ -330,9 +374,10 @@ function renderUnresolvedAssets(assets, projectDir, styler) {
   }
 
   lines.push(
+    '',
     `${DETAIL_INDENT}${styler(
       'gray',
-      'these must resolve from the built css, not the source file',
+      'paths resolve from dist/, not from the scss file',
     )}`,
   );
 
@@ -346,9 +391,10 @@ function renderUnresolvedAssets(assets, projectDir, styler) {
  * @param {string} projectDir - Project root.
  * @param {(format: string|string[], text: string) => string} styler - Styling function.
  * @param {string} sourceGlob - Glob matching the project stylesheets.
+ * @param {Array<object>} assetRows - Enriched unresolved asset rows.
  * @returns {string[]} Problem lines.
  */
-function renderProblems(snapshot, projectDir, styler, sourceGlob) {
+function renderProblems(snapshot, projectDir, styler, sourceGlob, assetRows) {
   const lines = [];
 
   if (snapshot.errors.length > 0) {
@@ -367,11 +413,7 @@ function renderProblems(snapshot, projectDir, styler, sourceGlob) {
     lines.push(...renderDetailRows(snapshot.warnings, projectDir, styler));
   }
 
-  const assetLines = renderUnresolvedAssets(
-    snapshot.unresolvedAssets || [],
-    projectDir,
-    styler,
-  );
+  const assetLines = renderUnresolvedAssets(assetRows, styler);
   if (assetLines.length > 0) {
     lines.push('');
     lines.push(...assetLines);
@@ -400,6 +442,7 @@ function renderProblems(snapshot, projectDir, styler, sourceGlob) {
  *   outDir?: string,
  *   projectDir?: string,
  *   sourceGlob?: string,
+ *   assetRows?: Array<object>,
  *   styler: (format: string|string[], text: string) => string
  * }} options - Summary inputs.
  * @returns {string[]} Summary lines.
@@ -410,6 +453,7 @@ export function renderSummary({
   outDir = 'dist',
   projectDir = '',
   sourceGlob = 'src/**/*.scss',
+  assetRows = [],
   styler,
 }) {
   const failed = snapshot.errors.length > 0;
@@ -422,7 +466,7 @@ export function renderSummary({
 
   const lines = [
     `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${outDir}`)}`,
-    ...renderProblems(snapshot, projectDir, styler, sourceGlob),
+    ...renderProblems(snapshot, projectDir, styler, sourceGlob, assetRows),
     '',
   ];
 
