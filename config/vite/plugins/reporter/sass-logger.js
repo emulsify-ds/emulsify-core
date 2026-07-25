@@ -19,22 +19,75 @@
 import { fileURLToPath } from 'node:url';
 
 /**
- * Commands that resolve each deprecation class, keyed by Sass deprecation ID.
+ * What each Sass deprecation means and how to resolve it.
  *
- * Only deprecations with a mechanical fix are listed. Anything absent falls
- * back to the Sass documentation link the reporter renders by default.
+ * `fix` is the substitution to make, written as `before → after` so the row
+ * reads as an instruction rather than an identifier. A deprecation ID like
+ * `slash-div` tells a themer nothing on its own; `$a/$b → math.div($a, $b)`
+ * tells them exactly what to type.
  *
- * @type {Record<string, string>}
+ * `migrator` names the `sass-migrator` migration that rewrites the code
+ * automatically, and is omitted for deprecations that have to be fixed by hand.
+ * The migrator only ships five migrations, so most IDs here have no entry.
+ *
+ * @type {Record<string, {fix: string, migrator?: string}>}
+ * @see https://sass-lang.com/documentation/cli/migrator/
  */
-export const MIGRATION_HINTS = {
-  'slash-div': 'npx sass-migrator division <paths>',
-  'global-builtin': 'npx sass-migrator module <paths>',
-  import: 'npx sass-migrator module <paths>',
-  'color-functions': 'replace lighten()/darken() with color.adjust()',
-  'color-4-api': 'replace lighten()/darken() with color.adjust()',
-  'legacy-js-api': 'upgrade the Sass compiler integration',
-  'mixed-decls': 'move declarations above nested rules',
+export const DEPRECATION_GUIDE = {
+  'slash-div': {
+    fix: '$a/$b → math.div($a, $b)',
+    migrator: 'division',
+  },
+  'global-builtin': {
+    fix: 'map-get() → map.get()',
+    migrator: 'module',
+  },
+  import: {
+    fix: '@import → @use',
+    migrator: 'module',
+  },
+  'color-functions': {
+    fix: 'lighten()/darken() → color.adjust()',
+    migrator: 'color',
+  },
+  'if-function': {
+    fix: 'if() → CSS if()',
+    migrator: 'if',
+  },
+  'color-4-api': { fix: 'color.red($c) → color.channel($c, "red")' },
+  'legacy-js-api': { fix: 'render() → compile()' },
+  'mixed-decls': { fix: 'move declarations above nested rules' },
+  'strict-unary': { fix: '$a -$b → $a - $b' },
+  'abs-percent': { fix: 'abs(10%) → math.abs(10%)' },
+  'duplicate-var-flags': { fix: 'remove the repeated !default or !global' },
+  'null-alpha': { fix: 'rgb($c, null) → rgb($c)' },
+  'feature-exists': { fix: 'remove meta.feature-exists()' },
+  'moz-document': { fix: 'remove @-moz-document' },
+  'bogus-combinators': { fix: 'remove the dangling combinator' },
+  elseif: { fix: '@elseif → @else if' },
+  'call-string': { fix: 'call($name) → call(get-function($name))' },
+  'new-global': { fix: 'declare the variable before assigning it !global' },
 };
+
+/**
+ * Look up the human-readable fix for a deprecation ID.
+ *
+ * @param {string} id - Sass deprecation ID.
+ * @returns {string|undefined} Fix instruction, when one is known.
+ */
+export function deprecationFix(id) {
+  return DEPRECATION_GUIDE[id]?.fix;
+}
+
+/**
+ * Look up the `sass-migrator` migration that resolves a deprecation ID.
+ *
+ * @param {string} id - Sass deprecation ID.
+ * @returns {string|undefined} Migration name, when one exists.
+ */
+export function deprecationMigrator(id) {
+  return DEPRECATION_GUIDE[id]?.migrator;
+}
 
 /**
  * Convert a Sass span URL into a readable filesystem path.

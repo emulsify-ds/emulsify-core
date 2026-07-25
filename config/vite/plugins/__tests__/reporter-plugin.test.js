@@ -7,6 +7,7 @@ import {
   countEntries,
   developReporterPlugin,
   normalizeBuildError,
+  resolveSourceGlob,
 } from '../reporter/index.js';
 import {
   createStyler,
@@ -17,8 +18,10 @@ import {
   platformLabel,
   pluralize,
   supportsColor,
+  supportsUnicode,
 } from '../reporter/format.js';
 import {
+  formatLineList,
   renderBanner,
   renderRebuild,
   renderSummary,
@@ -50,6 +53,7 @@ function createHarness(env = {}) {
     now: () => currentTime,
     clock: () => new Date(2026, 6, 25, 14, 31, 22),
     colorEnabled: false,
+    unicodeEnabled: true,
     version: '4.2.1',
   });
 
@@ -102,14 +106,14 @@ describe('develop reporter plugin gating', () => {
     expect(lines).toEqual([]);
   });
 
-  it('prints the banner once when a watch build resolves', () => {
+  it('prints the wordmark banner once when a watch build resolves', () => {
     const { plugin, lines } = createHarness();
 
     plugin.configResolved(resolvedConfig());
 
-    expect(lines.join('\n')).toContain(
-      'emulsify · core 4.2.1 · Platform: Drupal · 28 entries',
-    );
+    const output = lines.join('\n');
+    expect(output).toContain('█▀▀ █▀▄▀█ █ █ █   █▀▀ █ █▀▀ █ █');
+    expect(output).toContain('core 4.2.1 · Platform: Drupal · 28 entries');
   });
 
   it('reports each cycle exactly once across overlapping lifecycle hooks', () => {
@@ -189,12 +193,96 @@ describe('develop reporter output', () => {
     plugin.writeBundle();
 
     const output = lines.join('\n');
-    expect(output).toContain('! 25 sass deprecations · 2 kinds in 2 files');
-    expect(output).toContain('slash-div 20 · global-builtin 5');
-    expect(output).toContain('src/components/base/_variables.scss:30 (×20)');
-    expect(output).toContain('npx sass-migrator division <paths>');
+    expect(output).toContain('! 25 sass deprecations · 2 files');
+    // Each file heads its own worklist, with the kind, count, and fix beneath.
+    expect(output).toContain('src/components/base/_variables.scss');
+    expect(output).toContain(':30');
+    expect(output).toContain('20×');
+    expect(output).toContain('slash-div');
+    expect(output).toContain('$a/$b → math.div($a, $b)');
+    expect(output).toContain('src/components/base/_breakpoints.scss');
+    expect(output).toContain('map-get() → map.get()');
     // The whole tally fits well inside the volume it replaces.
-    expect(lines.length).toBeLessThan(12);
+    expect(lines.length).toBeLessThan(16);
+  });
+
+  it('lists each deprecation once per file with every affected line', () => {
+    const { plugin, lines, collector } = createHarness();
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+
+    // The same deprecation on several lines of one partial is one edit, so it
+    // must not produce one row per line.
+    for (const line of [30, 31, 32]) {
+      for (let index = 0; index < 4; index += 1) {
+        collector.recordDeprecation({
+          id: 'slash-div',
+          file: '/project/src/_variables.scss',
+          line,
+        });
+      }
+    }
+
+    plugin.writeBundle();
+
+    const rows = lines.filter((line) => line.includes('slash-div'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain(':30,31,32');
+    expect(rows[0]).toContain('12×');
+  });
+
+  it('emits one runnable migrator command and names the rest', () => {
+    const { plugin, lines, collector } = createHarness();
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+
+    for (let index = 0; index < 9; index += 1) {
+      collector.recordDeprecation({
+        id: 'slash-div',
+        file: '/project/src/a.scss',
+        line: 1,
+      });
+    }
+    collector.recordDeprecation({
+      id: 'color-functions',
+      file: '/project/src/b.scss',
+      line: 2,
+    });
+
+    plugin.writeBundle();
+
+    const output = lines.join('\n');
+    // sass-migrator runs exactly one migration per invocation, so a combined
+    // command such as "division,color" would not work.
+    const quote = String.fromCharCode(39);
+    expect(output).toContain(
+      `npx sass-migrator division ${quote}src/**/*.scss${quote}`,
+    );
+    expect(output).toContain('(then: color)');
+    expect(output).not.toContain('division,color');
+    expect(output).not.toContain('<paths>');
+  });
+
+  it('omits the migrator command when no deprecation has one', () => {
+    const { plugin, lines, collector } = createHarness();
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+    collector.recordDeprecation({
+      id: 'mixed-decls',
+      file: '/project/src/a.scss',
+      line: 4,
+    });
+    plugin.writeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('move declarations above nested rules');
+    expect(output).not.toContain('sass-migrator');
   });
 
   it('prints a compact line for rebuilds instead of a second summary', () => {
@@ -284,10 +372,23 @@ describe('rendering helpers', () => {
       platform: 'none',
       styler: plain,
     });
-    expect(banner.join('\n')).toContain(
-      'emulsify · core 1.0.0 · Platform: none',
-    );
+    expect(banner.join('\n')).toContain('core 1.0.0 · Platform: none');
     expect(banner.join('\n')).not.toContain('entries');
+  });
+
+  it('falls back to plain text where block glyphs would not render', () => {
+    const banner = renderBanner({
+      version: '1.0.0',
+      platform: 'drupal',
+      entryCount: 4,
+      unicode: false,
+      styler: plain,
+    }).join('\n');
+
+    // Mojibake reads as breakage, so the wordmark is dropped, not mangled.
+    expect(banner).not.toContain('█');
+    expect(banner).toContain('EMULSIFY');
+    expect(banner).toContain('core 1.0.0 · Platform: Drupal · 4 entries');
   });
 
   it('caps listed errors and reports the remainder as a count', () => {
@@ -312,7 +413,7 @@ describe('rendering helpers', () => {
     expect(output).not.toContain('boom 7');
   });
 
-  it('caps the named deprecation kinds', () => {
+  it('caps the deprecation kinds listed under one file', () => {
     const collector = createDiagnosticsCollector();
     for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) {
       collector.recordDeprecation({ id, file: '/project/x.scss', line: 1 });
@@ -325,7 +426,34 @@ describe('rendering helpers', () => {
       styler: plain,
     }).join('\n');
 
-    expect(output).toContain('+2 more');
+    expect(output).toContain('+2 more kinds');
+  });
+
+  it('caps the files listed in the worklist', () => {
+    const collector = createDiagnosticsCollector();
+    for (const index of [1, 2, 3, 4, 5, 6]) {
+      collector.recordDeprecation({
+        id: 'slash-div',
+        file: `/project/f${index}.scss`,
+        line: 1,
+      });
+    }
+
+    const output = renderSummary({
+      snapshot: collector.snapshot(),
+      durationMs: 10,
+      projectDir: '/project',
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('+2 more files');
+  });
+
+  it('collapses a long list of affected lines', () => {
+    expect(formatLineList([3, 4])).toBe(':3,4');
+    expect(formatLineList([3, 4, 5])).toBe(':3,4,5');
+    expect(formatLineList([3, 4, 5, 6, 7])).toBe(':3,4,5 +2');
+    expect(formatLineList([])).toBe(':?');
   });
 
   it('never prints an unknown location row for a locationless warning', () => {
@@ -430,6 +558,30 @@ describe('format helpers', () => {
     expect(supportsColor({}, undefined)).toBe(false);
   });
 
+  it('detects whether block glyphs will render', () => {
+    expect(supportsUnicode({ LANG: 'en_US.UTF-8' }, 'darwin')).toBe(true);
+    expect(supportsUnicode({ LC_ALL: 'C.utf8' }, 'linux')).toBe(true);
+    expect(supportsUnicode({ LANG: 'en_US.ISO-8859-1' }, 'linux')).toBe(false);
+    expect(supportsUnicode({}, 'linux')).toBe(false);
+    // A dumb or Linux console terminal cannot draw them regardless of locale.
+    expect(
+      supportsUnicode({ LANG: 'en_US.UTF-8', TERM: 'dumb' }, 'linux'),
+    ).toBe(false);
+    // Opt out explicitly.
+    expect(
+      supportsUnicode(
+        { LANG: 'en_US.UTF-8', EMULSIFY_NO_UNICODE: '1' },
+        'linux',
+      ),
+    ).toBe(false);
+  });
+
+  it('only trusts Windows terminals that render block glyphs correctly', () => {
+    expect(supportsUnicode({ WT_SESSION: '1' }, 'win32')).toBe(true);
+    expect(supportsUnicode({ TERM_PROGRAM: 'vscode' }, 'win32')).toBe(true);
+    expect(supportsUnicode({ LANG: 'en_US.UTF-8' }, 'win32')).toBe(false);
+  });
+
   it('emits ansi only when enabled', () => {
     expect(createStyler(false)('red', 'x')).toBe('x');
     expect(createStyler(true)('red', 'x')).toContain('\u001b[31m');
@@ -472,6 +624,30 @@ describe('build error normalization', () => {
     expect(normalizeBuildError(new Error('')).message).toBe(
       'Unknown build error',
     );
+  });
+});
+
+describe('source glob resolution', () => {
+  it('derives the migrator glob from the resolved source directory', () => {
+    expect(
+      resolveSourceGlob({ projectDir: '/project', srcDir: '/project/src' }),
+    ).toBe('src/**/*.scss');
+    expect(
+      resolveSourceGlob({
+        projectDir: '/project',
+        srcDir: '/project/components',
+      }),
+    ).toBe('components/**/*.scss');
+  });
+
+  it('falls back to src when the source directory is unusable', () => {
+    expect(resolveSourceGlob({})).toBe('src/**/*.scss');
+    expect(resolveSourceGlob({ projectDir: '/project' })).toBe('src/**/*.scss');
+    // A source directory outside the project cannot be expressed as a project
+    // relative glob, so the command stays generic rather than becoming wrong.
+    expect(
+      resolveSourceGlob({ projectDir: '/project', srcDir: '/elsewhere/src' }),
+    ).toBe('src/**/*.scss');
   });
 });
 

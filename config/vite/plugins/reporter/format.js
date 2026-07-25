@@ -59,6 +59,37 @@ export function supportsColor(env = process.env, stream = process.stdout) {
 }
 
 /**
+ * Decide whether block-drawing characters will render correctly.
+ *
+ * The banner wordmark is built from half-block glyphs. On a terminal without a
+ * UTF-8 locale those degrade into replacement characters, which looks broken
+ * rather than branded, so the reporter falls back to plain text instead.
+ *
+ * Windows consoles are excluded unless running under Windows Terminal or the
+ * VS Code integrated terminal, which are the two that handle these glyphs
+ * reliably.
+ *
+ * @param {object} [env] - Environment variables.
+ * @param {string} [platform] - Node platform identifier.
+ * @returns {boolean} TRUE when block glyphs are safe to emit.
+ */
+export function supportsUnicode(
+  env = process.env,
+  platform = process.platform,
+) {
+  if (env.EMULSIFY_NO_UNICODE) return false;
+
+  if (platform === 'win32') {
+    return Boolean(env.WT_SESSION) || env.TERM_PROGRAM === 'vscode';
+  }
+
+  if (env.TERM === 'linux' || env.TERM === 'dumb') return false;
+
+  const locale = env.LC_ALL || env.LC_CTYPE || env.LANG || '';
+  return /UTF-?8$/i.test(locale);
+}
+
+/**
  * Create a styling function that respects the resolved color support.
  *
  * @param {boolean} enabled - Whether color is enabled.

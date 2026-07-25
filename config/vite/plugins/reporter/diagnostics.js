@@ -67,6 +67,68 @@ const byCountThenPath = (a, b) =>
   locationKey(a.file, a.line).localeCompare(locationKey(b.file, b.line));
 
 /**
+ * Invert the deprecation buckets into a per-file worklist.
+ *
+ * The collector groups by deprecation ID because that is how Sass reports, but
+ * fixing the debt is a per-file activity: you open one partial and change the
+ * handful of lines inside it. This projection produces that view — each file
+ * with the offending lines beneath it — without disturbing the ID-keyed model
+ * the totals are computed from.
+ *
+ * Within a file the same deprecation is collapsed into one entry carrying every
+ * affected line. Ten `slash-div` hits across ten lines of one partial is one
+ * edit to make, not ten findings to read.
+ *
+ * @param {Array<{id: string, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>} deprecationList - ID-keyed buckets.
+ * @returns {Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>} File-keyed worklist.
+ */
+const groupDeprecationsByFile = (deprecationList) => {
+  /** @type {Map<string, {file: string, occurrences: number, entries: Map<string, object>}>} */
+  const files = new Map();
+
+  for (const bucket of deprecationList) {
+    for (const location of bucket.locations) {
+      // A location with no file cannot be opened, so it has no place in a
+      // worklist. Those still count toward the headline totals.
+      if (!location.file) continue;
+
+      let group = files.get(location.file);
+      if (!group) {
+        group = { file: location.file, occurrences: 0, entries: new Map() };
+        files.set(location.file, group);
+      }
+
+      let entry = group.entries.get(bucket.id);
+      if (!entry) {
+        entry = { id: bucket.id, count: 0, lines: [] };
+        group.entries.set(bucket.id, entry);
+      }
+
+      group.occurrences += location.count;
+      entry.count += location.count;
+      if (location.line != null && !entry.lines.includes(location.line)) {
+        entry.lines.push(location.line);
+      }
+    }
+  }
+
+  return [...files.values()]
+    .map((group) => ({
+      file: group.file,
+      occurrences: group.occurrences,
+      entries: [...group.entries.values()]
+        .map((entry) => ({
+          ...entry,
+          lines: [...entry.lines].sort((a, b) => a - b),
+        }))
+        .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
+    }))
+    .sort(
+      (a, b) => b.occurrences - a.occurrences || a.file.localeCompare(b.file),
+    );
+};
+
+/**
  * Create a per-cycle diagnostic collector.
  *
  * The collector is intentionally synchronous and process-local. The Sass logger
@@ -79,6 +141,7 @@ const byCountThenPath = (a, b) =>
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
  *   snapshot: () => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
+ *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     deprecationTotal: number,
@@ -164,6 +227,7 @@ export function createDiagnosticsCollector() {
 
       return {
         deprecations: deprecationList,
+        deprecationsByFile: groupDeprecationsByFile(deprecationList),
         warnings: warningList,
         errors: errorList,
         deprecationTotal: deprecationList.reduce(

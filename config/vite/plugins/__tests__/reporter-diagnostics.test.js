@@ -6,9 +6,12 @@ import { pathToFileURL } from 'node:url';
 
 import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import {
+  DEPRECATION_GUIDE,
   condenseMessage,
   createSassLogger,
   createSassOptions,
+  deprecationFix,
+  deprecationMigrator,
   isRepetitionNotice,
   spanLineNumber,
   spanUrlToPath,
@@ -120,9 +123,68 @@ describe('diagnostics collector', () => {
     expect(collector.snapshot().errors).toHaveLength(2);
   });
 
+  it('projects a per-file worklist collapsing each kind once', () => {
+    const collector = createDiagnosticsCollector();
+
+    for (const line of [30, 31]) {
+      for (let index = 0; index < 3; index += 1) {
+        collector.recordDeprecation({ id: 'slash-div', file: '/a.scss', line });
+      }
+    }
+    collector.recordDeprecation({
+      id: 'global-builtin',
+      file: '/a.scss',
+      line: 12,
+    });
+    collector.recordDeprecation({ id: 'slash-div', file: '/b.scss', line: 4 });
+
+    const [first, second] = collector.snapshot().deprecationsByFile;
+
+    // Files sort by total occurrences, so the heavier file leads.
+    expect(first.file).toBe('/a.scss');
+    expect(first.occurrences).toBe(7);
+    expect(first.entries).toHaveLength(2);
+    expect(first.entries[0]).toEqual({
+      id: 'slash-div',
+      count: 6,
+      lines: [30, 31],
+    });
+    expect(first.entries[1]).toEqual({
+      id: 'global-builtin',
+      count: 1,
+      lines: [12],
+    });
+    expect(second.file).toBe('/b.scss');
+  });
+
+  it('keeps locationless deprecations out of the worklist but in the totals', () => {
+    const collector = createDiagnosticsCollector();
+
+    collector.recordDeprecation({ id: 'import' });
+    collector.recordDeprecation({ id: 'slash-div', file: '/a.scss', line: 1 });
+
+    const snapshot = collector.snapshot();
+    expect(snapshot.deprecationTotal).toBe(2);
+    expect(snapshot.deprecationsByFile).toHaveLength(1);
+    expect(snapshot.deprecationsByFile[0].file).toBe('/a.scss');
+  });
+
+  it('sorts affected lines numerically rather than lexically', () => {
+    const collector = createDiagnosticsCollector();
+
+    for (const line of [100, 9, 30]) {
+      collector.recordDeprecation({ id: 'slash-div', file: '/a.scss', line });
+    }
+
+    expect(collector.snapshot().deprecationsByFile[0].entries[0].lines).toEqual(
+      [9, 30, 100],
+    );
+  });
+
   it('reports a clean snapshot with no problems', () => {
     expect(createDiagnosticsCollector().snapshot()).toMatchObject({
       deprecations: [],
+      deprecationsByFile: [],
       warnings: [],
       errors: [],
       deprecationTotal: 0,
@@ -259,6 +321,42 @@ describe('repetition notice detection', () => {
       false,
     );
     expect(isRepetitionNotice(undefined)).toBe(false);
+  });
+});
+
+describe('deprecation guide', () => {
+  it('translates the deprecations Emulsify projects actually hit', () => {
+    expect(deprecationFix('slash-div')).toBe('$a/$b → math.div($a, $b)');
+    expect(deprecationFix('global-builtin')).toBe('map-get() → map.get()');
+    expect(deprecationFix('color-functions')).toBe(
+      'lighten()/darken() → color.adjust()',
+    );
+    expect(deprecationFix('unrecognized-id')).toBeUndefined();
+  });
+
+  it('maps only to migrations the sass-migrator CLI actually ships', () => {
+    // The migrator provides exactly these five migrations. Naming anything
+    // else would print a command that fails.
+    const supported = new Set([
+      'color',
+      'division',
+      'module',
+      'namespace',
+      'if',
+    ]);
+
+    for (const [id, entry] of Object.entries(DEPRECATION_GUIDE)) {
+      expect(typeof entry.fix).toBe('string');
+      if (entry.migrator) {
+        expect(supported.has(entry.migrator)).toBe(true);
+      }
+      expect(deprecationFix(id)).toBe(entry.fix);
+    }
+
+    expect(deprecationMigrator('slash-div')).toBe('division');
+    expect(deprecationMigrator('global-builtin')).toBe('module');
+    // Fixed by hand; there is no migration for it.
+    expect(deprecationMigrator('mixed-decls')).toBeUndefined();
   });
 });
 

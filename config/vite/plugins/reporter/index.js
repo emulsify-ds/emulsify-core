@@ -25,9 +25,31 @@
  * started by `develop`, and Storybook keeps printing its own ready box.
  */
 
+import { relative } from 'node:path';
+
 import { renderBanner, renderRebuild, renderSummary } from './render.js';
-import { createStyler, supportsColor } from './format.js';
+import { createStyler, supportsColor, supportsUnicode } from './format.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
+
+/**
+ * Build the stylesheet glob handed to `sass-migrator`.
+ *
+ * The migrator takes entrypoints and the docs recommend passing every
+ * stylesheet in the package, so a glob rooted at the project's source
+ * directory is both valid and copy-pasteable. Falling back to `src` keeps the
+ * command sensible when the source directory cannot be resolved.
+ *
+ * @param {{projectDir?: string, srcDir?: string}} env - Project environment.
+ * @returns {string} Glob relative to the project root.
+ */
+export function resolveSourceGlob({ projectDir, srcDir } = {}) {
+  if (!projectDir || !srcDir) return 'src/**/*.scss';
+
+  const relativeSrc = relative(projectDir, srcDir).split('\\').join('/');
+  if (!relativeSrc || relativeSrc.startsWith('..')) return 'src/**/*.scss';
+
+  return `${relativeSrc}/**/*.scss`;
+}
 
 /**
  * Count the entries in a resolved Rollup input option.
@@ -91,11 +113,14 @@ export function developReporterPlugin({
   now = () => Date.now(),
   clock = () => new Date(),
   colorEnabled,
+  unicodeEnabled,
   version,
 } = {}) {
   const styler = createStyler(
     colorEnabled === undefined ? supportsColor() : colorEnabled,
   );
+  const unicode =
+    unicodeEnabled === undefined ? supportsUnicode() : unicodeEnabled;
 
   let watching = false;
   let outDir = 'dist';
@@ -147,6 +172,7 @@ export function developReporterPlugin({
           durationMs,
           outDir,
           projectDir: env.projectDir,
+          sourceGlob: resolveSourceGlob(env),
           styler,
         }),
       );
@@ -177,6 +203,7 @@ export function developReporterPlugin({
           version: version || resolvePackageVersion(env.projectDir),
           platform: env.platform,
           entryCount,
+          unicode,
           styler,
         }),
       );

@@ -11,12 +11,13 @@
 import {
   SYMBOLS,
   displayLocation,
+  displayPath,
   formatClockTime,
   formatDuration,
   platformLabel,
   pluralize,
 } from './format.js';
-import { MIGRATION_HINTS } from './sass-logger.js';
+import { deprecationFix, deprecationMigrator } from './sass-logger.js';
 
 const INDENT = '  ';
 const DETAIL_INDENT = '      ';
@@ -30,35 +31,93 @@ const SEPARATOR = ' · ';
 const MAX_DETAIL_ROWS = 5;
 
 /**
- * Maximum number of deprecation IDs named on the breakdown line.
+ * Maximum number of files listed in the deprecation worklist.
  *
  * @type {number}
  */
-const MAX_DEPRECATION_IDS = 4;
+const MAX_DEPRECATION_FILES = 4;
 
 /**
- * Render the one-line header shown when the watcher starts.
+ * Maximum number of deprecation kinds listed beneath a single file.
+ *
+ * @type {number}
+ */
+const MAX_DEPRECATION_KINDS_PER_FILE = 4;
+
+/**
+ * Maximum number of line numbers named on one row before collapsing.
+ *
+ * @type {number}
+ */
+const MAX_LINES_PER_ROW = 3;
+
+/**
+ * Render the affected line numbers for one deprecation within one file.
+ *
+ * @param {number[]} lineNumbers - Sorted line numbers.
+ * @returns {string} Compact line reference, for example `:30,31 +2`.
+ */
+export function formatLineList(lineNumbers = []) {
+  if (lineNumbers.length === 0) return ':?';
+
+  const shown = lineNumbers.slice(0, MAX_LINES_PER_ROW).join(',');
+  const hidden = lineNumbers.length - MAX_LINES_PER_ROW;
+
+  return hidden > 0 ? `:${shown} +${hidden}` : `:${shown}`;
+}
+
+/**
+ * Half-block wordmark drawn when the terminal can render the glyphs.
+ *
+ * Spells EMULSIFY at 31 columns, which fits comfortably in an 80-column
+ * terminal alongside the two-space indent.
+ *
+ * @type {string[]}
+ */
+const WORDMARK = [
+  '█▀▀ █▀▄▀█ █ █ █   █▀▀ █ █▀▀ █ █',
+  '█▀▀ █ ▀ █ █ █ █   ▀▀█ █ █▀▀ ▀▄▀',
+  '▀▀▀ ▀   ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀    ▀ ',
+];
+
+/**
+ * Render the header shown once when the watcher starts.
+ *
+ * The wordmark exists to mark where Emulsify's output begins. `npm run develop`
+ * interleaves npm's script echo, Vite, and Storybook, so a single dim line is
+ * easy to scroll past; a block of art is not. Terminals that cannot render the
+ * glyphs get the plain name instead of mojibake.
  *
  * @param {{
  *   version?: string,
  *   platform?: string,
  *   entryCount?: number,
+ *   unicode?: boolean,
  *   styler: (format: string|string[], text: string) => string
  * }} options - Banner inputs.
  * @returns {string[]} Banner lines.
  */
-export function renderBanner({ version, platform, entryCount, styler }) {
-  const parts = [
-    styler('cyan', 'emulsify'),
-    styler('gray', `core ${version || '0.0.0'}`),
-    styler('gray', `Platform: ${platformLabel(platform)}`),
+export function renderBanner({
+  version,
+  platform,
+  entryCount,
+  unicode = true,
+  styler,
+}) {
+  const facts = [
+    `core ${version || '0.0.0'}`,
+    `Platform: ${platformLabel(platform)}`,
   ];
 
   if (Number.isFinite(entryCount)) {
-    parts.push(styler('gray', pluralize(entryCount, 'entry', 'entries')));
+    facts.push(pluralize(entryCount, 'entry', 'entries'));
   }
 
-  return ['', `${INDENT}${parts.join(styler('gray', SEPARATOR))}`, ''];
+  const mark = unicode
+    ? WORDMARK.map((row) => `${INDENT}${styler(['bold', 'cyan'], row)}`)
+    : [`${INDENT}${styler(['bold', 'cyan'], 'EMULSIFY')}`];
+
+  return ['', ...mark, `${INDENT}${styler('gray', facts.join(SEPARATOR))}`, ''];
 }
 
 /**
@@ -107,56 +166,118 @@ function renderDetailRows(entries, projectDir, styler) {
 /**
  * Render the deduplicated Sass deprecation block.
  *
- * This is the block that replaces several hundred lines of repeated Dart Sass
- * output. It reports scale first, then which deprecation classes are involved,
- * then where the worst offender lives, then how to fix it.
+ * This replaces several hundred lines of repeated Dart Sass output with a
+ * worklist: total first, then each affected file with the deprecations inside
+ * it, then the command that fixes most of them. Each row carries the affected
+ * lines, how many occurrences, the Sass deprecation ID, and the substitution to
+ * make — the ID alone identifies nothing actionable, and the substitution alone
+ * gives no way to look up the details.
  *
  * @param {object} snapshot - Diagnostics snapshot.
  * @param {string} projectDir - Project root.
  * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @param {string} sourceGlob - Glob matching the project stylesheets.
  * @returns {string[]} Deprecation summary lines.
  */
-function renderDeprecations(snapshot, projectDir, styler) {
-  const { deprecations, deprecationTotal, deprecationFileCount } = snapshot;
+function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
+  const { deprecations, deprecationsByFile, deprecationTotal } = snapshot;
   if (deprecations.length === 0) return [];
 
   const headline = [
-    `${pluralize(deprecationTotal, 'sass deprecation')}`,
-    `${pluralize(deprecations.length, 'kind')} in ${pluralize(deprecationFileCount, 'file')}`,
+    pluralize(deprecationTotal, 'sass deprecation'),
+    pluralize(deprecationsByFile.length || 1, 'file'),
   ].join(SEPARATOR);
 
   const lines = [
     `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler('yellow', headline)}`,
+    '',
   ];
 
-  const breakdown = deprecations
-    .slice(0, MAX_DEPRECATION_IDS)
-    .map((bucket) => `${bucket.id} ${bucket.occurrences}`)
-    .join(SEPARATOR);
-  const remainingKinds = deprecations.length - MAX_DEPRECATION_IDS;
-  const breakdownSuffix =
-    remainingKinds > 0 ? `${SEPARATOR}+${remainingKinds} more` : '';
-  lines.push(`${DETAIL_INDENT}${styler('gray', breakdown + breakdownSuffix)}`);
+  const shownFiles = deprecationsByFile.slice(0, MAX_DEPRECATION_FILES);
 
-  const [worst] = deprecations;
-  const [worstLocation] = worst.locations;
-  if (worstLocation?.file) {
-    const location = displayLocation(
-      worstLocation.file,
-      worstLocation.line,
-      projectDir,
-    );
+  // Column widths are measured across every row that will be printed so the
+  // line, count, and ID columns align and the block scans as a table. Padding
+  // is applied before styling so escape sequences never affect the width.
+  const rows = shownFiles.flatMap((group) =>
+    group.entries.slice(0, MAX_DEPRECATION_KINDS_PER_FILE),
+  );
+  const lineWidth = Math.max(
+    ...rows.map((e) => formatLineList(e.lines).length),
+    0,
+  );
+  const countWidth = Math.max(...rows.map((e) => `${e.count}×`.length), 0);
+  const idWidth = Math.max(...rows.map((e) => e.id.length), 0);
+
+  for (const group of shownFiles) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `${location} (×${worstLocation.count})`)}`,
+      `${DETAIL_INDENT}${styler('cyan', displayPath(group.file, projectDir))}`,
+    );
+
+    for (const entry of group.entries.slice(
+      0,
+      MAX_DEPRECATION_KINDS_PER_FILE,
+    )) {
+      const lineRef = formatLineList(entry.lines).padEnd(lineWidth);
+      const count = `${entry.count}×`.padStart(countWidth);
+      const id = entry.id.padEnd(idWidth);
+      const fix = deprecationFix(entry.id) || '';
+
+      lines.push(
+        `${DETAIL_INDENT}  ${styler('gray', lineRef)}  ${styler('yellow', count)}  ${styler('gray', id)}  ${fix}`.trimEnd(),
+      );
+    }
+
+    const hiddenKinds = group.entries.length - MAX_DEPRECATION_KINDS_PER_FILE;
+    if (hiddenKinds > 0) {
+      lines.push(
+        `${DETAIL_INDENT}  ${styler('gray', `+${pluralize(hiddenKinds, 'more kind')}`)}`,
+      );
+    }
+  }
+
+  const hiddenFiles = deprecationsByFile.length - MAX_DEPRECATION_FILES;
+  if (hiddenFiles > 0) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hiddenFiles, 'more file')}`)}`,
     );
   }
 
-  const hint = MIGRATION_HINTS[worst.id];
-  if (hint) {
-    lines.push(`${DETAIL_INDENT}${styler('gray', hint)}`);
+  const command = renderMigratorCommand(deprecations, sourceGlob, styler);
+  if (command) {
+    lines.push('', command);
   }
 
   return lines;
+}
+
+/**
+ * Render the `sass-migrator` invocation that resolves most of the debt.
+ *
+ * The migrator runs exactly one migration per invocation, so a combined command
+ * would not work. The dominant migration is shown in full and any others are
+ * named after it, which keeps the block to one line while staying accurate
+ * about what has to be run.
+ *
+ * @param {Array<{id: string, occurrences: number}>} deprecations - ID-keyed buckets, most frequent first.
+ * @param {string} sourceGlob - Glob matching the project stylesheets.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string|undefined} Command line, when a migrator applies.
+ * @see https://sass-lang.com/documentation/cli/migrator/
+ */
+function renderMigratorCommand(deprecations, sourceGlob, styler) {
+  const migrators = [];
+  for (const bucket of deprecations) {
+    const migrator = deprecationMigrator(bucket.id);
+    if (migrator && !migrators.includes(migrator)) migrators.push(migrator);
+  }
+
+  if (migrators.length === 0) return undefined;
+
+  const [primary, ...rest] = migrators;
+  const command = `npx sass-migrator ${primary} '${sourceGlob}'`;
+  const others = rest.length > 0 ? `  (then: ${rest.join(', ')})` : '';
+
+  return `${DETAIL_INDENT}${styler('gray', command + others)}`;
 }
 
 /**
@@ -165,9 +286,10 @@ function renderDeprecations(snapshot, projectDir, styler) {
  * @param {object} snapshot - Diagnostics snapshot.
  * @param {string} projectDir - Project root.
  * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @param {string} sourceGlob - Glob matching the project stylesheets.
  * @returns {string[]} Problem lines.
  */
-function renderProblems(snapshot, projectDir, styler) {
+function renderProblems(snapshot, projectDir, styler, sourceGlob) {
   const lines = [];
 
   if (snapshot.errors.length > 0) {
@@ -186,7 +308,12 @@ function renderProblems(snapshot, projectDir, styler) {
     lines.push(...renderDetailRows(snapshot.warnings, projectDir, styler));
   }
 
-  const deprecationLines = renderDeprecations(snapshot, projectDir, styler);
+  const deprecationLines = renderDeprecations(
+    snapshot,
+    projectDir,
+    styler,
+    sourceGlob,
+  );
   if (deprecationLines.length > 0) {
     lines.push('');
     lines.push(...deprecationLines);
@@ -203,6 +330,7 @@ function renderProblems(snapshot, projectDir, styler) {
  *   durationMs: number,
  *   outDir?: string,
  *   projectDir?: string,
+ *   sourceGlob?: string,
  *   styler: (format: string|string[], text: string) => string
  * }} options - Summary inputs.
  * @returns {string[]} Summary lines.
@@ -212,6 +340,7 @@ export function renderSummary({
   durationMs,
   outDir = 'dist',
   projectDir = '',
+  sourceGlob = 'src/**/*.scss',
   styler,
 }) {
   const failed = snapshot.errors.length > 0;
@@ -224,7 +353,7 @@ export function renderSummary({
 
   const lines = [
     `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${outDir}`)}`,
-    ...renderProblems(snapshot, projectDir, styler),
+    ...renderProblems(snapshot, projectDir, styler, sourceGlob),
     '',
   ];
 
