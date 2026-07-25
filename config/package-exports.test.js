@@ -263,6 +263,7 @@ describe('@emulsify/core package exports', () => {
       'scripts/audit-twig-stories.js',
       'scripts/audit/index.js',
       'scripts/audit/report.js',
+      'scripts/inspect-components.js',
       'src/storybook/index.js',
       'src/storybook/render-web-component.js',
       'src/storybook/twig/asset-source-runtime.js',

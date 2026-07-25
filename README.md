@@ -160,6 +160,7 @@ The documentation is split by task:
 | [Dependency Contract](docs/dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                            |
 | [Performance](docs/performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.            |
 | [Native Twig Extensions](docs/native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, and `switch/case/default/endswitch` in Twig.js.                                |
+| [Component Inspector](docs/component-inspector.md)        | Listing recognized Twig component templates, exact references, shorthand collisions, and expected output paths.   |
 | [Project Audit](docs/audit.md)                            | Running human or versioned JSON project audits and configuring CI failure thresholds.                             |
 | [Release Verification](docs/release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                 |
 | [Release Pull Request Review](docs/release-review.md)     | Reviewing large release pull requests by independent API, runtime, consumer, accessibility, and release risks.    |

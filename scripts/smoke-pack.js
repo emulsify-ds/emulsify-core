@@ -242,6 +242,30 @@ function assertAuditCli() {
   }
 }
 
+function assertComponentInspectorCli() {
+  const inspectorBin = join(
+    tempDir,
+    'node_modules/.bin/emulsify-inspect-components',
+  );
+  const inspectorOutput = run(inspectorBin, ['--json', '--root', tempDir], {
+    ...runOptions,
+    cwd: tempDir,
+  });
+  const report = JSON.parse(inspectorOutput);
+  const headings = report.components?.find(
+    (component) => component.name === 'headings',
+  );
+
+  if (
+    report.project?.platform !== 'none' ||
+    !headings?.namespaces?.includes('mixed_storybook:headings')
+  ) {
+    throw new Error(
+      'Installed emulsify-inspect-components returned an invalid JSON report',
+    );
+  }
+}
+
 function assertEmulsifyCli() {
   const cliBin = join(tempDir, 'node_modules/.bin/emulsify');
   const installedCliRoot = join(tempDir, 'node_modules/@emulsify/cli');
@@ -338,11 +362,12 @@ async function main() {
     stdio: 'inherit',
   });
   assertAuditCli();
+  assertComponentInspectorCli();
   assertEmulsifyCli();
   buildPackedStorybook(installedPackageRoot);
 
   console.log(
-    'Packed package imports, Core audit CLIs, Emulsify CLI, and Storybook consumer build passed.',
+    'Packed package imports, Core inspection and audit CLIs, Emulsify CLI, and Storybook consumer build passed.',
   );
 }
 
