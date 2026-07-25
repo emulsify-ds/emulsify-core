@@ -175,6 +175,10 @@ const releaseFixtures = [
           'greeting-select',
         ],
       },
+      {
+        pattern: '.out/storybook-assets/*.js',
+        strings: ['data-nested-project-alias'],
+      },
     ],
     browserTest: customElementBrowserTest,
   },

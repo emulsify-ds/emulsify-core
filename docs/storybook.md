@@ -398,7 +398,11 @@ Project-scoped component IDs are also supported. The namespace segment is the co
 {% include 'project_id:button' %}
 ```
 
-Both namespace paths and project-scoped IDs can resolve grouped component folders. For example, `@components/button/button.twig` and `project_id:button` can resolve `src/components/ui/button/button.twig` when components are organized under a grouping directory such as `ui`.
+Both namespace paths and project-scoped IDs can resolve grouped component folders at any depth. For example, `@components/atoms/text/headings/headings.twig` and `project_id:headings` can resolve `src/components/atoms/text/headings/headings.twig`.
+
+Exact configured namespace paths take precedence over shorthand lookup. Project-scoped shorthand checks a component directly under the configured component root first, then grouped directories in shallowest-first order with lexical ordering between directories at the same depth. If multiple grouped components use the same name, that deterministic order selects one; use an exact path such as `@components/atoms/text/headings/headings.twig` to remove the ambiguity. Recursive lookup remains confined to the configured component root and does not follow directory symlinks outside it.
+
+The project-scope prefix is currently shorthand syntax rather than strict `project.machineName` validation: when the segment before `:` is not a configured Twig namespace, Core searches component roots using the segment after `:`. Prefer the configured machine name for portable project templates, and prefer exact namespace paths when a component name is duplicated.
 
 The runtime supports explicit variables, `with_context`, `ignore_missing`, and ordered template candidates:
 

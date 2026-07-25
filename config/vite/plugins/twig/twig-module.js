@@ -81,6 +81,13 @@ const compileCache = createLruCache(maxCompiledTemplateCacheEntries);
 const resolutionCache = createLruCache(maxResolutionCacheEntries);
 
 /**
+ * Cache recursively discovered component grouping directories by root.
+ *
+ * @type {Map<string, string[]>}
+ */
+const componentGroupRootsCache = new Map();
+
+/**
  * Track Twig files that have been seen during this build/session.
  *
  * Known files can keep include-resolution cache entries across ordinary content
@@ -387,6 +394,43 @@ const isWithinRoot = (root, filePath) => {
 };
 
 /**
+ * Return the first component template candidate contained by its configured root.
+ *
+ * Both lexical and real paths are checked so `..` segments and symlinks cannot
+ * escape the component root.
+ *
+ * @param {string[]} paths - Candidate absolute paths.
+ * @param {string} componentRoot - Absolute component root path.
+ * @returns {string|undefined} Existing component template path.
+ */
+const findExistingComponentTemplateFile = (paths, componentRoot) => {
+  const absoluteRoot = resolve(componentRoot);
+  let realRoot;
+
+  try {
+    realRoot = fs.realpathSync(absoluteRoot);
+  } catch {
+    return undefined;
+  }
+
+  return paths.filter(Boolean).find((filePath) => {
+    const absoluteFilePath = resolve(filePath);
+    if (!isWithinRoot(absoluteRoot, absoluteFilePath)) {
+      return false;
+    }
+
+    try {
+      return (
+        fs.statSync(absoluteFilePath).isFile() &&
+        isWithinRoot(realRoot, fs.realpathSync(absoluteFilePath))
+      );
+    } catch {
+      return false;
+    }
+  });
+};
+
+/**
  * Find the most specific configured Twig root for a template file.
  *
  * @param {string} filePath - Absolute template file path.
@@ -557,7 +601,11 @@ const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
 };
 
 /**
- * Return immediate directory roots that may group component folders.
+ * Return grouping directories below the configured component root.
+ *
+ * Breadth-first traversal preserves direct and one-level behavior before
+ * searching deeper groups. Siblings use code-point order so duplicate
+ * shorthand names resolve consistently across filesystems.
  *
  * @param {string} componentRoot - Absolute component root path.
  * @returns {string[]} Absolute grouping directory paths.
@@ -565,33 +613,57 @@ const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
 const componentGroupRoots = (componentRoot) => {
   if (!componentRoot) return [];
 
-  try {
-    // Component group roots come from a configured project directory.
-    return fs
-      .readdirSync(componentRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => resolve(componentRoot, entry.name));
-  } catch {
-    return [];
+  const absoluteRoot = resolve(componentRoot);
+  if (componentGroupRootsCache.has(absoluteRoot)) {
+    return componentGroupRootsCache.get(absoluteRoot);
   }
+
+  const groupRoots = [];
+  const pendingDirectories = [absoluteRoot];
+
+  for (let index = 0; index < pendingDirectories.length; index += 1) {
+    const directory = pendingDirectories[index];
+    let entries;
+
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    const childDirectories = entries
+      .filter((entry) => entry.isDirectory())
+      .sort(({ name: left }, { name: right }) =>
+        left === right ? 0 : left < right ? -1 : 1,
+      )
+      .map((entry) => resolve(directory, entry.name))
+      .filter((childDirectory) => isWithinRoot(absoluteRoot, childDirectory));
+
+    groupRoots.push(...childDirectories);
+    pendingDirectories.push(...childDirectories);
+  }
+
+  componentGroupRootsCache.set(absoluteRoot, groupRoots);
+  return groupRoots;
 };
 
 /**
- * Resolve a component reference through one grouping directory level.
+ * Resolve a component reference through recursively grouped directories.
  *
  * Project-scoped component IDs can use the component name (`project:button`)
- * even when projects organize components under grouping directories such as
- * `ui`.
+ * even when projects organize components under grouping paths such as
+ * `atoms/text`.
  *
  * @param {string} templatePath - Component-relative template reference.
  * @param {string} componentRoot - Absolute component root path.
  * @returns {string|null} Existing template path when found.
  */
 const resolveGroupedComponentTemplate = (templatePath, componentRoot) =>
-  findExistingTemplateFile(
+  findExistingComponentTemplateFile(
     componentGroupRoots(componentRoot).flatMap((groupRoot) =>
       buildTemplateFileCandidates(groupRoot, templatePath),
     ),
+    componentRoot,
   ) || null;
 
 /**
@@ -608,8 +680,9 @@ const resolveComponentShorthandReference = (templatePath, componentRoot) => {
     templatePath.startsWith('@') && !templatePath.includes('/')
       ? templatePath.slice(1)
       : templatePath;
-  const directComponentPath = findExistingTemplateFile(
+  const directComponentPath = findExistingComponentTemplateFile(
     buildTemplateFileCandidates(componentRoot, shorthandPath),
+    componentRoot,
   );
   if (directComponentPath) {
     return directComponentPath;
@@ -623,8 +696,9 @@ const resolveComponentShorthandReference = (templatePath, componentRoot) => {
   const genericComponentPath = genericNamespace[1];
 
   return (
-    findExistingTemplateFile(
+    findExistingComponentTemplateFile(
       buildTemplateFileCandidates(componentRoot, genericComponentPath),
+      componentRoot,
     ) || resolveGroupedComponentTemplate(genericComponentPath, componentRoot)
   );
 };
@@ -660,9 +734,15 @@ const resolveTwigTemplateWithoutCache = (templatePath, fromDir, options) => {
     options.namespaces,
   );
   if (namespaced) {
-    const namespacedTemplate = findExistingTemplateFile(
-      buildTemplateFileCandidates(namespaced.root, namespaced.path),
-    );
+    const namespacedTemplate =
+      namespaced.namespace === 'components'
+        ? findExistingComponentTemplateFile(
+            buildTemplateFileCandidates(namespaced.root, namespaced.path),
+            namespaced.root,
+          )
+        : findExistingTemplateFile(
+            buildTemplateFileCandidates(namespaced.root, namespaced.path),
+          );
     if (namespacedTemplate) {
       return namespacedTemplate;
     }
@@ -961,6 +1041,16 @@ export function emulsifyTwigModulePlugin(options) {
   const dependencyImporters = new Map();
 
   /**
+   * Twig entry modules transformed by this plugin instance.
+   *
+   * Structural component changes invalidate these modules because a new or
+   * removed directory can change the target of a shorthand reference.
+   *
+   * @type {Set<string>}
+   */
+  const transformedTwigModules = new Set();
+
+  /**
    * Remember that one imported Twig module depends on another Twig file.
    *
    * @param {string} dependency - Absolute dependency template path.
@@ -994,7 +1084,9 @@ export function emulsifyTwigModulePlugin(options) {
     buildStart() {
       compileCache.clear();
       resolutionCache.clear();
+      componentGroupRootsCache.clear();
       knownTwigFiles.clear();
+      transformedTwigModules.clear();
     },
     resolveId(id) {
       if (id.startsWith(VIRTUAL_TWIG_DEPENDENCY_PREFIX)) {
@@ -1024,6 +1116,7 @@ export function emulsifyTwigModulePlugin(options) {
 
       const filePath = stripRequestQuery(id);
       const sourceFilePath = resolve(filePath);
+      transformedTwigModules.add(sourceFilePath);
       /** @type {Map<string, Awaited<ReturnType<typeof compileTwigTemplate>>>} */
       const compiledDependencyTemplates = new Map();
       /** @type {Map<string, Set<string>>} */
@@ -1207,6 +1300,7 @@ export function emulsifyTwigModulePlugin(options) {
                 idVariableName,
                 paramsVariableName,
               )};
+              ${templateVariableName}.method = 'emulsify';
             `,
           )
           .join('\n');
@@ -1259,9 +1353,21 @@ export function emulsifyTwigModulePlugin(options) {
           const Twig = factory();
           registerTwigExtensions(Twig);
 	installProjectTwigExtensions(Twig);
+          Twig.extend((TwigCore) => {
+            TwigCore.Templates.registerLoader(
+              'emulsify',
+              (location, params = {}) => {
+                const templateName = params.path || params.id || location;
+                throw new TwigCore.Error(
+                  'Unable to find template ' + templateName + '.',
+                );
+              },
+            );
+          });
 
           ${dependencyTemplateCode}
           const __emulsifyTemplate = ${compiled.code};
+          __emulsifyTemplate.method = 'emulsify';
           const __emulsifyIncludeTemplates = new Map();
           const __emulsifySourceTemplates = new Map();
           ${includeTemplateRegistrations}
@@ -1298,22 +1404,55 @@ export function emulsifyTwigModulePlugin(options) {
       }
     },
     handleHotUpdate({ file, server }) {
-      if (!file.endsWith('.twig')) {
+      const filePath = resolve(file);
+      const componentRoot = options.namespaces?.components
+        ? resolve(options.namespaces.components)
+        : null;
+      const cachedComponentRoots = componentRoot
+        ? componentGroupRootsCache.get(componentRoot)
+        : undefined;
+      let fileIsDirectory = false;
+
+      try {
+        fileIsDirectory = fs.statSync(filePath).isDirectory();
+      } catch {
+        // Removed paths cannot be inspected.
+      }
+
+      const componentDirectoryChanged =
+        !!componentRoot &&
+        isWithinRoot(componentRoot, filePath) &&
+        (fileIsDirectory || cachedComponentRoots?.includes(filePath));
+      if (componentDirectoryChanged) {
+        componentGroupRootsCache.delete(componentRoot);
+        resolutionCache.clear();
+        compileCache.clear();
+      }
+
+      if (!file.endsWith('.twig') && !componentDirectoryChanged) {
         return undefined;
       }
 
-      const filePath = resolve(file);
       const fileExists = safeExists(filePath);
       const knownFile = knownTwigFiles.has(filePath);
-      compileCache.delete(filePath);
       const dependencyModuleId = resolvedVirtualTwigDependencyId(filePath);
       const importers = dependencyImporters.get(filePath);
-      if (!fileExists) {
+      const projectRoot = options.projectDir || options.root;
+      const projectPathChanged =
+        !!projectRoot &&
+        isWithinRoot(resolve(projectRoot), filePath) &&
+        fileExists !== knownFile;
+      const structuralChange = componentDirectoryChanged || projectPathChanged;
+
+      if (file.endsWith('.twig')) {
+        compileCache.delete(filePath);
+      }
+      if (!fileExists && file.endsWith('.twig')) {
         dependencyImporters.delete(filePath);
         knownTwigFiles.delete(filePath);
+        transformedTwigModules.delete(filePath);
       }
 
-      const projectRoot = options.projectDir || options.root;
       if (projectRoot && isWithinRoot(resolve(projectRoot), filePath)) {
         /**
          * Existing files only need entries for their own path and source
@@ -1327,32 +1466,53 @@ export function emulsifyTwigModulePlugin(options) {
         }
       }
 
-      if (!importers?.size) {
+      if (
+        componentRoot &&
+        isWithinRoot(componentRoot, filePath) &&
+        structuralChange
+      ) {
+        componentGroupRootsCache.delete(componentRoot);
+      }
+
+      if (structuralChange) {
+        compileCache.clear();
+      }
+
+      const affectedImporters = new Set(importers || []);
+      if (structuralChange) {
+        for (const transformedModule of transformedTwigModules) {
+          affectedImporters.add(transformedModule);
+        }
+      }
+
+      if (!affectedImporters.size) {
         return undefined;
       }
 
-      const modules = new Set(
-        server.moduleGraph.getModulesByFile(filePath) || [],
-      );
+      const moduleGraph = server?.moduleGraph;
+      if (!moduleGraph?.getModulesByFile) {
+        return undefined;
+      }
+
+      const modules = new Set(moduleGraph.getModulesByFile(filePath) || []);
       const dependencyModule =
-        server.moduleGraph.getModuleById?.(dependencyModuleId);
+        moduleGraph.getModuleById?.(dependencyModuleId);
       if (dependencyModule) {
-        server.moduleGraph.invalidateModule(dependencyModule);
+        moduleGraph.invalidateModule?.(dependencyModule);
         modules.add(dependencyModule);
       }
-      for (const importer of importers) {
+      for (const importer of affectedImporters) {
         compileCache.delete(importer);
 
-        const importerModules =
-          server.moduleGraph.getModulesByFile(importer) || [];
+        const importerModules = moduleGraph.getModulesByFile(importer) || [];
 
         for (const module of importerModules) {
-          server.moduleGraph.invalidateModule(module);
+          moduleGraph.invalidateModule?.(module);
           modules.add(module);
         }
       }
 
-      return Array.from(modules);
+      return modules.size ? Array.from(modules) : undefined;
     },
   };
 }
