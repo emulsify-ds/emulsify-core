@@ -24,6 +24,9 @@ import { resolveEnvironment } from './environment.js';
 import { makePlugins } from './plugins.js';
 import { buildInputs } from './entries.js';
 import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
+import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
+import { createSassLogger } from './plugins/reporter/sass-logger.js';
+import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
@@ -44,7 +47,14 @@ export default defineConfig(async () => {
   /** @type {EmulsifyEnv} */
   const env = resolveEnvironment();
   const sourceFileIndex = createSourceFileIndex(env.projectStructure);
-  const envWithSourceFileIndex = { ...env, sourceFileIndex };
+
+  // The develop reporter takes over output only for `vite build --watch`, the
+  // watcher `npm run develop` runs. One-shot builds, Storybook, and the release
+  // fixture verifications keep their existing output untouched, so no warning
+  // is ever collected without also being reported.
+  const watching = isWatchInvocation();
+  const diagnostics = watching ? createDiagnosticsCollector() : undefined;
+  const envWithSourceFileIndex = { ...env, sourceFileIndex, diagnostics };
 
   // Build the Rollup/Vite entry map: keys encode output paths, values source files.
   /** @type {Record<string, string>} */
@@ -85,6 +95,18 @@ export default defineConfig(async () => {
     // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
     css: {
       devSourcemap: true,
+
+      // During a watch build, route Sass warnings into the diagnostics
+      // collector instead of letting Dart Sass print a formatted block per
+      // occurrence. The reporter prints one deduplicated tally per cycle, so
+      // the deprecation debt stays visible without the repetition.
+      ...(diagnostics
+        ? {
+            preprocessorOptions: {
+              scss: { logger: createSassLogger(diagnostics) },
+            },
+          }
+        : {}),
     },
 
     build: {

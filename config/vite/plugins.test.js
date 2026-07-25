@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import * as pluginsModule from './plugins.js';
+import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
 import { makeEnv, makeTempProject, pluginNames } from './test-utils/plugins.js';
 
 jest.mock('@mlnop/vite-plugin-sass-glob-import', () => ({
@@ -64,6 +65,28 @@ describe('Vite plugin public barrel', () => {
       ]),
     );
     expect(names).not.toContain('@vituum/vite-plugin-core:bundle');
+  });
+
+  it('omits the develop reporter unless a diagnostics collector is supplied', () => {
+    projectDir = makeTempProject();
+
+    // Storybook and one-shot builds resolve the chain without diagnostics, so
+    // the reporter must not be present to double-print alongside Storybook.
+    expect(
+      pluginNames(pluginsModule.makePlugins(makeEnv(projectDir))),
+    ).not.toContain('emulsify-develop-reporter');
+
+    const withDiagnostics = pluginsModule.makePlugins({
+      ...makeEnv(projectDir),
+      diagnostics: createDiagnosticsCollector(),
+    });
+
+    expect(pluginNames(withDiagnostics)).toContain('emulsify-develop-reporter');
+    expect(
+      withDiagnostics.find(
+        (plugin) => plugin?.name === 'emulsify-develop-reporter',
+      ).apply,
+    ).toBe('build');
   });
 
   it('only enables root component mirroring for Drupal projects with src', () => {
