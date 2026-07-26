@@ -16,6 +16,10 @@ import { renderSummary } from '../reporter/render.js';
 
 const plain = createStyler(false);
 
+// Built rather than written literally so SCSS fixtures can use the single
+// quotes real stylesheets use without tripping the lint rule.
+const q = String.fromCharCode(39);
+
 describe('asset resolver', () => {
   let projectDir;
 
@@ -27,19 +31,14 @@ describe('asset resolver', () => {
    */
   const withProject = (files) => {
     projectDir = mkdtempSync(join(tmpdir(), 'emulsify-assets-'));
-    const absolutePaths = [];
 
     for (const [relativePath, contents] of Object.entries(files)) {
       const absolutePath = join(projectDir, relativePath);
       mkdirSync(dirname(absolutePath), { recursive: true });
       writeFileSync(absolutePath, contents);
-      absolutePaths.push({ absPath: absolutePath });
     }
 
-    return createAssetResolver({
-      projectDir,
-      sourceFileIndex: { all: () => absolutePaths },
-    });
+    return createAssetResolver({ projectDir });
   };
 
   afterEach(() => {
@@ -59,6 +58,36 @@ describe('asset resolver', () => {
     expect(resolver.locate('../images/bg.png')).toEqual({
       status: 'found',
       label: 'src/assets/images/',
+    });
+  });
+
+  it('finds assets in a project-root directory outside the source roots', () => {
+    // Emulsify's default layout puts images in `assets/` at the project root,
+    // which the Vite source file index never covers. Searching only that index
+    // reported every URL in such a project as "not found".
+    const resolver = withProject({
+      'assets/images/bg-lines.png': '',
+      'src/components/base/_base.scss':
+        '.a { background: url("../images/bg-lines.png"); }',
+    });
+
+    expect(resolver.locate('../images/bg-lines.png')).toEqual({
+      status: 'found',
+      label: 'assets/images/',
+    });
+  });
+
+  it('ignores build output and dependencies when searching', () => {
+    const resolver = withProject({
+      'assets/images/bg.png': '',
+      'dist/assets/images/bg.png': '',
+      'node_modules/pkg/bg.png': '',
+    });
+
+    // Only the source copy counts, otherwise every asset reads as ambiguous.
+    expect(resolver.locate('../images/bg.png')).toEqual({
+      status: 'found',
+      label: 'assets/images/',
     });
   });
 
@@ -158,7 +187,51 @@ describe('asset resolver', () => {
     expect(resolver.references('../img/x.png')).toEqual([]);
   });
 
-  it('degrades quietly when no source index is available', () => {
+  it('finds an interpolated path by its filename', () => {
+    // `url('#{$image-path}/x.png')` never contains the resolved URL, so an
+    // exact match finds nothing even though the line is right there.
+    const resolver = withProject({
+      'assets/images/x.png': '',
+      'src/components/pages/_pages.scss': [
+        `$image-path: ${q}../images${q};`,
+        `.p { background: url(${q}#{$image-path}/x.png${q}); }`,
+      ].join('\n'),
+    });
+
+    expect(resolver.references('../images/x.png')).toEqual([
+      { file: 'pages/_pages.scss', line: 2 },
+    ]);
+  });
+
+  it('falls back to the declaration when the whole path is a variable', () => {
+    // `url($plus)` holds no path at all, but the declaration above it does and
+    // that is the line to edit.
+    const resolver = withProject({
+      'assets/images/plus.png': '',
+      'src/components/atoms/_buttons.scss': [
+        `$plus: ${q}../images/plus.png${q};`,
+        '.btn { background: url($plus); }',
+      ].join('\n'),
+    });
+
+    expect(resolver.references('../images/plus.png')).toEqual([
+      { file: 'atoms/_buttons.scss', line: 1 },
+    ]);
+  });
+
+  it('prefers an exact match over the looser fallbacks', () => {
+    const resolver = withProject({
+      'src/components/a/_a.scss': '.a { background: url("../images/x.png"); }',
+      'src/components/b/_b.scss': `.b { background: url(${q}#{$p}/x.png${q}); }`,
+    });
+
+    // _b.scss would match on filename, but an exact hit exists so it wins.
+    expect(resolver.references('../images/x.png')).toEqual([
+      { file: 'a/_a.scss', line: 1 },
+    ]);
+  });
+
+  it('degrades quietly when the project directory is unknown', () => {
     const resolver = createAssetResolver({});
 
     expect(resolver.locate('../img/x.png')).toEqual({
@@ -168,16 +241,13 @@ describe('asset resolver', () => {
     expect(resolver.references('../img/x.png')).toEqual([]);
   });
 
-  it('survives an index that throws', () => {
+  it('survives an unreadable project directory', () => {
     const resolver = createAssetResolver({
-      sourceFileIndex: {
-        all: () => {
-          throw new Error('index unavailable');
-        },
-      },
+      projectDir: join(tmpdir(), 'emulsify-does-not-exist-1234'),
     });
 
     expect(resolver.locate('x.png').status).toBe('unknown');
+    expect(resolver.references('x.png')).toEqual([]);
   });
 });
 

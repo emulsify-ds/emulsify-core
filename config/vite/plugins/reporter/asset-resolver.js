@@ -20,6 +20,15 @@
 import { readFileSync } from 'node:fs';
 import { basename, dirname, relative } from 'node:path';
 
+import { walkFiles } from '../assets/source-file-index.js';
+
+/**
+ * Directories worth skipping on top of the shared defaults.
+ *
+ * @type {string[]}
+ */
+const EXTRA_SKIP_DIRS = ['vendor', '.ddev', '.lando', 'storybook-static'];
+
 /**
  * Matches a CSS `url()` call and captures its specifier.
  *
@@ -78,24 +87,46 @@ const lineAt = (source, index) => source.slice(0, index).split('\n').length;
 /**
  * Create a resolver for unresolved CSS asset URLs.
  *
- * @param {{
- *   sourceFileIndex?: {all: () => Array<{absPath: string}>},
- *   projectDir?: string
- * }} env - Project environment.
+ * @param {{projectDir?: string}} env - Project environment.
  * @returns {{
  *   locate: (url: string) => {status: string, label: string},
  *   references: (url: string) => Array<{file: string, line: number}>
  * }} Resolver.
  */
-export function createAssetResolver({ sourceFileIndex, projectDir = '' } = {}) {
-  /** @type {Array<{absPath: string}>} */
-  let files = [];
-  try {
-    files = sourceFileIndex?.all?.() || [];
-  } catch {
-    // A broken index must not take down the build summary.
-    files = [];
-  }
+export function createAssetResolver({ projectDir = '' } = {}) {
+  // Deliberately not `sourceFileIndex`. That index only covers component and
+  // global *source* roots, so a theme keeping its images in a project-root
+  // `assets/` directory — the Emulsify default — has none of them indexed, and
+  // every URL resolves as "not found". Walking the project root instead covers
+  // assets, src, and components wherever a project happens to put them.
+  //
+  // The walk is lazy and cached, so a build with no unresolved URLs never
+  // performs it, and one with ten pays for it once.
+  /** @type {string[]|undefined} */
+  let cachedFiles;
+
+  /**
+   * List every project file worth searching.
+   *
+   * @returns {string[]} Absolute file paths.
+   */
+  const allFiles = () => {
+    if (cachedFiles) return cachedFiles;
+
+    try {
+      cachedFiles = projectDir
+        ? walkFiles(projectDir, {
+            shouldSkipDir: (directory) =>
+              EXTRA_SKIP_DIRS.includes(basename(directory)),
+          })
+        : [];
+    } catch {
+      // A build summary must never be the thing that breaks a build.
+      cachedFiles = [];
+    }
+
+    return cachedFiles;
+  };
 
   // Stylesheets are read at most once per cycle, however many URLs are checked.
   /** @type {Map<string, string|undefined>} */
@@ -132,10 +163,11 @@ export function createAssetResolver({ sourceFileIndex, projectDir = '' } = {}) {
      * @returns {{status: 'found'|'missing'|'ambiguous'|'unknown', label: string}} Location.
      */
     locate(url) {
+      const files = allFiles();
       if (files.length === 0) return { status: 'unknown', label: '' };
 
       const name = basename(cleanUrl(url));
-      const hits = files.filter((file) => basename(file.absPath) === name);
+      const hits = files.filter((file) => basename(file) === name);
 
       if (hits.length === 0) return { status: 'missing', label: 'not found' };
       if (hits.length > 1) {
@@ -144,7 +176,7 @@ export function createAssetResolver({ sourceFileIndex, projectDir = '' } = {}) {
 
       return {
         status: 'found',
-        label: `${toProjectPath(dirname(hits[0].absPath), projectDir)}/`,
+        label: `${toProjectPath(dirname(hits[0]), projectDir)}/`,
       };
     },
 
@@ -155,28 +187,72 @@ export function createAssetResolver({ sourceFileIndex, projectDir = '' } = {}) {
      * @returns {Array<{file: string, line: number}>} References, in file order.
      */
     references(url) {
-      const found = [];
+      const stylesheets = allFiles().filter((file) => STYLESHEET.test(file));
+      const name = basename(cleanUrl(url));
 
-      for (const file of files) {
-        if (!STYLESHEET.test(file.absPath)) continue;
+      /**
+       * Collect matches across every stylesheet using one predicate.
+       *
+       * @param {(source: string) => Array<number>} findOffsets - Offset finder.
+       * @returns {Array<{file: string, line: number}>} Matches.
+       */
+      const scan = (findOffsets) => {
+        const found = [];
 
-        const source = read(file.absPath);
-        // Cheap reject before running the matcher over the whole file.
-        if (!source || !source.includes(url)) continue;
+        for (const absPath of stylesheets) {
+          const source = read(absPath);
+          if (!source) continue;
 
-        for (const match of source.matchAll(URL_CALL)) {
-          if (match[2].trim() !== url) continue;
-
-          found.push({
-            file: tailSegments(toProjectPath(file.absPath, projectDir)),
-            line: lineAt(source, match.index),
-          });
+          for (const offset of findOffsets(source)) {
+            found.push({
+              file: tailSegments(toProjectPath(absPath, projectDir)),
+              line: lineAt(source, offset),
+            });
+          }
         }
-      }
 
-      return found.sort(
-        (a, b) => a.file.localeCompare(b.file) || a.line - b.line,
+        return found.sort(
+          (a, b) => a.file.localeCompare(b.file) || a.line - b.line,
+        );
+      };
+
+      /**
+       * Offsets of every `url()` whose specifier satisfies a predicate.
+       *
+       * @param {(specifier: string) => boolean} matches - Specifier predicate.
+       * @returns {(source: string) => Array<number>} Offset finder.
+       */
+      const urlCalls = (matches) => (source) =>
+        [...source.matchAll(URL_CALL)]
+          .filter((match) => matches(match[2].trim()))
+          .map((match) => match.index);
+
+      // Tier 1: the URL is written literally. Precise, and the common case.
+      const exact = scan(urlCalls((specifier) => specifier === url));
+      if (exact.length > 0) return exact;
+
+      // Tier 2: the path is interpolated, as in `url('#{$image-path}/x.png')`,
+      // so the resolved URL never appears literally but the filename does.
+      const interpolated = scan(
+        urlCalls(
+          (specifier) => specifier === name || specifier.endsWith(`/${name}`),
+        ),
       );
+      if (interpolated.length > 0) return interpolated;
+
+      // Tier 3: the whole path lives in a variable, so `url()` holds only the
+      // variable name. The declaration is still the line to edit.
+      return scan((source) => {
+        const offsets = [];
+        let offset = source.indexOf(name);
+
+        while (offset !== -1) {
+          offsets.push(offset);
+          offset = source.indexOf(name, offset + name.length);
+        }
+
+        return offsets;
+      });
     },
   };
 }
