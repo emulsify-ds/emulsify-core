@@ -21,6 +21,7 @@ import { deprecationFix, deprecationMigrator } from './sass-logger.js';
 
 const INDENT = '  ';
 const DETAIL_INDENT = '      ';
+const ROW_INDENT = '        ';
 const SEPARATOR = ' · ';
 
 /**
@@ -213,11 +214,24 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
     group.entries.slice(0, MAX_DEPRECATION_KINDS_PER_FILE),
   );
   const lineWidth = Math.max(
+    DEPRECATION_HEADINGS.lines.length,
     ...rows.map((e) => formatLineList(e.lines).length),
-    0,
   );
-  const countWidth = Math.max(...rows.map((e) => `${e.count}×`.length), 0);
-  const idWidth = Math.max(...rows.map((e) => e.id.length), 0);
+  const countWidth = Math.max(
+    DEPRECATION_HEADINGS.count.length,
+    ...rows.map((e) => `${e.count}×`.length),
+  );
+  const idWidth = Math.max(
+    DEPRECATION_HEADINGS.id.length,
+    ...rows.map((e) => e.id.length),
+  );
+
+  lines.push(
+    `${ROW_INDENT}${styler(
+      'gray',
+      `${DEPRECATION_HEADINGS.lines.padEnd(lineWidth)}  ${DEPRECATION_HEADINGS.count.padStart(countWidth)}  ${DEPRECATION_HEADINGS.id.padEnd(idWidth)}  ${DEPRECATION_HEADINGS.fix}`,
+    )}`,
+  );
 
   for (const group of shownFiles) {
     lines.push(
@@ -234,14 +248,14 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
       const fix = deprecationFix(entry.id) || '';
 
       lines.push(
-        `${DETAIL_INDENT}  ${styler('gray', lineRef)}  ${styler('yellow', count)}  ${styler('gray', id)}  ${fix}`.trimEnd(),
+        `${ROW_INDENT}${styler('gray', lineRef)}  ${styler('yellow', count)}  ${styler('gray', id)}  ${fix}`.trimEnd(),
       );
     }
 
     const hiddenKinds = group.entries.length - MAX_DEPRECATION_KINDS_PER_FILE;
     if (hiddenKinds > 0) {
       lines.push(
-        `${DETAIL_INDENT}  ${styler('gray', `+${pluralize(hiddenKinds, 'more kind')}`)}`,
+        `${ROW_INDENT}${styler('gray', `+${pluralize(hiddenKinds, 'more kind')}`)}`,
       );
     }
   }
@@ -303,6 +317,21 @@ const ASSET_HEADINGS = {
   where: 'referenced in',
   url: 'url',
   disk: 'on disk',
+};
+
+/**
+ * Column headings for the deprecation worklist.
+ *
+ * These sit at the row indent rather than the file indent so each label lands
+ * directly above the column it names.
+ *
+ * @type {{lines: string, count: string, id: string, fix: string}}
+ */
+const DEPRECATION_HEADINGS = {
+  lines: 'lines',
+  count: 'count',
+  id: 'deprecation',
+  fix: 'fix',
 };
 
 /**

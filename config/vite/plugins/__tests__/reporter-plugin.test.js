@@ -194,6 +194,7 @@ describe('develop reporter output', () => {
 
     const output = lines.join('\n');
     expect(output).toContain('! 25 sass deprecations · 2 files');
+    expect(output).toMatch(/lines\s+count\s+deprecation\s+fix/);
     // Each file heads its own worklist, with the kind, count, and fix beneath.
     expect(output).toContain('src/components/base/_variables.scss');
     expect(output).toContain(':30');
@@ -447,6 +448,35 @@ describe('rendering helpers', () => {
     }).join('\n');
 
     expect(output).toContain('+2 more files');
+  });
+
+  it('aligns the deprecation header above the columns it labels', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordDeprecation({
+      id: 'slash-div',
+      file: '/project/src/_variables.scss',
+      line: 30,
+    });
+
+    const output = renderSummary({
+      snapshot: collector.snapshot(),
+      durationMs: 10,
+      projectDir: '/project',
+      styler: plain,
+    }).join('\n');
+
+    const rendered = output.split('\n');
+    // The headline also contains the word "deprecation", so match the header
+    // by its full column sequence rather than a single label.
+    const header = rendered.find((line) =>
+      /lines\s+count\s+deprecation/.test(line),
+    );
+    const row = rendered.find((line) => line.includes('slash-div'));
+
+    // The header sits at the row indent, not the file indent, so each label
+    // lands directly above its column.
+    expect(header.indexOf('lines')).toBe(row.indexOf(':30'));
+    expect(header.indexOf('deprecation')).toBe(row.indexOf('slash-div'));
   });
 
   it('collapses a long list of affected lines', () => {

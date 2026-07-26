@@ -57,7 +57,7 @@ describe('asset resolver', () => {
 
     expect(resolver.locate('../images/bg.png')).toEqual({
       status: 'found',
-      label: 'src/assets/images/',
+      label: 'src/assets/images/bg.png',
     });
   });
 
@@ -73,8 +73,19 @@ describe('asset resolver', () => {
 
     expect(resolver.locate('../images/bg-lines.png')).toEqual({
       status: 'found',
-      label: 'assets/images/',
+      label: 'assets/images/bg-lines.png',
     });
+  });
+
+  it('reveals the subfolder an asset is nested in', () => {
+    // Showing only the directory hid the part that differs from the url.
+    const resolver = withProject({
+      'assets/images/backgrounds/bg-lines.png': '',
+    });
+
+    expect(resolver.locate('../images/bg-lines.png').label).toBe(
+      'assets/images/backgrounds/bg-lines.png',
+    );
   });
 
   it('ignores build output and dependencies when searching', () => {
@@ -87,7 +98,7 @@ describe('asset resolver', () => {
     // Only the source copy counts, otherwise every asset reads as ambiguous.
     expect(resolver.locate('../images/bg.png')).toEqual({
       status: 'found',
-      label: 'assets/images/',
+      label: 'assets/images/bg.png',
     });
   });
 
@@ -228,6 +239,48 @@ describe('asset resolver', () => {
     // _b.scss would match on filename, but an exact hit exists so it wins.
     expect(resolver.references('../images/x.png')).toEqual([
       { file: 'a/_a.scss', line: 1 },
+    ]);
+  });
+
+  it('prefers authored scss over mirrored build output', () => {
+    // Drupal themes with mirrorComponentOutput keep compiled CSS beside their
+    // source at the project root. Matching there points at a one-line build
+    // artifact rather than a line anyone can edit.
+    const resolver = withProject({
+      'assets/images/bg.png': '',
+      'components/style.css': '.b{background:url(../images/bg.png)}',
+      'src/components/base/_base.scss': [
+        '// comment',
+        '.a { background: url("../images/bg.png"); }',
+      ].join('\n'),
+    });
+
+    expect(resolver.references('../images/bg.png')).toEqual([
+      { file: 'base/_base.scss', line: 2 },
+    ]);
+  });
+
+  it('beats compiled css even when only a loose tier matches the source', () => {
+    // The compiled file holds an exact match while the source only matches on
+    // filename. Source still wins: authored files are searched exhaustively
+    // before compiled output is considered at all.
+    const resolver = withProject({
+      'components/style.css': '.b{background:url(../images/bg.png)}',
+      'src/components/base/_base.scss': `.a { background: url(${q}#{$p}/bg.png${q}); }`,
+    });
+
+    expect(resolver.references('../images/bg.png')).toEqual([
+      { file: 'base/_base.scss', line: 1 },
+    ]);
+  });
+
+  it('still reports compiled css when there is no authored source', () => {
+    const resolver = withProject({
+      'components/style.css': '.b{background:url(../images/bg.png)}',
+    });
+
+    expect(resolver.references('../images/bg.png')).toEqual([
+      { file: 'components/style.css', line: 1 },
     ]);
   });
 

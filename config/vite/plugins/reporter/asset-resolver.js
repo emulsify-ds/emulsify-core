@@ -18,7 +18,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { basename, dirname, relative } from 'node:path';
+import { basename, relative } from 'node:path';
 
 import { walkFiles } from '../assets/source-file-index.js';
 
@@ -41,11 +41,18 @@ const EXTRA_SKIP_DIRS = ['vendor', '.ddev', '.lando', 'storybook-static'];
 const URL_CALL = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
 
 /**
- * Stylesheet extensions worth scanning for `url()` references.
+ * Stylesheets a human actually edits.
  *
  * @type {RegExp}
  */
-const STYLESHEET = /\.(scss|sass|css)$/i;
+const AUTHORED_STYLESHEET = /\.(scss|sass)$/i;
+
+/**
+ * Any stylesheet, including compiled output.
+ *
+ * @type {RegExp}
+ */
+const ANY_STYLESHEET = /\.(scss|sass|css)$/i;
 
 /**
  * Convert an absolute path to a forward-slash path relative to the project.
@@ -174,10 +181,10 @@ export function createAssetResolver({ projectDir = '' } = {}) {
         return { status: 'ambiguous', label: `${hits.length} candidates` };
       }
 
-      return {
-        status: 'found',
-        label: `${toProjectPath(dirname(hits[0]), projectDir)}/`,
-      };
+      // The full path, not just the directory: assets are commonly nested a
+      // few levels deep and the subfolder is the part that differs from what
+      // the stylesheet wrote.
+      return { status: 'found', label: toProjectPath(hits[0], projectDir) };
     },
 
     /**
@@ -187,16 +194,17 @@ export function createAssetResolver({ projectDir = '' } = {}) {
      * @returns {Array<{file: string, line: number}>} References, in file order.
      */
     references(url) {
-      const stylesheets = allFiles().filter((file) => STYLESHEET.test(file));
+      const files = allFiles();
       const name = basename(cleanUrl(url));
 
       /**
-       * Collect matches across every stylesheet using one predicate.
+       * Collect matches across a set of stylesheets using one predicate.
        *
+       * @param {string[]} stylesheets - Files to search.
        * @param {(source: string) => Array<number>} findOffsets - Offset finder.
        * @returns {Array<{file: string, line: number}>} Matches.
        */
-      const scan = (findOffsets) => {
+      const scan = (stylesheets, findOffsets) => {
         const found = [];
 
         for (const absPath of stylesheets) {
@@ -227,22 +235,13 @@ export function createAssetResolver({ projectDir = '' } = {}) {
           .filter((match) => matches(match[2].trim()))
           .map((match) => match.index);
 
-      // Tier 1: the URL is written literally. Precise, and the common case.
-      const exact = scan(urlCalls((specifier) => specifier === url));
-      if (exact.length > 0) return exact;
-
-      // Tier 2: the path is interpolated, as in `url('#{$image-path}/x.png')`,
-      // so the resolved URL never appears literally but the filename does.
-      const interpolated = scan(
-        urlCalls(
-          (specifier) => specifier === name || specifier.endsWith(`/${name}`),
-        ),
-      );
-      if (interpolated.length > 0) return interpolated;
-
-      // Tier 3: the whole path lives in a variable, so `url()` holds only the
-      // variable name. The declaration is still the line to edit.
-      return scan((source) => {
+      /**
+       * Offsets of the bare filename anywhere in a source.
+       *
+       * @param {string} source - File contents.
+       * @returns {Array<number>} Match offsets.
+       */
+      const bareFilename = (source) => {
         const offsets = [];
         let offset = source.indexOf(name);
 
@@ -252,7 +251,40 @@ export function createAssetResolver({ projectDir = '' } = {}) {
         }
 
         return offsets;
-      });
+      };
+
+      const finders = [
+        // Tier 1: the URL is written literally. Precise, and the common case.
+        urlCalls((specifier) => specifier === url),
+
+        // Tier 2: the path is interpolated, as in `url('#{$path}/x.png')`, so
+        // the resolved URL never appears literally but the filename does.
+        urlCalls(
+          (specifier) => specifier === name || specifier.endsWith(`/${name}`),
+        ),
+
+        // Tier 3: the whole path lives in a variable, so `url()` holds only the
+        // variable name. The declaration is still the line to edit.
+        bareFilename,
+      ];
+
+      // Authored stylesheets are searched exhaustively before compiled CSS is
+      // considered at all. Drupal themes that mirror component output back to
+      // the project root keep generated CSS beside their source, and a match
+      // there points at a one-line build artifact nobody can usefully edit.
+      const searchOrder = [
+        files.filter((file) => AUTHORED_STYLESHEET.test(file)),
+        files.filter((file) => ANY_STYLESHEET.test(file)),
+      ];
+
+      for (const stylesheets of searchOrder) {
+        for (const findOffsets of finders) {
+          const found = scan(stylesheets, findOffsets);
+          if (found.length > 0) return found;
+        }
+      }
+
+      return [];
     },
   };
 }
