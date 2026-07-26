@@ -34,8 +34,8 @@ implementation details where they belong.
 
 - Consumers are supported on Node.js 24.13.0 or later. The strictest published
   toolchain dependency, `stylelint-selector-bem-pattern` 5, requires that patch.
-- Contributors should use Node.js 24.13.0, the exact version pinned in `.nvmrc`.
-- CI also uses Node.js 24.13.0 by reading `.nvmrc`, so local development and
+- Contributors should use Node.js 24.18.0, the exact version pinned in `.nvmrc`.
+- CI also uses Node.js 24.18.0 by reading `.nvmrc`, so local development and
   automated checks share the same recommended runtime.
 
 ## Project Evolution

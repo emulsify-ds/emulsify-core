@@ -14,7 +14,7 @@ jobs:
     name: Add issue to project
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/add-to-project@v0.3.0
+      - uses: actions/add-to-project@v2
         with:
           # Keep triage in the organization-level project used by maintainers.
           project-url: https://github.com/orgs/emulsify-ds/projects/6

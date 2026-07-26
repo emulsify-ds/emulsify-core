@@ -4,7 +4,7 @@ Emulsify Core 4.3.0 supports consumers on Node.js 24.13.0 or later. The
 strictest published toolchain dependency, `stylelint-selector-bem-pattern` 5,
 requires that patch.
 
-Repository development recommends the exact Node.js 24.13.0 version pinned in
+Repository development recommends the exact Node.js 24.18.0 version pinned in
 `.nvmrc`. Every CI and release workflow reads `.nvmrc`, so automation uses that
 same exact version. Maintained scripts derive the supported consumer floor from
 `package.json#engines.node`.
