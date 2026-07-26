@@ -195,7 +195,7 @@
     "@babel/eslint-parser": "^7.29.7",
     "@babel/preset-env": "^7.29.7",
     "@emulsify/cli": "^2.2.0",
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@mlnop/vite-plugin-sass-glob-import": "^6.2.0",
     "@storybook/addon-a11y": "^10.5.4",
     "@storybook/addon-links": "^10.5.4",
