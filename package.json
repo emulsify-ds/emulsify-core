@@ -257,5 +257,13 @@
     "glob": "^13.0.6",
     "locutus": "^3.0.36",
     "minimatch@3.0.x": "^3.1.5"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": true,
+    "puppeteer@24.43.1": true,
+    "puppeteer@25.3.0": true,
+    "unrs-resolver@1.12.2": true
   }
 }
