@@ -6,7 +6,6 @@ import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import {
   countEntries,
   developReporterPlugin,
-  normalizeBuildError,
   resolveSourceGlob,
 } from '../reporter/index.js';
 import {
@@ -617,43 +616,6 @@ describe('format helpers', () => {
     expect(createStyler(true)('red', 'x')).toContain('\u001b[31m');
     expect(createStyler(true)(undefined, 'x')).toBe('x');
     expect(createStyler(true)('not-a-real-format', 'x')).toBe('x');
-  });
-});
-
-describe('build error normalization', () => {
-  it('strips the plugin prefix and keeps the first line', () => {
-    expect(
-      normalizeBuildError(
-        Object.assign(
-          new Error(`[vite:css] [sass] ${MISSING_STYLESHEET}\n  ╷\n1 │ @use`),
-          {
-            loc: { file: '/a.scss', line: 1 },
-          },
-        ),
-      ),
-    ).toEqual({
-      message: `[sass] ${MISSING_STYLESHEET}`,
-      file: '/a.scss',
-      line: 1,
-    });
-  });
-
-  it('falls back to the module id when there is no loc', () => {
-    expect(
-      normalizeBuildError(Object.assign(new Error('boom'), { id: '/b.scss' })),
-    ).toEqual({
-      message: 'boom',
-      file: '/b.scss',
-      line: undefined,
-    });
-  });
-
-  it('handles string and missing errors', () => {
-    expect(normalizeBuildError('plain failure').message).toBe('plain failure');
-    expect(normalizeBuildError(undefined).message).toBe('Unknown build error');
-    expect(normalizeBuildError(new Error('')).message).toBe(
-      'Unknown build error',
-    );
   });
 });
 

@@ -141,7 +141,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
  *   recordImportError: (entry: {file?: string, line?: number, specifier?: string}) => void,
- *   hasCapturedImportErrors: () => boolean,
+ *   hasCapturedBuildErrors: () => boolean,
  *   snapshot: () => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
  *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
@@ -310,15 +310,20 @@ export function createDiagnosticsCollector() {
     },
 
     /**
-     * Whether any import error has been captured this cycle.
+     * Whether any build error has been captured this cycle.
      *
      * The logger consults this before swallowing Rolldown's raw error dump, so
      * output is only suppressed once the reporter has something to show in its
      * place.
      *
-     * @returns {boolean} TRUE when import errors were captured.
+     * Deliberately covers ordinary errors as well as missing imports. Scoping
+     * it to imports alone meant a failure of any other kind — an undefined
+     * mixin, say — was reported by the summary *and* dumped raw, so the one
+     * error appeared twice.
+     *
+     * @returns {boolean} TRUE when any build error was captured.
      */
-    hasCapturedImportErrors: () => importErrors.size > 0,
+    hasCapturedBuildErrors: () => importErrors.size > 0 || errors.size > 0,
 
     reset() {
       deprecations = new Map();

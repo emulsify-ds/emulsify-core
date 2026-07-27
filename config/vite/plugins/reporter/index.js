@@ -75,33 +75,6 @@ export function countEntries(input) {
 }
 
 /**
- * Reduce a Rollup or Vite build error to a single reportable record.
- *
- * Sass failures arrive with the compiler's full source excerpt embedded in the
- * message, and Vite prefixes the responsible plugin. Both are stripped so the
- * summary shows one readable sentence with a location beside it.
- *
- * @param {Error & {loc?: {file?: string, line?: number}, id?: string, plugin?: string}} error - Build error.
- * @returns {{message: string, file: string|undefined, line: number|undefined}} Normalized error.
- */
-export function normalizeBuildError(error) {
-  if (!error) {
-    return { message: 'Unknown build error', file: undefined, line: undefined };
-  }
-
-  const rawMessage = typeof error === 'string' ? error : error.message || '';
-  const [firstLine] = rawMessage.split('\n');
-  const message =
-    firstLine?.replace(/^\[[^\]]+\]\s*/, '').trim() || 'Unknown build error';
-
-  return {
-    message,
-    file: error.loc?.file || error.id || undefined,
-    line: error.loc?.line,
-  };
-}
-
-/**
  * Create the Emulsify develop reporter plugin.
  *
  * @param {{

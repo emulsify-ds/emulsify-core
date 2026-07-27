@@ -50,6 +50,16 @@ const RAW_BUILD_DUMP =
   /^\s*(?:Build failed with \d+ error|\[plugin [\w:-]+\]|Error: \[sass\]|\[sass\] )/;
 
 /**
+ * Matches a Dart Sass JS stack frame.
+ *
+ * These point into the compiler bundle rather than the project and are noise
+ * wherever they appear, so their presence alone identifies a raw dump.
+ *
+ * @type {RegExp}
+ */
+const DART_SASS_FRAME = /\bsass\.dart\.js:\d+/;
+
+/**
  * Determine whether the reporter should stand aside and let Vite speak.
  *
  * @param {object} [env] - Environment variables.
@@ -119,9 +129,10 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
    */
   const isRedundantDump = (message) => {
     if (passRawThrough) return false;
-    if (!collector.hasCapturedImportErrors?.()) return false;
+    if (!collector.hasCapturedBuildErrors?.()) return false;
 
-    return RAW_BUILD_DUMP.test(stripAnsi(String(message)));
+    const plain = stripAnsi(String(message));
+    return RAW_BUILD_DUMP.test(plain) || DART_SASS_FRAME.test(plain);
   };
 
   return {

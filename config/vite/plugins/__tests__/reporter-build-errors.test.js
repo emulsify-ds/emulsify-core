@@ -215,7 +215,7 @@ describe('import error collection', () => {
     expect(snapshot.importErrors).toHaveLength(1);
     expect(snapshot.importErrors[0].count).toBe(2);
     expect(snapshot.hasProblems).toBe(true);
-    expect(collector.hasCapturedImportErrors()).toBe(true);
+    expect(collector.hasCapturedBuildErrors()).toBe(true);
   });
 
   it('clears captured imports on reset', () => {
@@ -223,7 +223,21 @@ describe('import error collection', () => {
     collector.recordImportError({ file: '/a.scss', specifier: '../x' });
     collector.reset();
 
-    expect(collector.hasCapturedImportErrors()).toBe(false);
+    expect(collector.hasCapturedBuildErrors()).toBe(false);
+  });
+
+  it('counts an ordinary build error as captured too', () => {
+    const collector = createDiagnosticsCollector();
+
+    // An undefined mixin is not a missing import. Scoping the check to imports
+    // alone let its raw dump through, so the error was reported twice.
+    collector.recordError({
+      message: 'Undefined mixin.',
+      file: '/p/src/layout/container/_container-textures.scss',
+      line: 34,
+    });
+
+    expect(collector.hasCapturedBuildErrors()).toBe(true);
   });
 });
 
@@ -451,6 +465,34 @@ describe('raw dump suppression', () => {
 
     // An error the reporter could not parse must still reach the user.
     expect(base.error).toHaveBeenCalled();
+  });
+
+  it('drops the dump for a non-import failure such as an undefined mixin', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordError({
+      message: 'Undefined mixin.',
+      file: '/p/src/layout/container/_container-textures.scss',
+      line: 34,
+    });
+
+    const base = baseLogger();
+    createReporterLogger(collector, base, { verbose: false }).error(
+      'Build failed with 1 error:\n[plugin vite:css] /p/src/layout/layout.scss\nError: [sass] Undefined mixin.',
+    );
+
+    expect(base.error).not.toHaveBeenCalled();
+  });
+
+  it('drops a dart sass stack trace wherever it appears', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordError({ message: 'Undefined mixin.', file: '/p/a.scss' });
+
+    const base = baseLogger();
+    createReporterLogger(collector, base, { verbose: false }).error(
+      'Error: Undefined mixin.\n    at Object.wrapException (/p/node_modules/sass/sass.dart.js:2310:47)',
+    );
+
+    expect(base.error).not.toHaveBeenCalled();
   });
 
   it('keeps unrelated errors even when imports were captured', () => {
