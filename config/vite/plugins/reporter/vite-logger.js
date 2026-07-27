@@ -60,6 +60,23 @@ const RAW_BUILD_DUMP =
 const DART_SASS_FRAME = /\bsass\.dart\.js:\d+/;
 
 /**
+ * Detect a message that is nothing but JavaScript stack frames.
+ *
+ * Rolldown emits the trailing stack of a failure as its own log call. Those
+ * frames point into `lightningcss`, `vite`, or `sass` internals rather than
+ * anywhere in the project, so a message made only of them carries nothing once
+ * the failure itself has been reported.
+ *
+ * @param {string} message - Plain-text log message.
+ * @returns {boolean} TRUE when every line is a stack frame.
+ */
+function isBareStackTrace(message) {
+  const lines = message.split('\n').filter((line) => line.trim());
+
+  return lines.length > 0 && lines.every((line) => /^\s*at\s+\S/.test(line));
+}
+
+/**
  * Determine whether the reporter should stand aside and let Vite speak.
  *
  * @param {object} [env] - Environment variables.
@@ -132,7 +149,12 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
     if (!collector.hasCapturedBuildErrors?.()) return false;
 
     const plain = stripAnsi(String(message));
-    return RAW_BUILD_DUMP.test(plain) || DART_SASS_FRAME.test(plain);
+
+    return (
+      RAW_BUILD_DUMP.test(plain) ||
+      DART_SASS_FRAME.test(plain) ||
+      isBareStackTrace(plain)
+    );
   };
 
   return {

@@ -141,6 +141,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
  *   recordImportError: (entry: {file?: string, line?: number, specifier?: string}) => void,
+ *   recordSyntaxError: (entry: {minifier?: string, message?: string, declaration?: string}) => void,
  *   hasCapturedBuildErrors: () => boolean,
  *   snapshot: () => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
@@ -167,6 +168,8 @@ export function createDiagnosticsCollector() {
   let unresolvedAssets = new Map();
   /** @type {Map<string, object>} */
   let importErrors = new Map();
+  /** @type {Map<string, object>} */
+  let syntaxErrors = new Map();
 
   /**
    * Record one deprecation occurrence.
@@ -237,6 +240,29 @@ export function createDiagnosticsCollector() {
     },
 
     /**
+     * Record one CSS minifier syntax failure.
+     *
+     * Keyed by the offending declaration, since the same broken rule reached
+     * through several entrypoints is one thing to fix.
+     *
+     * @param {{minifier?: string, message?: string, declaration?: string}} entry - Syntax error.
+     * @returns {void}
+     */
+    recordSyntaxError(entry = {}) {
+      if (!entry.message) return;
+
+      const key = `${entry.declaration || ''}|${entry.message}`;
+      const existing = syntaxErrors.get(key);
+
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+
+      syntaxErrors.set(key, { ...entry, count: 1 });
+    },
+
+    /**
      * Record one CSS `url()` that Vite could not resolve at build time.
      *
      * Keyed by URL, because the same asset referenced from two stylesheets with
@@ -293,6 +319,7 @@ export function createDiagnosticsCollector() {
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
         unresolvedAssets: unresolvedAssetList,
         importErrors: importErrorList,
+        syntaxErrors: [...syntaxErrors.values()],
         warnings: warningList,
         errors: errorList,
         deprecationTotal: deprecationList.reduce(
@@ -305,7 +332,8 @@ export function createDiagnosticsCollector() {
           warningList.length > 0 ||
           deprecationList.length > 0 ||
           unresolvedAssetList.length > 0 ||
-          importErrorList.length > 0,
+          importErrorList.length > 0 ||
+          syntaxErrors.size > 0,
       };
     },
 
@@ -323,7 +351,8 @@ export function createDiagnosticsCollector() {
      *
      * @returns {boolean} TRUE when any build error was captured.
      */
-    hasCapturedBuildErrors: () => importErrors.size > 0 || errors.size > 0,
+    hasCapturedBuildErrors: () =>
+      importErrors.size > 0 || errors.size > 0 || syntaxErrors.size > 0,
 
     reset() {
       deprecations = new Map();
@@ -331,6 +360,7 @@ export function createDiagnosticsCollector() {
       errors = new Map();
       unresolvedAssets = new Map();
       importErrors = new Map();
+      syntaxErrors = new Map();
     },
   };
 }

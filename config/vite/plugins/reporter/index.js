@@ -33,6 +33,7 @@ import {
   buildAssetRows,
   buildImportRows,
   createAssetResolver,
+  findLikelySource,
   sharedMissingDirectory,
 } from './asset-resolver.js';
 import { classifyBuildError } from './build-errors.js';
@@ -121,6 +122,41 @@ export function developReporterPlugin({
   const emit = (lines) => lines.forEach((line) => write(line));
 
   /**
+   * Unpack a build failure and record everything it contains.
+   *
+   * Rolldown wraps every failure of a cycle into one error whose message is
+   * just a count, so it has to be opened up before anything useful can be
+   * reported. Shared by the build and generate phases, which fail through
+   * different hooks but produce the same shapes.
+   *
+   * @param {Error} error - Build or render error.
+   * @returns {void}
+   */
+  const captureFailure = (error) => {
+    const { importErrors, syntaxErrors, otherErrors } =
+      classifyBuildError(error);
+
+    for (const importError of importErrors) {
+      diagnostics.recordImportError(importError);
+    }
+
+    for (const syntaxError of syntaxErrors) {
+      diagnostics.recordSyntaxError(syntaxError);
+    }
+
+    const detailed = importErrors.length > 0 || syntaxErrors.length > 0;
+
+    for (const other of otherErrors) {
+      // The aggregate wrapper carries no location and would only add a row
+      // reading "Build failed with N errors" above the detail it wraps.
+      if (detailed && /^Build failed with \d+ error/.test(other.message)) {
+        continue;
+      }
+      diagnostics.recordError(other);
+    }
+  };
+
+  /**
    * Print the summary or rebuild line for the cycle that just finished.
    *
    * Guarded so the cycle reports exactly once regardless of whether Rollup
@@ -153,7 +189,8 @@ export function developReporterPlugin({
       // cycle so its read cache never serves stale contents after an edit.
       const needsResolver =
         snapshot.unresolvedAssets.length > 0 ||
-        snapshot.importErrors.length > 0;
+        snapshot.importErrors.length > 0 ||
+        snapshot.syntaxErrors.length > 0;
       const resolver = needsResolver ? createAssetResolver(env) : undefined;
 
       const assetRows = resolver
@@ -168,6 +205,15 @@ export function developReporterPlugin({
         env.projectDir,
       );
 
+      // The minifier reports against generated CSS, so the only route back to
+      // a source file is searching for the literals in the offending rule.
+      const syntaxErrors = resolver
+        ? snapshot.syntaxErrors.map((error) => ({
+            ...error,
+            lead: findLikelySource(error.declaration, resolver),
+          }))
+        : snapshot.syntaxErrors;
+
       emit(
         renderSummary({
           snapshot,
@@ -176,6 +222,7 @@ export function developReporterPlugin({
           projectDir: env.projectDir,
           sourceGlob: resolveSourceGlob(env),
           assetRows,
+          syntaxErrors,
           importErrors: {
             rows: importRows,
             sharedDirectory,
@@ -235,29 +282,18 @@ export function developReporterPlugin({
 
     buildEnd(error) {
       if (!watching || !error) return;
-
-      // Rolldown wraps every failure of a cycle into one error whose message
-      // is just a count, so it has to be unpacked before anything useful can
-      // be reported.
-      const { importErrors, otherErrors } = classifyBuildError(error);
-
-      for (const importError of importErrors) {
-        diagnostics.recordImportError(importError);
-      }
-
-      for (const other of otherErrors) {
-        // The aggregate wrapper itself carries no location and would only add
-        // a row reading "Build failed with N errors".
-        if (
-          importErrors.length > 0 &&
-          /^Build failed with \d+ error/.test(other.message)
-        ) {
-          continue;
-        }
-        diagnostics.recordError(other);
-      }
-
+      captureFailure(error);
       // A failed cycle never reaches writeBundle, so report from here instead.
+      reportCycle();
+    },
+
+    // Failures while generating output — CSS minification among them — occur
+    // after `buildEnd` and abort before `writeBundle`, so without this hook a
+    // broken build produced no summary at all. It also stops a later
+    // `closeBundle` from reporting success over a build that failed.
+    renderError(error) {
+      if (!watching || !error) return;
+      captureFailure(error);
       reportCycle();
     },
 

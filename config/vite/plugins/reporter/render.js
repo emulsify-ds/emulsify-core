@@ -358,6 +358,93 @@ const IMPORT_HEADINGS = {
 };
 
 /**
+ * Maximum likely-source leads listed for one syntax error.
+ *
+ * @type {number}
+ */
+const MAX_SOURCE_LEADS = 4;
+
+/**
+ * Render the CSS syntax error block.
+ *
+ * The minifier runs on the concatenated bundle, so its line number refers to
+ * generated CSS and names no file. The offending declaration is shown verbatim
+ * with the minifier's caret, followed by wherever that declaration's literals
+ * appear in the project. Those are labelled likely, not definite, because they
+ * come from a search rather than a source map.
+ *
+ * @param {Array<{
+ *   minifier: string,
+ *   message: string,
+ *   bundleLine?: number,
+ *   declaration?: string,
+ *   caretColumn?: number,
+ *   lead?: {token: string, matches: Array<{file: string, line: number}>}
+ * }>} errors - Parsed syntax errors.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Syntax error lines.
+ */
+function renderSyntaxErrors(errors, styler) {
+  if (errors.length === 0) return [];
+
+  const lines = [
+    `${INDENT}${styler('red', SYMBOLS.error)} ${styler('red', pluralize(errors.length, 'css syntax error'))}`,
+    '',
+  ];
+
+  for (const error of errors) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('gray', error.minifier)}  ${error.message}`,
+    );
+
+    if (error.declaration) {
+      lines.push(`${DETAIL_INDENT}${error.declaration}`);
+
+      if (error.caretColumn != null) {
+        lines.push(
+          `${DETAIL_INDENT}${' '.repeat(error.caretColumn)}${styler('red', '^')}`,
+        );
+      }
+    }
+
+    const matches = error.lead?.matches || [];
+    if (matches.length > 0) {
+      lines.push('', `${DETAIL_INDENT}${styler('gray', 'likely source')}`);
+
+      const width = Math.max(
+        ...matches
+          .slice(0, MAX_SOURCE_LEADS)
+          .map((match) => `${match.file}:${match.line}`.length),
+      );
+
+      for (const match of matches.slice(0, MAX_SOURCE_LEADS)) {
+        const location = `${match.file}:${match.line}`.padEnd(width);
+        lines.push(
+          `${DETAIL_INDENT}${styler('cyan', location)}  ${styler('gray', error.lead.token)}`,
+        );
+      }
+
+      const hidden = matches.length - MAX_SOURCE_LEADS;
+      if (hidden > 0) {
+        lines.push(
+          `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+        );
+      }
+    }
+
+    if (error.bundleLine != null) {
+      // Named as generated output so it never reads as a source location.
+      lines.push(
+        '',
+        `${DETAIL_INDENT}${styler('gray', `bundle line ${error.bundleLine} · EMULSIFY_VERBOSE=1 for full output`)}`,
+      );
+    }
+  }
+
+  return lines;
+}
+
+/**
  * Render the missing Sass import block.
  *
  * Replaces Rolldown's aggregate dump, which prints every error three times
@@ -508,8 +595,15 @@ function renderProblems(
   sourceGlob,
   assetRows,
   importErrors,
+  syntaxErrors,
 ) {
   const lines = [];
+
+  const syntaxLines = renderSyntaxErrors(syntaxErrors, styler);
+  if (syntaxLines.length > 0) {
+    lines.push('');
+    lines.push(...syntaxLines);
+  }
 
   const importLines = renderImportErrors(
     importErrors.rows || [],
@@ -581,10 +675,13 @@ export function renderSummary({
   sourceGlob = 'src/**/*.scss',
   assetRows = [],
   importErrors = {},
+  syntaxErrors = [],
   styler,
 }) {
   const failed =
-    snapshot.errors.length > 0 || (importErrors.rows || []).length > 0;
+    snapshot.errors.length > 0 ||
+    (importErrors.rows || []).length > 0 ||
+    syntaxErrors.length > 0;
   const symbol = failed
     ? styler('red', SYMBOLS.error)
     : styler('green', SYMBOLS.ok);
@@ -601,6 +698,7 @@ export function renderSummary({
       sourceGlob,
       assetRows,
       importErrors,
+      syntaxErrors,
     ),
     '',
   ];

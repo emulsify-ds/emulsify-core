@@ -48,6 +48,90 @@ const FRAME_LINE = /^\s*(\d+)\s*│\s?(.*)$/m;
 const MAX_CAUSE_DEPTH = 10;
 
 /**
+ * Captures the minifier name Vite prefixes onto a CSS minification failure.
+ *
+ * Both the lightningcss and esbuild paths tag the message this way before
+ * rethrowing, and both attach `loc` and `frame` alongside it.
+ *
+ * @type {RegExp}
+ */
+const MINIFIER_PREFIX = /^\[((?:lightningcss|esbuild css) minify)\]\s*/;
+
+/**
+ * Captures one numbered row of a Vite code frame.
+ *
+ * @type {RegExp}
+ */
+const FRAME_ROW = /^\s*(\d+)\s*\|\s?(.*)$/;
+
+/**
+ * Captures the caret row that follows the offending row of a code frame.
+ *
+ * @type {RegExp}
+ */
+const FRAME_CARET = /^\s*\|\s?(\s*)\^/;
+
+/**
+ * Parse a CSS minifier syntax failure.
+ *
+ * These are unlike every other error the reporter handles: the minifier runs
+ * on the concatenated bundle, so `loc.line` is a line of generated CSS and
+ * points at no file anyone wrote. What is salvageable is the offending
+ * declaration itself, which is enough to search the project for.
+ *
+ * @param {object} error - Individual build error.
+ * @returns {{
+ *   minifier: string,
+ *   message: string,
+ *   bundleLine: number|undefined,
+ *   declaration: string|undefined,
+ *   caretColumn: number|undefined
+ * }|undefined} Parsed syntax error.
+ */
+export function parseCssSyntaxError(error) {
+  const rawMessage = String(error?.message || '');
+  const prefix = MINIFIER_PREFIX.exec(rawMessage);
+  if (!prefix) return undefined;
+
+  const [firstLine] = rawMessage.replace(MINIFIER_PREFIX, '').split('\n');
+  const parsed = {
+    minifier: prefix[1],
+    message: firstLine.trim(),
+    bundleLine:
+      typeof error?.loc?.line === 'number' ? error.loc.line : undefined,
+    declaration: undefined,
+    caretColumn: undefined,
+  };
+
+  const rows = String(error?.frame || '').split('\n');
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = FRAME_ROW.exec(rows[index]);
+    if (!row) continue;
+
+    // Without a bundle line, the row carrying a caret beneath it is the one.
+    const isOffending =
+      parsed.bundleLine == null
+        ? FRAME_CARET.test(rows[index + 1] || '')
+        : Number(row[1]) === parsed.bundleLine;
+    if (!isOffending) continue;
+
+    const leading = row[2].length - row[2].trimStart().length;
+    parsed.declaration = row[2].trim();
+
+    const caret = FRAME_CARET.exec(rows[index + 1] || '');
+    if (caret) {
+      // Re-base the caret against the trimmed declaration.
+      parsed.caretColumn = Math.max(0, caret[1].length - leading);
+    }
+
+    break;
+  }
+
+  return parsed;
+}
+
+/**
  * Flatten a rolldown build error into the individual errors it wraps.
  *
  * @param {Error & {errors?: Array<object>}} error - Build error.
@@ -169,14 +253,22 @@ export function describeBuildError(error) {
  * @param {Error & {errors?: Array<object>}} error - Build error.
  * @returns {{
  *   importErrors: Array<object>,
+ *   syntaxErrors: Array<object>,
  *   otherErrors: Array<object>
  * }} Classified errors.
  */
 export function classifyBuildError(error) {
   const importErrors = [];
+  const syntaxErrors = [];
   const otherErrors = [];
 
   for (const entry of flattenBuildErrors(error)) {
+    const syntaxError = parseCssSyntaxError(entry);
+    if (syntaxError) {
+      syntaxErrors.push(syntaxError);
+      continue;
+    }
+
     const described = describeBuildError(entry);
 
     // A missing import with no specifier cannot be tabulated, so it falls
@@ -188,5 +280,5 @@ export function classifyBuildError(error) {
     }
   }
 
-  return { importErrors, otherErrors };
+  return { importErrors, syntaxErrors, otherErrors };
 }

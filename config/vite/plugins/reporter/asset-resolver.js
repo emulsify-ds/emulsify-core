@@ -211,6 +211,38 @@ export function createAssetResolver({ projectDir = '' } = {}) {
     },
 
     /**
+     * Find every authored stylesheet line containing a literal.
+     *
+     * @param {string} literal - Text to find.
+     * @returns {Array<{file: string, line: number, text: string}>} Matches.
+     */
+    findLiteral(literal) {
+      if (!literal) return [];
+
+      const found = [];
+
+      for (const absPath of allFiles()) {
+        if (!AUTHORED_STYLESHEET.test(absPath)) continue;
+
+        const source = read(absPath);
+        if (!source || !source.includes(literal)) continue;
+
+        const lines = source.split('\n');
+        for (let index = 0; index < lines.length; index += 1) {
+          if (!lines[index].includes(literal)) continue;
+
+          found.push({
+            file: tailSegments(toProjectPath(absPath, projectDir)),
+            line: index + 1,
+            text: lines[index].trim(),
+          });
+        }
+      }
+
+      return found;
+    },
+
+    /**
      * Find the stylesheets that write this URL, with line numbers.
      *
      * @param {string} url - Unresolved asset URL.
@@ -313,6 +345,48 @@ export function createAssetResolver({ projectDir = '' } = {}) {
 }
 
 /**
+ * Maximum stylesheets a single literal may appear in and still count as a lead.
+ *
+ * A token found in twenty files locates nothing.
+ *
+ * @type {number}
+ */
+const MAX_LITERAL_MATCHES = 6;
+
+/**
+ * Pull the searchable literals out of a generated CSS declaration.
+ *
+ * The minifier reports against the concatenated bundle, so there is no source
+ * location to report — but the declaration itself was written by somebody, and
+ * its unusual tokens survive compilation. A value like `60.9375rem` is far more
+ * likely to appear once in the source than a keyword like `min-width`.
+ *
+ * Ordered most distinctive first: precise decimals, then other dimensions, then
+ * identifiers.
+ *
+ * @param {string} declaration - Offending CSS declaration.
+ * @returns {string[]} Candidate literals.
+ */
+export function extractSourceTokens(declaration = '') {
+  const text = String(declaration);
+  const dimensions =
+    text.match(/\d*\.?\d+(?:rem|em|px|vh|vw|ch|%|s|ms)/g) || [];
+  const colors = text.match(/#[0-9a-f]{3,8}\b/gi) || [];
+  const identifiers = text.match(/[a-z][\w-]{4,}/gi) || [];
+
+  const ranked = [
+    // A decimal is nearly always authored verbatim somewhere.
+    ...dimensions.filter((token) => token.includes('.')),
+    ...colors,
+    ...dimensions.filter((token) => !token.includes('.')),
+    // Custom names beat CSS keywords, which appear everywhere.
+    ...identifiers.filter((token) => token.includes('-')),
+  ];
+
+  return [...new Set(ranked)];
+}
+
+/**
  * Candidate filenames Sass would try for an import specifier.
  *
  * Sass resolves `grid/grid-item` to `_grid-item.scss` before `grid-item.scss`,
@@ -375,6 +449,31 @@ export function buildImportRows(errors, resolver, projectDir = '') {
     (a, b) =>
       a.where.localeCompare(b.where) || a.specifier.localeCompare(b.specifier),
   );
+}
+
+/**
+ * Find the probable source of a generated CSS declaration.
+ *
+ * Tokens are tried most distinctive first and the first one that narrows to a
+ * workable number of stylesheets wins. Nothing here is a mapping — it is a
+ * search — so the caller labels the result as likely rather than certain.
+ *
+ * @param {string|undefined} declaration - Offending CSS declaration.
+ * @param {ReturnType<createAssetResolver>} resolver - Asset resolver.
+ * @returns {{token: string, matches: Array<{file: string, line: number, text: string}>}|undefined} Best lead.
+ */
+export function findLikelySource(declaration, resolver) {
+  for (const token of extractSourceTokens(declaration)) {
+    const matches = resolver.findLiteral(token);
+
+    // Zero means the token did not survive compilation intact; too many means
+    // it is a keyword rather than a lead.
+    if (matches.length === 0 || matches.length > MAX_LITERAL_MATCHES) continue;
+
+    return { token, matches };
+  }
+
+  return undefined;
 }
 
 /**

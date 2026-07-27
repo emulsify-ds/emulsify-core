@@ -495,6 +495,34 @@ describe('raw dump suppression', () => {
     expect(base.error).not.toHaveBeenCalled();
   });
 
+  it('drops a message that is nothing but js stack frames', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordSyntaxError({ message: 'Unexpected token Comma' });
+
+    const base = baseLogger();
+    createReporterLogger(collector, base, { verbose: false }).error(
+      [
+        '    at Module. (/p/node_modules/lightningcss/node/index.js:56:14)',
+        '    at minifyCSS (/p/node_modules/vite/dist/node/chunks/node.js:22902:59)',
+      ].join('\n'),
+    );
+
+    expect(base.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps a message that merely mentions a stack frame', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordSyntaxError({ message: 'Unexpected token Comma' });
+
+    const base = baseLogger();
+    createReporterLogger(collector, base, { verbose: false }).error(
+      'Something broke\n    at Module. (/p/node_modules/x/index.js:1:1)',
+    );
+
+    // Only a message consisting purely of frames is noise.
+    expect(base.error).toHaveBeenCalled();
+  });
+
   it('keeps unrelated errors even when imports were captured', () => {
     const collector = createDiagnosticsCollector();
     collector.recordImportError({ file: '/p/a.scss', specifier: '../x' });
