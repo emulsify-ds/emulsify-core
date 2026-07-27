@@ -38,6 +38,28 @@ const stripAnsi = (value) =>
   String(value).replace(/\[[0-9;]*m/g, '');
 
 /**
+ * Matches Rolldown's raw failure dump.
+ *
+ * The dump repeats every error up to three times — message, cause, and stack —
+ * and appends a Dart Sass JS trace that points into `sass.dart.js` rather than
+ * anywhere in the project.
+ *
+ * @type {RegExp}
+ */
+const RAW_BUILD_DUMP =
+  /^\s*(?:Build failed with \d+ error|\[plugin [\w:-]+\]|Error: \[sass\]|\[sass\] )/;
+
+/**
+ * Determine whether the reporter should stand aside and let Vite speak.
+ *
+ * @param {object} [env] - Environment variables.
+ * @returns {boolean} TRUE when raw output should pass through.
+ */
+export function isVerbose(env = process.env) {
+  return Boolean(env.EMULSIFY_VERBOSE) && env.EMULSIFY_VERBOSE !== '0';
+}
+
+/**
  * Parse Vite's unresolved CSS asset notice.
  *
  * @param {string} message - Raw log message.
@@ -69,7 +91,9 @@ export function parseUnresolvedAsset(message) {
  * @param {import('vite').Logger} baseLogger - Logger to delegate to.
  * @returns {import('vite').Logger} Wrapped logger.
  */
-export function createReporterLogger(collector, baseLogger) {
+export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
+  const passRawThrough = verbose === undefined ? isVerbose() : verbose;
+
   /**
    * Record a message if it is one the reporter owns.
    *
@@ -82,6 +106,22 @@ export function createReporterLogger(collector, baseLogger) {
 
     collector.recordUnresolvedAsset(unresolvedAsset);
     return true;
+  };
+
+  /**
+   * Determine whether a failure dump has already been reported in table form.
+   *
+   * Output is only ever dropped once the reporter holds the same information
+   * in a readable shape; an error it failed to parse still reaches the user.
+   *
+   * @param {string} message - Raw log message.
+   * @returns {boolean} TRUE when the dump is redundant.
+   */
+  const isRedundantDump = (message) => {
+    if (passRawThrough) return false;
+    if (!collector.hasCapturedImportErrors?.()) return false;
+
+    return RAW_BUILD_DUMP.test(stripAnsi(String(message)));
   };
 
   return {
@@ -103,7 +143,10 @@ export function createReporterLogger(collector, baseLogger) {
       if (!capture(message)) baseLogger.warnOnce(message, options);
     },
 
-    error: (message, options) => baseLogger.error(message, options),
+    error(message, options) {
+      if (isRedundantDump(message)) return;
+      baseLogger.error(message, options);
+    },
 
     clearScreen: (type) => baseLogger.clearScreen(type),
 

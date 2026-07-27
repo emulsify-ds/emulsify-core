@@ -25,9 +25,17 @@
  * started by `develop`, and Storybook keeps printing its own ready box.
  */
 
-import { relative } from 'node:path';
+import { join, relative } from 'node:path';
 
-import { buildAssetRows, createAssetResolver } from './asset-resolver.js';
+import { existsSync } from 'node:fs';
+
+import {
+  buildAssetRows,
+  buildImportRows,
+  createAssetResolver,
+  sharedMissingDirectory,
+} from './asset-resolver.js';
+import { classifyBuildError } from './build-errors.js';
 import { renderBanner, renderRebuild, renderSummary } from './render.js';
 import { createStyler, supportsColor, supportsUnicode } from './format.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
@@ -170,10 +178,22 @@ export function developReporterPlugin({
       // Enriching costs a filesystem read per stylesheet, so it only runs when
       // the build actually produced unresolved URLs. A resolver is built per
       // cycle so its read cache never serves stale contents after an edit.
-      const assetRows =
-        snapshot.unresolvedAssets.length > 0
-          ? buildAssetRows(snapshot.unresolvedAssets, createAssetResolver(env))
-          : [];
+      const needsResolver =
+        snapshot.unresolvedAssets.length > 0 ||
+        snapshot.importErrors.length > 0;
+      const resolver = needsResolver ? createAssetResolver(env) : undefined;
+
+      const assetRows = resolver
+        ? buildAssetRows(snapshot.unresolvedAssets, resolver)
+        : [];
+
+      const importRows = resolver
+        ? buildImportRows(snapshot.importErrors, resolver, env.projectDir)
+        : [];
+      const sharedDirectory = sharedMissingDirectory(
+        importRows,
+        env.projectDir,
+      );
 
       emit(
         renderSummary({
@@ -183,6 +203,15 @@ export function developReporterPlugin({
           projectDir: env.projectDir,
           sourceGlob: resolveSourceGlob(env),
           assetRows,
+          importErrors: {
+            rows: importRows,
+            sharedDirectory,
+            directoryExists: Boolean(
+              sharedDirectory &&
+              env.projectDir &&
+              existsSync(join(env.projectDir, sharedDirectory)),
+            ),
+          },
           styler,
         }),
       );
@@ -233,7 +262,28 @@ export function developReporterPlugin({
 
     buildEnd(error) {
       if (!watching || !error) return;
-      diagnostics.recordError(normalizeBuildError(error));
+
+      // Rolldown wraps every failure of a cycle into one error whose message
+      // is just a count, so it has to be unpacked before anything useful can
+      // be reported.
+      const { importErrors, otherErrors } = classifyBuildError(error);
+
+      for (const importError of importErrors) {
+        diagnostics.recordImportError(importError);
+      }
+
+      for (const other of otherErrors) {
+        // The aggregate wrapper itself carries no location and would only add
+        // a row reading "Build failed with N errors".
+        if (
+          importErrors.length > 0 &&
+          /^Build failed with \d+ error/.test(other.message)
+        ) {
+          continue;
+        }
+        diagnostics.recordError(other);
+      }
+
       // A failed cycle never reaches writeBundle, so report from here instead.
       reportCycle();
     },

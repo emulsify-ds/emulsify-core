@@ -140,10 +140,13 @@ const groupDeprecationsByFile = (deprecationList) => {
  *   recordWarning: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
+ *   recordImportError: (entry: {file?: string, line?: number, specifier?: string}) => void,
+ *   hasCapturedImportErrors: () => boolean,
  *   snapshot: () => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
  *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
  *     unresolvedAssets: Array<{url: string, importer: string|undefined, count: number}>,
+ *     importErrors: Array<{file: string|undefined, line: number|undefined, specifier: string, count: number}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     deprecationTotal: number,
@@ -162,6 +165,8 @@ export function createDiagnosticsCollector() {
   let errors = new Map();
   /** @type {Map<string, {url: string, importer: string|undefined, count: number}>} */
   let unresolvedAssets = new Map();
+  /** @type {Map<string, object>} */
+  let importErrors = new Map();
 
   /**
    * Record one deprecation occurrence.
@@ -209,6 +214,29 @@ export function createDiagnosticsCollector() {
     recordError: (entry) => recordEntry(errors, entry),
 
     /**
+     * Record one Sass import that could not be resolved.
+     *
+     * Keyed by the importing site and the specifier, because the same missing
+     * partial reported through two entrypoints is one thing to fix.
+     *
+     * @param {{file?: string, line?: number, specifier?: string, statement?: string}} entry - Import error.
+     * @returns {void}
+     */
+    recordImportError(entry = {}) {
+      if (!entry.specifier) return;
+
+      const key = `${entry.file || '?'}:${entry.line ?? '?'}|${entry.specifier}`;
+      const existing = importErrors.get(key);
+
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+
+      importErrors.set(key, { ...entry, count: 1 });
+    },
+
+    /**
      * Record one CSS `url()` that Vite could not resolve at build time.
      *
      * Keyed by URL, because the same asset referenced from two stylesheets with
@@ -254,10 +282,17 @@ export function createDiagnosticsCollector() {
         (a, b) => b.count - a.count || a.url.localeCompare(b.url),
       );
 
+      const importErrorList = [...importErrors.values()].sort(
+        (a, b) =>
+          String(a.file).localeCompare(String(b.file)) ||
+          (a.line ?? 0) - (b.line ?? 0),
+      );
+
       return {
         deprecations: deprecationList,
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
         unresolvedAssets: unresolvedAssetList,
+        importErrors: importErrorList,
         warnings: warningList,
         errors: errorList,
         deprecationTotal: deprecationList.reduce(
@@ -269,15 +304,28 @@ export function createDiagnosticsCollector() {
           errorList.length > 0 ||
           warningList.length > 0 ||
           deprecationList.length > 0 ||
-          unresolvedAssetList.length > 0,
+          unresolvedAssetList.length > 0 ||
+          importErrorList.length > 0,
       };
     },
+
+    /**
+     * Whether any import error has been captured this cycle.
+     *
+     * The logger consults this before swallowing Rolldown's raw error dump, so
+     * output is only suppressed once the reporter has something to show in its
+     * place.
+     *
+     * @returns {boolean} TRUE when import errors were captured.
+     */
+    hasCapturedImportErrors: () => importErrors.size > 0,
 
     reset() {
       deprecations = new Map();
       warnings = new Map();
       errors = new Map();
       unresolvedAssets = new Map();
+      importErrors = new Map();
     },
   };
 }

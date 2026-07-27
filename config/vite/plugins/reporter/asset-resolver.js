@@ -18,7 +18,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { basename, relative } from 'node:path';
+import { basename, dirname, posix, relative, resolve } from 'node:path';
 
 import { walkFiles } from '../assets/source-file-index.js';
 
@@ -188,6 +188,29 @@ export function createAssetResolver({ projectDir = '' } = {}) {
     },
 
     /**
+     * Locate the first of several candidate filenames that exists.
+     *
+     * Sass tries a handful of names for one specifier, so the lookup has to
+     * try them in the same order rather than matching a single basename.
+     *
+     * @param {string[]} candidates - Candidate basenames, most likely first.
+     * @returns {{status: 'found'|'missing'|'unknown', label: string}} Location.
+     */
+    locateAny(candidates = []) {
+      const files = allFiles();
+      if (files.length === 0) return { status: 'unknown', label: '' };
+
+      for (const candidate of candidates) {
+        const hit = files.find((file) => basename(file) === candidate);
+        if (hit) {
+          return { status: 'found', label: toProjectPath(hit, projectDir) };
+        }
+      }
+
+      return { status: 'missing', label: 'not found' };
+    },
+
+    /**
      * Find the stylesheets that write this URL, with line numbers.
      *
      * @param {string} url - Unresolved asset URL.
@@ -287,6 +310,102 @@ export function createAssetResolver({ projectDir = '' } = {}) {
       return [];
     },
   };
+}
+
+/**
+ * Candidate filenames Sass would try for an import specifier.
+ *
+ * Sass resolves `grid/grid-item` to `_grid-item.scss` before `grid-item.scss`,
+ * and a bare directory to its `_index` partial.
+ *
+ * @param {string} specifier - Import specifier.
+ * @returns {string[]} Candidate basenames.
+ */
+export function sassImportCandidates(specifier) {
+  const name = basename(specifier);
+
+  return [
+    `_${name}.scss`,
+    `${name}.scss`,
+    `_${name}.sass`,
+    `${name}.sass`,
+    '_index.scss',
+    '_index.sass',
+  ];
+}
+
+/**
+ * Build rows for the missing-import table.
+ *
+ * Each row keeps the importing site and the specifier as written. The on-disk
+ * column distinguishes a partial that was deleted from one that merely moved,
+ * which is the difference between rewriting an import and restoring a file.
+ *
+ * @param {Array<{file?: string, line?: number, specifier: string}>} errors - Import errors.
+ * @param {ReturnType<createAssetResolver>} resolver - Asset resolver.
+ * @param {string} projectDir - Project root.
+ * @returns {Array<{where: string, specifier: string, status: string, label: string, expected: string|undefined}>} Rows.
+ */
+export function buildImportRows(errors, resolver, projectDir = '') {
+  const rows = errors.map((error) => {
+    const found = resolver.locateAny(sassImportCandidates(error.specifier));
+
+    // Where the specifier would have landed, used to derive the shared
+    // directory that every failing import points into.
+    const expected =
+      error.file && error.specifier
+        ? resolve(dirname(error.file), error.specifier)
+        : undefined;
+
+    return {
+      where: `${tailSegments(toProjectPath(error.file || '', projectDir))}${
+        error.line == null ? '' : `:${error.line}`
+      }`,
+      specifier: error.specifier,
+      expected,
+      ...(found.status === 'found'
+        ? { status: 'moved', label: `moved? ${found.label}` }
+        : found),
+    };
+  });
+
+  // Sorted on the shortened path that is actually displayed, so the column
+  // reads in order rather than by the absolute paths behind it.
+  return rows.sort(
+    (a, b) =>
+      a.where.localeCompare(b.where) || a.specifier.localeCompare(b.specifier),
+  );
+}
+
+/**
+ * Derive the deepest directory every failing import points into.
+ *
+ * When one deleted directory breaks a dozen imports, naming it once explains
+ * the whole failure better than any individual row can.
+ *
+ * @param {Array<{expected?: string}>} rows - Import rows.
+ * @param {string} projectDir - Project root.
+ * @returns {string|undefined} Shared project-relative directory.
+ */
+export function sharedMissingDirectory(rows, projectDir = '') {
+  const directories = rows
+    .map((row) => row.expected && dirname(row.expected))
+    .filter(Boolean)
+    .map((directory) => toProjectPath(directory, projectDir).split('/'));
+
+  if (directories.length === 0) return undefined;
+
+  const [first, ...rest] = directories;
+  const shared = [];
+
+  for (let index = 0; index < first.length; index += 1) {
+    const segment = first[index];
+    if (!rest.every((parts) => parts[index] === segment)) break;
+    shared.push(segment);
+  }
+
+  // A single shared segment is usually just `src`, which explains nothing.
+  return shared.length > 1 ? `${posix.join(...shared)}/` : undefined;
 }
 
 /**

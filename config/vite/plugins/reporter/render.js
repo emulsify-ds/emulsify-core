@@ -347,6 +347,84 @@ const ASSET_STATUS_COLORS = {
 };
 
 /**
+ * Column headings for the missing-import table.
+ *
+ * @type {{where: string, specifier: string, disk: string}}
+ */
+const IMPORT_HEADINGS = {
+  where: 'imported by',
+  specifier: 'import',
+  disk: 'on disk',
+};
+
+/**
+ * Render the missing Sass import block.
+ *
+ * Replaces Rolldown's aggregate dump, which prints every error three times
+ * with a Dart Sass stack trace attached. The table keeps one row per importing
+ * site and closes with the directory they all point into, because a deleted
+ * partial usually breaks several components at once.
+ *
+ * @param {Array<{where: string, specifier: string, status: string, label: string}>} rows - Import rows.
+ * @param {string|undefined} sharedDirectory - Directory every import resolves under.
+ * @param {boolean} directoryExists - Whether that directory is present.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Missing import lines.
+ */
+function renderImportErrors(rows, sharedDirectory, directoryExists, styler) {
+  if (rows.length === 0) return [];
+
+  const shown = rows.slice(0, MAX_ASSET_ROWS);
+  const distinct = new Set(rows.map((row) => row.specifier)).size;
+  const headline = [
+    pluralize(distinct, 'missing stylesheet'),
+    pluralize(rows.length, 'import error'),
+  ].join(SEPARATOR);
+
+  const whereWidth = Math.max(
+    IMPORT_HEADINGS.where.length,
+    ...shown.map((row) => row.where.length),
+  );
+  const specifierWidth = Math.max(
+    IMPORT_HEADINGS.specifier.length,
+    ...shown.map((row) => row.specifier.length),
+  );
+
+  const lines = [
+    `${INDENT}${styler('red', SYMBOLS.error)} ${styler('red', headline)}`,
+    '',
+    `${DETAIL_INDENT}${styler(
+      'gray',
+      `${IMPORT_HEADINGS.where.padEnd(whereWidth)}  ${IMPORT_HEADINGS.specifier.padEnd(specifierWidth)}  ${IMPORT_HEADINGS.disk}`,
+    )}`,
+  ];
+
+  for (const row of shown) {
+    const where = styler('cyan', row.where.padEnd(whereWidth));
+    const specifier = row.specifier.padEnd(specifierWidth);
+    const disk = styler(row.status === 'moved' ? 'yellow' : 'red', row.label);
+
+    lines.push(`${DETAIL_INDENT}${where}  ${specifier}  ${disk}`.trimEnd());
+  }
+
+  const hidden = rows.length - MAX_ASSET_ROWS;
+  if (hidden > 0) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+    );
+  }
+
+  if (sharedDirectory) {
+    const cause = directoryExists
+      ? `all ${rows.length} resolve under ${sharedDirectory}`
+      : `all ${rows.length} resolve under ${sharedDirectory} — directory not found`;
+    lines.push('', `${DETAIL_INDENT}${styler('gray', cause)}`);
+  }
+
+  return lines;
+}
+
+/**
  * Render the unresolved CSS asset block.
  *
  * Vite prints one of these per `url()` it cannot resolve, mid-build and in
@@ -423,8 +501,26 @@ function renderUnresolvedAssets(rows, styler) {
  * @param {Array<object>} assetRows - Enriched unresolved asset rows.
  * @returns {string[]} Problem lines.
  */
-function renderProblems(snapshot, projectDir, styler, sourceGlob, assetRows) {
+function renderProblems(
+  snapshot,
+  projectDir,
+  styler,
+  sourceGlob,
+  assetRows,
+  importErrors,
+) {
   const lines = [];
+
+  const importLines = renderImportErrors(
+    importErrors.rows || [],
+    importErrors.sharedDirectory,
+    Boolean(importErrors.directoryExists),
+    styler,
+  );
+  if (importLines.length > 0) {
+    lines.push('');
+    lines.push(...importLines);
+  }
 
   if (snapshot.errors.length > 0) {
     lines.push('');
@@ -472,6 +568,7 @@ function renderProblems(snapshot, projectDir, styler, sourceGlob, assetRows) {
  *   projectDir?: string,
  *   sourceGlob?: string,
  *   assetRows?: Array<object>,
+ *   importErrors?: {rows?: Array<object>, sharedDirectory?: string, directoryExists?: boolean},
  *   styler: (format: string|string[], text: string) => string
  * }} options - Summary inputs.
  * @returns {string[]} Summary lines.
@@ -483,9 +580,11 @@ export function renderSummary({
   projectDir = '',
   sourceGlob = 'src/**/*.scss',
   assetRows = [],
+  importErrors = {},
   styler,
 }) {
-  const failed = snapshot.errors.length > 0;
+  const failed =
+    snapshot.errors.length > 0 || (importErrors.rows || []).length > 0;
   const symbol = failed
     ? styler('red', SYMBOLS.error)
     : styler('green', SYMBOLS.ok);
@@ -495,7 +594,14 @@ export function renderSummary({
 
   const lines = [
     `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${outDir}`)}`,
-    ...renderProblems(snapshot, projectDir, styler, sourceGlob, assetRows),
+    ...renderProblems(
+      snapshot,
+      projectDir,
+      styler,
+      sourceGlob,
+      assetRows,
+      importErrors,
+    ),
     '',
   ];
 

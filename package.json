@@ -66,6 +66,7 @@
     "config/vite/plugins/assets/svg-sprite.js",
     "config/vite/plugins/index.js",
     "config/vite/plugins/reporter/asset-resolver.js",
+    "config/vite/plugins/reporter/build-errors.js",
     "config/vite/plugins/reporter/diagnostics.js",
     "config/vite/plugins/reporter/format.js",
     "config/vite/plugins/reporter/index.js",
