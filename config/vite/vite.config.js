@@ -13,7 +13,18 @@
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *
  * Notes:
- * - CSS & JS sourcemaps are enabled.
+ * - JS sourcemaps come from `build.sourcemap`. Extracted CSS gets no map from
+ *   `vite build`: `vite:css-post` emits CSS through
+ *   `this.emitFile({ type: 'asset' })`, Rollup/Rolldown assets carry no map,
+ *   and `finalizeCss()` -> `minifyCSS()` returns code only. To trace a rule
+ *   back to its `.scss` partial, let Vite compile the SCSS in Storybook: set
+ *   `parameters.emulsify.loadAllCSS = false` in
+ *   `config/emulsify-core/storybook/preview.js` and import the SCSS entry
+ *   there, so `css.devSourcemap` can chain the map to source. Loading the
+ *   compiled CSS instead yields an identity map whose only source is the
+ *   compiled `.css` file.
+ * - CSS is left unminified during `vite build --watch` so the develop loop
+ *   stays readable; one-shot builds keep minification.
  * - CSS assets keep their path and drop the internal `__style` suffix if present.
  */
 
@@ -100,6 +111,9 @@ export default defineConfig(async () => {
     resolve: mergeReactSingletonResolve(),
 
     // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
+    // These map only what Vite itself compiles. A preview that imports
+    // already-compiled CSS gets an identity map pointing at that `.css` file,
+    // so import SCSS entries when styles need to resolve to their partials.
     css: {
       devSourcemap: true,
 
@@ -119,8 +133,15 @@ export default defineConfig(async () => {
       // All outputs are written into ./dist/
       outDir: 'dist/',
 
-      // Emit production sourcemaps as well.
+      // Emit JS sourcemaps. Extracted CSS is not covered; see the file header.
       sourcemap: true,
+
+      // Vite cannot map extracted CSS, so during `vite build --watch` the
+      // readable stylesheet is the debugging aid: keep it unminified so
+      // devtools shows one declaration per line instead of a single long line.
+      // One-shot `vite build`, `storybook build`, and the release fixture
+      // verifications still minify, so nothing a platform ships changes.
+      cssMinify: !watching,
 
       rollupOptions: {
         // Multi-entry input map constructed above.

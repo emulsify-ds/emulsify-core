@@ -3,6 +3,13 @@
  *
  * Rewrites emitted CSS references to root assets so nested CSS files can keep
  * resolving copied assets correctly from their final output directories.
+ *
+ * Sourcemap warning: this rewrites emitted CSS in `generateBundle` without
+ * adjusting positions, and every replacement changes the length of the line it
+ * sits on. Vite does not emit sourcemaps for extracted CSS today, so there is
+ * nothing to invalidate. If CSS sourcemaps are ever added, this plugin has to
+ * shift mappings as it rewrites (for example via MagicString) or each mapping
+ * after the first rewritten `url()` will silently resolve to the wrong column.
  */
 
 import { posix as pathPosix } from 'path';
@@ -26,6 +33,8 @@ export function cssAssetUrlRelativizer({ assetsRoot = 'assets' } = {}) {
 
         const fromDir = pathPosix.dirname(fileName);
 
+        // Length-changing rewrite: read the sourcemap warning in the file
+        // header before pairing this plugin with CSS sourcemaps.
         chunk.source = chunk.source.replace(
           /url\((['"]?)\/?assets\/([^)'"]+)\1\)/g,
           (match, quote = '', rest) => {
