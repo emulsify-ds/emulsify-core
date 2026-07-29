@@ -264,7 +264,7 @@
     "esbuild@0.28.1": true,
     "fsevents@2.3.3": true,
     "puppeteer@24.43.1": true,
-    "puppeteer@25.3.0": true,
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "puppeteer@25.4.0": true
   }
 }
