@@ -6,9 +6,10 @@
  */
 
 export default {
-  storybookBuildDir: '../../../../.out',
+  storybookBuildDir: '.out',
   discoverStories: true,
   pa11y: {
+    actions: ['wait for element #storybook-root > * to be visible'],
     includeNotices: false,
     includeWarnings: false,
     runners: ['axe'],

@@ -7,7 +7,7 @@ import {
   attachStorybookBehaviors,
   normalizeStorybookPlatformAdapter,
 } from './platform-behaviors.js';
-import { TWIG_SOURCE_LOADED_EVENT } from './twig/source-events.js';
+import { TWIG_SOURCE_LOADED_EVENT } from './twig/constants.js';
 
 /**
  * Read the normalized Emulsify environment injected by Storybook's Vite config.

@@ -5,13 +5,18 @@ These docs expand on the short project README and are organized by the task a pr
 | Topic                                                | Use This When                                                                                                         |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | [Version Evolution](version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |
-| [Component Authoring](component-authoring.md)        | Choosing Twig, React, or mixed Storybook authoring and comparing component examples.                                  |
-| [Storybook](storybook.md)                            | Rendering Twig stories, using `renderTwig()`, understanding Twig runtime helpers, and mixing Twig with React stories. |
+| [Component Authoring](component-authoring.md)        | Choosing Twig, React, custom element, or mixed Storybook authoring and comparing component examples.                  |
+| [Storybook](storybook.md)                            | Rendering Twig and custom element stories, using public helpers, and mixing authoring models.                         |
 | [Project Structure And Output](project-structure.md) | Configuring `src/components`, root `./components`, `variant.structureImplementations`, asset roots, and output paths. |
 | [Asset References](asset-references.md)              | Referencing fonts, SVGs, images, and other files from project root or configured asset roots in Sass, CSS, and Twig.  |
 | [Platform Adapters](platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
 | [Extension Points](extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
+| [Dependency Contract](dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                                |
 | [Performance](performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, Storybook `include()`/`source()`, and `switch/case/default/endswitch` in Twig.js.  |
+| [Component Inspector](component-inspector.md)        | Listing recognized Twig component templates, exact references, shorthand collisions, and expected output paths.       |
+| [Project Audit](audit.md)                            | Running human or versioned JSON project audits and configuring CI failure thresholds.                                 |
 | [Release Verification](release.md)                   | Running 4.x release checks, tarball smoke tests, and semantic-release dry runs before publishing.                     |
-| [Migration](migration-4x.md)                         | Upgrading from earlier versions while preserving existing structures.                                                 |
+| [Release Pull Request Review](release-review.md)     | Reviewing large release pull requests by independent API, runtime, consumer, accessibility, and release risks.        |
+| [Migration To 4.x](migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                             |
+| [4.3.0 Release Notes](releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.                |

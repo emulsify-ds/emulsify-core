@@ -1,6 +1,10 @@
 # Component Authoring
 
-Emulsify Core supports component-driven development with Vite and Storybook. Twig-based components and React components are both complete, intentional authoring models. A project can be Twig-first, React-first, or intentionally mixed.
+Emulsify Core supports component-driven development with Vite and Storybook.
+Twig and React have complete authoring workflows. Autonomous custom elements
+have a focused Storybook adapter for property or attribute args, default-slot
+content, and explicitly mapped native events. A project can use any one of
+these approaches or intentionally mix them.
 
 ## Choosing An Authoring Model
 
@@ -8,7 +12,14 @@ Twig is a good fit for CMS themes and server-rendered template systems where pro
 
 React is a good fit for standalone UI packages, application components, and design systems consumed by React applications.
 
-Mixed libraries use Twig and React in the same Storybook instance. This works well when a design system needs to document both CMS-rendered components and JavaScript-rendered application components.
+Autonomous custom elements are a good fit for framework-neutral JavaScript
+components, design systems consumed by multiple applications, and small
+interactive elements that should not require React at runtime.
+
+Mixed libraries use Twig, React, and custom-element stories in the same
+Storybook instance. This works well when a design system needs to document
+CMS-rendered components, framework-rendered components, and framework-neutral
+browser components together.
 
 ## Twig Component Libraries
 
@@ -75,9 +86,98 @@ export const Default = {
 };
 ```
 
-## Mixed Twig And React Storybook Libraries
+## Custom Element Stories
 
-Twig and React stories can share the same title hierarchy, Storybook addons, Sass conventions, and project structure. They do not need to share implementation details.
+Autonomous custom elements render through the same React/Vite Storybook
+framework using `renderWebComponent()` from `@emulsify/core/storybook`. The
+helper returns a normal Storybook render function, creates the custom element,
+and synchronizes Storybook args through its DOM API.
+
+Register the browser custom element with `defineCustomElement()`. Repeated
+evaluation with the same constructor is a no-op. If HMR supplies a different
+constructor for an existing tag, the helper warns and returns the
+browser-registered constructor; refresh Storybook to load the new class.
+
+```js
+import {
+  defineCustomElement,
+  renderWebComponent,
+} from '@emulsify/core/storybook';
+import { fn } from 'storybook/test';
+import { GreetingCardElement } from './greeting-card.js';
+
+defineCustomElement('greeting-card', GreetingCardElement);
+
+export default {
+  title: 'Components/Greeting Card',
+  render: renderWebComponent('greeting-card', {
+    events: {
+      'greeting-select': 'onGreetingSelect',
+    },
+  }),
+  args: {
+    heading: 'Hello',
+    body: 'Rendered as a vanilla custom element.',
+    children: 'Content for the default slot',
+    onGreetingSelect: fn(),
+  },
+};
+
+export const Default = {};
+```
+
+By default, `renderWebComponent()` applies args as DOM properties:
+
+```js
+render: renderWebComponent('greeting-card', {
+  argsAs: 'properties',
+});
+```
+
+Property mode preserves object, array, and function references, which is
+usually the right choice for custom elements with JavaScript APIs. When a
+control update omits a property that was previously present, the renderer
+assigns `undefined` so custom setters can clear stale state. Attribute mode is
+available when a component is designed around attributes:
+
+```js
+render: renderWebComponent('greeting-card', {
+  argsAs: 'attributes',
+});
+```
+
+Attribute mode stringifies non-boolean values, writes `true` booleans as empty
+attributes, and removes attributes for `false`, `null`, `undefined`, or a key
+omitted by a later args object.
+
+`args.children` is rendered as light DOM for a component's unnamed default
+slot. The `events` option maps a native event name to a Storybook callback arg;
+the callback receives the original `Event` or `CustomEvent`, including
+`event.detail`. Mapped callback args are not assigned as element properties or
+attributes.
+
+`defineCustomElement()` validates the browser's custom-element naming rules,
+reserved names, and that the constructor inherits from `HTMLElement` before it
+uses the native registry.
+
+Renderer `id` and `className` options apply to the custom element when there is
+no wrapper. When `wrapper` is set, those options apply to the wrapper instead.
+Storybook args always apply to the custom element and win while present.
+Renderer options are never forwarded as element args.
+
+The initial adapter intentionally supports autonomous custom elements and an
+unnamed default slot. `defineCustomElement()` rejects customized built-in
+constructors and registration options, and the renderer does not provide
+named-slot composition. Native events must be listed in `events`; the renderer
+does not infer React synthetic `on*` handlers. See
+[Storybook Known Limitations](storybook.md#known-limitations) for the complete
+boundary.
+
+## Mixed Twig, React, And Custom Element Storybook Libraries
+
+Twig, React, and custom-element stories can share the same title hierarchy,
+Storybook addons, Sass conventions, and project structure. They do not need to
+share implementation details.
 
 ```text
 src/
@@ -91,9 +191,21 @@ src/
       mount.jsx
       badge.stories.jsx
       badge.scss
+    greeting-card/
+      greeting-card.js
+      greeting-card.stories.js
 ```
 
-Both stories appear in the same Storybook instance. Twig stories should use `renderTwig(template, { context })` for imported Twig templates when authored or actively migrated. Older Twig stories that return HTML strings directly remain compatible through the shared Storybook preview, but the `renderTwig()` shape is easier to maintain because it makes the Twig context mapping explicit. React stories use standard Storybook React component or render-function patterns. A colocated `.jsx` mount file can be used as the production Vite entry when a CMS needs a browser bundle for that React component.
+All stories appear in the same Storybook instance. Twig stories should use
+`renderTwig(template, { context })` for imported Twig templates when authored
+or actively migrated. Older Twig stories that return HTML strings directly
+remain compatible through the shared Storybook preview, but the `renderTwig()`
+shape is easier to maintain because it makes the Twig context mapping explicit.
+React stories use standard Storybook React component or render-function
+patterns. Custom-element stories use `defineCustomElement()` and
+`renderWebComponent()`. A colocated `.jsx` mount file can be used as the
+production Vite entry when a CMS needs a browser bundle for that React
+component.
 
 ## WordPress And Timber Themes
 

@@ -6,6 +6,7 @@
  */
 
 import { unique } from '../../extensions/shared/lists.js';
+import { toRootRelativePath as toProjectRootRelativePath } from '../../extensions/shared/root-relative.js';
 
 const ENV = (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};
 
@@ -15,8 +16,6 @@ let rootRecordsCache = new WeakMap();
 /** @type {object[]|undefined} */
 let defaultRecords;
 
-const normalizeGlobPath = (filePath) => filePath.replace(/\\/g, '/');
-
 /**
  * Convert an absolute project path to a Vite root-relative key.
  *
@@ -25,17 +24,7 @@ const normalizeGlobPath = (filePath) => filePath.replace(/\\/g, '/');
  * @returns {string} Root-relative path with a leading slash.
  */
 export function toRootRelativePath(absolutePath, env = ENV) {
-  if (!absolutePath) return '';
-
-  const normalizedPath = normalizeGlobPath(absolutePath);
-  const projectDir = normalizeGlobPath(env?.projectDir || '');
-
-  if (projectDir && normalizedPath.startsWith(projectDir)) {
-    const relativePath = normalizedPath.slice(projectDir.length);
-    return relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
-  }
-
-  return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  return toProjectRootRelativePath(env?.projectDir, absolutePath);
 }
 
 /**

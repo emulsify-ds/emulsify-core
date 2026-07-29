@@ -14,17 +14,9 @@ import { sep } from 'path';
  * @param {string} filePath - Filesystem path.
  * @returns {string} Path using forward slashes.
  */
-export function toPosix(filePath) {
+export function toPosixPath(filePath) {
   return filePath.split(sep).join('/').replace(/\\/g, '/');
 }
-
-/**
- * Normalize a filesystem path to POSIX separators.
- *
- * @param {string} filePath - Filesystem path.
- * @returns {string} Path using forward slashes.
- */
-export const toPosixPath = toPosix;
 
 /**
  * Replace the final slash in a POSIX path with a custom segment.

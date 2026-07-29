@@ -1,6 +1,9 @@
 # Storybook
 
-Emulsify Core uses `@storybook/react-vite`. React components render directly through Storybook's React framework, and Twig templates render through Emulsify's Twig story helper.
+Emulsify Core uses `@storybook/react-vite`. React components render directly
+through Storybook's React framework, Twig templates render through Emulsify's
+Twig story helper, and autonomous custom elements render through a focused
+custom-element adapter.
 
 ## Twig Stories
 
@@ -93,7 +96,10 @@ node scripts/audit.js --root /path/to/project
 
 For only the Twig story migration report, use `npm run audit:twig-stories` from this repo or `npx --no-install emulsify-audit-twig-stories` from a consuming project.
 
-Add `--fail-on-found` when using the audit in CI during a migration push.
+For the combined project audit, use `emulsify-audit --fail-on warn` when errors
+and warnings should fail CI. The focused `emulsify-audit-twig-stories` command
+continues to use `--fail-on-found`. See [Project Audit](audit.md) for the
+versioned JSON schema and complete exit behavior.
 
 ## Pa11y Accessibility Checks
 
@@ -116,6 +122,10 @@ By default, Pa11y reads Storybook story IDs from the built Storybook
 `config/emulsify-core/a11y.config.js` are merged with discovered IDs and
 deduplicated, so projects can keep explicit coverage for stories that are not
 present in the generated index:
+
+Both paths are resolved from the consuming project's current working
+directory. During the scan, Core serves the static Storybook build on a
+loopback-only HTTP origin so its browser modules load normally.
 
 ```js
 export default {
@@ -155,6 +165,153 @@ export const Default = {};
 ```
 
 Twig and React stories are discovered from the same normalized story roots. They can share title hierarchy, Sass conventions, global preview configuration, and addons.
+
+## Custom Element Stories
+
+Custom-element stories use the browser custom element registry plus
+`defineCustomElement()` and `renderWebComponent()` from
+`@emulsify/core/storybook`.
+
+```js
+import {
+  defineCustomElement,
+  renderWebComponent,
+} from '@emulsify/core/storybook';
+import { fn } from 'storybook/test';
+import { GreetingCardElement } from './greeting-card.js';
+
+defineCustomElement('greeting-card', GreetingCardElement);
+
+export default {
+  title: 'Components/Greeting Card',
+  render: renderWebComponent('greeting-card', {
+    argsAs: 'properties',
+    events: {
+      'greeting-select': 'onGreetingSelect',
+    },
+  }),
+  args: {
+    heading: 'Hello',
+    body: 'Rendered as a vanilla custom element.',
+    children: 'Content for the default slot',
+    onGreetingSelect: fn(),
+  },
+};
+
+export const Default = {};
+```
+
+`defineCustomElement()` validates the browser's custom-element name rules and
+requires a constructable class whose prototype inherits from `HTMLElement`. It
+is idempotent when the same tag and constructor are evaluated again. If HMR
+supplies a different constructor for an existing tag, the helper warns and
+returns the constructor already in the browser registry. The registry cannot
+replace a definition, so refresh Storybook to use the new class.
+
+`renderWebComponent()` applies Storybook args through the custom element's DOM
+API. The `argsAs` option accepts only `properties` or `attributes` and reports a
+configuration error for any other value. Property mode is the default and
+preserves object, array, and function references:
+
+```js
+render: renderWebComponent('greeting-card', {
+  argsAs: 'properties',
+});
+```
+
+When a later args object omits a property that was previously applied, the
+renderer assigns `undefined`. This lets custom setters clear their internal
+state instead of retaining an earlier control value.
+
+Attribute mode is available for elements that use attributes as their public
+API. It stringifies values, writes `true` booleans as empty attributes, and
+removes attributes for `false`, `null`, `undefined`, or a key omitted by a
+later args object:
+
+```js
+render: renderWebComponent('greeting-card', {
+  argsAs: 'attributes',
+});
+```
+
+### Children And The Default Slot
+
+`args.children` becomes React-managed light DOM inside the custom element. A
+component with an unnamed `<slot>` can use it as straightforward default-slot
+content:
+
+```js
+export const WithSupportingText = {
+  args: {
+    children: 'Supporting text',
+  },
+};
+```
+
+Strings are inserted as text, not HTML. React-renderable nodes are also
+supported. When a later args object omits `children`, the old light DOM is
+removed.
+
+### Native Custom Events
+
+Use the `events` option to map native event types to Storybook callback args:
+
+```js
+render: renderWebComponent('greeting-card', {
+  events: {
+    'greeting-select': 'onGreetingSelect',
+  },
+});
+```
+
+The mapped callback receives the original native `Event` or `CustomEvent`, so
+custom payloads remain available through `event.detail`. The renderer updates
+the listener when controls change and removes it on unmount. Mapped callback
+args are not assigned as DOM properties or attributes, and React synthetic
+event naming is not inferred. Assign Storybook's `fn()` to the callback arg, as
+shown above, to record calls in the Actions panel and make the callback
+available to interaction tests.
+
+For events created inside a shadow root, set `composed: true` when the event
+should cross the shadow boundary and `bubbles: true` when it should continue
+through ancestor elements. A component can instead redispatch its public event
+from the custom-element host.
+
+### Wrapper, Class, And ID
+
+Without a wrapper, renderer `id` and `className` options apply to the custom
+element. With `wrapper`, those two options apply to the wrapper:
+
+```js
+render: renderWebComponent('greeting-card', {
+  wrapper: 'section',
+  id: 'greeting-card-story',
+  className: 'story-frame',
+});
+```
+
+Storybook args always target the custom element, even in wrapper mode. An arg
+for `id` or `className` in property mode, or `id` or `class` in attribute mode,
+wins while it is present. Renderer options such as `argsAs`, `events`, and
+`wrapper` are never forwarded to the custom element.
+
+### Known Limitations
+
+- The adapter supports autonomous custom-element tags.
+  `defineCustomElement()` rejects customized built-in constructors and
+  registration options such as `{ extends: 'button' }`; markup such as
+  `<button is="custom-button">` is not supported.
+- `args.children` covers an unnamed default slot. There is no named-slot
+  composition API in this initial release.
+- Native events require an explicit `events` mapping. The renderer does not
+  convert React-style `on*` args into native listeners.
+- The custom element registry is permanent for the page. A different
+  constructor supplied during HMR produces a warning and requires a full
+  Storybook refresh.
+- Shadow DOM components may need extra accessibility test configuration.
+  Storybook's a11y addon and axe-based checks do not automatically inspect
+  every shadow root in every setup; configure axe traversal when accessible UI
+  lives inside a shadow tree.
 
 ## Storybook Twig Runtime
 
@@ -208,7 +365,10 @@ npm run fixtures:release -- --fixture large-twig-storybook
 
 The `large-twig-storybook` fixture prints Storybook build time, static output size, and the generated Twig component count. Those numbers are intended for trend comparison between branches and machines, not as fixed performance budgets.
 
-A lazy resolver/cache model is feasible later because the resolver already centralizes template and source lookup behind `createTwigResolver()`. That change should be handled separately from this release because it would alter how Twig modules are loaded, watched, and cached in Storybook.
+Compiled Twig modules are not lazy-loaded because stories need synchronous
+render functions. Changing that boundary would alter how Twig modules are
+loaded, watched, and invalidated in Storybook; raw Twig and text asset sources
+already load lazily through `source()`.
 
 ## `include()`
 
@@ -286,6 +446,10 @@ Text assets such as SVG, HTML, Twig, CSS, JavaScript, JSON, TXT, and Markdown ar
 
 Configured asset roots must resolve inside the project root. Unsafe paths are ignored.
 
+The generated asset map and its cache runtime are Core implementation details,
+not supported JavaScript import paths. Projects configure `assets.roots` and
+consume this behavior through Twig's `source()` function.
+
 The generated sprite is a special asset alias: `source('@assets/icons.svg')` resolves `dist/assets/icons.svg` before checking root `assets/icons.svg`. Other `@assets/...` SVG references resolve through the project asset roots, so `source('@assets/icons/arrow.svg')` reads `assets/icons/arrow.svg` when that file exists.
 
 The first text source call lazy-loads the raw text and triggers a re-render; later calls return the cached text synchronously.
@@ -311,7 +475,10 @@ URLs behave in Storybook and built platform CSS.
 
 Legacy stories that use `require.context()` to list static assets are converted to a static key list for common asset extensions. This lets stories enumerate files such as `assets/icons/*.svg` without loading those SVGs as JavaScript modules.
 
-The old synchronous XHR fallback for text assets is disabled by default because it blocks Storybook rendering. It remains available as a temporary compatibility fallback for assets outside the virtual asset roots:
+The old synchronous XHR fallback for text assets is disabled by default because
+it blocks Storybook rendering. Its deprecated opt-in is reached only when the
+generated module reports no asset-root coverage; it is not a general fallback
+for a missing file in an active asset map:
 
 ```js
 export const platformAdapter = {
@@ -321,7 +488,9 @@ export const platformAdapter = {
 };
 ```
 
-Move text assets used by `source('@assets/...')` into `src/assets`, `assets`, or a configured asset root instead. The sync-XHR fallback is deprecated and scheduled for removal in a future major release.
+Move text assets used by `source('@assets/...')` into `src/assets`, `assets`, or
+a configured asset root instead. The sync-XHR fallback is scheduled for
+removal in a future major release.
 
 ## Mixed Twig And React Folder Example
 

@@ -17,21 +17,10 @@ function normalizePackagePath(filePath) {
   return posix.normalize(filePath).replace(/^\.\//, '');
 }
 
-function isPackagedFile(filePath, packageFiles) {
-  const normalized = normalizePackagePath(filePath);
-
-  return packageFiles.some((entry) => {
-    if (entry === normalized) return true;
-    if (entry.endsWith('/**/*')) {
-      return normalized.startsWith(entry.replace('/**/*', '/'));
-    }
-    return false;
-  });
-}
-
 function isRelativeJsSpecifier(value) {
   return (
-    (value.startsWith('./') || value.startsWith('../')) && value.endsWith('.js')
+    (value.startsWith('./') || value.startsWith('../')) &&
+    (value.endsWith('.js') || !posix.extname(value))
   );
 }
 
@@ -101,15 +90,37 @@ function dryRunPackFiles() {
   return pack.files.map(({ path: filePath }) => normalizePackagePath(filePath));
 }
 
-function matchesForbiddenPackagePath(filePath, prefixes, suffixes) {
+function matchesForbiddenPackagePath(filePath, prefixes, suffixes, segments) {
   return (
     prefixes.some((prefix) => filePath.startsWith(prefix)) ||
-    suffixes.some((suffix) => filePath.endsWith(suffix))
+    suffixes.some((suffix) => filePath.endsWith(suffix)) ||
+    segments.some((segment) => filePath.split('/').includes(segment))
   );
 }
 
 describe('@emulsify/core package exports', () => {
-  it('imports each public export with native Node ESM resolution', () => {
+  it('resolves every public export with native Node ESM', () => {
+    const specifiers = Object.keys(packageJson.exports).map((exportPath) =>
+      exportPath === '.'
+        ? packageJson.name
+        : `${packageJson.name}${exportPath.slice(1)}`,
+    );
+    const script = `
+      const specifiers = ${JSON.stringify(specifiers)};
+      for (const specifier of specifiers) {
+        const resolved = import.meta.resolve(specifier);
+        if (!resolved.startsWith('file:')) {
+          throw new Error(\`Unexpected resolution for \${specifier}: \${resolved}\`);
+        }
+      }
+    `;
+
+    expect(() => {
+      execFileSync(process.execPath, ['--input-type=module', '--eval', script]);
+    }).not.toThrow();
+  });
+
+  it('imports each Node-loadable public export with native Node ESM', () => {
     const checks = [
       ['@emulsify/core', ['react', 'twig']],
       ['@emulsify/core/extensions', ['react', 'twig']],
@@ -123,7 +134,14 @@ describe('@emulsify/core package exports', () => {
       ],
       [
         '@emulsify/core/storybook',
-        ['renderHtmlStoryResult', 'renderTwig', 'TwigHtmlStory', 'TwigStory'],
+        [
+          'defineCustomElement',
+          'renderHtmlStoryResult',
+          'renderTwig',
+          'renderWebComponent',
+          'TwigHtmlStory',
+          'TwigStory',
+        ],
       ],
       [
         '@emulsify/core/storybook/twig/include-function',
@@ -154,12 +172,18 @@ describe('@emulsify/core package exports', () => {
       if (typeof renderTwig !== 'function') {
         throw new Error('renderTwig is not a function');
       }
-      try {
-        await import('@emulsify/core/config/vite/project-config.js');
-        throw new Error('Internal project-config import unexpectedly succeeded');
-      } catch (error) {
-        if (error?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
-          throw error;
+      const internalSpecifiers = [
+        '@emulsify/core/config/vite/project-config.js',
+        '@emulsify/core/storybook/twig/asset-source-runtime',
+      ];
+      for (const specifier of internalSpecifiers) {
+        try {
+          await import(specifier);
+          throw new Error(\`Internal import unexpectedly succeeded: \${specifier}\`);
+        } catch (error) {
+          if (error?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+            throw error;
+          }
         }
       }
     `;
@@ -170,21 +194,28 @@ describe('@emulsify/core package exports', () => {
   });
 
   it('exposes renderTwig from the Storybook public entry', async () => {
-    const { renderTwig } = await import('@emulsify/core/storybook');
+    const { defineCustomElement, renderTwig, renderWebComponent } =
+      await import('@emulsify/core/storybook');
 
+    expect(typeof defineCustomElement).toBe('function');
     expect(typeof renderTwig).toBe('function');
+    expect(typeof renderWebComponent).toBe('function');
   });
 
   it('does not expose internal implementation subpaths to Jest resolution', async () => {
-    await expect(
-      import('@emulsify/core/config/vite/project-config.js'),
-    ).rejects.toThrow();
+    for (const specifier of [
+      '@emulsify/core/config/vite/project-config.js',
+      '@emulsify/core/storybook/twig/asset-source-runtime',
+    ]) {
+      await expect(import(specifier)).rejects.toThrow();
+    }
   });
 
   it('packages relative JavaScript imports used by packaged files', () => {
-    const packageFiles = packageJson.files.map(normalizePackagePath);
-    const packageJsFiles = packageFiles.filter(
-      (filePath) => filePath.endsWith('.js') && !filePath.includes('*'),
+    const packageFiles = dryRunPackFiles();
+    const packageFileSet = new Set(packageFiles);
+    const packageJsFiles = packageFiles.filter((filePath) =>
+      filePath.endsWith('.js'),
     );
     const missingImports = [];
 
@@ -196,9 +227,16 @@ describe('@emulsify/core package exports', () => {
           posix.join(posix.dirname(filePath), specifier),
         );
 
+        // Some packaged Storybook files intentionally load consumer-project
+        // overrides outside the package root.
         if (resolvedPath.startsWith('../')) continue;
 
-        if (!isPackagedFile(resolvedPath, packageFiles)) {
+        const importCandidates = posix.extname(resolvedPath)
+          ? [resolvedPath]
+          : [resolvedPath, `${resolvedPath}.js`, `${resolvedPath}/index.js`];
+        if (
+          !importCandidates.some((candidate) => packageFileSet.has(candidate))
+        ) {
           missingImports.push(
             `${filePath} imports ${specifier} (${resolvedPath})`,
           );
@@ -221,7 +259,14 @@ describe('@emulsify/core package exports', () => {
       '.storybook/preview.js',
       'config/vite/vite.config.js',
       'config/vite/plugins.js',
+      'scripts/audit.js',
+      'scripts/audit-twig-stories.js',
+      'scripts/audit/index.js',
+      'scripts/audit/report.js',
+      'scripts/inspect-components.js',
       'src/storybook/index.js',
+      'src/storybook/render-web-component.js',
+      'src/storybook/twig/asset-source-runtime.js',
       'src/extensions/index.js',
       'src/extensions/react/index.js',
       'src/extensions/twig/index.js',
@@ -230,11 +275,17 @@ describe('@emulsify/core package exports', () => {
       '.github/workflows/lint.yml',
       'config/jest.config.js',
       'config/jest-transform-import-meta-url.js',
+      'config/release-analysis.cjs',
       'config/vite/test-utils/virtual-twig-asset-sources.js',
       'config/vite/test-utils/virtual-twig-globs.js',
       'release.config.cjs',
       'scripts/bump-version-from-commits.js',
+      'scripts/consumer-fixtures.js',
       'scripts/release-fixtures.js',
+      'scripts/lib/consumer-contract.js',
+      'scripts/smoke-pack.js',
+      'scripts/test-custom-element-storybook.js',
+      'scripts/verify-release-analysis.js',
     ];
     const forbiddenPrefixes = [
       '.coverage/',
@@ -244,7 +295,18 @@ describe('@emulsify/core package exports', () => {
       'dist/',
       'src/components/',
     ];
-    const forbiddenSuffixes = ['.test.js', '.test.jsx'];
+    const forbiddenSuffixes = [
+      '.snap',
+      '.spec.js',
+      '.spec.jsx',
+      '.spec.ts',
+      '.spec.tsx',
+      '.test.js',
+      '.test.jsx',
+      '.test.ts',
+      '.test.tsx',
+    ];
+    const forbiddenSegments = ['__snapshots__'];
 
     for (const filePath of requiredFiles) {
       expect(packFileSet.has(filePath)).toBe(true);
@@ -252,6 +314,10 @@ describe('@emulsify/core package exports', () => {
 
     for (const exportTarget of collectExportTargets(packageJson.exports)) {
       expect(packFileSet.has(exportTarget)).toBe(true);
+    }
+
+    for (const binTarget of Object.values(packageJson.bin)) {
+      expect(packFileSet.has(normalizePackagePath(binTarget))).toBe(true);
     }
 
     for (const filePath of forbiddenFiles) {
@@ -263,6 +329,7 @@ describe('@emulsify/core package exports', () => {
         filePath,
         forbiddenPrefixes,
         forbiddenSuffixes,
+        forbiddenSegments,
       ),
     );
 

@@ -4,7 +4,7 @@
 
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
-import { parse } from 'yaml';
+import { load as parseYaml } from 'js-yaml';
 
 /**
  * Small utility function that loads a yaml file and parses it synchronously.
@@ -17,5 +17,5 @@ import { parse } from 'yaml';
 export default function loadYaml(relativePath) {
   // Resolve from this script directory so tests can pass stable relative paths.
   const fullPath = resolve(__dirname, relativePath);
-  return parse(readFileSync(fullPath, 'utf8'));
+  return parseYaml(readFileSync(fullPath, 'utf8'));
 }

@@ -2,7 +2,7 @@
  * @file React singleton helpers for Storybook and Vite config.
  */
 
-import { unique } from './unique.js';
+import { unique } from '../../../src/extensions/shared/lists.js';
 
 /**
  * React modules that must resolve from the consumer project root.

@@ -5,26 +5,27 @@
  * each individual plugin concern to focused internal modules.
  */
 
-import sassGlobImports from 'vite-plugin-sass-glob-import';
+import sassGlobImports from '@mlnop/vite-plugin-sass-glob-import';
 
 import { getPlatformAdapter } from '../platforms.js';
 import { resolveProjectStructure } from '../project-structure.js';
 import { toPosixPath } from '../utils/paths.js';
-import { copyAllSrcAssetsPlugin } from './copy-src-assets.js';
-import { copyTwigFilesPlugin } from './copy-twig-files.js';
-import { cssAssetUrlRelativizer } from './css-asset-relativizer.js';
-import { mirrorComponentsToRoot } from './mirror-components.js';
+import { copyAllSrcAssetsPlugin } from './assets/copy-src-assets.js';
+import { copyTwigFilesPlugin } from './assets/copy-twig-files.js';
+import { cssAssetUrlRelativizer } from './assets/css-asset-relativizer.js';
+import { mirrorComponentsToRoot } from './assets/mirror-components.js';
+import { createSourceFileIndex } from './assets/source-file-index.js';
+import { svgSpriteFilePlugin } from './assets/svg-sprite.js';
+import { developReporterPlugin } from './reporter/index.js';
 import { requireContextCompatPlugin } from './require-context.js';
-import { createSourceFileIndex } from './source-file-index.js';
-import { svgSpriteFilePlugin } from './svg-sprite.js';
-import { virtualTwigExtensionInstallersPlugin } from './twig-extension-installers.js';
+import { virtualTwigExtensionInstallersPlugin } from './twig/extension-installers.js';
 import {
   emulsifyTwigModulePlugin,
   makeTwigPluginOptions,
-} from './twig-module.js';
-import { virtualTwigAssetSourcesPlugin } from './virtual-twig-asset-sources.js';
-import { virtualTwigGlobsPlugin } from './virtual-twig-globs.js';
-import { makeTwigPlugins } from './vituum-patch.js';
+} from './twig/twig-module.js';
+import { virtualTwigAssetSourcesPlugin } from './twig/virtual-twig-asset-sources.js';
+import { virtualTwigGlobsPlugin } from './twig/virtual-twig-globs.js';
+import { makeTwigPlugins } from './twig/vituum-patch.js';
 import { yamlModulePlugin } from './yaml-module.js';
 
 /**
@@ -35,8 +36,10 @@ import { yamlModulePlugin } from './yaml-module.js';
  *   platform: string,
  *   srcDir: string,
  *   srcExists: boolean,
- *   structureOverrides?: boolean
- * }} env - Project environment.
+ *   structureOverrides?: boolean,
+ *   diagnostics?: object
+ * }} env - Project environment. When `diagnostics` is present the develop
+ *   reporter is appended; it is supplied only for watch builds.
  * @returns {import('vite').PluginOption[]} Emulsify Vite plugins.
  */
 export function makePlugins(env) {
@@ -101,5 +104,11 @@ export function makePlugins(env) {
       enabled: structure.mirrorComponentOutput,
       projectDir,
     }),
+
+    // Summarize the build for `npm run develop`. Present only when the Vite
+    // config supplied a diagnostics collector, which it does for watch builds.
+    ...(env.diagnostics
+      ? [developReporterPlugin({ env, diagnostics: env.diagnostics })]
+      : []),
   ];
 }

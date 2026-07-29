@@ -10,7 +10,7 @@
 import { basename, normalize, relative, resolve, sep } from 'path';
 import { safeExists } from './utils/fs-safe.js';
 import { replaceLastSlash, toPosixPath } from './utils/paths.js';
-import { unique } from './utils/unique.js';
+import { unique } from '../../src/extensions/shared/lists.js';
 
 export { replaceLastSlash, toPosixPath };
 

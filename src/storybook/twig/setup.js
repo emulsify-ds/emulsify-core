@@ -3,7 +3,8 @@
  */
 
 import { registerTwigExtensions } from '../../extensions/twig/index.js';
-import twigInclude from './include.js';
+import { createTwigIncludeFunction } from './include-function.js';
+import resolveTemplate from './resolver.js';
 import twigSource from './source.js';
 
 /**
@@ -35,5 +36,14 @@ export function setupTwig(twig, options = {}) {
   return twig;
 }
 
-export { default as twigInclude } from './include.js';
+/**
+ * Twig `include()` runtime helper.
+ *
+ * @param {Object} Twig - Twig.js module.
+ * @returns {undefined}
+ */
+export function twigInclude(Twig) {
+  Twig.extendFunction('include', createTwigIncludeFunction(resolveTemplate));
+}
+
 export { default as twigSource } from './source.js';

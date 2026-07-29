@@ -11,7 +11,7 @@ import { normalize, resolve, sep } from 'path';
 import { getPlatformAdapter, normalizePlatformName } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
 import { safeExists, safeReadJson } from './utils/fs-safe.js';
-import { unique } from './utils/unique.js';
+import { unique } from '../../src/extensions/shared/lists.js';
 
 /**
  * Cache normalized project config by project root and relevant env signature.

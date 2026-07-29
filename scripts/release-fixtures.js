@@ -7,7 +7,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -15,10 +14,12 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { globSync } from 'glob';
 import { safeExists } from '../config/vite/utils/fs-safe.js';
+import { createUsage, parseArgs as parseCliArgs } from './lib/cli.js';
+import { directorySize } from './lib/fs.js';
+import { run } from './lib/proc.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixturesRoot = join(repoRoot, '.github/fixtures/release');
@@ -26,7 +27,21 @@ const viteBin = join(repoRoot, 'node_modules/vite/bin/vite.js');
 const storybookBin = join(repoRoot, 'node_modules/.bin/storybook');
 const viteConfig = join(repoRoot, 'config/vite/vite.config.js');
 const storybookConfigDir = join(repoRoot, '.storybook');
+const customElementBrowserTest = join(
+  repoRoot,
+  'scripts/test-custom-element-storybook.js',
+);
 const largeTwigComponentCount = 80;
+// Storybook 10.5 changes its own manager/runtime chunks under Vite 8, so keep
+// the regression gate focused on fixture-owned output. The exclusive ceiling
+// preserves the original 484-byte budget over the current 178,698-byte result.
+const largeTwigStorybookFixtureJsLimit = 179_182;
+const largeTwigStorybookFixtureJsPatterns = [
+  'storybook-assets/_content-*.js',
+  'storybook-assets/gallery-*.js',
+  'storybook-assets/gallery.stories-*.js',
+  'storybook-assets/item-*.js',
+];
 
 const releaseFixtures = [
   {
@@ -66,6 +81,12 @@ const releaseFixtures = [
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
       'dist/components/card/js/card2.js',
+    ],
+    assertContent: [
+      {
+        pattern: 'dist/global/base/css/base.css',
+        strings: ['.sass-glob-fixture', '.legacy-sass-glob-fixture'],
+      },
     ],
     rejectContent: [
       {
@@ -137,17 +158,29 @@ const releaseFixtures = [
     name: 'mixed-storybook',
     type: 'storybook',
     assert: ['.out/iframe.html'],
-    match: ['.out/storybook-assets/card.stories-*.js'],
+    match: [
+      '.out/storybook-assets/card.stories-*.js',
+      '.out/storybook-assets/greeting-card.stories-*.js',
+    ],
     assertContent: [
       {
         pattern: '.out/storybook-assets/card.stories-*.js',
         strings: ['Twig fixture', 'React fixture'],
       },
       {
+        pattern: '.out/storybook-assets/greeting-card.stories-*.js',
+        strings: [
+          'Custom element fixture',
+          'Default slot content',
+          'greeting-select',
+        ],
+      },
+      {
         pattern: '.out/storybook-assets/*.js',
         strings: ['data-nested-project-alias'],
       },
     ],
+    browserTest: customElementBrowserTest,
   },
   {
     name: 'large-twig-storybook',
@@ -157,18 +190,20 @@ const releaseFixtures = [
     match: ['.out/storybook-assets/gallery.stories-*.js'],
     measure: true,
     metricComponentCount: largeTwigComponentCount,
+    javascriptMeasurePatterns: largeTwigStorybookFixtureJsPatterns,
+    maxMeasuredJavaScriptBytes: largeTwigStorybookFixtureJsLimit,
   },
 ];
 
 function usage() {
-  return [
+  return createUsage(
     'Usage: node scripts/release-fixtures.js [--fixture <name>] [--list]',
-    '',
-    'Options:',
-    '  --fixture <name>  Run one fixture by name. Can be repeated or comma-separated.',
-    '  --list            Print fixture names and exit.',
-    '  --help            Print this help text.',
-  ].join('\n');
+    [
+      '  --fixture <name>  Run one fixture by name. Can be repeated or comma-separated.',
+      '  --list            Print fixture names and exit.',
+      '  --help            Print this help text.',
+    ],
+  );
 }
 
 function parseFixtureNames(value) {
@@ -179,39 +214,24 @@ function parseFixtureNames(value) {
 }
 
 function parseArgs(argv) {
-  const fixtureNames = [];
-  let list = false;
-  let help = false;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-
-    if (arg === '--list') {
-      list = true;
-      continue;
-    }
-    if (arg === '--help' || arg === '-h') {
-      help = true;
-      continue;
-    }
-    if (arg === '--fixture') {
-      const value = argv[index + 1];
-      if (!value || value.startsWith('--')) {
-        throw new Error('--fixture requires a fixture name.');
-      }
-      fixtureNames.push(...parseFixtureNames(value));
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith('--fixture=')) {
-      fixtureNames.push(...parseFixtureNames(arg.slice('--fixture='.length)));
-      continue;
-    }
-
-    throw new Error(`Unknown option: ${arg}`);
-  }
-
-  return { fixtureNames, help, list };
+  return parseCliArgs(argv, {
+    defaults: {
+      fixtureNames: [],
+      help: false,
+      list: false,
+    },
+    flags: {
+      '--list': 'list',
+    },
+    options: {
+      '--fixture': {
+        key: 'fixtureNames',
+        append: true,
+        parse: parseFixtureNames,
+        missingMessage: '--fixture requires a fixture name.',
+      },
+    },
+  });
 }
 
 function selectedFixtures(fixtureNames) {
@@ -314,27 +334,19 @@ function linkPackage(source, target) {
   }
 }
 
-function run(command, args, cwd) {
-  const result = spawnSync(command, args, {
+function fixtureRunOptions(cwd) {
+  return {
     cwd,
-    encoding: 'utf8',
     env: {
       ...process.env,
       CI: '1',
       FORCE_COLOR: '0',
       NODE_OPTIONS: '--no-deprecation',
     },
-  });
-
-  if (result.status !== 0) {
-    process.stdout.write(result.stdout || '');
-    process.stderr.write(result.stderr || '');
-    throw new Error(
-      `${command} ${args.join(' ')} failed in ${cwd} with exit ${result.status}`,
-    );
-  }
-
-  return result;
+    echoOutputOnFailure: true,
+    failureMessage: ({ args, command, status }) =>
+      `${command} ${args.join(' ')} failed in ${cwd} with exit ${status}`,
+  };
 }
 
 function assertExists(projectDir, relPaths) {
@@ -410,22 +422,6 @@ function assertNoContent(projectDir, assertions = []) {
   }
 }
 
-function directorySize(directory) {
-  let total = 0;
-
-  for (const entryName of readdirSync(directory)) {
-    const entryPath = join(directory, entryName);
-    const stats = statSync(entryPath);
-    if (stats.isDirectory()) {
-      total += directorySize(entryPath);
-    } else {
-      total += stats.size;
-    }
-  }
-
-  return total;
-}
-
 function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB'];
   let value = bytes;
@@ -439,6 +435,21 @@ function formatBytes(bytes) {
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function javascriptOutputSize(outputDir, patterns = ['**/*.js']) {
+  const filePaths = new Set(
+    patterns.flatMap((pattern) =>
+      globSync(pattern, {
+        cwd: outputDir,
+        nodir: true,
+      }),
+    ),
+  );
+
+  return Array.from(filePaths).reduce((totalBytes, filePath) => {
+    return totalBytes + statSync(join(outputDir, filePath)).size;
+  }, 0);
+}
+
 function runViteFixture(fixture) {
   const projectDir = copyFixture(fixture);
   try {
@@ -446,7 +457,7 @@ function runViteFixture(fixture) {
     run(
       process.execPath,
       [viteBin, 'build', '--config', viteConfig],
-      projectDir,
+      fixtureRunOptions(projectDir),
     );
     assertExists(projectDir, fixture.assert);
     assertMissing(projectDir, fixture.reject);
@@ -467,19 +478,43 @@ function runStorybookFixture(fixture) {
     run(
       storybookBin,
       ['build', '--config-dir', storybookConfigDir, '-o', outputDir],
-      projectDir,
+      fixtureRunOptions(projectDir),
     );
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     assertExists(projectDir, fixture.assert);
     assertMatches(projectDir, fixture.match);
     assertContent(projectDir, fixture.assertContent);
     assertNoContent(projectDir, fixture.rejectContent);
+    if (fixture.browserTest) {
+      console.log(`  → Running browser assertions: ${fixture.name}`);
+      run(
+        process.execPath,
+        [fixture.browserTest, outputDir],
+        fixtureRunOptions(projectDir),
+      );
+      console.log(`  ✓ Browser assertions passed: ${fixture.name}`);
+    }
     if (fixture.measure) {
       const outputSize = directorySize(outputDir);
+      const jsBytes = javascriptOutputSize(outputDir);
+      const measuredJsBytes = javascriptOutputSize(
+        outputDir,
+        fixture.javascriptMeasurePatterns,
+      );
+      if (
+        Number.isFinite(fixture.maxMeasuredJavaScriptBytes) &&
+        measuredJsBytes >= fixture.maxMeasuredJavaScriptBytes
+      ) {
+        throw new Error(
+          `${fixture.name} emitted ${measuredJsBytes} measured JS bytes; expected less than ${fixture.maxMeasuredJavaScriptBytes}.`,
+        );
+      }
       console.log(
         `  Storybook metrics (${fixture.name}): ${(durationMs / 1000).toFixed(
           2,
-        )}s, ${formatBytes(outputSize)} output${
+        )}s, ${formatBytes(outputSize)} output, ${formatBytes(
+          jsBytes,
+        )} JS, ${formatBytes(measuredJsBytes)} measured JS${
           fixture.metricComponentCount
             ? `, ${fixture.metricComponentCount} generated Twig components`
             : ''

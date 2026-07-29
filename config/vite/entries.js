@@ -24,10 +24,10 @@ import {
   resolveProjectStructure,
   storybookStyleOutputPath,
 } from './project-structure.js';
-import { createSourceFileIndex } from './plugins/source-file-index.js';
-import { replaceLastSlash, toPosix } from './utils/paths.js';
+import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
+import { replaceLastSlash, toPosixPath } from './utils/paths.js';
 
-export { replaceLastSlash, toPosix };
+export { replaceLastSlash, toPosixPath };
 
 /** Remove characters that would confuse Rollup naming or file systems. */
 export const sanitizePath = (s) => s.replace(/[^a-zA-Z0-9/_-]/g, '');
@@ -123,7 +123,7 @@ export function buildInputs(ctx) {
    */
   const add = (key, abs) => {
     if (!key) return;
-    const clean = sanitizePath(toPosix(key)).replace(/^\/+/, '');
+    const clean = sanitizePath(toPosixPath(key)).replace(/^\/+/, '');
     if (!clean) return;
     safeSetKey(inputs, clean, abs);
   };

@@ -20,17 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '24.x'
+          node-version-file: '.nvmrc'
       - name: Install
         run: npm ci
       - name: Update version from semantic commits
-        run: npm run version:develop -- "${{ github.event.before }}" "${{ github.sha }}"
+        run: npm run version:develop -- "origin/main" "${{ github.sha }}"
       - name: Open package version pull request
         env:
           GH_TOKEN: ${{ github.token }}

@@ -8,8 +8,11 @@ import {
   isAssetTextLoading,
   whenAssetTextLoaded,
 } from 'virtual:emulsify-twig-asset-sources';
-import { IMAGE_ASSET_EXTS, INLINE_ASSET_EXTS } from './source-extensions.js';
-import { TWIG_SOURCE_LOADED_EVENT } from './source-events.js';
+import {
+  IMAGE_ASSET_EXTS,
+  INLINE_ASSET_EXTS,
+  TWIG_SOURCE_LOADED_EVENT,
+} from './constants.js';
 
 const DEFAULT_ENV =
   (typeof __EMULSIFY_ENV__ !== 'undefined' && __EMULSIFY_ENV__) || {};

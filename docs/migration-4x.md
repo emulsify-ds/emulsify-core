@@ -1,10 +1,17 @@
-# Migration To The Current Release
+# Migration To 4.x
 
-Emulsify Core now runs on Vite and React/Vite Storybook while preserving existing component structures. This guide is for projects upgrading from earlier Webpack-based versions.
+Emulsify Core 4 runs on Vite and React/Vite Storybook while preserving existing
+component structures. This guide is for projects upgrading from pre-4.x,
+Webpack-based versions. Projects already using Core 4 should instead review the
+[release notes for 4.3.0](releases/4.3.0.md).
 
 ## Requirements
 
-Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.js` before doing work.
+The Core 4 major-version contract began at Node.js 24 or later. Consumers
+installing Core 4.3.0 must use Node.js 24.13.0 or later because of its published
+toolchain dependencies. See the
+[4.3.0 Node.js policy](releases/4.3.0.md#nodejs-support-policy) for the exact
+compatibility impact.
 
 ## Upgrade Summary
 
@@ -12,7 +19,7 @@ Use Node.js 24 or later. All maintained scripts run `scripts/check-node-version.
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Build tool              | Vite replaces the Webpack build.                                                                                            | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `config/emulsify-core/vite/plugins.*`.                                            |
 | Storybook               | Storybook uses `@storybook/react-vite`.                                                                                     | Twig stories and React stories can live in the same Storybook instance. Existing Twig stories that return HTML strings are wrapped for compatibility. | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook` when stories are actively migrated. |
-| Runtime                 | Node.js 24 is the supported floor.                                                                                          | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Local developer machines and CI images must use Node.js 24 or later.                                                             |
+| Runtime                 | The Core 4 public runtime contract begins at Node.js 24. Core 4.3.0 raises its consumer floor to Node.js 24.13.0.           | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Check the installed release's `package.json#engines.node`; Core 4.3.0 consumers must use Node.js 24.13.0 or later.               |
 | Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                                    | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
 | Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `none`, `wordpress`, and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | WordPress/Timber projects can use `wordpress`; other non-Drupal projects can use `none` unless they need a dedicated adapter.    |
 | Extension configuration | Vite extension files live under `config/emulsify-core/vite/plugins.*`.                                                      | Storybook overrides still live under `config/emulsify-core/storybook/...`; a11y config still lives at `config/emulsify-core/a11y.config.js`.          | Projects with old Webpack override files should replace them with Vite extensions.                                               |
@@ -41,7 +48,8 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 
 ## What May Require Changes
 
-- Update CI and local development to Node.js 24 or later.
+- Update consuming project development and CI environments to Node.js 24.13.0
+  or later.
 - Move custom Webpack configuration to Vite plugins or `extendConfig()`.
 - Existing Twig stories that return HTML strings can continue working during the upgrade. Use `npx --no-install emulsify-audit` to find stories that should move to `renderTwig()` and other upgrade-readiness items.
 - Review any project code that assumed Drupal behavior in Storybook. Drupal behavior now comes from the Drupal adapter.
@@ -102,7 +110,14 @@ internals, Drupal assumptions in non-Drupal projects, missing configured
 structure roots, large Twig Storybook roots, and Twig stories that should move
 to `renderTwig()`.
 
-Use `--fail-on-found` if you want to make the audit enforce migration progress in CI. If you only want the Twig story migration report, run `npx --no-install emulsify-audit-twig-stories`.
+Use `--fail-on warn` to make errors and warnings enforce migration progress in
+CI. The existing `--fail-on-found` option remains a compatibility alias for
+`--fail-on any`. If you only want the Twig story migration report, run
+`npx --no-install emulsify-audit-twig-stories`.
+
+For CI dashboards or downstream tooling, see
+[Project Audit](audit.md) for the versioned JSON report contract, exit behavior,
+and `jq` examples.
 
 ## Manual package.json Updates
 
@@ -117,7 +132,8 @@ themes. At minimum:
 - Replace Webpack build scripts with Vite scripts.
 - Remove `build-dev` and `webpack` scripts.
 - Add `audit` and `audit:twig-stories` wrappers so project audits can print the
-  relevant migration docs after running.
+  relevant migration docs to stderr after running without contaminating JSON
+  stdout.
 - Update `@emulsify/core` to a Core 4-compatible version.
 - Keep the root-level npm `overrides` listed in
   [Install Warning Controls](#install-warning-controls).
@@ -126,12 +142,12 @@ themes. At minimum:
 {
   "description": "Storybook and a Vite-based build workflow powered by Emulsify Core 4",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.13.0"
   },
   "type": "module",
   "scripts": {
-    "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\\n\"; exit $status' --",
-    "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\"; exit $status' --",
+    "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/audit.md\\n\" >&2; exit $status' --",
+    "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\" >&2; exit $status' --",
     "build": "npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js",
     "develop": "npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook",
     "vite": "vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js"
@@ -181,18 +197,9 @@ Emulsify Core's Storybook Twig runtime supports:
 
 Drupal-specific Twig filters are only loaded when the Drupal adapter enables them.
 
-Core 4 no longer uses a browser-global Twig template store or patches `Twig.Templates` to resolve compiled Storybook dependencies. Each emitted Twig module now creates an isolated Twig.js factory instance and registers its own compiled dependency set locally. This keeps duplicate template IDs from colliding while avoiding global runtime cleanup during HMR.
-
-If Storybook reports `Twig.lib.boolval is not a function`, Twig.js failed while
-evaluating a boolean expression such as `{% if %}`, `and`, `or`, `not`, or a
-ternary. Core provides a narrow runtime fallback for that internal helper, but
-the message still usually points to dependency optimizer or transitive package
-drift. Clear Storybook/Vite caches and confirm the project-level `overrides`
-above are present in the consuming theme if the error appears during migration.
-
-## Vituum Twig Integration
-
-Emulsify treats `@vituum/vite-plugin-twig` as a pinned integration point. The internal `vituum-patch.js` adapter removes Vituum build hooks that conflict with Emulsify's output model and fails fast if a future Vituum release changes the expected plugin shape, so projects should pin to a known-good Vituum version or update the adapter instead of accepting a silent rendering break.
+See [Storybook](storybook.md) for current Twig behavior and the
+[4.3.0 release notes](releases/4.3.0.md) for the dependency, cache, HMR, and
+asset-source changes delivered in that release.
 
 ## Drupal Behavior
 
@@ -218,6 +225,12 @@ export default ({ env }) => [
 ```
 
 See [Extension Points](extension-points.md) for Vite plugins, Tailwind CSS, Storybook preview overrides, and framework integrations.
+
+Sass glob expansion supports modern `@use` patterns such as
+`@use "./components/**/*.scss";` and retains legacy globbed `@import` support
+for existing themes. Prefer `@use` in new code. Migrating existing `@import`
+globs requires reviewing Sass namespace and scoping changes rather than only
+changing the at-rule.
 
 ## CSS Asset URLs
 
@@ -268,7 +281,7 @@ including inline SVGs through `source('@assets/...')`.
 
 ## Upgrade Checklist
 
-1. Use Node.js 24 or later.
+1. Use Node.js 24.13.0 or later.
 2. Keep existing component roots unless you are intentionally restructuring.
 3. Add or verify `project.emulsify.json`, including the appropriate `none`, `wordpress`, or `drupal` platform setting.
 4. Move Webpack-specific customization to Vite extension files.

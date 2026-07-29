@@ -1,0 +1,46 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`audit orchestrator runs all checks and formats a stable report 1`] = `
+"Emulsify project audit
+Project: <projectDir>
+Scanned 1 story file(s), 2 Twig file(s), 1 code file(s), and 0 style file(s).
+Findings: 0 error(s), 6 warning(s), 1 info item(s).
+
+[warn] legacy-twig-story
+  src/components/card/card.stories.js:5
+  Twig story appears to return an HTML string directly. This remains compatible, but renderTwig() is preferred for active migrations.
+  imports Twig templates without renderTwig()
+  appears to return Twig HTML strings directly
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility
+
+[warn] unknown-twig-namespace
+  src/components/card/card.twig:2
+  Twig namespace "@missing" is not configured in the normalized project structure.
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md#twig-namespaces
+
+[warn] unresolved-twig-reference
+  src/components/card/card.twig:2
+  include() reference "@missing/card.twig" could not be resolved from the normalized Twig roots.
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#include
+
+[warn] webpack-era-pattern
+  src/components/card/card.stories.js:3
+  require.context() is Webpack-specific and should be migrated.
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#vite-customization
+
+[warn] internal-core-import
+  src/components/card/card.stories.js:2
+  Import "@emulsify/core/src/storybook/render-twig.js" uses an internal Emulsify Core path. Prefer a public package export.
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/README.md#public-imports
+
+[warn] drupal-assumption-non-drupal
+  src/components/card/card.stories.js:4
+  Drupal-specific Storybook/runtime code was found, but the active platform is not drupal.
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/platform-adapters.md
+
+[info] large-twig-storybook-roots
+  project
+  2 Twig files are under Storybook Twig roots. Eager Twig imports are reliable but can increase Storybook startup/build cost for large libraries.
+  Approximate Twig root size: 1 KB.
+  Docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/performance.md#storybook-twig-imports"
+`;
