@@ -12,6 +12,7 @@ import {
   SYMBOLS,
   displayLocation,
   displayPath,
+  formatBytes,
   formatClockTime,
   formatDuration,
   platformLabel,
@@ -100,36 +101,261 @@ const WORDMARK = [
  * easy to scroll past; a block of art is not. Terminals that cannot render the
  * glyphs get the plain name instead of mojibake.
  *
+ * The banner carries only the version. It is emitted from `configResolved`,
+ * before the build has run, so it cannot know what was written to `dist/` — and
+ * splitting the project facts across two moments would mean reading the input
+ * roots in one place and the output tally in another. They belong together, so
+ * both live in the facts block that {@link renderFacts} prints with the summary.
+ *
  * @param {{
  *   version?: string,
- *   platform?: string,
- *   entryCount?: number,
  *   unicode?: boolean,
  *   styler: (format: string|string[], text: string) => string
  * }} options - Banner inputs.
  * @returns {string[]} Banner lines.
  */
-export function renderBanner({
-  version,
-  platform,
-  entryCount,
-  unicode = true,
-  styler,
-}) {
-  const facts = [
-    `core ${version || '0.0.0'}`,
-    `Platform: ${platformLabel(platform)}`,
-  ];
-
-  if (Number.isFinite(entryCount)) {
-    facts.push(pluralize(entryCount, 'entry', 'entries'));
-  }
-
+export function renderBanner({ version, unicode = true, styler }) {
   const mark = unicode
     ? WORDMARK.map((row) => `${INDENT}${styler(['bold', 'cyan'], row)}`)
     : [`${INDENT}${styler(['bold', 'cyan'], 'EMULSIFY')}`];
 
-  return ['', ...mark, `${INDENT}${styler('gray', facts.join(SEPARATOR))}`, ''];
+  return [
+    '',
+    ...mark,
+    `${INDENT}${styler('gray', `core ${version || '0.0.0'}`)}`,
+    '',
+  ];
+}
+
+/**
+ * Labels for the rows in the facts block.
+ *
+ * @type {{platform: string, input: string, output: string}}
+ */
+const FACT_LABELS = {
+  platform: 'platform',
+  input: 'input',
+  output: 'output',
+};
+
+/**
+ * Render the project facts block.
+ *
+ * The `input` rows are the reason this block exists. A total entry count cannot
+ * distinguish a healthy project from one whose second source root was never
+ * discovered, so each root is named with what it contributed. A configured root
+ * reporting zero is reported rather than hidden — that row is usually the bug.
+ *
+ * @param {{
+ *   platform?: string,
+ *   inputRows?: Array<{name: string, path: string, count: number}>,
+ *   outDir?: string,
+ *   write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}},
+ *   styler: (format: string|string[], text: string) => string
+ * }} options - Facts inputs.
+ * @returns {string[]} Facts lines.
+ */
+export function renderFacts({
+  platform,
+  inputRows = [],
+  outDir = 'dist',
+  write,
+  styler,
+}) {
+  const labelWidth = Math.max(
+    ...Object.values(FACT_LABELS).map((label) => label.length),
+  );
+
+  /**
+   * Render one labelled row, or a continuation row when the label repeats.
+   *
+   * @param {string|undefined} label - Row label, omitted for continuations.
+   * @param {string} value - Rendered value.
+   * @returns {string} Finished line.
+   */
+  const row = (label, value) =>
+    `${DETAIL_INDENT}${styler('gray', (label || '').padEnd(labelWidth))}    ${value}`;
+
+  const lines = [row(FACT_LABELS.platform, platformLabel(platform))];
+
+  // Paths are padded to a shared width and counts are right-aligned on their
+  // digits, so both the paths and the numbers read as columns however many roots
+  // a project declares. Padding is applied before styling because ANSI escapes
+  // carry no display width and would skew every row by a different amount.
+  if (inputRows.length > 0) {
+    const pathWidth = Math.max(...inputRows.map((entry) => entry.path.length));
+    const countWidth = Math.max(
+      ...inputRows.map((entry) => String(entry.count).length),
+    );
+
+    inputRows.forEach((entry, index) => {
+      const path = styler('cyan', entry.path.padEnd(pathWidth));
+      const noun = entry.count === 1 ? 'entry' : 'entries';
+      const count = styler(
+        // A configured root that matched nothing is the row most likely to be a
+        // misconfiguration, so it is the one row here that is not dim.
+        entry.count === 0 ? 'yellow' : 'gray',
+        `${String(entry.count).padStart(countWidth)} ${noun}`,
+      );
+
+      lines.push(
+        row(index === 0 ? FACT_LABELS.input : '', `${path}  ${count}`),
+      );
+    });
+  }
+
+  const outputFacts = [];
+  if (write) {
+    outputFacts.push(pluralize(write.fileCount, 'file'));
+    outputFacts.push(formatBytes(write.totalBytes));
+
+    if (write.largest) {
+      outputFacts.push(
+        `largest ${write.largest.fileName} ${formatBytes(write.largest.bytes)}`,
+      );
+    }
+  }
+
+  const outputSuffix =
+    outputFacts.length > 0
+      ? styler('gray', `  ${outputFacts.join(SEPARATOR)}`)
+      : '';
+
+  lines.push(row(FACT_LABELS.output, `${outDir}${outputSuffix}`));
+
+  return lines;
+}
+
+/**
+ * Labels for the URL rows printed beneath a ready headline.
+ *
+ * @type {{local: string, network: string}}
+ */
+const URL_LABELS = {
+  local: 'local',
+  network: 'network',
+};
+
+/**
+ * Render the ready state for a long-running service.
+ *
+ * Storybook announces itself with a boxed banner drawn in its own visual
+ * language, which reads as a second tool's output rather than part of the
+ * build. This renders the same facts in the reporter's vocabulary so one
+ * `develop` run looks like one tool.
+ *
+ * Kept pure and service-agnostic so both callers share it: the Storybook
+ * preset that runs while `concurrently` owns the terminal, and any launcher
+ * that owns both child processes and prints a combined block.
+ *
+ * A port that does not match the one requested is reported rather than
+ * silently accepted. Storybook falls forward to the next free port, so the
+ * difference usually means a previous session is still running — and a browser
+ * pointed at the requested port would then be showing a stale instance.
+ *
+ * @param {{
+ *   service?: string,
+ *   urls?: {local?: string, network?: string},
+ *   durationMs?: number,
+ *   portDrift?: {requested: number|string, actual: number|string},
+ *   styler: (format: string|string[], text: string) => string
+ * }} options - Ready-state inputs.
+ * @returns {string[]} Ready lines.
+ */
+export function renderReady({
+  service = 'storybook',
+  urls = {},
+  durationMs,
+  portDrift,
+  unicode = true,
+  styler,
+}) {
+  const drifted =
+    portDrift && String(portDrift.requested) !== String(portDrift.actual);
+
+  const facts = [];
+  if (Number.isFinite(durationMs)) facts.push(formatDuration(durationMs));
+  if (drifted) {
+    facts.push(`port ${portDrift.requested} in use, using ${portDrift.actual}`);
+  }
+
+  const symbol = drifted
+    ? styler('yellow', SYMBOLS.warning)
+    : styler('green', SYMBOLS.ok);
+  const headline = drifted
+    ? styler('yellow', `${service} ready`)
+    : `${service} ready`;
+  const suffix =
+    facts.length > 0 ? styler('gray', SEPARATOR + facts.join(SEPARATOR)) : '';
+
+  const lines = [`${INDENT}${symbol} ${headline}${suffix}`];
+
+  const rows = Object.entries(URL_LABELS).filter(([key]) => urls[key]);
+  if (rows.length === 0) return lines;
+
+  // Padding is applied before styling so ANSI escapes never skew the columns.
+  const labelWidth = Math.max(...rows.map(([, label]) => label.length));
+
+  const body = rows.map(
+    ([key, label]) =>
+      `${INDENT}${INDENT}${styler('gray', label.padEnd(labelWidth))}   ${styler(['bold', 'cyan'], urls[key])}`,
+  );
+
+  // The rules are measured from the longest row rather than fixed, so a long
+  // network address or an added row cannot punch through the panel. Width is
+  // taken from the unstyled text because ANSI escapes carry no display width.
+  const width =
+    Math.max(
+      ...rows.map(
+        ([key, label]) =>
+          INDENT.length * 2 +
+          label.padEnd(labelWidth).length +
+          3 +
+          urls[key].length,
+      ),
+    ) - INDENT.length;
+
+  lines.push('');
+  lines.push(...renderPanel(body, width, drifted, unicode, styler));
+
+  return lines;
+}
+
+/**
+ * Frame a block of rows between two half-block rules.
+ *
+ * Storybook draws its ready state in a rounded box, which reads as a second
+ * tool's output rather than as part of the build. The rules here are built from
+ * the same half-block glyphs as the wordmark, so the panel belongs to Emulsify's
+ * visual language instead of importing another tool's.
+ *
+ * The glyph choice is deliberate: `▄` sits on the baseline and `▀` sits at cap
+ * height, so the pair encloses the rows without the corner joins that
+ * box-drawing characters need — and without the alignment failures those joins
+ * produce when a row contains a character the font renders at a different width.
+ *
+ * Terminals that cannot render block glyphs get the rows alone. The same
+ * `supportsUnicode()` gate gives the wordmark its plain-text fallback, so a
+ * terminal always gets both treatments or neither.
+ *
+ * @param {string[]} body - Rendered rows to enclose.
+ * @param {number} width - Rule width in columns.
+ * @param {boolean} warned - Whether the panel reports a problem.
+ * @param {boolean} unicode - Whether block glyphs are safe to emit.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Panel lines.
+ */
+function renderPanel(body, width, warned, unicode, styler) {
+  if (!unicode) return body;
+
+  const color = warned ? 'yellow' : 'cyan';
+  const safeWidth = Math.max(1, Math.round(width));
+
+  return [
+    `${INDENT}${styler(color, '▄'.repeat(safeWidth))}`,
+    ...body,
+    `${INDENT}${styler(color, '▀'.repeat(safeWidth))}`,
+  ];
 }
 
 /**
@@ -596,13 +822,14 @@ function renderProblems(
   assetRows,
   importErrors,
   syntaxErrors,
+  unicode = true,
 ) {
-  const lines = [];
+  const attention = [];
 
   const syntaxLines = renderSyntaxErrors(syntaxErrors, styler);
   if (syntaxLines.length > 0) {
-    lines.push('');
-    lines.push(...syntaxLines);
+    attention.push('');
+    attention.push(...syntaxLines);
   }
 
   const importLines = renderImportErrors(
@@ -612,44 +839,84 @@ function renderProblems(
     styler,
   );
   if (importLines.length > 0) {
-    lines.push('');
-    lines.push(...importLines);
+    attention.push('');
+    attention.push(...importLines);
   }
 
   if (snapshot.errors.length > 0) {
-    lines.push('');
-    lines.push(
+    attention.push('');
+    attention.push(
       `${INDENT}${styler('red', SYMBOLS.error)} ${styler('red', pluralize(snapshot.errors.length, 'error'))}`,
     );
-    lines.push(...renderDetailRows(snapshot.errors, projectDir, styler));
+    attention.push(...renderDetailRows(snapshot.errors, projectDir, styler));
   }
 
   if (snapshot.warnings.length > 0) {
-    lines.push('');
-    lines.push(
+    attention.push('');
+    attention.push(
       `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler('yellow', pluralize(snapshot.warnings.length, 'warning'))}`,
     );
-    lines.push(...renderDetailRows(snapshot.warnings, projectDir, styler));
+    attention.push(...renderDetailRows(snapshot.warnings, projectDir, styler));
   }
 
   const assetLines = renderUnresolvedAssets(assetRows, styler);
   if (assetLines.length > 0) {
-    lines.push('');
-    lines.push(...assetLines);
+    attention.push('');
+    attention.push(...assetLines);
   }
 
-  const deprecationLines = renderDeprecations(
-    snapshot,
-    projectDir,
-    styler,
-    sourceGlob,
-  );
-  if (deprecationLines.length > 0) {
+  const debt = renderDeprecations(snapshot, projectDir, styler, sourceGlob);
+
+  const lines = [];
+
+  // Sass deprecations are inherited debt on almost every project, and there are
+  // usually two orders of magnitude more of them than of today's actual
+  // breakages. Without the split, 190 deprecations and six broken asset URLs
+  // compete for the same attention; with it, the reader knows which block is
+  // about the edit they just made.
+  //
+  // A divider is only drawn when its section has content. Labelling an empty
+  // category advertises a problem the project does not have.
+  if (attention.length > 0) {
+    lines.push('', renderDivider('needs attention', unicode, styler));
+    lines.push(...attention);
+  }
+
+  if (debt.length > 0) {
+    lines.push('', renderDivider('pre-existing debt', unicode, styler));
     lines.push('');
-    lines.push(...deprecationLines);
+    lines.push(...debt);
   }
 
   return lines;
+}
+
+/**
+ * Total width of a section divider, in columns.
+ *
+ * Chosen to sit inside an 80-column terminal alongside the two-space indent.
+ *
+ * @type {number}
+ */
+const DIVIDER_WIDTH = 54;
+
+/**
+ * Render a labelled section divider.
+ *
+ * Falls back to ASCII dashes where box-drawing characters would not render, on
+ * the same gate as the wordmark and the ready panel.
+ *
+ * @param {string} label - Section label.
+ * @param {boolean} unicode - Whether box-drawing characters are safe to emit.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string} Divider line.
+ */
+function renderDivider(label, unicode, styler) {
+  const rule = unicode ? '─' : '-';
+  const prefix = `${rule.repeat(2)} ${label} `;
+  const fill = Math.max(3, DIVIDER_WIDTH - prefix.length);
+
+  return `${INDENT}${styler('gray', `${prefix}${rule.repeat(fill)}`)}`;
 }
 
 /**
@@ -676,6 +943,10 @@ export function renderSummary({
   assetRows = [],
   importErrors = {},
   syntaxErrors = [],
+  platform,
+  inputRows = [],
+  write,
+  unicode = true,
   styler,
 }) {
   const failed =
@@ -690,6 +961,8 @@ export function renderSummary({
     : `built in ${formatDuration(durationMs)}`;
 
   const lines = [
+    ...renderFacts({ platform, inputRows, outDir, write, styler }),
+    '',
     `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${outDir}`)}`,
     ...renderProblems(
       snapshot,
@@ -699,6 +972,7 @@ export function renderSummary({
       assetRows,
       importErrors,
       syntaxErrors,
+      unicode,
     ),
     '',
   ];

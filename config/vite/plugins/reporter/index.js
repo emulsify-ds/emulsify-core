@@ -39,6 +39,7 @@ import {
 import { classifyBuildError } from './build-errors.js';
 import { renderBanner, renderRebuild, renderSummary } from './render.js';
 import { createStyler, supportsColor, supportsUnicode } from './format.js';
+import { buildInputRows, summarizeBundle } from './source-roots.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
 
 /**
@@ -107,11 +108,12 @@ export function developReporterPlugin({
 
   let watching = false;
   let outDir = 'dist';
-  let entryCount;
+  let inputRows = [];
   let cycleStart = 0;
   let cyclePrinted = true;
   let firstCycleComplete = false;
   let changedFiles = [];
+  let writeTally;
 
   /**
    * Write an array of finished lines to the destination stream.
@@ -232,6 +234,10 @@ export function developReporterPlugin({
               existsSync(join(env.projectDir, sharedDirectory)),
             ),
           },
+          platform: env.platform,
+          inputRows,
+          write: writeTally,
+          unicode,
           styler,
         }),
       );
@@ -255,13 +261,19 @@ export function developReporterPlugin({
       if (!watching) return;
 
       outDir = config.build?.outDir || 'dist';
-      entryCount = countEntries(config.build?.rollupOptions?.input);
+
+      // Attribution is resolved here, from the entry map the config already
+      // carries, so the summary can name each source root and what it
+      // contributed without touching the filesystem.
+      inputRows = buildInputRows({
+        entries: config.build?.rollupOptions?.input,
+        sourceRootRecords: env.projectStructure?.sourceRootRecords,
+        projectDir: env.projectDir,
+      });
 
       emit(
         renderBanner({
           version: version || resolvePackageVersion(env.projectDir),
-          platform: env.platform,
-          entryCount,
           unicode,
           styler,
         }),
@@ -297,7 +309,12 @@ export function developReporterPlugin({
       reportCycle();
     },
 
-    writeBundle() {
+    // The bundle is reduced here rather than in the summary because this is the
+    // only hook that receives it. Raising `logLevel` to quiet the develop loop
+    // discards Rolldown's per-file asset table, and this recovers the three
+    // facts from it worth keeping.
+    writeBundle(_options, bundle) {
+      if (watching) writeTally = summarizeBundle(bundle);
       reportCycle();
     },
 

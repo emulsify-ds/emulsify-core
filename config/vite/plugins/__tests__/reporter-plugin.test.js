@@ -46,7 +46,17 @@ function createHarness(env = {}) {
   let currentTime = 0;
 
   const plugin = developReporterPlugin({
-    env: { projectDir: '/project', platform: 'drupal', ...env },
+    env: {
+      projectDir: '/project',
+      platform: 'drupal',
+      projectStructure: {
+        sourceRootRecords: [
+          { name: 'components', directory: '/project/src/components' },
+          { name: 'global', directory: '/project/src' },
+        ],
+      },
+      ...env,
+    },
     diagnostics: collector,
     write: (line) => lines.push(line),
     now: () => currentTime,
@@ -72,7 +82,11 @@ function createHarness(env = {}) {
  * @param {{watch?: object|null, entries?: number}} [options] - Config inputs.
  * @returns {object} Resolved config.
  */
-const resolvedConfig = ({ watch = {}, entries = 28 } = {}) => ({
+const resolvedConfig = ({
+  watch = {},
+  entries = 28,
+  sourceDir = '/project/src/components',
+} = {}) => ({
   build: {
     watch,
     outDir: 'dist/',
@@ -80,7 +94,7 @@ const resolvedConfig = ({ watch = {}, entries = 28 } = {}) => ({
       input: Object.fromEntries(
         Array.from({ length: entries }, (_, index) => [
           `entry-${index}`,
-          `/src/${index}.js`,
+          `${sourceDir}/${index}.js`,
         ]),
       ),
     },
@@ -112,7 +126,20 @@ describe('develop reporter plugin gating', () => {
 
     const output = lines.join('\n');
     expect(output).toContain('█▀▀ █▀▄▀█ █ █ █   █▀▀ █ █▀▀ █ █');
-    expect(output).toContain('core 4.2.1 · Platform: Drupal · 28 entries');
+    expect(output).toContain('core 4.2.1');
+  });
+
+  it('leaves the project facts to the summary, which can see the output', () => {
+    const { plugin, lines } = createHarness();
+
+    plugin.configResolved(resolvedConfig());
+
+    // `configResolved` runs before the build, so anything it printed about
+    // `dist/` would be a guess. The facts belong with the write tally.
+    const banner = lines.join('\n');
+    expect(banner).not.toContain('platform');
+    expect(banner).not.toContain('input');
+    expect(banner).not.toContain('output');
   });
 
   it('reports each cycle exactly once across overlapping lifecycle hooks', () => {
@@ -202,8 +229,10 @@ describe('develop reporter output', () => {
     expect(output).toContain('$a/$b → math.div($a, $b)');
     expect(output).toContain('src/components/base/_breakpoints.scss');
     expect(output).toContain('map-get() → map.get()');
-    // The whole tally fits well inside the volume it replaces.
-    expect(lines.length).toBeLessThan(16);
+    // Dart Sass prints a formatted block per occurrence, so 25 deprecations cost
+    // upwards of a hundred lines raw. The budget covers the whole summary — the
+    // project facts and section dividers included — not just the tally.
+    expect(lines.length).toBeLessThan(24);
   });
 
   it('lists each deprecation once per file with every affected line', () => {
@@ -366,21 +395,15 @@ describe('develop reporter output', () => {
 describe('rendering helpers', () => {
   const emptySnapshot = createDiagnosticsCollector().snapshot();
 
-  it('omits the entry count when it cannot be determined', () => {
-    const banner = renderBanner({
-      version: '1.0.0',
-      platform: 'none',
-      styler: plain,
-    });
-    expect(banner.join('\n')).toContain('core 1.0.0 · Platform: none');
-    expect(banner.join('\n')).not.toContain('entries');
+  it('carries the core version under the wordmark', () => {
+    const banner = renderBanner({ version: '1.0.0', styler: plain }).join('\n');
+
+    expect(banner).toContain('core 1.0.0');
   });
 
   it('falls back to plain text where block glyphs would not render', () => {
     const banner = renderBanner({
       version: '1.0.0',
-      platform: 'drupal',
-      entryCount: 4,
       unicode: false,
       styler: plain,
     }).join('\n');
@@ -388,7 +411,7 @@ describe('rendering helpers', () => {
     // Mojibake reads as breakage, so the wordmark is dropped, not mangled.
     expect(banner).not.toContain('█');
     expect(banner).toContain('EMULSIFY');
-    expect(banner).toContain('core 1.0.0 · Platform: Drupal · 4 entries');
+    expect(banner).toContain('core 1.0.0');
   });
 
   it('caps listed errors and reports the remainder as a count', () => {

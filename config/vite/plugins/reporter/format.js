@@ -137,6 +137,27 @@ export function formatDuration(milliseconds) {
 }
 
 /**
+ * Format a byte count for display.
+ *
+ * Rolldown's discarded asset table reported kilobytes to two decimals per file.
+ * The reporter states one total and one largest file instead, so it rounds to
+ * whole kilobytes and one decimal megabyte — enough to notice a bundle doubling,
+ * without implying a precision that matters at this scale.
+ *
+ * @param {number} bytes - Byte count.
+ * @returns {string} Formatted size.
+ */
+export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+
+  const kilobytes = bytes / 1024;
+  if (kilobytes < 1024) return `${Math.round(kilobytes)} kB`;
+
+  return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
+/**
  * Format a wall-clock timestamp for rebuild lines.
  *
  * @param {Date} [date] - Date to format.
