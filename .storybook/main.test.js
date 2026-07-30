@@ -413,9 +413,13 @@ describe('Storybook main config', () => {
         dedupe: finalConfig.resolve.dedupe,
         include: finalConfig.optimizeDeps.include,
         exclude: finalConfig.optimizeDeps.exclude,
-        esbuildPluginNames: finalConfig.optimizeDeps.esbuildOptions.plugins.map(
-          (plugin) => plugin.name,
-        ),
+        optimizerPluginNames:
+          finalConfig.optimizeDeps.rolldownOptions.plugins.map(
+            (plugin) => plugin.name,
+          ),
+        moduleTypes: finalConfig.optimizeDeps.rolldownOptions.moduleTypes,
+        usesDeprecatedEsbuildOptions:
+          finalConfig.optimizeDeps.esbuildOptions !== undefined,
       }));
     `;
     const output = execFileSync(process.execPath, [
@@ -444,13 +448,17 @@ describe('Storybook main config', () => {
     expect(finalConfig.exclude).toEqual([
       'virtual:emulsify-twig-globs',
       'virtual:emulsify-twig-asset-sources',
+      'virtual:emulsify-twig-asset-source-runtime',
       'virtual:emulsify-twig-extension-installers',
       '@emulsify/core/storybook/twig/source-function',
       '@emulsify/core/storybook/twig/source',
       '@emulsify/core/storybook/twig/resolver',
     ]);
-    expect(finalConfig.esbuildPluginNames).toContain(
+    expect(finalConfig.optimizerPluginNames).toContain(
       'emulsify-twig-virtual-modules',
     );
+    expect(finalConfig.moduleTypes).toEqual({ '.js': 'jsx' });
+    // Vite 8 optimizes with Rolldown; setting esbuildOptions logs a deprecation.
+    expect(finalConfig.usesDeprecatedEsbuildOptions).toBe(false);
   });
 });

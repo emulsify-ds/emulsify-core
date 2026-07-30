@@ -32,8 +32,16 @@ const customElementBrowserTest = join(
   'scripts/test-custom-element-storybook.js',
 );
 const largeTwigComponentCount = 80;
-// Measured before shared virtual Twig dependency AST modules were introduced.
-const largeTwigStorybookBaselineJsBytes = 7_529_579;
+// Storybook 10.5 changes its own manager/runtime chunks under Vite 8, so keep
+// the regression gate focused on fixture-owned output. The exclusive ceiling
+// preserves the original 484-byte budget over the current 178,698-byte result.
+const largeTwigStorybookFixtureJsLimit = 179_182;
+const largeTwigStorybookFixtureJsPatterns = [
+  'storybook-assets/_content-*.js',
+  'storybook-assets/gallery-*.js',
+  'storybook-assets/gallery.stories-*.js',
+  'storybook-assets/item-*.js',
+];
 
 const releaseFixtures = [
   {
@@ -73,6 +81,12 @@ const releaseFixtures = [
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
       'dist/components/card/js/card2.js',
+    ],
+    assertContent: [
+      {
+        pattern: 'dist/global/base/css/base.css',
+        strings: ['.sass-glob-fixture', '.legacy-sass-glob-fixture'],
+      },
     ],
     rejectContent: [
       {
@@ -161,6 +175,10 @@ const releaseFixtures = [
           'greeting-select',
         ],
       },
+      {
+        pattern: '.out/storybook-assets/*.js',
+        strings: ['data-nested-project-alias'],
+      },
     ],
     browserTest: customElementBrowserTest,
   },
@@ -172,7 +190,8 @@ const releaseFixtures = [
     match: ['.out/storybook-assets/gallery.stories-*.js'],
     measure: true,
     metricComponentCount: largeTwigComponentCount,
-    maxJavaScriptBytes: largeTwigStorybookBaselineJsBytes,
+    javascriptMeasurePatterns: largeTwigStorybookFixtureJsPatterns,
+    maxMeasuredJavaScriptBytes: largeTwigStorybookFixtureJsLimit,
   },
 ];
 
@@ -416,11 +435,17 @@ function formatBytes(bytes) {
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function javascriptOutputSize(outputDir) {
-  return globSync('**/*.js', {
-    cwd: outputDir,
-    nodir: true,
-  }).reduce((totalBytes, filePath) => {
+function javascriptOutputSize(outputDir, patterns = ['**/*.js']) {
+  const filePaths = new Set(
+    patterns.flatMap((pattern) =>
+      globSync(pattern, {
+        cwd: outputDir,
+        nodir: true,
+      }),
+    ),
+  );
+
+  return Array.from(filePaths).reduce((totalBytes, filePath) => {
     return totalBytes + statSync(join(outputDir, filePath)).size;
   }, 0);
 }
@@ -472,18 +497,24 @@ function runStorybookFixture(fixture) {
     if (fixture.measure) {
       const outputSize = directorySize(outputDir);
       const jsBytes = javascriptOutputSize(outputDir);
+      const measuredJsBytes = javascriptOutputSize(
+        outputDir,
+        fixture.javascriptMeasurePatterns,
+      );
       if (
-        Number.isFinite(fixture.maxJavaScriptBytes) &&
-        jsBytes >= fixture.maxJavaScriptBytes
+        Number.isFinite(fixture.maxMeasuredJavaScriptBytes) &&
+        measuredJsBytes >= fixture.maxMeasuredJavaScriptBytes
       ) {
         throw new Error(
-          `${fixture.name} emitted ${jsBytes} JS bytes; expected less than baseline ${fixture.maxJavaScriptBytes}.`,
+          `${fixture.name} emitted ${measuredJsBytes} measured JS bytes; expected less than ${fixture.maxMeasuredJavaScriptBytes}.`,
         );
       }
       console.log(
         `  Storybook metrics (${fixture.name}): ${(durationMs / 1000).toFixed(
           2,
-        )}s, ${formatBytes(outputSize)} output, ${formatBytes(jsBytes)} JS${
+        )}s, ${formatBytes(outputSize)} output, ${formatBytes(
+          jsBytes,
+        )} JS, ${formatBytes(measuredJsBytes)} measured JS${
           fixture.metricComponentCount
             ? `, ${fixture.metricComponentCount} generated Twig components`
             : ''

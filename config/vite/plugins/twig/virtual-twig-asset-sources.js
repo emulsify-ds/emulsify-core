@@ -5,8 +5,9 @@
  * resident unless a Twig template calls `source('@assets/...')`.
  */
 
-import { readdirSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { relative, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { safeExists } from '../../utils/fs-safe.js';
 import { toPosixPath } from '../../utils/paths.js';
 import { unique } from '../../../../src/extensions/shared/lists.js';
@@ -16,6 +17,14 @@ import { INLINE_ASSET_EXTS } from '../../../../src/storybook/twig/constants.js';
 export const VIRTUAL_TWIG_ASSET_SOURCES_ID =
   'virtual:emulsify-twig-asset-sources';
 const RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID = `\0${VIRTUAL_TWIG_ASSET_SOURCES_ID}`;
+const VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID =
+  'virtual:emulsify-twig-asset-source-runtime';
+const RESOLVED_VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID = `\0${VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID}`;
+const ASSET_SOURCE_RUNTIME_URL = new URL(
+  '../../../../src/storybook/twig/asset-source-runtime.js',
+  import.meta.url,
+);
+const ASSET_SOURCE_RUNTIME_PATH = fileURLToPath(ASSET_SOURCE_RUNTIME_URL);
 const GENERATED_ASSET_ALIASES = new Set(['icons.svg']);
 const GENERATED_ASSET_ROOTS = ['/dist/assets'];
 const PUBLIC_ASSET_ROOTS = new Map([
@@ -252,7 +261,7 @@ export function generateVirtualTwigAssetSourcesModule(env) {
  * Raw text assets stay lazy and load only when Twig source() requests them.
  */
 
-import { createAssetSourceRuntime } from '@emulsify/core/storybook/twig/asset-source-runtime';
+import { createAssetSourceRuntime } from '${VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID}';
 
 export const assetRootPrefixes = ${JSON.stringify(rootPrefixes)};
 export const generatedAssetRootPrefixes = ${JSON.stringify(allGeneratedRootPrefixes)};
@@ -301,12 +310,19 @@ export function virtualTwigAssetSourcesPlugin(env) {
       if (id === VIRTUAL_TWIG_ASSET_SOURCES_ID) {
         return RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID;
       }
+      if (id === VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID) {
+        return RESOLVED_VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID;
+      }
 
       return null;
     },
     load(id) {
       if (id === RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID) {
         return generateVirtualTwigAssetSourcesModule(env);
+      }
+      if (id === RESOLVED_VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID) {
+        this.addWatchFile(ASSET_SOURCE_RUNTIME_PATH);
+        return readFileSync(ASSET_SOURCE_RUNTIME_PATH, 'utf8');
       }
 
       return null;

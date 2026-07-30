@@ -3,6 +3,7 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { get } from 'http';
 import { tmpdir } from 'os';
 import path from 'path';
 import pa11y from 'pa11y';
@@ -17,6 +18,9 @@ import {
   lintComponent,
   lintReportAndExit,
   resolvePa11yStoryIds,
+  resolveProjectA11yConfig,
+  resolveStorybookBuildDir,
+  startStorybookServer,
   storyIdsFromStorybookIndex,
 } from './a11y.js';
 
@@ -25,7 +29,7 @@ jest.mock('pa11y', () => jest.fn());
 jest.spyOn(global.console, 'log').mockImplementation(() => {});
 const { ignore, storybookBuildDir, pa11y: pa11yConfig } = a11yConfig;
 
-const STORYBOOK_BUILD_DIR = path.resolve(__dirname, '../', storybookBuildDir);
+const STORYBOOK_BUILD_DIR = path.resolve(process.cwd(), storybookBuildDir);
 const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
 
 pa11y.mockResolvedValue('very official report');
@@ -47,6 +51,19 @@ function makeStorybookBuild(indexSource) {
   }
 
   return buildDir;
+}
+
+function readUrl(url) {
+  return new Promise((resolve, reject) => {
+    get(url, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        body += chunk;
+      });
+      response.on('end', () => resolve(body));
+    }).on('error', reject);
+  });
 }
 
 describe('a11y', () => {
@@ -106,6 +123,17 @@ describe('a11y', () => {
       'components-button--primary',
       'components-card--default',
     ]);
+  });
+
+  it('resolves generated-consumer paths from the project root', () => {
+    const projectDir = path.join(tmpdir(), 'packed-consumer');
+
+    expect(resolveStorybookBuildDir('.out', projectDir)).toBe(
+      path.join(projectDir, '.out'),
+    );
+    expect(resolveProjectA11yConfig(projectDir)).toBe(
+      path.join(projectDir, 'config/emulsify-core/a11y.config.js'),
+    );
   });
 
   it('keeps manual-only configuration when discovery is disabled', () => {
@@ -326,6 +354,31 @@ describe('a11y', () => {
       `${STORYBOOK_IFRAME}?id=chicken-strips`,
       pa11yConfig,
     );
+  });
+
+  it('can call pa11y through a served Storybook origin', async () => {
+    await lintComponent('chicken-strips', {
+      baseUrl: 'http://127.0.0.1:4321/iframe.html',
+    });
+
+    expect(pa11y).toHaveBeenLastCalledWith(
+      'http://127.0.0.1:4321/iframe.html?id=chicken-strips',
+      pa11yConfig,
+    );
+  });
+
+  it('serves built Storybook files over loopback HTTP', async () => {
+    const buildDir = makeStorybookBuild();
+    writeFileSync(path.join(buildDir, 'iframe.html'), 'Storybook ready');
+    const server = await startStorybookServer(buildDir);
+
+    try {
+      await expect(readUrl(`${server.baseUrl}/iframe.html`)).resolves.toBe(
+        'Storybook ready',
+      );
+    } finally {
+      await server.close();
+    }
   });
 
   it('runs linter, reports on issues, and exits with code "1" if valid issues are found', async () => {

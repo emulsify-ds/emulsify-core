@@ -360,11 +360,24 @@ describe('Twig module plugin', () => {
                 const Twig = factory();
                 registerTwigExtensions(Twig);
       	installProjectTwigExtensions(Twig);
+                Twig.extend((TwigCore) => {
+                  TwigCore.Templates.registerLoader(
+                    'emulsify',
+                    (location, params = {}) => {
+                      const templateName = params.path || params.id || location;
+                      throw new TwigCore.Error(
+                        'Unable to find template ' + templateName + '.',
+                      );
+                    },
+                  );
+                });
 
                 
                     const __emulsifyDependency0 = Twig.twig({ ...__emulsifyDependencyTemplateParams0, id: __emulsifyDependencyTemplateId0 });
+                    __emulsifyDependency0.method = 'emulsify';
                   
                 const __emulsifyTemplate = Twig.twig({"allowInlineIncludes":true,"data":[{"type":"logic","token":{"type":"Twig.logic.type.include","only":false,"ignoreMissing":false,"stack":[{"type":"Twig.expression.type.string","value":"/src/components::shared/shared.twig"}],"position":{"start":0,"end":0}},"position":{"start":0,"end":0}}],"namespaces":{"components":"<projectDir>/src/components"},"precompiled":true,"rethrow":true,"id":"/src/components::parent/parent.twig"});
+                __emulsifyTemplate.method = 'emulsify';
                 const __emulsifyIncludeTemplates = new Map();
                 const __emulsifySourceTemplates = new Map();
                 __emulsifyIncludeTemplates.set("<projectDir>/src/components/shared/shared.twig", (context = {}) => __emulsifyDependency0.render(context));
@@ -638,6 +651,360 @@ describe('Twig module plugin', () => {
       'An error occurred whilst compiling',
     );
     expect(output).toContain('<button>Read more</button>');
+  });
+
+  it.each([
+    {
+      componentName: 'heading',
+      description: 'directly under the component root',
+      pathParts: ['heading'],
+    },
+    {
+      componentName: 'heading',
+      description: 'under one grouping directory',
+      pathParts: ['typography', 'heading'],
+    },
+    {
+      componentName: 'headings',
+      description: 'under multiple grouping directories',
+      pathParts: ['atoms', 'text', 'headings'],
+    },
+  ])(
+    'resolves project-scoped components $description',
+    async ({ componentName, pathParts }) => {
+      projectDir = makeTempProject();
+      const cardFile = join(projectDir, 'src/components/card/card.twig');
+      const headingDir = join(projectDir, 'src/components', ...pathParts);
+      fs.mkdirSync(join(projectDir, 'src/components/card'), {
+        recursive: true,
+      });
+      fs.mkdirSync(headingDir, { recursive: true });
+      fs.writeFileSync(
+        join(headingDir, `${componentName}.twig`),
+        '<h2>{{ title }}</h2>',
+      );
+      fs.writeFileSync(cardFile, `{% include "steinhardt:${componentName}" %}`);
+
+      const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+      const transformed = await transformTwigModule(twigPlugin, cardFile);
+      const output = renderGeneratedTwigModule(transformed.code, {
+        title: 'Nested heading',
+      });
+
+      expect(transformed.code).toContain(
+        `__emulsifyIncludeTemplates.set("steinhardt:${componentName}"`,
+      );
+      expect(output).toContain('<h2>Nested heading</h2>');
+      expect(output).not.toContain('Unable to find template file');
+      expect(output).not.toContain('fs.statSync is not a function');
+    },
+  );
+
+  it.each([
+    {
+      dependencyName: 'heading',
+      dependencySource: '<h2>Included</h2>',
+      expected: '<h2>Included</h2>',
+      source: '{% include "steinhardt:heading" %}',
+      tag: 'include',
+    },
+    {
+      dependencyName: 'macros',
+      dependencySource:
+        '{% macro badge(text) %}<span>{{ text }}</span>{% endmacro %}',
+      expected: '<span>Imported</span>',
+      source:
+        '{% import "steinhardt:macros" as components %}{{ components.badge("Imported") }}',
+      tag: 'import',
+    },
+    {
+      dependencyName: 'frame',
+      dependencySource: '<section>{% block content %}{% endblock %}</section>',
+      expected: '<section>Embedded</section>',
+      source:
+        '{% embed "steinhardt:frame" %}{% block content %}Embedded{% endblock %}{% endembed %}',
+      tag: 'embed',
+    },
+    {
+      dependencyName: 'shell',
+      dependencySource: '<main>{% block content %}{% endblock %}</main>',
+      expected: '<main>Extended</main>',
+      source:
+        '{% extends "steinhardt:shell" %}{% block content %}Extended{% endblock %}',
+      tag: 'extends',
+    },
+    {
+      dependencyName: 'macros',
+      dependencySource:
+        '{% macro badge(text) %}<span>{{ text }}</span>{% endmacro %}',
+      expected: '<span>From</span>',
+      source: '{% from "steinhardt:macros" import badge %}{{ badge("From") }}',
+      tag: 'from',
+    },
+  ])(
+    'resolves nested project-scoped $tag references',
+    async ({ dependencyName, dependencySource, expected, source }) => {
+      projectDir = makeTempProject();
+      const cardDir = join(projectDir, 'src/components/card');
+      const dependencyDir = join(
+        projectDir,
+        'src/components/atoms/text',
+        dependencyName,
+      );
+      const cardFile = join(cardDir, 'card.twig');
+      fs.mkdirSync(cardDir, { recursive: true });
+      fs.mkdirSync(dependencyDir, { recursive: true });
+      fs.writeFileSync(
+        join(dependencyDir, `${dependencyName}.twig`),
+        dependencySource,
+      );
+      fs.writeFileSync(cardFile, source);
+
+      const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+      const transformed = await transformTwigModule(twigPlugin, cardFile);
+      const output = renderGeneratedTwigModule(transformed.code);
+
+      expect(output).toContain(expected);
+      expect(output).not.toContain('Unable to find template file');
+      expect(output).not.toContain('fs.statSync is not a function');
+    },
+  );
+
+  it('preserves exact component namespace precedence for nested templates', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const exactDir = join(projectDir, 'src/components/atoms/text/headings');
+    const duplicateDir = join(projectDir, 'src/components/molecules/headings');
+    const cardFile = join(cardDir, 'card.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.mkdirSync(exactDir, { recursive: true });
+    fs.mkdirSync(duplicateDir, { recursive: true });
+    fs.writeFileSync(join(exactDir, 'heading.twig'), '<h2>Exact heading</h2>');
+    fs.writeFileSync(
+      join(duplicateDir, 'heading.twig'),
+      '<h2>Duplicate heading</h2>',
+    );
+    fs.writeFileSync(
+      cardFile,
+      '{% include "@components/atoms/text/headings/heading.twig" %}',
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code);
+
+    expect(output).toContain('<h2>Exact heading</h2>');
+    expect(output).not.toContain('Duplicate heading');
+  });
+
+  it('resolves duplicate project-scoped component names deterministically', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const alphaDir = join(projectDir, 'src/components/alpha/heading');
+    const betaDir = join(projectDir, 'src/components/beta/heading');
+    const deeperDir = join(projectDir, 'src/components/aardvark/text/heading');
+    const cardFile = join(cardDir, 'card.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.mkdirSync(betaDir, { recursive: true });
+    fs.mkdirSync(deeperDir, { recursive: true });
+    fs.mkdirSync(alphaDir, { recursive: true });
+    fs.writeFileSync(join(betaDir, 'heading.twig'), '<h2>Beta</h2>');
+    fs.writeFileSync(join(deeperDir, 'heading.twig'), '<h2>Deeper</h2>');
+    fs.writeFileSync(join(alphaDir, 'heading.twig'), '<h2>Alpha</h2>');
+    fs.writeFileSync(cardFile, '{% include "steinhardt:heading" %}');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code);
+
+    expect(output).toContain('<h2>Alpha</h2>');
+    expect(output).not.toContain('<h2>Beta</h2>');
+    expect(output).not.toContain('<h2>Deeper</h2>');
+  });
+
+  it('resolves nested transitive project-scoped dependencies', async () => {
+    projectDir = makeTempProject();
+    const pageDir = join(projectDir, 'src/components/page');
+    const cardDir = join(projectDir, 'src/components/molecules/cards/card');
+    const headingDir = join(projectDir, 'src/components/atoms/text/heading');
+    const pageFile = join(pageDir, 'page.twig');
+    fs.mkdirSync(pageDir, { recursive: true });
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.mkdirSync(headingDir, { recursive: true });
+    fs.writeFileSync(join(headingDir, 'heading.twig'), '<h2>{{ title }}</h2>');
+    fs.writeFileSync(
+      join(cardDir, 'card.twig'),
+      '<article>{% include "steinhardt:heading" %}</article>',
+    );
+    fs.writeFileSync(pageFile, '{% include "steinhardt:card" %}');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, pageFile);
+    const output = renderGeneratedTwigModule(transformed.code, {
+      title: 'Transitive heading',
+    });
+
+    expect(output).toContain('<article><h2>Transitive heading</h2></article>');
+  });
+
+  it('skips unreadable grouped component directories', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const privateDir = join(projectDir, 'src/components/atoms/private');
+    const headingDir = join(projectDir, 'src/components/atoms/public/heading');
+    const cardFile = join(cardDir, 'card.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.mkdirSync(privateDir, { recursive: true });
+    fs.mkdirSync(headingDir, { recursive: true });
+    fs.writeFileSync(join(headingDir, 'heading.twig'), '<h2>Public</h2>');
+    fs.writeFileSync(cardFile, '{% include "steinhardt:heading" %}');
+    const realReaddirSync = fs.readdirSync.bind(fs);
+    jest.spyOn(fs, 'readdirSync').mockImplementation((directory, options) => {
+      if (directory === privateDir) {
+        throw new Error('EACCES');
+      }
+      return realReaddirSync(directory, options);
+    });
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+
+    expect(renderGeneratedTwigModule(transformed.code)).toContain(
+      '<h2>Public</h2>',
+    );
+  });
+
+  it('does not resolve project-scoped traversal outside the component root', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const outsideDir = join(projectDir, 'src/outside/heading');
+    const cardFile = join(cardDir, 'card.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(join(outsideDir, 'heading.twig'), '<h2>Outside root</h2>');
+    fs.writeFileSync(
+      cardFile,
+      '{% include "steinhardt:../../outside/heading" %}',
+    );
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code);
+
+    expect(output).not.toContain('Outside root');
+    expect(output).toContain('Unable to find template');
+    expect(output).not.toContain('fs.statSync is not a function');
+  });
+
+  it('keeps unresolved static templates away from the Twig.js fs loader', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const cardFile = join(cardDir, 'card.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.writeFileSync(cardFile, '{% include "steinhardt:missing" %}');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+    const runtimeTwig = Twig.factory();
+    let fsLoaderUsed = false;
+    runtimeTwig.extend((TwigCore) => {
+      TwigCore.Templates.registerLoader('fs', async () => {
+        fsLoaderUsed = true;
+        throw new Error('fs loader used');
+      });
+    });
+
+    const output = renderGeneratedTwigModule(transformed.code, {}, runtimeTwig);
+
+    expect(fsLoaderUsed).toBe(false);
+    expect(output).toContain('Unable to find template steinhardt:missing');
+    expect(output).not.toContain('fs.statSync is not a function');
+  });
+
+  it('invalidates nested component traversal when HMR adds a directory', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const headingDir = join(projectDir, 'src/components/atoms/text/heading');
+    const cardFile = join(cardDir, 'card.twig');
+    const headingFile = join(headingDir, 'heading.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.writeFileSync(cardFile, '{% include "steinhardt:heading" %}');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const initial = await transformTwigModule(twigPlugin, cardFile);
+    expect(renderGeneratedTwigModule(initial.code)).toContain(
+      'Unable to find template',
+    );
+
+    fs.mkdirSync(headingDir, { recursive: true });
+    fs.writeFileSync(headingFile, '<h2>Added by HMR</h2>');
+    const importerModule = { id: 'card-template' };
+    const server = {
+      moduleGraph: {
+        getModulesByFile: jest.fn((filePath) =>
+          filePath === cardFile ? [importerModule] : [],
+        ),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    const updatedModules = twigPlugin.handleHotUpdate({
+      file: headingFile,
+      server,
+    });
+    const updated = await transformTwigModule(twigPlugin, cardFile);
+
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      importerModule,
+    );
+    expect(updatedModules).toContain(importerModule);
+    expect(renderGeneratedTwigModule(updated.code)).toContain(
+      '<h2>Added by HMR</h2>',
+    );
+  });
+
+  it('invalidates nested component traversal when HMR removes a directory', async () => {
+    projectDir = makeTempProject();
+    const cardDir = join(projectDir, 'src/components/card');
+    const headingDir = join(projectDir, 'src/components/atoms/text/heading');
+    const cardFile = join(cardDir, 'card.twig');
+    const headingFile = join(headingDir, 'heading.twig');
+    fs.mkdirSync(cardDir, { recursive: true });
+    fs.mkdirSync(headingDir, { recursive: true });
+    fs.writeFileSync(headingFile, '<h2>Removed by HMR</h2>');
+    fs.writeFileSync(cardFile, '{% include "steinhardt:heading" %}');
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const initial = await transformTwigModule(twigPlugin, cardFile);
+    expect(renderGeneratedTwigModule(initial.code)).toContain(
+      '<h2>Removed by HMR</h2>',
+    );
+
+    fs.rmSync(headingDir, { recursive: true, force: true });
+    const importerModule = { id: 'card-template' };
+    const server = {
+      moduleGraph: {
+        getModulesByFile: jest.fn((filePath) =>
+          filePath === cardFile ? [importerModule] : [],
+        ),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    const updatedModules = twigPlugin.handleHotUpdate({
+      file: headingFile,
+      server,
+    });
+    const updated = await transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(updated.code);
+
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      importerModule,
+    );
+    expect(updatedModules).toContain(importerModule);
+    expect(output).not.toContain('Removed by HMR');
+    expect(output).toContain('Unable to find template');
+    expect(output).not.toContain('fs.statSync is not a function');
   });
 
   it('preserves runtime rethrow for precompiled templates', async () => {

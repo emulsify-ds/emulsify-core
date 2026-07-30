@@ -1,0 +1,13 @@
+{
+  "name": "consumer-mixed-storybook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Packed Storybook consumer used for the React peer matrix",
+  "type": "module",
+  "scripts": {
+    "storybook-build": "storybook build -c node_modules/@emulsify/core/.storybook -o .out"
+  },
+  "dependencies": {
+    "@emulsify/core": "0.0.0-packed-fixture"
+  }
+}

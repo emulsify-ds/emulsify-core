@@ -38,10 +38,23 @@ describe('virtual Twig asset source module plugin', () => {
     const env = { projectDir, projectStructure: {} };
     const plugin = virtualTwigAssetSourcesPlugin(env);
     const resolvedId = plugin.resolveId(VIRTUAL_TWIG_ASSET_SOURCES_ID);
+    const runtimeId = plugin.resolveId(
+      'virtual:emulsify-twig-asset-source-runtime',
+    );
+    const addWatchFile = jest.fn();
 
     expect(resolvedId).toBe('\0virtual:emulsify-twig-asset-sources');
+    expect(runtimeId).toBe('\0virtual:emulsify-twig-asset-source-runtime');
     expect(plugin.resolveId('/real/module.js')).toBeNull();
     expect(plugin.load(resolvedId)).toContain('export const assets =');
+    expect(plugin.load.call({ addWatchFile }, runtimeId)).toContain(
+      'export function createAssetSourceRuntime',
+    );
+    expect(addWatchFile).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /src[/\\]storybook[/\\]twig[/\\]asset-source-runtime\.js$/,
+      ),
+    );
     expect(plugin.load('/real/module.js')).toBeNull();
   });
 
@@ -71,7 +84,7 @@ describe('virtual Twig asset source module plugin', () => {
     expect(source).toContain('export const assetRootPrefixes =');
     expect(source).toContain('export const generatedAssetRootPrefixes =');
     expect(source).toMatch(
-      /import \{ createAssetSourceRuntime \} from '@emulsify\/core\/storybook\/twig\/asset-source-runtime';/,
+      /import \{ createAssetSourceRuntime \} from 'virtual:emulsify-twig-asset-source-runtime';/,
     );
     expect(source).toContain(
       'const assetSourceRuntime = createAssetSourceRuntime({',

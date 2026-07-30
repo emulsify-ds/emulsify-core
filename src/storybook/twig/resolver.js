@@ -91,9 +91,26 @@ function findGroupedComponentEntry(map, candidates, env) {
 
   for (const { rootRel, suffix } of groupedComponentSuffixes(candidates, env)) {
     const rootPrefix = `${rootRel}/`;
-    const match = entries.find(
-      ([key]) => key.startsWith(rootPrefix) && key.endsWith(suffix),
-    );
+    const matches = entries
+      .filter(([key]) => key.startsWith(rootPrefix) && key.endsWith(suffix))
+      .sort(([leftKey], [rightKey]) => {
+        const leftGroupingPath = leftKey.slice(
+          rootPrefix.length,
+          -suffix.length,
+        );
+        const rightGroupingPath = rightKey.slice(
+          rootPrefix.length,
+          -suffix.length,
+        );
+        const leftDepth = leftGroupingPath.split('/').filter(Boolean).length;
+        const rightDepth = rightGroupingPath.split('/').filter(Boolean).length;
+
+        if (leftDepth !== rightDepth) {
+          return leftDepth - rightDepth;
+        }
+        return leftKey === rightKey ? 0 : leftKey < rightKey ? -1 : 1;
+      });
+    const match = matches[0];
     if (match) {
       return { key: match[0], value: match[1] };
     }

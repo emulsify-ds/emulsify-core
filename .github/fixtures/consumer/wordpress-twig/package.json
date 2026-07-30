@@ -1,0 +1,13 @@
+{
+  "name": "consumer-wordpress-twig",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal generated WordPress and Twig consumer",
+  "type": "module",
+  "scripts": {
+    "build": "vite build --config node_modules/@emulsify/core/config/vite/vite.config.js"
+  },
+  "dependencies": {
+    "@emulsify/core": "0.0.0-packed-fixture"
+  }
+}

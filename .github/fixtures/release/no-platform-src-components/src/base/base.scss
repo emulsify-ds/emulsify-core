@@ -1,3 +1,6 @@
+@use './glob-partials/*.scss';
+@import './legacy-glob-partials/*.scss';
+
 .base {
   color: #2f6f4e;
 }

@@ -23,37 +23,11 @@ import {
 import { basename, dirname, join, resolve } from 'path';
 
 import { safeExists, safeReadJson } from '../../utils/fs-safe.js';
+import { resolvePackageVersion } from '../../utils/package-version.js';
 import { walkFiles } from './source-file-index.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';
 const FILE_COMPARE_CHUNK_SIZE = 64 * 1024;
-
-/**
- * Resolve the installed Core package version without relying on import.meta so
- * Jest's CommonJS transform can load this Vite plugin module.
- *
- * @param {string} projectDir - Project directory running the build.
- * @returns {string} Emulsify Core package version.
- */
-const resolvePackageVersion = (projectDir) => {
-  const candidates = [
-    join(projectDir, 'node_modules/@emulsify/core/package.json'),
-    join(process.cwd(), 'node_modules/@emulsify/core/package.json'),
-    join(process.cwd(), 'package.json'),
-  ];
-
-  for (const candidate of candidates) {
-    const candidatePackage = safeReadJson(candidate).data;
-    if (
-      candidatePackage?.name === '@emulsify/core' &&
-      candidatePackage.version
-    ) {
-      return candidatePackage.version;
-    }
-  }
-
-  return '0.0.0';
-};
 
 /**
  * Remove empty parent directories from a start directory up to, but not including,
