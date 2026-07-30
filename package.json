@@ -1,7 +1,7 @@
 {
   "name": "@emulsify/core",
-  "version": "4.3.0",
-  "description": "Shared Vite build tooling and Storybook support for Twig, React, and custom elements",
+  "version": "4.4.0",
+  "description": "Bundled tooling for Storybook development + Vite Build",
   "keywords": [
     "component library",
     "craftcms",
