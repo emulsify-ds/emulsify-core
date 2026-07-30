@@ -11,6 +11,7 @@ These docs expand on the short project README and are organized by the task a pr
 | [Asset References](asset-references.md)              | Referencing fonts, SVGs, images, and other files from project root or configured asset roots in Sass, CSS, and Twig.  |
 | [Platform Adapters](platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
 | [Extension Points](extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
+| [Develop Reporter](develop-reporter.md)              | Reading `npm run develop` output: project facts, input roots, problem blocks, Storybook URLs, and verbosity controls. |
 | [Dependency Contract](dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                                |
 | [Performance](performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, Storybook `include()`/`source()`, and `switch/case/default/endswitch` in Twig.js.  |

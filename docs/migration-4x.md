@@ -149,7 +149,7 @@ themes. At minimum:
     "audit": "sh -c 'node_modules/@emulsify/core/scripts/audit.js \"$@\"; status=$?; printf \"\\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/audit.md\\n\" >&2; exit $status' --",
     "audit:twig-stories": "sh -c 'node_modules/@emulsify/core/scripts/audit-twig-stories.js \"$@\"; status=$?; printf \"\\nMigration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility\\n\" >&2; exit $status' --",
     "build": "npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js",
-    "develop": "npm run ensure-dist && concurrently --raw --no-shell npm:vite npm:storybook",
+    "develop": "npm run --silent ensure-dist && concurrently --raw --no-shell \"npm run --silent vite\" \"npm run --silent storybook\"",
     "vite": "vite build --watch --config node_modules/@emulsify/core/config/vite/vite.config.js"
   },
   "dependencies": {
@@ -161,6 +161,12 @@ themes. At minimum:
 Projects with custom lint, Prettier, test, or Storybook scripts should keep
 their project-specific behavior, but should still move Core build commands away
 from `config/webpack` and into `config/vite`.
+
+The `--silent` flags in `develop` are cosmetic. `concurrently` spawns each task
+as its own `npm run`, and npm echoes the script it is about to execute, so a
+plain `concurrently --raw --no-shell npm:vite npm:storybook` opens every develop
+session with several lines of script echo before either tool has said anything.
+Existing scripts without the flags keep working; they are just noisier.
 
 ## Install Warning Controls
 
