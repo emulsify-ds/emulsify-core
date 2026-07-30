@@ -37,7 +37,10 @@ import { buildInputs } from './entries.js';
 import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
 import { createSassOptions } from './plugins/reporter/sass-logger.js';
-import { createReporterLogger } from './plugins/reporter/vite-logger.js';
+import {
+  createReporterLogger,
+  isVerbose,
+} from './plugins/reporter/vite-logger.js';
 import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
@@ -101,10 +104,47 @@ export default defineConfig(async () => {
     // Core plugin set + project-provided plugins (if any).
     plugins: [...makePlugins(envWithSourceFileIndex), ...projectPlugins],
 
-    // Route Vite's own diagnostics through the reporter during a watch build so
-    // unresolved CSS asset URLs are summarized rather than printed mid-build.
+    // Quieting `develop` takes two independent switches, because the output has
+    // two independent sources.
+    //
+    // 1. `logLevel` gates Vite's build reporter, which is a native Rolldown
+    //    plugin. Vite reads `config.logLevel` directly when constructing it and
+    //    passes a `logInfo` callback only when the level admits info. Rolldown's
+    //    Rust side registers its Transform, BuildStart, BuildEnd, RenderChunk,
+    //    WriteBundle, and GenerateBundle hooks only when that callback exists,
+    //    so raising the level does not merely hide the report — it stops
+    //    Rolldown instrumenting transforms and computing gzip sizes at all.
+    //    That removes the `transforming (N)` progress line, `N modules
+    //    transformed.`, `rendering chunks...`, `computing gzip size...`, and the
+    //    per-file asset table, and makes every rebuild cheaper.
+    //
+    //    The progress line is the one that matters most for legibility: Rolldown
+    //    writes it from Rust with a `\x1b[2K\r` prefix and no trailing newline,
+    //    which is what collides with Storybook's output when `concurrently`
+    //    merges both streams onto one pipe. Nothing on the JavaScript side can
+    //    intercept it, so `logLevel` is the only lever that removes it.
+    //
+    // 2. `customLogger` gates Vite's own JavaScript chatter — `building client
+    //    environment...`, `build started...`, `watching for file changes...`,
+    //    and `built in Nms.` — and routes unresolved CSS asset URLs into the
+    //    diagnostics collector so they are summarized rather than printed
+    //    mid-build. The reporter writes straight to stdout rather than through
+    //    this logger, so its own output survives the higher level, and warnings
+    //    and errors still come through.
+    //
+    // Neither switch substitutes for the other: `createLogger` returns a
+    // supplied `customLogger` verbatim and never consults the level, while the
+    // build reporter consults the level and never consults the logger.
+    // `build.reportCompressedSize` is deliberately left alone; it suppresses
+    // only the gzip column, and the table it belongs to is already gone.
     ...(diagnostics
-      ? { customLogger: createReporterLogger(diagnostics, createLogger()) }
+      ? {
+          logLevel: isVerbose() ? 'info' : 'warn',
+          customLogger: createReporterLogger(
+            diagnostics,
+            createLogger(isVerbose() ? 'info' : 'warn'),
+          ),
+        }
       : {}),
 
     // Keep React-based story helpers on the consumer project's React singleton.
