@@ -21,6 +21,10 @@ import {
 } from '../src/storybook/main-config.js';
 import { buildAssetStaticDirs } from './main-static-assets.js';
 import { createViteFinal } from './main-vite.js';
+import {
+  installReadyReporter,
+  requestedPortFromArgv,
+} from './ready-reporter.js';
 
 /**
  * Minimal subset of the resolved Emulsify environment used by this file.
@@ -142,6 +146,22 @@ const safeConfigOverrides = await loadConfigOverrides();
  * @type {StorybookEnvironment}
  */
 const resolvedStorybookEnv = resolveEnvironment();
+
+/**
+ * Render Storybook's startup announcement in the Emulsify reporter's voice.
+ *
+ * Installed here because this module is itself a Storybook preset: `loadAllPresets`
+ * imports it, so a top-level await runs well before the dev server announces
+ * itself. Only the ready box is affected, and only when the internal logger is
+ * reachable — see `.storybook/ready-reporter.js` for why this is interception
+ * rather than `--quiet`.
+ *
+ * Restricted to `storybook dev`. A static `storybook build` prints no ready box,
+ * and the develop reporter deliberately leaves one-shot builds alone.
+ */
+if (process.argv.includes('dev')) {
+  await installReadyReporter({ requestedPort: requestedPortFromArgv() });
+}
 
 /**
  * Primary Storybook configuration object.
