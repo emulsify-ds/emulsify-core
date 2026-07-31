@@ -37,6 +37,21 @@ const releaseRules = [
     subject: 'render the ready announcement through the reporter',
     release: 'patch',
   },
+
+  // Held to the same framing as the three above, and deliberately: this commit
+  // does add a capability 4.3.0 lacked, so on its own reading it is a minor. It
+  // is classified as a patch because it belongs to the same corrective pass, and
+  // 4.3.1 is the release that pass was scoped to. The detailed output and the
+  // section headings are additions to a reporter the previous release already
+  // shipped, reached through controls that release already documented.
+  //
+  // This is the last commit that gets this treatment. Anything further that adds
+  // to the reporter is a `feat` on its own terms and should take the minor.
+  {
+    type: 'feat',
+    subject: 'add a detailed mode and label the summary sections',
+    release: 'patch',
+  },
 ];
 
 const parserOpts = {
