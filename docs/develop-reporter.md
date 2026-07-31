@@ -135,9 +135,10 @@ until an unrelated stylesheet changed. Storybook renders Twig through its own
 pipeline and looked correct throughout, which made the stale copy visible only to
 whatever consumes `dist/`.
 
-Two things deliberately do not trigger a Vite rebuild. Story files are Storybook's
-to watch, and Twig partials are not copied — a partial reached from a story's Twig
-import is already watched by the Twig module plugin.
+Story files deliberately do not trigger a Vite rebuild; Storybook watches those
+itself. Every Twig template does, including ones whose names begin with an
+underscore — Twig resolves `{% include %}` at render time against the emitted tree,
+so those are files the site still has to find.
 
 Adding a _new_ file is different from editing one. The entry map and the source
 index are both resolved once at config time, and Rollup cannot take new inputs
