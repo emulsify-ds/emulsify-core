@@ -30,6 +30,22 @@ src/
 
 When `src/` exists, global styles and scripts can live elsewhere under `src/`, outside `src/components` and `src/util`.
 
+#### Global Styles And Scripts
+
+Anything under `src/` that is not inside a component root is treated as global: styles and scripts meant to apply across every page, or to affect every component, rather than to belong to one. Each such directory emits to `dist/global/<directory>/`, so `src/foundation/type.scss` becomes `dist/global/foundation/css/type.css`.
+
+```text
+src/
+  components/
+  foundation/
+  base/
+  global/
+```
+
+No configuration is needed and no directory name is required — the build handles every directory under `src/` this way. `foundation/`, `base/`, and `global/` are the conventional names, and the develop reporter lists those three on their own `input` rows so you can see what each contributed; see [Develop Reporter](develop-reporter.md). Other directory names build identically but report under the `src/` row.
+
+These directories are deliberately not Twig namespaces. A namespace exists so a template can `include()` another template, and global CSS and JS are not templates. Directories that do hold templates — `layout/` and `tokens/` — are discovered as namespaces automatically, as described in [Twig Namespace Roots](#twig-namespace-roots).
+
 ### Root `./components`
 
 Root `./components` remains valid for existing projects.

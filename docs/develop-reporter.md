@@ -18,7 +18,7 @@ A watch session opens with the wordmark and the Core version:
   █▀▀ █ ▀ █ █ █ █   ▀▀█ █ █▀▀ ▀▄▀
   ▀▀▀ ▀   ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀    ▀
 
-  core 4.4.0
+  core 4.3.1
 ```
 
 Then, once the first build finishes, the project facts and the build result:
@@ -26,8 +26,9 @@ Then, once the first build finishes, the project facts and the build result:
 ```text
       platform    Drupal
       input       src/components/   28 entries
-                  src/layout/        6 entries
                   src/foundation/    5 entries
+                  src/base/          3 entries
+                  src/              2 entries
       output      dist/  41 files · 2.3 MB · largest style.css 388 kB
 
   ✓ built in 2.55s · watching dist/
@@ -38,16 +39,28 @@ Then, once the first build finishes, the project facts and the build result:
 One row per source root, naming the directory and how many build entries came
 out of it. The roots are the project's resolved structure:
 
+- Without `variant.structureImplementations`, the discovered `src/components`
+  (or root `./components`) appears, followed by the global root — which is the
+  source directory itself, not a `global/` subdirectory of it.
 - With `variant.structureImplementations` in `project.emulsify.json`, each
-  configured root appears in the order it was declared.
-- Without it, the discovered `src/components` (or root `./components`) appears,
-  followed by the global root.
+  configured root appears instead, in the order it was declared.
+
+Because a global root is the whole source directory, it would otherwise report
+one opaque total for everything outside the component roots. So the conventional
+global-asset directories inside it — `foundation/`, `base/`, and `global/` — are
+listed on their own rows. Anything else under the root, including files sitting
+directly in it, stays on the root's own row, which keeps the block bounded on a
+project with a crowded `src/`.
+
+This is a reporting distinction only. The build already treats every directory
+under a global root the same way, emitting each to `dist/global/<name>/`, and
+these rows just make that visible. See
+[Project Structure And Output](project-structure.md) for how roots resolve.
 
 **A root reporting `0 entries` is highlighted, and it is usually a bug.** Either
 the path in `project.emulsify.json` is wrong, or the directory is empty, or the
 files in it are not recognized as entries. A total entry count cannot tell you
-this — 39 entries looks healthy whether or not a root was found at all. See
-[Project Structure And Output](project-structure.md) for how roots resolve.
+this — 39 entries looks healthy whether or not a root was found at all.
 
 ### Reading The Output Row
 
