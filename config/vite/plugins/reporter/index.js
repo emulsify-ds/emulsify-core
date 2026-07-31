@@ -268,6 +268,7 @@ export function developReporterPlugin({
       inputRows = buildInputRows({
         entries: config.build?.rollupOptions?.input,
         sourceRootRecords: env.projectStructure?.sourceRootRecords,
+        globalRootDirectories: env.projectStructure?.globalRoots,
         projectDir: env.projectDir,
       });
 

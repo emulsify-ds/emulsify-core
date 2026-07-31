@@ -40,6 +40,43 @@ export function displayRoot(directory, projectDir) {
 }
 
 /**
+ * Directory names inside a global root that hold project-wide CSS and JS.
+ *
+ * A project without `variant.structureImplementations` gets one global root, and
+ * it is the source directory itself — not a `global/` subdirectory of it. So
+ * every stylesheet outside the component roots attributes to a single `src/` row,
+ * which reports a number without saying where any of it came from.
+ *
+ * These are the conventional names for that content. They are recognized for
+ * reporting only: the build already treats every directory under a global root
+ * the same way, emitting each to `dist/global/<name>/`, and nothing here changes
+ * that. Breaking them out only makes visible what the build already did.
+ *
+ * @type {string[]}
+ */
+export const GLOBAL_ASSET_DIRECTORIES = ['foundation', 'base', 'global'];
+
+/**
+ * Resolve the recognized global directory an entry sits inside.
+ *
+ * @param {string} sourceFile - Absolute source file path.
+ * @param {string} rootDirectory - Absolute global root directory.
+ * @returns {string|undefined} Recognized directory name, when the entry is in one.
+ */
+function globalAssetDirectory(sourceFile, rootDirectory) {
+  const relative = relativeFrom(sourceFile, rootDirectory);
+  if (!relative || relative.startsWith('..')) return undefined;
+
+  const [segment, ...rest] = relative.split('/');
+
+  // A bare file directly inside the root has no directory to attribute to, so it
+  // belongs on the root's own row rather than inventing one from the filename.
+  if (rest.length === 0) return undefined;
+
+  return GLOBAL_ASSET_DIRECTORIES.includes(segment) ? segment : undefined;
+}
+
+/**
  * Attribute build entries to the source roots that produced them.
  *
  * Roots are reported in `sourceRootRecords` order so a project's configured
@@ -51,9 +88,16 @@ export function displayRoot(directory, projectDir) {
  * either misspelled in `project.emulsify.json` or empty on disk, and hiding it
  * would hide the bug.
  *
+ * Global roots additionally break out the conventional global-asset directories
+ * they contain, because a global root is the source directory itself and would
+ * otherwise report one opaque total. Only directories named in
+ * {@link GLOBAL_ASSET_DIRECTORIES} split out; everything else stays on the root's
+ * row, which keeps the block bounded on a project with a crowded `src/`.
+ *
  * @param {{
  *   entries?: Record<string, string>,
  *   sourceRootRecords?: Array<{name: string, directory: string}>,
+ *   globalRootDirectories?: string[],
  *   projectDir?: string
  * }} options - Attribution inputs.
  * @returns {Array<{name: string, path: string, count: number}>} Input rows.
@@ -61,11 +105,19 @@ export function displayRoot(directory, projectDir) {
 export function buildInputRows({
   entries = {},
   sourceRootRecords = [],
+  globalRootDirectories = [],
   projectDir,
 } = {}) {
   if (sourceRootRecords.length === 0) return [];
 
+  // Only roots the project structure reported as global are split. A project
+  // whose `structureImplementations` happens to name a root `global` has it as a
+  // component root, and splitting that would invent rows it did not ask for.
+  const globalRoots = new Set(globalRootDirectories);
+
   const counts = new Map(sourceRootRecords.map((root) => [root.directory, 0]));
+  /** @type {Map<string, Map<string, number>>} */
+  const globalCounts = new Map();
 
   for (const sourceFile of Object.values(entries)) {
     if (typeof sourceFile !== 'string') continue;
@@ -77,14 +129,57 @@ export function buildInputRows({
     const root = findSourceRoot(sourceFile, sourceRootRecords);
     if (!root) continue;
 
-    counts.set(root.directory, (counts.get(root.directory) || 0) + 1);
+    const directory = globalRoots.has(root.directory)
+      ? globalAssetDirectory(sourceFile, root.directory)
+      : undefined;
+
+    if (!directory) {
+      counts.set(root.directory, (counts.get(root.directory) || 0) + 1);
+      continue;
+    }
+
+    if (!globalCounts.has(root.directory)) {
+      globalCounts.set(root.directory, new Map());
+    }
+
+    const byDirectory = globalCounts.get(root.directory);
+    byDirectory.set(directory, (byDirectory.get(directory) || 0) + 1);
   }
 
-  return sourceRootRecords.map((root) => ({
-    name: root.name,
-    path: displayRoot(root.directory, projectDir),
-    count: counts.get(root.directory) || 0,
-  }));
+  return sourceRootRecords.flatMap((root) => {
+    const byDirectory = globalCounts.get(root.directory);
+    const rootCount = counts.get(root.directory) || 0;
+
+    const rows = [];
+
+    // Recognized directories are listed in convention order rather than by count,
+    // so the block reads the same way across projects.
+    if (byDirectory) {
+      for (const name of GLOBAL_ASSET_DIRECTORIES) {
+        const count = byDirectory.get(name);
+        if (!count) continue;
+
+        rows.push({
+          name,
+          path: displayRoot(`${root.directory}/${name}`, projectDir),
+          count,
+        });
+      }
+    }
+
+    // The root keeps a row when it holds entries of its own, and when it holds
+    // nothing at all — a zero there is still worth seeing. It is dropped only
+    // when everything it contained has been attributed to a row above.
+    if (rootCount > 0 || rows.length === 0) {
+      rows.push({
+        name: root.name,
+        path: displayRoot(root.directory, projectDir),
+        count: rootCount,
+      });
+    }
+
+    return rows;
+  });
 }
 
 /**

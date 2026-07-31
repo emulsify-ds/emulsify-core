@@ -115,6 +115,134 @@ describe('source root attribution', () => {
     expect(buildInputRows()).toEqual([]);
   });
 
+  it('breaks out the conventional global asset directories', () => {
+    // A global root is the source directory itself, so without this every
+    // stylesheet outside the component roots reports as one opaque `src/` total.
+    const rows = buildInputRows({
+      entries: {
+        a: '/p/src/components/button/button.scss',
+        b: '/p/src/foundation/type.scss',
+        c: '/p/src/base/reset.scss',
+        d: '/p/src/global/print.scss',
+      },
+      sourceRootRecords: [
+        { name: 'components', directory: '/p/src/components' },
+        { name: 'global', directory: '/p/src' },
+      ],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows).toEqual([
+      { name: 'components', path: 'src/components/', count: 1 },
+      { name: 'foundation', path: 'src/foundation/', count: 1 },
+      { name: 'base', path: 'src/base/', count: 1 },
+      { name: 'global', path: 'src/global/', count: 1 },
+    ]);
+  });
+
+  it('lists global directories in convention order, not discovery order', () => {
+    const rows = buildInputRows({
+      entries: {
+        a: '/p/src/global/print.scss',
+        b: '/p/src/base/reset.scss',
+        c: '/p/src/foundation/type.scss',
+      },
+      sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows.map((row) => row.name)).toEqual([
+      'foundation',
+      'base',
+      'global',
+    ]);
+  });
+
+  it('keeps unrecognized directories and bare files on the root row', () => {
+    // Splitting every subdirectory would make the block unbounded on a crowded
+    // src/, and a loose file has no directory to attribute to.
+    const rows = buildInputRows({
+      entries: {
+        a: '/p/src/foundation/type.scss',
+        b: '/p/src/utilities/spacing.scss',
+        c: '/p/src/style.scss',
+      },
+      sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows).toEqual([
+      { name: 'foundation', path: 'src/foundation/', count: 1 },
+      { name: 'global', path: 'src/', count: 2 },
+    ]);
+  });
+
+  it('drops the root row when every entry was attributed above it', () => {
+    const rows = buildInputRows({
+      entries: { a: '/p/src/foundation/type.scss' },
+      sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('foundation');
+  });
+
+  it('keeps an empty global root visible', () => {
+    const rows = buildInputRows({
+      entries: {},
+      sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows).toEqual([{ name: 'global', path: 'src/', count: 0 }]);
+  });
+
+  it('never splits a configured structure root that happens to be named global', () => {
+    // With structureImplementations there are no global roots, so a root named
+    // `global` is a component root and inventing rows inside it would be wrong.
+    const rows = buildInputRows({
+      entries: {
+        a: '/p/src/global/foundation/type.scss',
+        b: '/p/src/global/base/reset.scss',
+      },
+      sourceRootRecords: [{ name: 'global', directory: '/p/src/global' }],
+      globalRootDirectories: [],
+      projectDir: '/p',
+    });
+
+    expect(rows).toEqual([{ name: 'global', path: 'src/global/', count: 2 }]);
+  });
+
+  it('still counts every entry exactly once when global rows split', () => {
+    const entries = {
+      a: '/p/src/components/button/button.scss',
+      b: '/p/src/foundation/type.scss',
+      c: '/p/src/foundation/color.scss',
+      d: '/p/src/base/reset.scss',
+      e: '/p/src/utilities/spacing.scss',
+      f: '/p/src/style.scss',
+    };
+
+    const rows = buildInputRows({
+      entries,
+      sourceRootRecords: [
+        { name: 'components', directory: '/p/src/components' },
+        { name: 'global', directory: '/p/src' },
+      ],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    expect(total).toBe(Object.keys(entries).length);
+  });
+
   it('renders roots relative to the project with a trailing slash', () => {
     expect(displayRoot('/p/src/components', '/p')).toBe('src/components/');
     expect(displayRoot('/p/components/', '/p')).toBe('components/');
