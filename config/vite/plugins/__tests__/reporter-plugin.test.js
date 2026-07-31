@@ -167,7 +167,52 @@ describe('develop reporter output', () => {
     advance(1420);
     plugin.writeBundle();
 
-    expect(lines.join('\n')).toContain('✓ built in 1.42s · watching dist/');
+    // `dist/` is written, not watched. The label names the directory the source
+    // roots share, which is what Rollup's module graph is rooted in.
+    expect(lines.join('\n')).toContain('✓ built in 1.42s · watching src/');
+  });
+
+  it('names the watched sources, not the output directory', () => {
+    const { plugin, lines, advance } = createHarness({
+      projectStructure: {
+        sourceRootRecords: [
+          { name: 'components', directory: '/project/components' },
+        ],
+      },
+    });
+
+    plugin.configResolved(
+      resolvedConfig({ sourceDir: '/project/components/atoms' }),
+    );
+    lines.length = 0;
+    plugin.buildStart();
+    advance(1000);
+    plugin.writeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('watching components/');
+    expect(output).not.toContain('watching dist/');
+  });
+
+  it('falls back to a generic label when the roots share no parent', () => {
+    const { plugin, lines, advance } = createHarness({
+      projectStructure: {
+        sourceRootRecords: [
+          { name: 'components', directory: '/project/components' },
+          { name: 'tokens', directory: '/project/src/tokens' },
+        ],
+      },
+    });
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+    advance(1000);
+    plugin.writeBundle();
+
+    // Naming either root would be a lie about the other, and naming the project
+    // root would suggest the whole tree is watched.
+    expect(lines.join('\n')).toContain('watching sources');
   });
 
   it('folds a build error into the summary rather than interrupting', () => {
@@ -231,8 +276,10 @@ describe('develop reporter output', () => {
     expect(output).toContain('map-get() → map.get()');
     // Dart Sass prints a formatted block per occurrence, so 25 deprecations cost
     // upwards of a hundred lines raw. The budget covers the whole summary — the
-    // project facts and section dividers included — not just the tally.
-    expect(lines.length).toBeLessThan(24);
+    // project facts, the section dividers, and the blank lines between them — not
+    // just the tally, and it is what stops the block growing back toward the
+    // output it replaced.
+    expect(lines.length).toBeLessThan(28);
   });
 
   it('lists each deprecation once per file with every affected line', () => {

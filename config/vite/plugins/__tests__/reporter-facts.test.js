@@ -6,9 +6,12 @@ import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import { createStyler, formatBytes } from '../reporter/format.js';
 import { renderFacts, renderReady, renderSummary } from '../reporter/render.js';
 import {
+  MAX_GLOBAL_DIRECTORY_ROWS,
   buildInputRows,
   displayRoot,
+  sharedRootPath,
   summarizeBundle,
+  watchedRootLabel,
 } from '../reporter/source-roots.js';
 
 const plain = createStyler(false);
@@ -115,7 +118,7 @@ describe('source root attribution', () => {
     expect(buildInputRows()).toEqual([]);
   });
 
-  it('breaks out the conventional global asset directories', () => {
+  it('breaks out the directories one level inside a global root', () => {
     // A global root is the source directory itself, so without this every
     // stylesheet outside the component roots reports as one opaque `src/` total.
     const rows = buildInputRows({
@@ -160,14 +163,36 @@ describe('source root attribution', () => {
     ]);
   });
 
-  it('keeps unrecognized directories and bare files on the root row', () => {
-    // Splitting every subdirectory would make the block unbounded on a crowded
-    // src/, and a loose file has no directory to attribute to.
+  it('gives an unconventional directory its own row', () => {
+    // A bare `src/` row reports a number without saying where any of it came
+    // from, which is the one thing the block exists to answer. Conventional
+    // names sort first; the rest follow alphabetically so the order is stable.
+    const rows = buildInputRows({
+      entries: {
+        a: '/p/src/utilities/spacing.scss',
+        b: '/p/src/foundation/type.scss',
+        c: '/p/src/js/behaviors.js',
+      },
+      sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows).toEqual([
+      { name: 'foundation', path: 'src/foundation/', count: 1 },
+      { name: 'js', path: 'src/js/', count: 1 },
+      { name: 'utilities', path: 'src/utilities/', count: 1 },
+    ]);
+  });
+
+  it('keeps files sitting directly in the root on the root row', () => {
+    // A loose file has no directory to attribute to, so inventing one from the
+    // filename would report a directory that does not exist.
     const rows = buildInputRows({
       entries: {
         a: '/p/src/foundation/type.scss',
-        b: '/p/src/utilities/spacing.scss',
-        c: '/p/src/style.scss',
+        b: '/p/src/style.scss',
+        c: '/p/src/print.scss',
       },
       sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
       globalRootDirectories: ['/p/src'],
@@ -178,6 +203,35 @@ describe('source root attribution', () => {
       { name: 'foundation', path: 'src/foundation/', count: 1 },
       { name: 'global', path: 'src/', count: 2 },
     ]);
+  });
+
+  it('collapses directories past the cap without losing their entries', () => {
+    // The cap is what keeps the block from pushing the build result off the top
+    // of the terminal. The overflow row still carries its count, so the rows
+    // continue to reconcile against the total.
+    const entries = Object.fromEntries(
+      Array.from({ length: 11 }, (_, index) => [
+        `entry-${index}`,
+        `/p/src/dir-${String(index).padStart(2, '0')}/style.scss`,
+      ]),
+    );
+
+    const rows = buildInputRows({
+      entries,
+      sourceRootRecords: [{ name: 'global', directory: '/p/src' }],
+      globalRootDirectories: ['/p/src'],
+      projectDir: '/p',
+    });
+
+    expect(rows).toHaveLength(MAX_GLOBAL_DIRECTORY_ROWS + 1);
+
+    const overflow = rows.at(-1);
+    expect(overflow.overflow).toBe(true);
+    expect(overflow.path).toBe('+3 more directories');
+    expect(overflow.count).toBe(3);
+
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    expect(total).toBe(Object.keys(entries).length);
   });
 
   it('drops the root row when every entry was attributed above it', () => {
@@ -252,6 +306,57 @@ describe('source root attribution', () => {
     // A `../../` climb is unreadable, and a root outside the project is rare
     // enough that the full path is the more useful thing to print.
     expect(displayRoot('/elsewhere/shared', '/p')).toBe('/elsewhere/shared/');
+  });
+});
+
+describe('watched directory label', () => {
+  it('names the directory every source root sits inside', () => {
+    expect(
+      watchedRootLabel({
+        sourceRootRecords: [
+          { directory: '/p/src/components' },
+          { directory: '/p/src' },
+        ],
+        projectDir: '/p',
+      }),
+    ).toBe('src/');
+  });
+
+  it('names a single root in full', () => {
+    expect(
+      watchedRootLabel({
+        sourceRootRecords: [{ directory: '/p/src/components' }],
+        projectDir: '/p',
+      }),
+    ).toBe('src/components/');
+  });
+
+  it('falls back rather than naming one of several unrelated roots', () => {
+    expect(
+      watchedRootLabel({
+        sourceRootRecords: [
+          { directory: '/p/components' },
+          { directory: '/p/src/tokens' },
+        ],
+        projectDir: '/p',
+      }),
+    ).toBe('sources');
+
+    expect(watchedRootLabel()).toBe('sources');
+  });
+
+  it('keeps the leading slash on roots outside the project', () => {
+    expect(
+      sharedRootPath(['/elsewhere/shared/atoms/', '/elsewhere/shared/base/']),
+    ).toBe('/elsewhere/shared/');
+  });
+
+  it('reduces a set of display paths to their deepest shared directory', () => {
+    expect(sharedRootPath(['src/components/', 'src/base/'])).toBe('src/');
+    expect(sharedRootPath(['src/a/b/', 'src/a/c/'])).toBe('src/a/');
+    expect(sharedRootPath(['src/', 'src/'])).toBe('src/');
+    expect(sharedRootPath(['components/', 'src/'])).toBeUndefined();
+    expect(sharedRootPath([])).toBeUndefined();
   });
 });
 
@@ -541,6 +646,79 @@ describe('problem section dividers', () => {
     });
 
     expect(output).toContain('-- needs attention');
+    expect(output).not.toContain('─');
+  });
+});
+
+describe('summary section layout', () => {
+  const summaryOf = (overrides = {}) =>
+    renderSummary({
+      snapshot: emptySnapshot(),
+      durationMs: 1000,
+      inputRows: [
+        { name: 'components', path: 'src/components/', count: 28 },
+        { name: 'base', path: 'src/base/', count: 6 },
+      ],
+      platform: 'drupal',
+      outDir: 'dist/',
+      unicode: true,
+      styler: plain,
+      ...overrides,
+    });
+
+  it('labels the project facts and the build result', () => {
+    const output = summaryOf().join('\n');
+
+    expect(output).toContain('── project ');
+    expect(output).toContain('── build ');
+    expect(output.indexOf('── project ')).toBeLessThan(
+      output.indexOf('── build '),
+    );
+  });
+
+  it('keeps every fact it reported before the section labels existed', () => {
+    const output = summaryOf().join('\n');
+
+    expect(output).toContain('Drupal');
+    expect(output).toContain('src/components/');
+    expect(output).toContain('28 entries');
+    expect(output).toContain('dist/');
+    expect(output).toContain('✓ built in 1.00s · watching src/');
+  });
+
+  it('opens with a blank line rather than trusting the previous writer', () => {
+    // Storybook's startup lines land between the banner and the summary, so the
+    // block cannot rely on whatever printed last having left a gap.
+    expect(summaryOf()[0]).toBe('');
+  });
+
+  it('keeps the fact rows contiguous under their label', () => {
+    const lines = summaryOf();
+    const start = lines.findIndex((line) => line.includes('platform'));
+    const end = lines.findIndex((line) => line.includes('output'));
+
+    // Whitespace inside the block would compete with the dividers that separate
+    // the sections, leaving nothing to say where one section ends.
+    expect(lines.slice(start, end + 1).filter((line) => line === '')).toEqual(
+      [],
+    );
+  });
+
+  it('labels the build section even when the build failed', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordError(new Error('boom'));
+
+    const output = summaryOf({ snapshot: collector.snapshot() }).join('\n');
+
+    expect(output).toContain('── build ');
+    expect(output).toContain('✗ build failed after 1.00s');
+  });
+
+  it('falls back to ascii section rules alongside the problem headings', () => {
+    const output = summaryOf({ unicode: false }).join('\n');
+
+    expect(output).toContain('-- project ');
+    expect(output).toContain('-- build ');
     expect(output).not.toContain('─');
   });
 });

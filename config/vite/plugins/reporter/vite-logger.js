@@ -18,6 +18,12 @@
  * message passes straight through to Vite's own logger untouched.
  */
 
+import { isVerbose } from './verbosity.js';
+
+// Re-exported because the Vite config and the reporter both branch on it, and
+// this module was where it lived before verbosity grew a third level.
+export { isVerbose };
+
 /**
  * Matches Vite's unresolved CSS asset notice.
  *
@@ -74,16 +80,6 @@ function isBareStackTrace(message) {
   const lines = message.split('\n').filter((line) => line.trim());
 
   return lines.length > 0 && lines.every((line) => /^\s*at\s+\S/.test(line));
-}
-
-/**
- * Determine whether the reporter should stand aside and let Vite speak.
- *
- * @param {object} [env] - Environment variables.
- * @returns {boolean} TRUE when raw output should pass through.
- */
-export function isVerbose(env = process.env) {
-  return Boolean(env.EMULSIFY_VERBOSE) && env.EMULSIFY_VERBOSE !== '0';
 }
 
 /**

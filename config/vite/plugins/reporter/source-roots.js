@@ -13,6 +13,10 @@
  * filesystem access.
  */
 
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import { statSync } from 'node:fs';
+
 import { findSourceRoot, relativeFrom } from '../../project-structure.js';
 
 /**
@@ -40,28 +44,110 @@ export function displayRoot(directory, projectDir) {
 }
 
 /**
- * Directory names inside a global root that hold project-wide CSS and JS.
+ * Name the directory the watcher is actually watching.
+ *
+ * The summary used to close with `watching dist/`, which named the wrong end of
+ * the pipeline: `dist/` is written, not watched. Rollup watches the module graph,
+ * whose roots are the source roots reported directly above in the input rows, so
+ * the honest label is the directory those roots share.
+ *
+ * A shared parent is preferred over listing each root because it is both shorter
+ * and still true — watching `src/` covers `src/components/` and `src/base/`. When
+ * the roots share nothing above the project itself, no path describes the set and
+ * the generic label is used rather than an inaccurate one.
+ *
+ * @param {{
+ *   sourceRootRecords?: Array<{directory: string}>,
+ *   projectDir?: string,
+ *   fallback?: string
+ * }} [options] - Watch label inputs.
+ * @returns {string} Display path of the watched directory.
+ */
+export function watchedRootLabel({
+  sourceRootRecords = [],
+  projectDir,
+  fallback = 'sources',
+} = {}) {
+  const paths = sourceRootRecords
+    .map((root) => displayRoot(root.directory, projectDir))
+    .filter(Boolean);
+
+  return sharedRootPath(paths) || fallback;
+}
+
+/**
+ * Reduce a set of display paths to the deepest directory all of them sit inside.
+ *
+ * @param {string[]} paths - Display paths with trailing slashes.
+ * @returns {string|undefined} Shared path with a trailing slash, when one exists.
+ */
+export function sharedRootPath(paths = []) {
+  if (paths.length === 0) return undefined;
+
+  const segmentLists = paths.map((path) =>
+    path.split('/').filter((segment) => segment !== ''),
+  );
+
+  const [first, ...rest] = segmentLists;
+  const shared = [];
+
+  for (let index = 0; index < first.length; index += 1) {
+    const segment = first[index];
+    if (!rest.every((list) => list[index] === segment)) break;
+    shared.push(segment);
+  }
+
+  // Every root being the same directory leaves that directory shared in full,
+  // which is the correct answer. Sharing nothing means the roots sit in unrelated
+  // trees, and the caller decides what to say about that.
+  if (shared.length === 0) return undefined;
+
+  // A root resolving outside the project keeps its absolute path, and dropping
+  // the leading slash off that would name a directory that does not exist.
+  const prefix = paths.every((path) => path.startsWith('/')) ? '/' : '';
+
+  return `${prefix}${shared.join('/')}/`;
+}
+
+/**
+ * Conventional global directory names, in the order they are listed.
  *
  * A project without `variant.structureImplementations` gets one global root, and
  * it is the source directory itself — not a `global/` subdirectory of it. So
- * every stylesheet outside the component roots attributes to a single `src/` row,
- * which reports a number without saying where any of it came from.
+ * every entry outside the component roots would attribute to a single `src/` row,
+ * which reports a number without saying where any of it came from. Every
+ * directory one level inside the root is therefore given its own row.
  *
- * These are the conventional names for that content. They are recognized for
- * reporting only: the build already treats every directory under a global root
- * the same way, emitting each to `dist/global/<name>/`, and nothing here changes
- * that. Breaking them out only makes visible what the build already did.
+ * These names sort first so the conventional layout reads the same way across
+ * projects; everything else follows alphabetically. Ordering is the only thing
+ * this list controls — an unlisted directory still gets a row.
+ *
+ * This is a reporting distinction only. The build already treats every directory
+ * under a global root the same way, emitting each to `dist/global/<name>/`, and
+ * nothing here changes that.
  *
  * @type {string[]}
  */
-export const GLOBAL_ASSET_DIRECTORIES = ['foundation', 'base', 'global'];
+export const GLOBAL_DIRECTORY_ORDER = ['foundation', 'base', 'global'];
 
 /**
- * Resolve the recognized global directory an entry sits inside.
+ * Maximum number of directories broken out of one global root.
+ *
+ * Only directories that produced build entries get a row, which on a real
+ * project is a handful. The cap is what keeps that a guarantee rather than an
+ * observation, so an unconventional `src/` cannot push the build result off the
+ * top of the terminal.
+ *
+ * @type {number}
+ */
+export const MAX_GLOBAL_DIRECTORY_ROWS = 8;
+
+/**
+ * Resolve the directory one level inside a global root that an entry sits in.
  *
  * @param {string} sourceFile - Absolute source file path.
  * @param {string} rootDirectory - Absolute global root directory.
- * @returns {string|undefined} Recognized directory name, when the entry is in one.
+ * @returns {string|undefined} Directory name, when the entry is inside one.
  */
 function globalAssetDirectory(sourceFile, rootDirectory) {
   const relative = relativeFrom(sourceFile, rootDirectory);
@@ -73,7 +159,24 @@ function globalAssetDirectory(sourceFile, rootDirectory) {
   // belongs on the root's own row rather than inventing one from the filename.
   if (rest.length === 0) return undefined;
 
-  return GLOBAL_ASSET_DIRECTORIES.includes(segment) ? segment : undefined;
+  return segment || undefined;
+}
+
+/**
+ * Order the directories broken out of one global root.
+ *
+ * @param {Iterable<string>} names - Discovered directory names.
+ * @returns {string[]} Names in display order.
+ */
+function orderGlobalDirectories(names) {
+  const rank = (name) => {
+    const index = GLOBAL_DIRECTORY_ORDER.indexOf(name);
+    return index === -1 ? GLOBAL_DIRECTORY_ORDER.length : index;
+  };
+
+  return [...names].sort(
+    (a, b) => rank(a) - rank(b) || a.localeCompare(b, 'en'),
+  );
 }
 
 /**
@@ -88,11 +191,11 @@ function globalAssetDirectory(sourceFile, rootDirectory) {
  * either misspelled in `project.emulsify.json` or empty on disk, and hiding it
  * would hide the bug.
  *
- * Global roots additionally break out the conventional global-asset directories
- * they contain, because a global root is the source directory itself and would
- * otherwise report one opaque total. Only directories named in
- * {@link GLOBAL_ASSET_DIRECTORIES} split out; everything else stays on the root's
- * row, which keeps the block bounded on a project with a crowded `src/`.
+ * Global roots additionally break out the directories one level inside them,
+ * because a global root is the source directory itself and a bare `src/` row
+ * reports a number without saying where any of it came from. Files sitting
+ * directly in the root have no directory to attribute to and stay on the root's
+ * own row. {@link MAX_GLOBAL_DIRECTORY_ROWS} bounds the split.
  *
  * @param {{
  *   entries?: Record<string, string>,
@@ -100,7 +203,7 @@ function globalAssetDirectory(sourceFile, rootDirectory) {
  *   globalRootDirectories?: string[],
  *   projectDir?: string
  * }} options - Attribution inputs.
- * @returns {Array<{name: string, path: string, count: number}>} Input rows.
+ * @returns {Array<{name: string, path: string, count: number, overflow?: boolean}>} Input rows.
  */
 export function buildInputRows({
   entries = {},
@@ -152,17 +255,29 @@ export function buildInputRows({
 
     const rows = [];
 
-    // Recognized directories are listed in convention order rather than by count,
-    // so the block reads the same way across projects.
+    // Directories are listed in convention order rather than by count, so the
+    // block reads the same way across projects. Anything past the cap collapses
+    // into one row that still carries its entries, so the counts reconcile
+    // against the total however many directories a project has.
     if (byDirectory) {
-      for (const name of GLOBAL_ASSET_DIRECTORIES) {
-        const count = byDirectory.get(name);
-        if (!count) continue;
+      const names = orderGlobalDirectories(byDirectory.keys());
+      const shown = names.slice(0, MAX_GLOBAL_DIRECTORY_ROWS);
+      const hidden = names.slice(MAX_GLOBAL_DIRECTORY_ROWS);
 
+      for (const name of shown) {
         rows.push({
           name,
           path: displayRoot(`${root.directory}/${name}`, projectDir),
-          count,
+          count: byDirectory.get(name),
+        });
+      }
+
+      if (hidden.length > 0) {
+        rows.push({
+          name: root.name,
+          path: `+${hidden.length} more ${hidden.length === 1 ? 'directory' : 'directories'}`,
+          count: hidden.reduce((sum, name) => sum + byDirectory.get(name), 0),
+          overflow: true,
         });
       }
     }
@@ -180,6 +295,210 @@ export function buildInputRows({
 
     return rows;
   });
+}
+
+/**
+ * Extensions worth measuring compressed.
+ *
+ * Gzipping is the expensive part of a per-file table — it is the whole of
+ * Rolldown's `computing gzip size...` pause — so it is spent only where the
+ * number means something. Fonts and raster images are already compressed and
+ * their gzip figure is noise; sourcemaps compress well but are a diagnostic
+ * artifact nobody ships to a browser, and they are among the largest files in a
+ * typical `dist/`.
+ *
+ * @type {string[]}
+ */
+const COMPRESSIBLE_EXTENSIONS = [
+  '.css',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.json',
+  '.svg',
+  '.html',
+  '.xml',
+  '.txt',
+];
+
+/**
+ * Determine whether a file's compressed size is worth computing.
+ *
+ * @param {string} fileName - Output file name.
+ * @returns {boolean} TRUE when the file should be gzipped for reporting.
+ */
+function isCompressible(fileName) {
+  const lower = String(fileName).toLowerCase();
+  if (lower.endsWith('.map')) return false;
+
+  return COMPRESSIBLE_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+/**
+ * Read one bundle output as bytes.
+ *
+ * @param {{code?: string, source?: string|Uint8Array}} output - Bundle output.
+ * @returns {Buffer|undefined} Content, when the output carries any.
+ */
+function outputBuffer(output) {
+  if (!output) return undefined;
+  if (typeof output.code === 'string') return Buffer.from(output.code);
+
+  const { source } = output;
+  if (typeof source === 'string') return Buffer.from(source);
+  if (source && typeof source.byteLength === 'number') {
+    return Buffer.from(
+      source.buffer || source,
+      source.byteOffset,
+      source.byteLength,
+    );
+  }
+
+  return undefined;
+}
+
+/**
+ * List every entry the build will read, with the size of its source.
+ *
+ * The quiet reporter answers how many entries each root contributed; this answers
+ * which ones. Rows are ordered by path rather than by size because the question
+ * a full input listing gets asked is "is everything I expect being compiled" —
+ * and that is answered by scanning a tree, not a ranking.
+ *
+ * Sizes come from one `stat` per entry at config resolution, so this costs
+ * nothing on rebuilds and nothing at all outside detailed mode.
+ *
+ * @param {{
+ *   entries?: Record<string, string>,
+ *   projectDir?: string
+ * }} [options] - Listing inputs.
+ * @returns {Array<{path: string, bytes?: number}>} Input file rows.
+ */
+export function buildInputFileRows({ entries = {}, projectDir } = {}) {
+  const rows = [];
+
+  for (const sourceFile of Object.values(entries)) {
+    if (typeof sourceFile !== 'string') continue;
+
+    let bytes;
+    try {
+      bytes = statSync(sourceFile).size;
+    } catch {
+      // An entry that cannot be stat'd is still worth listing — a path the build
+      // resolved but the filesystem does not have is exactly the kind of thing a
+      // verbose listing is being read to find.
+      bytes = undefined;
+    }
+
+    rows.push({ path: displayEntry(sourceFile, projectDir), bytes });
+  }
+
+  return rows.sort((a, b) => a.path.localeCompare(b.path, 'en'));
+}
+
+/**
+ * Render one entry as a display path.
+ *
+ * @param {string} sourceFile - Absolute source path.
+ * @param {string} [projectDir] - Absolute project root.
+ * @returns {string} Display path.
+ */
+function displayEntry(sourceFile, projectDir) {
+  const posix = sourceFile.split('\\').join('/');
+  if (!projectDir) return posix;
+
+  const relative = relativeFrom(sourceFile, projectDir);
+
+  return !relative || relative.startsWith('..') ? posix : relative;
+}
+
+/**
+ * List every file a build wrote, with its size and, where useful, its gzip size.
+ *
+ * Ordered by size descending. Unlike the input listing, the question here is
+ * "what is heavy" — the output row already reports the single largest file, and
+ * this is that row expanded into the full ranking.
+ *
+ * @param {Record<string, object>} [bundle] - Rollup output bundle.
+ * @param {{gzip?: boolean}} [options] - Listing options.
+ * @returns {Array<{fileName: string, bytes: number, gzipBytes?: number}>} Output file rows.
+ */
+export function buildOutputFileRows(bundle, { gzip = true } = {}) {
+  if (!bundle || typeof bundle !== 'object') return [];
+
+  const rows = Object.entries(bundle).map(([fileName, output]) => {
+    const content = outputBuffer(output);
+    const bytes = content ? content.byteLength : 0;
+
+    let gzipBytes;
+    if (gzip && content && isCompressible(fileName)) {
+      try {
+        gzipBytes = gzipSync(content).byteLength;
+      } catch {
+        gzipBytes = undefined;
+      }
+    }
+
+    return { fileName, bytes, gzipBytes };
+  });
+
+  return rows.sort(
+    (a, b) => b.bytes - a.bytes || a.fileName.localeCompare(b.fileName, 'en'),
+  );
+}
+
+/**
+ * Fingerprint every file in a bundle by content.
+ *
+ * Rollup regenerates the whole bundle on every watch cycle, so "which files were
+ * written" is always "all of them" and says nothing. Comparing content hashes
+ * between cycles answers the question actually being asked after an edit: which
+ * outputs are different now. It also makes the useful negative reportable — an
+ * edit that compiles to byte-identical CSS is worth knowing about.
+ *
+ * @param {Record<string, object>} [bundle] - Rollup output bundle.
+ * @returns {Map<string, string>} File name to content hash.
+ */
+export function fingerprintBundle(bundle) {
+  const fingerprints = new Map();
+  if (!bundle || typeof bundle !== 'object') return fingerprints;
+
+  for (const [fileName, output] of Object.entries(bundle)) {
+    const content = outputBuffer(output);
+    if (!content) continue;
+
+    fingerprints.set(
+      fileName,
+      createHash('sha1').update(content).digest('hex'),
+    );
+  }
+
+  return fingerprints;
+}
+
+/**
+ * Reduce two fingerprint maps to the files that differ.
+ *
+ * @param {Map<string, string>} previous - Fingerprints from the last cycle.
+ * @param {Map<string, string>} current - Fingerprints from this cycle.
+ * @returns {{changed: string[], removed: string[]}} Differing file names.
+ */
+export function diffFingerprints(previous = new Map(), current = new Map()) {
+  const changed = [];
+
+  for (const [fileName, hash] of current) {
+    // The rule fires on any comparison against a value named like a digest. These
+    // hashes identify build output for a terminal listing and guard nothing, so
+    // there is no secret to leak through comparison timing.
+    // eslint-disable-next-line security/detect-possible-timing-attacks
+    if (previous.get(fileName) !== hash) changed.push(fileName);
+  }
+
+  const removed = [...previous.keys()].filter(
+    (fileName) => !current.has(fileName),
+  );
+
+  return { changed: changed.sort(), removed: removed.sort() };
 }
 
 /**

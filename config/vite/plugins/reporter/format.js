@@ -158,6 +158,26 @@ export function formatBytes(bytes) {
 }
 
 /**
+ * Format a byte count for a column of sizes.
+ *
+ * {@link formatBytes} rounds hard, which is right for a one-line total but wrong
+ * for a table: rounding turns 5,660 and 3,010 bytes into `6 kB` and `3 kB`, and a
+ * table whose whole purpose is comparison should not round away the difference.
+ * A single unit keeps the column directly comparable down its length rather than
+ * making the reader convert between B, kB, and MB row to row.
+ *
+ * Two decimals of kilobytes is the convention Rolldown's discarded asset table
+ * used, so the numbers are recognizable to anyone who has read that output.
+ *
+ * @param {number} bytes - Byte count.
+ * @returns {string} Formatted size in kilobytes.
+ */
+export function formatPreciseBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0.00 kB';
+  return `${(bytes / 1024).toFixed(2)} kB`;
+}
+
+/**
  * Format a wall-clock timestamp for rebuild lines.
  *
  * @param {Date} [date] - Date to format.

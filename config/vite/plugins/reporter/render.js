@@ -15,10 +15,12 @@ import {
   formatBytes,
   formatClockTime,
   formatDuration,
+  formatPreciseBytes,
   platformLabel,
   pluralize,
 } from './format.js';
 import { deprecationFix, deprecationMigrator } from './sass-logger.js';
+import { sharedRootPath } from './source-roots.js';
 
 const INDENT = '  ';
 const DETAIL_INDENT = '      ';
@@ -189,7 +191,12 @@ export function renderFacts({
     );
 
     inputRows.forEach((entry, index) => {
-      const path = styler('cyan', entry.path.padEnd(pathWidth));
+      // An overflow row names a count of directories rather than a directory, so
+      // it is dimmed to keep it from reading as a path.
+      const path = styler(
+        entry.overflow ? 'gray' : 'cyan',
+        entry.path.padEnd(pathWidth),
+      );
       const noun = entry.count === 1 ? 'entry' : 'entries';
       const count = styler(
         // A configured root that matched nothing is the row most likely to be a
@@ -317,6 +324,10 @@ export function renderReady({
 
   lines.push('');
   lines.push(...renderPanel(body, width, drifted, unicode, styler));
+  // Storybook keeps logging after it announces itself — timing lines, and under
+  // `--ci` a migration notice or two. Closing with a blank line stops those from
+  // butting straight up against the panel's lower rule.
+  lines.push('');
 
   return lines;
 }
@@ -920,7 +931,186 @@ function renderDivider(label, unicode, styler) {
 }
 
 /**
+ * Column headings for the verbose input listing.
+ *
+ * @type {{source: string, size: string}}
+ */
+const INPUT_FILE_HEADINGS = { source: 'source', size: 'size' };
+
+/**
+ * Column headings for the verbose output listing.
+ *
+ * @type {{file: string, size: string, gzip: string}}
+ */
+const OUTPUT_FILE_HEADINGS = { file: 'file', size: 'size', gzip: 'gzip' };
+
+/**
+ * Placeholder for a size that does not apply or could not be read.
+ *
+ * @type {string}
+ */
+const NO_SIZE = '—';
+
+/**
+ * Render a right-aligned size column.
+ *
+ * Padding is applied to the unstyled text because ANSI escapes carry no display
+ * width and would skew every row by a different amount.
+ *
+ * @param {number|undefined} bytes - Size in bytes.
+ * @param {number} width - Column width.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string} Padded, styled size.
+ */
+const sizeColumn = (bytes, width, styler) =>
+  styler(
+    'gray',
+    (Number.isFinite(bytes) ? formatPreciseBytes(bytes) : NO_SIZE).padStart(
+      width,
+    ),
+  );
+
+/**
+ * Measure the widest rendered size in a set of rows.
+ *
+ * @param {Array<number|undefined>} values - Byte values.
+ * @param {string} heading - Column heading, which also has to fit.
+ * @returns {number} Column width.
+ */
+const sizeWidth = (values, heading) =>
+  Math.max(
+    heading.length,
+    ...values.map(
+      (bytes) =>
+        (Number.isFinite(bytes) ? formatPreciseBytes(bytes) : NO_SIZE).length,
+    ),
+  );
+
+/**
+ * Render the verbose listing of every entry the build reads.
+ *
+ * @param {Array<{path: string, bytes?: number}>} rows - Input file rows.
+ * @param {boolean} unicode - Whether box-drawing characters are safe to emit.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Input listing lines.
+ */
+function renderInputFiles(rows, unicode, styler) {
+  if (rows.length === 0) return [];
+
+  const pathWidth = Math.max(
+    INPUT_FILE_HEADINGS.source.length,
+    ...rows.map((row) => row.path.length),
+  );
+  const width = sizeWidth(
+    rows.map((row) => row.bytes),
+    INPUT_FILE_HEADINGS.size,
+  );
+
+  const lines = [
+    '',
+    renderDivider('input files', unicode, styler),
+    '',
+    `${DETAIL_INDENT}${styler(
+      'gray',
+      `${INPUT_FILE_HEADINGS.source.padEnd(pathWidth)}  ${INPUT_FILE_HEADINGS.size.padStart(width)}`,
+    )}`,
+  ];
+
+  for (const row of rows) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('cyan', row.path.padEnd(pathWidth))}  ${sizeColumn(row.bytes, width, styler)}`,
+    );
+  }
+
+  return lines;
+}
+
+/**
+ * Render the verbose listing of every file the build wrote.
+ *
+ * @param {Array<{fileName: string, bytes: number, gzipBytes?: number}>} rows - Output file rows.
+ * @param {boolean} unicode - Whether box-drawing characters are safe to emit.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Output listing lines.
+ */
+function renderOutputFiles(rows, unicode, styler) {
+  if (rows.length === 0) return [];
+
+  const lines = [
+    '',
+    renderDivider('output files', unicode, styler),
+    '',
+    ...renderSizeTable(rows, styler),
+  ];
+
+  return lines;
+}
+
+/**
+ * Render a file-and-size table, with a gzip column when any row has one.
+ *
+ * Shared by the first build's output listing and the rebuild's changed-file
+ * listing so the two read identically — the second is a filtered view of the
+ * first, and formatting them differently would obscure that.
+ *
+ * @param {Array<{fileName: string, bytes: number, gzipBytes?: number}>} rows - Output file rows.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Table lines.
+ */
+function renderSizeTable(rows, styler) {
+  const nameWidth = Math.max(
+    OUTPUT_FILE_HEADINGS.file.length,
+    ...rows.map((row) => row.fileName.length),
+  );
+  const width = sizeWidth(
+    rows.map((row) => row.bytes),
+    OUTPUT_FILE_HEADINGS.size,
+  );
+
+  // The gzip column is dropped entirely when nothing in the table is
+  // compressible, rather than printed as a column of dashes.
+  const compressed = rows.some((row) => Number.isFinite(row.gzipBytes));
+  const gzipHeading = compressed
+    ? `  ${OUTPUT_FILE_HEADINGS.gzip.padStart(
+        sizeWidth(
+          rows.map((row) => row.gzipBytes),
+          OUTPUT_FILE_HEADINGS.gzip,
+        ),
+      )}`
+    : '';
+  const gzipWidth = compressed
+    ? sizeWidth(
+        rows.map((row) => row.gzipBytes),
+        OUTPUT_FILE_HEADINGS.gzip,
+      )
+    : 0;
+
+  const lines = [
+    `${DETAIL_INDENT}${styler(
+      'gray',
+      `${OUTPUT_FILE_HEADINGS.file.padEnd(nameWidth)}  ${OUTPUT_FILE_HEADINGS.size.padStart(width)}${gzipHeading}`,
+    )}`,
+  ];
+
+  for (const row of rows) {
+    const gzip = compressed
+      ? `  ${sizeColumn(row.gzipBytes, gzipWidth, styler)}`
+      : '';
+
+    lines.push(
+      `${DETAIL_INDENT}${styler('cyan', row.fileName.padEnd(nameWidth))}  ${sizeColumn(row.bytes, width, styler)}${gzip}`,
+    );
+  }
+
+  return lines;
+}
+
+/**
  * Render the summary printed after the first successful watch build.
+ *
+ * Emitted as four labelled sections — project, build, and whichever problem
+ * headings have content. `watchLabel` is supplied by the plugin, which has the
+ * resolved source roots; without it the label is inferred from the input rows.
  *
  * @param {{
  *   snapshot: object,
@@ -930,6 +1120,13 @@ function renderDivider(label, unicode, styler) {
  *   sourceGlob?: string,
  *   assetRows?: Array<object>,
  *   importErrors?: {rows?: Array<object>, sharedDirectory?: string, directoryExists?: boolean},
+ *   platform?: string,
+ *   inputRows?: Array<{name: string, path: string, count: number, overflow?: boolean}>,
+ *   watchLabel?: string,
+ *   write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}},
+ *   inputFiles?: Array<{path: string, bytes?: number}>,
+ *   outputFiles?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   unicode?: boolean,
  *   styler: (format: string|string[], text: string) => string
  * }} options - Summary inputs.
  * @returns {string[]} Summary lines.
@@ -945,7 +1142,10 @@ export function renderSummary({
   syntaxErrors = [],
   platform,
   inputRows = [],
+  watchLabel,
   write,
+  inputFiles = [],
+  outputFiles = [],
   unicode = true,
   styler,
 }) {
@@ -960,10 +1160,36 @@ export function renderSummary({
     ? `build failed after ${formatDuration(durationMs)}`
     : `built in ${formatDuration(durationMs)}`;
 
-  const lines = [
-    ...renderFacts({ platform, inputRows, outDir, write, styler }),
+  // `dist/` is written, not watched. Falling back to the input rows keeps the
+  // label honest for any caller that renders a summary without the resolved
+  // source roots to hand.
+  const watching =
+    watchLabel ||
+    sharedRootPath(
+      inputRows.filter((entry) => !entry.overflow).map((entry) => entry.path),
+    ) ||
+    'sources';
+
+  // The two halves are labelled with the same dividers the problem blocks use, so
+  // the whole summary reads as one sequence of named sections rather than a wall
+  // of rows followed by some headings. The labels also give the facts block
+  // somewhere to end: without one, `output` ran straight into the build result.
+  //
+  // Storybook's startup lines land between the banner and this block, so it opens
+  // with a blank line rather than trusting whatever printed last to have left one.
+  return [
     '',
-    `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${outDir}`)}`,
+    renderDivider('project', unicode, styler),
+    '',
+    ...renderFacts({ platform, inputRows, outDir, write, styler }),
+    // The verbose listings expand the two rows above them, so they sit directly
+    // under the totals they itemize rather than after the build result.
+    ...renderInputFiles(inputFiles, unicode, styler),
+    ...renderOutputFiles(outputFiles, unicode, styler),
+    '',
+    renderDivider('build', unicode, styler),
+    '',
+    `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${watching}`)}`,
     ...renderProblems(
       snapshot,
       projectDir,
@@ -976,18 +1202,27 @@ export function renderSummary({
     ),
     '',
   ];
-
-  return lines;
 }
 
 /**
  * Render the compact line printed after each watch rebuild.
+ *
+ * In detailed mode the line is followed by what the rebuild actually produced:
+ * how many modules were transformed, and which outputs came out different. That
+ * is a deliberate departure from Rolldown's table, which reprints all seventy-odd
+ * files every cycle because Rollup regenerates the whole bundle every cycle. The
+ * question after an edit is which files changed, and the negative answer — an
+ * edit that compiled to byte-identical output — is worth a line of its own.
  *
  * @param {{
  *   snapshot: object,
  *   durationMs: number,
  *   changedFiles?: string[],
  *   projectDir?: string,
+ *   moduleCount?: number,
+ *   changedOutputs?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   removedOutputs?: string[],
+ *   detailed?: boolean,
  *   styler: (format: string|string[], text: string) => string,
  *   now?: Date
  * }} options - Rebuild inputs.
@@ -998,6 +1233,10 @@ export function renderRebuild({
   durationMs,
   changedFiles = [],
   projectDir = '',
+  moduleCount,
+  changedOutputs = [],
+  removedOutputs = [],
+  detailed = false,
   styler,
   now = new Date(),
 }) {
@@ -1026,6 +1265,67 @@ export function renderRebuild({
   // this reporter exists to remove, so rebuilds only surface hard failures.
   if (failed) {
     lines.push(...renderDetailRows(snapshot.errors, projectDir, styler));
+    return lines;
+  }
+
+  if (detailed)
+    lines.push(
+      ...renderRebuildDetail(
+        { moduleCount, changedOutputs, removedOutputs },
+        styler,
+      ),
+    );
+
+  return lines;
+}
+
+/**
+ * Render the detailed tail of a successful rebuild.
+ *
+ * @param {{
+ *   moduleCount?: number,
+ *   changedOutputs?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   removedOutputs?: string[]
+ * }} cycle - What the rebuild produced.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Detail lines.
+ */
+function renderRebuildDetail(
+  { moduleCount, changedOutputs = [], removedOutputs = [] },
+  styler,
+) {
+  const facts = [];
+  if (Number.isFinite(moduleCount)) {
+    facts.push(`${pluralize(moduleCount, 'module')} transformed`);
+  }
+
+  facts.push(
+    changedOutputs.length === 0
+      ? 'no output changed'
+      : `${pluralize(changedOutputs.length, 'output')} changed`,
+  );
+
+  if (removedOutputs.length > 0) {
+    facts.push(`${pluralize(removedOutputs.length, 'output')} removed`);
+  }
+
+  const lines = [
+    '',
+    `${DETAIL_INDENT}${styler('gray', facts.join(SEPARATOR))}`,
+  ];
+
+  if (changedOutputs.length > 0) {
+    lines.push('', ...renderSizeTable(changedOutputs, styler));
+  }
+
+  // Removals carry no size, so they cannot share the table without a column of
+  // dashes. They get their own labelled group instead.
+  if (removedOutputs.length > 0) {
+    lines.push('', `${DETAIL_INDENT}${styler('gray', 'no longer written')}`);
+
+    for (const fileName of removedOutputs) {
+      lines.push(`${DETAIL_INDENT}${styler('cyan', fileName)}`);
+    }
   }
 
   return lines;
