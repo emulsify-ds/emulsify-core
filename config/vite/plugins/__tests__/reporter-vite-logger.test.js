@@ -6,6 +6,7 @@
 
 import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import {
+  createDevServerLogger,
   createReporterLogger,
   parseUnresolvedAsset,
 } from '../reporter/vite-logger.js';
@@ -142,5 +143,82 @@ describe('reporter logger', () => {
 
     // Each spelling is a separate edit for the author to make.
     expect(collector.snapshot().unresolvedAssets).toHaveLength(2);
+  });
+});
+
+describe('storybook dev server logger', () => {
+  // Vite colors the notice, so the fixture carries escapes the filter has to
+  // look past. Built from the escape character to keep it out of the source.
+  const ESC = String.fromCharCode(27);
+  const green = (text) => `${ESC}[32m${text}${ESC}[39m`;
+  const dim = (text) => `${ESC}[2m${text}${ESC}[22m`;
+  const hmr = (files) => green('hmr update ') + dim(files);
+
+  it('drops hmr notices at the default level', () => {
+    // The watch build rewrites all of dist/ every cycle and Storybook imports
+    // its css from dist/, so one saved stylesheet lands as several of these.
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    logger.info(hmr('/dist/global/layout/layout.css'));
+    logger.info(
+      hmr('/@id/__x00__virtual:/@storybook/builder-vite/vite-app.js'),
+    );
+
+    expect(base.info).not.toHaveBeenCalled();
+  });
+
+  it('passes every other message through untouched', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    logger.info('optimized dependencies changed, reloading');
+
+    expect(base.info).toHaveBeenCalledWith(
+      'optimized dependencies changed, reloading',
+      undefined,
+    );
+  });
+
+  it('keeps hmr notices when more output was requested', () => {
+    // Filtering output away from someone who asked for more of it is backwards.
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: true });
+
+    logger.info(hmr('/dist/global/layout/layout.css'));
+
+    expect(base.info).toHaveBeenCalled();
+  });
+
+  it('never filters warnings or errors', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    logger.warn('hmr update something went wrong');
+    logger.error('hmr update also broken');
+
+    expect(base.warn).toHaveBeenCalled();
+    expect(base.error).toHaveBeenCalled();
+  });
+
+  it('keeps a message that merely mentions hmr in prose', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    logger.info('hmr updated nothing; full reload required');
+
+    expect(base.info).toHaveBeenCalled();
+  });
+
+  it('proxies hasWarned in both directions', () => {
+    // Vite reads this back after logging, so a copy would freeze it.
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    base.hasWarned = true;
+    expect(logger.hasWarned).toBe(true);
+
+    logger.hasWarned = false;
+    expect(base.hasWarned).toBe(false);
   });
 });

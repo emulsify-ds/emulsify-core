@@ -115,6 +115,10 @@ export function copyTwigFilesPlugin({
    */
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return;
+
+    // Copied unconditionally, because `build.emptyOutDir` clears the output
+    // directory on every watch cycle and not just the first — a freshness check
+    // against the destination can never find anything to skip.
     const destPath = join(outDir, relDest);
     mkdirSync(dirname(destPath), { recursive: true });
     try {

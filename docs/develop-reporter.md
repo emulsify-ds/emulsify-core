@@ -180,6 +180,30 @@ Because Vite and Storybook are separate processes, the Storybook panel and the
 Vite summary appear in whichever order the two finish. Each block is
 self-contained.
 
+### HMR Notices
+
+Storybook's dev server logs an HMR notice for every module it pushes to the
+browser, and one saved stylesheet produces several:
+
+```text
+│  Vite hmr update
+│  /@id/__x00__virtual:/@storybook/builder-vite/project-annotations.js,
+│  /@id/__x00__virtual:/@storybook/builder-vite/vite-app.js
+│  Vite hmr update /dist/global/layout/layout.css
+```
+
+These are suppressed at the default level and restored in either verbose mode.
+The rebuild line already reports the same event more precisely, and under
+`concurrently` these interleave with it on the shared pipe.
+
+The volume has a cause worth knowing about: `build.emptyOutDir` clears the output
+directory on **every** watch cycle, not just the first, and Storybook imports its
+compiled CSS from `dist/`. So each save deletes and recreates every file
+Storybook is watching, and each one becomes an HMR event. Suppressing the notices
+hides the noise; it does not reduce the work. Leaving `dist/` intact between
+cycles would, at the cost of letting output from a deleted or renamed component
+linger until the next restart.
+
 ## Verbose Mode
 
 Two ways in, both reaching the same place:

@@ -2,7 +2,7 @@
  * @file Tests for source Twig, metadata, and static asset copy plugins.
  */
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { resolveProjectConfig } from '../../project-config.js';
@@ -244,6 +244,22 @@ describe('source copy plugins', () => {
       expect(watchedBy(copyAllSrcAssetsPlugin({ structure }), build)).toEqual(
         [],
       );
+    });
+
+    it('picks up an edit on the next cycle', () => {
+      const { structure, outDir } = scaffold();
+      const build = { outDir, watch: {} };
+      const source = join(projectDir, 'src/components/card/card.twig');
+      const twigPath = join(outDir, 'components/card/card.twig');
+
+      const plugin = copyTwigFilesPlugin({ structure });
+      plugin.configResolved({ build });
+      plugin.writeBundle();
+
+      writeFileSync(source, '<article>edited</article>');
+      plugin.writeBundle();
+
+      expect(readFileSync(twigPath, 'utf8')).toBe('<article>edited</article>');
     });
 
     it('still copies everything when watching', () => {

@@ -104,3 +104,16 @@ export function isVerbose(env = process.env) {
 export function isDetailed(env = process.env) {
   return resolveVerbosity(env) === VERBOSITY.detailed;
 }
+
+/**
+ * Determine whether output the reporter replaces should be suppressed.
+ *
+ * True only at the default level. Both verbose modes asked for more output, so
+ * neither should have anything filtered out of it.
+ *
+ * @param {object} [env] - Environment variables.
+ * @returns {boolean} TRUE when suppression applies.
+ */
+export function isQuiet(env = process.env) {
+  return resolveVerbosity(env) === VERBOSITY.quiet;
+}

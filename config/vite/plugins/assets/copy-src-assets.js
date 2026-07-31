@@ -106,6 +106,9 @@ export function copyAllSrcAssetsPlugin({
    */
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return;
+
+    // Copied unconditionally; see the note in copy-twig-files.js — `emptyOutDir`
+    // clears the destination on every cycle, so nothing is ever up to date.
     const destPath = join(outDir, relDest);
     mkdirSync(dirname(destPath), { recursive: true });
     try {
