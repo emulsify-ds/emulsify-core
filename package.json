@@ -195,7 +195,7 @@
     "twatch": "npm run check-node-version && jest --no-coverage --watch --verbose"
   },
   "dependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "^8.0.1",
     "@babel/eslint-parser": "^7.29.7",
     "@babel/preset-env": "^7.29.7",
     "@emulsify/cli": "^2.2.0",
