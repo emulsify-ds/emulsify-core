@@ -32,16 +32,48 @@ export function copyTwigFilesPlugin({
   sourceFileIndex = createSourceFileIndex(structure),
 }) {
   let outDir = 'dist';
+  let watching = false;
+  /** @type {Array<{absPath: string, relDest: string}>|undefined} */
+  let plan;
 
-  const copyToOutDir = (absPath, relDest) => {
-    if (!relDest) return;
-    const destPath = join(outDir, relDest);
-    mkdirSync(dirname(destPath), { recursive: true });
-    try {
-      copyFileSync(absPath, destPath);
-    } catch {
-      /* noop */
+  /**
+   * Resolve every file this plugin copies, paired with where it lands.
+   *
+   * Built once and reused, because the source index is resolved at config time
+   * and does not change across watch cycles. Both hooks below read this same
+   * list, which is what keeps "gets copied to dist" and "a save triggers the
+   * copy" from drifting apart — a file cannot be added to one without the other.
+   *
+   * @returns {Array<{absPath: string, relDest: string}>} Copy plan.
+   */
+  const copyPlan = () => {
+    if (plan) return plan;
+
+    plan = [];
+
+    for (const file of sourceFileIndex.componentFiles()) {
+      const isTwig = file.absPath.endsWith('.twig');
+
+      if (!isTwig && !isComponentMetadataFile(file.absPath)) continue;
+      if (isTwig && isPartial(file.relPath)) continue;
+
+      plan.push({
+        absPath: file.absPath,
+        relDest: copiedComponentOutputPath(file.absPath, structure),
+      });
     }
+
+    for (const file of sourceFileIndex.globalFiles()) {
+      if (!file.absPath.endsWith('.twig')) continue;
+      if (isPartial(file.relPath)) continue;
+
+      plan.push({
+        absPath: file.absPath,
+        relDest: copiedGlobalOutputPath(file.absPath, structure),
+      });
+    }
+
+    return plan;
   };
 
   return {
@@ -52,33 +84,43 @@ export function copyTwigFilesPlugin({
     /** Capture the final outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
+      watching = Boolean(cfg.build?.watch);
+    },
+
+    // Twig is copied rather than compiled, so none of it reaches Rollup's module
+    // graph, and Rollup only watches what is in that graph. Without this, saving
+    // a template produced no rebuild at all: `dist/` kept the previous version
+    // until some unrelated stylesheet happened to change. Storybook renders Twig
+    // through its own pipeline and looked correct throughout, so the stale copy
+    // was only visible to whatever consumes `dist/` — which on Drupal is the site.
+    buildStart() {
+      if (!watching) return;
+      for (const { absPath } of copyPlan()) this.addWatchFile(absPath);
     },
 
     /** Copy before the mirror plugin moves dist/components to the project root. */
     writeBundle() {
-      for (const file of sourceFileIndex.componentFiles()) {
-        if (file.absPath.endsWith('.twig')) {
-          if (isPartial(file.relPath)) continue;
-          copyToOutDir(
-            file.absPath,
-            copiedComponentOutputPath(file.absPath, structure),
-          );
-        } else if (isComponentMetadataFile(file.absPath)) {
-          copyToOutDir(
-            file.absPath,
-            copiedComponentOutputPath(file.absPath, structure),
-          );
-        }
-      }
-
-      for (const file of sourceFileIndex.globalFiles()) {
-        if (!file.absPath.endsWith('.twig')) continue;
-        if (isPartial(file.relPath)) continue;
-        copyToOutDir(
-          file.absPath,
-          copiedGlobalOutputPath(file.absPath, structure),
-        );
+      for (const { absPath, relDest } of copyPlan()) {
+        copyToOutDir(absPath, relDest);
       }
     },
   };
+
+  /**
+   * Copy one file into the output directory.
+   *
+   * @param {string} absPath - Absolute source path.
+   * @param {string} relDest - Destination relative to `outDir`.
+   * @returns {void}
+   */
+  function copyToOutDir(absPath, relDest) {
+    if (!relDest) return;
+    const destPath = join(outDir, relDest);
+    mkdirSync(dirname(destPath), { recursive: true });
+    try {
+      copyFileSync(absPath, destPath);
+    } catch {
+      /* noop */
+    }
+  }
 }

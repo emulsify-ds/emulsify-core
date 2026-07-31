@@ -127,6 +127,23 @@ After the first build, each cycle is one line:
   09:14:02 ~ src/components/atoms/buttons/_buttons.scss · rebuilt in 84ms
 ```
 
+Any file that ends up in `dist/` triggers one, including the templates and static
+assets that are copied rather than compiled. Those are absent from Rollup's module
+graph, so the copy plugins register them with `addWatchFile`; without that, saving
+a Twig template produced no rebuild at all and `dist/` kept the previous version
+until an unrelated stylesheet changed. Storybook renders Twig through its own
+pipeline and looked correct throughout, which made the stale copy visible only to
+whatever consumes `dist/`.
+
+Two things deliberately do not trigger a Vite rebuild. Story files are Storybook's
+to watch, and Twig partials are not copied — a partial reached from a story's Twig
+import is already watched by the Twig module plugin.
+
+Adding a _new_ file is different from editing one. The entry map and the source
+index are both resolved once at config time, and Rollup cannot take new inputs
+mid-watch, so a newly created component needs `develop` restarted before it is
+picked up.
+
 Deprecations are not repeated on rebuilds — restating 190 of them on every
 keystroke would recreate the noise the reporter exists to remove. Failures are
 reported in full.
