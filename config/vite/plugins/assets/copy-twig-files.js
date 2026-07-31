@@ -17,10 +17,6 @@ import {
   isComponentMetadataFile,
 } from './source-file-index.js';
 
-/** Determine whether a Twig file is a partial (filename starts with `_`). */
-const isPartial = (filePath) =>
-  (filePath.split('/')?.pop() || '').trim().startsWith('_');
-
 /**
  * Copy Twig templates and component metadata to `dist/`.
  *
@@ -51,11 +47,18 @@ export function copyTwigFilesPlugin({
 
     plan = [];
 
+    // A leading underscore excludes a stylesheet from compilation, because a Sass
+    // partial is inlined into whatever imports it and has no output of its own.
+    // Twig has no equivalent: `{% include %}` and `{% embed %}` resolve at render
+    // time against the emitted tree, so an underscored template is a file the site
+    // still has to find. Skipping those left the include unresolvable at runtime.
     for (const file of sourceFileIndex.componentFiles()) {
-      const isTwig = file.absPath.endsWith('.twig');
-
-      if (!isTwig && !isComponentMetadataFile(file.absPath)) continue;
-      if (isTwig && isPartial(file.relPath)) continue;
+      if (
+        !file.absPath.endsWith('.twig') &&
+        !isComponentMetadataFile(file.absPath)
+      ) {
+        continue;
+      }
 
       plan.push({
         absPath: file.absPath,
@@ -65,7 +68,6 @@ export function copyTwigFilesPlugin({
 
     for (const file of sourceFileIndex.globalFiles()) {
       if (!file.absPath.endsWith('.twig')) continue;
-      if (isPartial(file.relPath)) continue;
 
       plan.push({
         absPath: file.absPath,

@@ -58,8 +58,10 @@ describe('source copy plugins', () => {
     runCopyPlugins(structure, outDir);
 
     expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
+    // An underscored Twig template is still included at render time, so it has to
+    // be emitted. Only stylesheets treat the prefix as "no output of its own".
     expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
-      false,
+      true,
     );
     expect(existsSync(join(outDir, 'components/card/card.component.yml'))).toBe(
       true,
@@ -117,15 +119,16 @@ describe('source copy plugins', () => {
 
     expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
     expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
-      false,
+      true,
     );
     expect(existsSync(join(outDir, 'components/card/card.component.yml'))).toBe(
       true,
     );
     expect(existsSync(join(outDir, 'components/card/image.png'))).toBe(true);
     expect(existsSync(join(outDir, 'foundation/icons/icon.svg'))).toBe(true);
+    // Emitted from a named structure root too, not only from component roots.
     expect(existsSync(join(outDir, 'foundation/icons/_partial.twig'))).toBe(
-      false,
+      true,
     );
     expect(
       existsSync(join(outDir, 'foundation/icons/icon.component.json')),
@@ -213,9 +216,10 @@ describe('source copy plugins', () => {
       }
     });
 
-    it('leaves partials and compiled entries out of the watch set', () => {
-      // Partials are not copied, and Rollup already watches the SCSS it compiles.
-      // Registering either here would buy a rebuild that copies nothing.
+    it('watches an underscored template and leaves compiled entries alone', () => {
+      // The plan drives both hooks, so a template that is now copied is also now
+      // watched — saving it has to update dist/ like any other template. SCSS
+      // stays out because Rollup already watches what it compiles.
       const { structure, outDir } = scaffold();
       const watched = [
         ...watchedBy(copyTwigFilesPlugin({ structure }), {
@@ -228,9 +232,7 @@ describe('source copy plugins', () => {
         }),
       ];
 
-      expect(watched.some((path) => path.endsWith('_partial.twig'))).toBe(
-        false,
-      );
+      expect(watched.some((path) => path.endsWith('_partial.twig'))).toBe(true);
       expect(watched.some((path) => path.endsWith('card.scss'))).toBe(false);
     });
 
@@ -278,8 +280,49 @@ describe('source copy plugins', () => {
       expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
       expect(existsSync(join(outDir, 'components/card/icon.svg'))).toBe(true);
       expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
+        true,
+      );
+    });
+  });
+
+  describe('underscored templates', () => {
+    it('emits an underscored template so a runtime include can resolve it', () => {
+      // The bug this covers: `{% include '@components/card/_inner.twig' %}` is
+      // resolved by Twig at render time against the emitted tree, so a template
+      // left out of dist/ is a 404 on the rendered page. Nothing about the
+      // filename makes it inlinable the way a Sass partial is.
+      projectDir = makeTempProject();
+      const componentDir = join(projectDir, 'src/components/card');
+      const outDir = join(projectDir, 'dist');
+      mkdirSync(componentDir, { recursive: true });
+      writeFileSync(
+        join(componentDir, 'card.twig'),
+        '<div>{% include "@components/card/_inner.twig" %}</div>',
+      );
+      writeFileSync(join(componentDir, '_inner.twig'), '<span></span>');
+      writeFileSync(join(componentDir, '_inner.scss'), '.inner {}');
+
+      runCopyPlugins(resolveProjectStructure(makeEnv(projectDir)), outDir);
+
+      expect(existsSync(join(outDir, 'components/card/_inner.twig'))).toBe(
+        true,
+      );
+      // The Sass partial keeps its exclusion; it has no output of its own.
+      expect(existsSync(join(outDir, 'components/card/_inner.scss'))).toBe(
         false,
       );
+    });
+
+    it('emits an underscored template from a global root', () => {
+      projectDir = makeTempProject();
+      const globalDir = join(projectDir, 'src/layout');
+      const outDir = join(projectDir, 'dist');
+      mkdirSync(globalDir, { recursive: true });
+      writeFileSync(join(globalDir, '_grid.twig'), '<div class="grid"></div>');
+
+      runCopyPlugins(resolveProjectStructure(makeEnv(projectDir)), outDir);
+
+      expect(existsSync(join(outDir, 'global/layout/_grid.twig'))).toBe(true);
     });
   });
 });
