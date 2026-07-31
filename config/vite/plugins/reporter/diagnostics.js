@@ -148,6 +148,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
  *     unresolvedAssets: Array<{url: string, importer: string|undefined, count: number}>,
  *     importErrors: Array<{file: string|undefined, line: number|undefined, specifier: string, count: number}>,
+ *     syntaxErrors: Array<{minifier: string|undefined, message: string, declaration: string|undefined, count: number}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
  *     deprecationTotal: number,

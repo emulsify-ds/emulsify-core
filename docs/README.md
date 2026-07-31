@@ -11,6 +11,7 @@ These docs expand on the short project README and are organized by the task a pr
 | [Asset References](asset-references.md)              | Referencing fonts, SVGs, images, and other files from project root or configured asset roots in Sass, CSS, and Twig.  |
 | [Platform Adapters](platform-adapters.md)            | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                      |
 | [Extension Points](extension-points.md)              | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                          |
+| [Develop Reporter](develop-reporter.md)              | Reading `npm run develop` output: project facts, input roots, problem blocks, Storybook URLs, and verbosity controls. |
 | [Dependency Contract](dependency-contract.md)        | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                                |
 | [Performance](performance.md)                        | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                |
 | [Native Twig Extensions](native-twig-extensions.md)  | Using `bem()`, `add_attributes()`, Storybook `include()`/`source()`, and `switch/case/default/endswitch` in Twig.js.  |
@@ -20,3 +21,4 @@ These docs expand on the short project README and are organized by the task a pr
 | [Release Pull Request Review](release-review.md)     | Reviewing large release pull requests by independent API, runtime, consumer, accessibility, and release risks.        |
 | [Migration To 4.x](migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                             |
 | [4.3.0 Release Notes](releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.                |
+| [4.3.1 Release Notes](releases/4.3.1.md)             | Reviewing the 4.3.1 develop reporter changes, verbosity controls, and scope limits.                                   |

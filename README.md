@@ -166,6 +166,7 @@ The documentation is split by task:
 | [Release Pull Request Review](docs/release-review.md)     | Reviewing large release pull requests by independent API, runtime, consumer, accessibility, and release risks.    |
 | [Migration To 4.x](docs/migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                         |
 | [4.3.0 Release Notes](docs/releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.            |
+| [4.3.1 Release Notes](docs/releases/4.3.1.md)             | Reviewing the 4.3.1 develop reporter changes, verbosity controls, and scope limits.                               |
 
 ## Known Limitations
 

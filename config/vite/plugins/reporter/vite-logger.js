@@ -18,6 +18,12 @@
  * message passes straight through to Vite's own logger untouched.
  */
 
+import { isQuiet, isVerbose } from './verbosity.js';
+
+// Re-exported because the Vite config and the reporter both branch on it, and
+// this module was where it lived before verbosity grew a third level.
+export { isVerbose };
+
 /**
  * Matches Vite's unresolved CSS asset notice.
  *
@@ -77,13 +83,68 @@ function isBareStackTrace(message) {
 }
 
 /**
- * Determine whether the reporter should stand aside and let Vite speak.
+ * Matches Vite's HMR notice.
  *
- * @param {object} [env] - Environment variables.
- * @returns {boolean} TRUE when raw output should pass through.
+ * Emitted by the dev server as `hmr update <files>` through `logger.info`.
+ *
+ * @type {RegExp}
  */
-export function isVerbose(env = process.env) {
-  return Boolean(env.EMULSIFY_VERBOSE) && env.EMULSIFY_VERBOSE !== '0';
+const HMR_UPDATE_PATTERN = /(^|\s)hmr update\s/;
+
+/**
+ * Wrap the Storybook dev server's logger to drop HMR notices.
+ *
+ * These come from Storybook's Vite dev server, not from the watch build, and
+ * there are a lot of them. The watch build rewrites every file in `dist/` on
+ * every cycle — Rollup regenerates the whole bundle — and Storybook imports its
+ * compiled CSS from `dist/`, so one saved stylesheet lands as several HMR events.
+ * Most name Storybook's own virtual modules:
+ *
+ *   │  Vite hmr update
+ *   │  /@id/__x00__virtual:/@storybook/builder-vite/project-annotations.js,
+ *   │  /@id/__x00__virtual:/@storybook/builder-vite/vite-app.js
+ *
+ * Nothing there is actionable, and the reporter has already printed the rebuild
+ * line that says the same thing more precisely. Under `concurrently` both
+ * processes share one pipe, so these interleave with the build's output and are
+ * the last thing making one command look like two.
+ *
+ * The wrapper delegates to whatever logger is already configured rather than
+ * replacing it, so Storybook keeps its own prefixes and styling for every other
+ * message. Verbose modes pass everything through, because someone who asked for
+ * more output should not have this filtered away.
+ *
+ * @param {{
+ *   baseLogger: import('vite').Logger,
+ *   verbose?: boolean
+ * }} options - Logger options.
+ * @returns {import('vite').Logger} Wrapped logger.
+ */
+export function createDevServerLogger({ baseLogger, verbose } = {}) {
+  const passThrough = verbose === undefined ? !isQuiet() : verbose;
+
+  return {
+    get hasWarned() {
+      return baseLogger.hasWarned;
+    },
+
+    set hasWarned(value) {
+      baseLogger.hasWarned = value;
+    },
+
+    info(message, options) {
+      if (!passThrough && HMR_UPDATE_PATTERN.test(stripAnsi(String(message)))) {
+        return;
+      }
+      baseLogger.info(message, options);
+    },
+
+    warn: (message, options) => baseLogger.warn(message, options),
+    warnOnce: (message, options) => baseLogger.warnOnce(message, options),
+    error: (message, options) => baseLogger.error(message, options),
+    clearScreen: (type) => baseLogger.clearScreen(type),
+    hasErrorLogged: (error) => baseLogger.hasErrorLogged(error),
+  };
 }
 
 /**

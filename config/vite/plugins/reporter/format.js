@@ -137,6 +137,47 @@ export function formatDuration(milliseconds) {
 }
 
 /**
+ * Format a byte count for display.
+ *
+ * Rolldown's discarded asset table reported kilobytes to two decimals per file.
+ * The reporter states one total and one largest file instead, so it rounds to
+ * whole kilobytes and one decimal megabyte — enough to notice a bundle doubling,
+ * without implying a precision that matters at this scale.
+ *
+ * @param {number} bytes - Byte count.
+ * @returns {string} Formatted size.
+ */
+export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+
+  const kilobytes = bytes / 1024;
+  if (kilobytes < 1024) return `${Math.round(kilobytes)} kB`;
+
+  return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * Format a byte count for a column of sizes.
+ *
+ * {@link formatBytes} rounds hard, which is right for a one-line total but wrong
+ * for a table: rounding turns 5,660 and 3,010 bytes into `6 kB` and `3 kB`, and a
+ * table whose whole purpose is comparison should not round away the difference.
+ * A single unit keeps the column directly comparable down its length rather than
+ * making the reader convert between B, kB, and MB row to row.
+ *
+ * Two decimals of kilobytes is the convention Rolldown's discarded asset table
+ * used, so the numbers are recognizable to anyone who has read that output.
+ *
+ * @param {number} bytes - Byte count.
+ * @returns {string} Formatted size in kilobytes.
+ */
+export function formatPreciseBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0.00 kB';
+  return `${(bytes / 1024).toFixed(2)} kB`;
+}
+
+/**
  * Format a wall-clock timestamp for rebuild lines.
  *
  * @param {Date} [date] - Date to format.

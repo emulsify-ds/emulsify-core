@@ -39,6 +39,16 @@ import {
 import { classifyBuildError } from './build-errors.js';
 import { renderBanner, renderRebuild, renderSummary } from './render.js';
 import { createStyler, supportsColor, supportsUnicode } from './format.js';
+import {
+  buildInputFileRows,
+  buildInputRows,
+  buildOutputFileRows,
+  diffFingerprints,
+  fingerprintBundle,
+  summarizeBundle,
+  watchedRootLabel,
+} from './source-roots.js';
+import { isDetailed } from './verbosity.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
 
 /**
@@ -85,6 +95,7 @@ export function countEntries(input) {
  *   now?: () => number,
  *   clock?: () => Date,
  *   colorEnabled?: boolean,
+ *   detailed?: boolean,
  *   version?: string
  * }} options - Plugin options.
  * @returns {import('vite').PluginOption} Develop reporter plugin.
@@ -97,6 +108,7 @@ export function developReporterPlugin({
   clock = () => new Date(),
   colorEnabled,
   unicodeEnabled,
+  detailed,
   version,
 } = {}) {
   const styler = createStyler(
@@ -104,14 +116,23 @@ export function developReporterPlugin({
   );
   const unicode =
     unicodeEnabled === undefined ? supportsUnicode() : unicodeEnabled;
+  const verbose = detailed === undefined ? isDetailed() : detailed;
 
   let watching = false;
   let outDir = 'dist';
-  let entryCount;
+  let inputRows = [];
+  let inputFiles = [];
+  let watchLabel;
   let cycleStart = 0;
   let cyclePrinted = true;
   let firstCycleComplete = false;
   let changedFiles = [];
+  let writeTally;
+  let outputFiles = [];
+  let changedOutputs = [];
+  let removedOutputs = [];
+  let fingerprints = new Map();
+  let transformedModules = new Set();
 
   /**
    * Write an array of finished lines to the destination stream.
@@ -178,6 +199,10 @@ export function developReporterPlugin({
           durationMs,
           changedFiles,
           projectDir: env.projectDir,
+          moduleCount: verbose ? transformedModules.size : undefined,
+          changedOutputs,
+          removedOutputs,
+          detailed: verbose,
           styler,
           now: clock(),
         }),
@@ -232,6 +257,13 @@ export function developReporterPlugin({
               existsSync(join(env.projectDir, sharedDirectory)),
             ),
           },
+          platform: env.platform,
+          inputRows,
+          watchLabel,
+          write: writeTally,
+          inputFiles,
+          outputFiles,
+          unicode,
           styler,
         }),
       );
@@ -255,13 +287,36 @@ export function developReporterPlugin({
       if (!watching) return;
 
       outDir = config.build?.outDir || 'dist';
-      entryCount = countEntries(config.build?.rollupOptions?.input);
+
+      // Attribution is resolved here, from the entry map the config already
+      // carries, so the summary can name each source root and what it
+      // contributed without touching the filesystem.
+      inputRows = buildInputRows({
+        entries: config.build?.rollupOptions?.input,
+        sourceRootRecords: env.projectStructure?.sourceRootRecords,
+        globalRootDirectories: env.projectStructure?.globalRoots,
+        projectDir: env.projectDir,
+      });
+
+      // Named from the resolved source roots rather than the input rows, so the
+      // label is the truth about what Rollup is watching even when a root
+      // produced no entries to report.
+      watchLabel = watchedRootLabel({
+        sourceRootRecords: env.projectStructure?.sourceRootRecords,
+        projectDir: env.projectDir,
+      });
+
+      // One stat per entry, once, and only when the listing will be printed.
+      if (verbose) {
+        inputFiles = buildInputFileRows({
+          entries: config.build?.rollupOptions?.input,
+          projectDir: env.projectDir,
+        });
+      }
 
       emit(
         renderBanner({
           version: version || resolvePackageVersion(env.projectDir),
-          platform: env.platform,
-          entryCount,
           unicode,
           styler,
         }),
@@ -273,7 +328,26 @@ export function developReporterPlugin({
       diagnostics.reset();
       cycleStart = now();
       cyclePrinted = false;
+      transformedModules = new Set();
+      changedOutputs = [];
+      removedOutputs = [];
     },
+
+    // Rolldown's own `N modules transformed.` count is unavailable here by
+    // design: it comes from Rust instrumentation that Vite only registers when
+    // `logLevel` admits info, and keeping the level low is what removes the
+    // colliding progress line. Counting the ids that reach this hook is
+    // equivalent for the question being asked — what did this cycle recompile —
+    // and it costs one Set insert per module. The hook is only attached in
+    // detailed mode so the default path is untouched.
+    ...(verbose
+      ? {
+          transform(_code, id) {
+            if (watching) transformedModules.add(id);
+            return null;
+          },
+        }
+      : {}),
 
     watchChange(id) {
       if (!watching) return;
@@ -297,7 +371,42 @@ export function developReporterPlugin({
       reportCycle();
     },
 
-    writeBundle() {
+    // The bundle is reduced here rather than in the summary because this is the
+    // only hook that receives it. Raising `logLevel` to quiet the develop loop
+    // discards Rolldown's per-file asset table, and this recovers the three
+    // facts from it worth keeping.
+    writeBundle(_options, bundle) {
+      if (watching) {
+        writeTally = summarizeBundle(bundle);
+
+        if (verbose) {
+          // Rollup regenerates the whole bundle every cycle, so the first build
+          // lists everything and later cycles list only what came out different.
+          // Gzip is computed for the full listing once, then only for the files
+          // a rebuild changed — which is what keeps the watch loop from paying
+          // Rolldown's `computing gzip size...` pause on every keystroke.
+          const current = fingerprintBundle(bundle);
+
+          if (firstCycleComplete) {
+            const diff = diffFingerprints(fingerprints, current);
+            const changed = new Set(diff.changed);
+
+            changedOutputs = buildOutputFileRows(
+              Object.fromEntries(
+                Object.entries(bundle).filter(([fileName]) =>
+                  changed.has(fileName),
+                ),
+              ),
+            );
+            removedOutputs = diff.removed;
+          } else {
+            outputFiles = buildOutputFileRows(bundle);
+          }
+
+          fingerprints = current;
+        }
+      }
+
       reportCycle();
     },
 

@@ -5,6 +5,7 @@ import {
   mergeReactSingletonOptimizeDeps,
   mergeReactSingletonResolve,
 } from '../config/vite/utils/react-singleton.js';
+import { createDevServerLogger } from '../config/vite/plugins/reporter/vite-logger.js';
 import { makeGeneratedDistFilesPlugin } from './main-static-assets.js';
 
 // Twig glob maps are provided by config/vite/plugins/twig/virtual-twig-globs.js.
@@ -123,7 +124,7 @@ function makeTwigVirtualModuleOptimizerPlugin() {
  */
 export function createViteFinal(resolvedStorybookEnv) {
   return async function viteFinal(config) {
-    const { mergeConfig } = await import('vite');
+    const { createLogger, mergeConfig } = await import('vite');
     const env = resolvedStorybookEnv;
     const storybookBuildConfig = config?.build || {};
 
@@ -249,6 +250,15 @@ export function createViteFinal(resolvedStorybookEnv) {
 
     return {
       ...mergedConfig,
+
+      // Assigned after the merge rather than inside it, because `mergeConfig`
+      // deep-merges plain objects and a logger is an object of functions — merging
+      // Storybook's with ours would produce a hybrid belonging to neither. Spread
+      // last, it simply wins, and it delegates to whatever was already configured
+      // so Storybook keeps its prefixes for every message it is allowed to print.
+      customLogger: createDevServerLogger({
+        baseLogger: mergedConfig.customLogger || createLogger(),
+      }),
       build: {
         ...(mergedConfig.build || {}),
         ...(storybookBuildConfig.outDir
