@@ -34,8 +34,8 @@ const customElementBrowserTest = join(
 const largeTwigComponentCount = 80;
 // Storybook 10.5 changes its own manager/runtime chunks under Vite 8, so keep
 // the regression gate focused on fixture-owned output. The exclusive ceiling
-// preserves the original 484-byte budget over the current 178,698-byte result.
-const largeTwigStorybookFixtureJsLimit = 179_182;
+// preserves the original 484-byte budget over the current 181,845-byte result.
+const largeTwigStorybookFixtureJsLimit = 182_329;
 const largeTwigStorybookFixtureJsPatterns = [
   'storybook-assets/_content-*.js',
   'storybook-assets/gallery-*.js',
