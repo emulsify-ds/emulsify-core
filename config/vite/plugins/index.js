@@ -12,6 +12,7 @@ import { resolveProjectStructure } from '../project-structure.js';
 import { toPosixPath } from '../utils/paths.js';
 import { copyAllSrcAssetsPlugin } from './assets/copy-src-assets.js';
 import { copyTwigFilesPlugin } from './assets/copy-twig-files.js';
+import { cssAssetRebasePlugin } from './assets/css-asset-rebase.js';
 import { cssAssetUrlRelativizer } from './assets/css-asset-relativizer.js';
 import { mirrorComponentsToRoot } from './assets/mirror-components.js';
 import { createSourceFileIndex } from './assets/source-file-index.js';
@@ -56,6 +57,11 @@ export function makePlugins(env) {
   const sourceFileIndex =
     env.sourceFileIndex || createSourceFileIndex(structure);
 
+  // Filled by the rebase plugin, read by the relativizer: published asset path
+  // -> where that file actually lives, relative to the project root.
+  /** @type {Map<string, string>} */
+  const publishedAssetSources = new Map();
+
   const basePlugins = [
     virtualTwigExtensionInstallersPlugin(envWithStructure),
     virtualTwigGlobsPlugin(envWithStructure),
@@ -86,8 +92,24 @@ export function makePlugins(env) {
     // Legacy Storybook stories may still enumerate assets with require.context.
     requireContextCompatPlugin(),
 
-    // Keep CSS asset URLs relative to the emitted CSS location.
-    cssAssetUrlRelativizer({ assetsRoot: 'assets' }),
+    // Repair CSS asset URLs Vite could not resolve, and strip the asset copies
+    // Vite would otherwise leave in the output. Ordering against the
+    // relativizer below is load-bearing in both directions: this normalizes
+    // URLs to `/assets/...` and fills `publishedAssetSources`, and only then
+    // can the relativizer point each URL at where the file actually lives.
+    cssAssetRebasePlugin({
+      env: envWithStructure,
+      diagnostics: env.diagnostics,
+      publishedAssetSources,
+    }),
+
+    // Point CSS asset URLs at the file each one names, relative to the
+    // stylesheet's own location on disk.
+    cssAssetUrlRelativizer({
+      assetsRoot: 'assets',
+      env: envWithStructure,
+      publishedAssetSources,
+    }),
   ];
 
   return [

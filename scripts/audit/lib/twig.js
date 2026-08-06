@@ -2,7 +2,11 @@
  * @file Twig reference parsing and resolution helpers for the project audit.
  */
 
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import {
+  resolveAssetRoots,
+  toAbsoluteAssetRoot,
+} from '../../../config/vite/utils/asset-roots.js';
 import { safeExists } from '../../../config/vite/utils/fs-safe.js';
 import { candidateKeysForReference } from '../../../src/storybook/twig/reference-paths.js';
 import { lineNumberAt } from '../../lib/text.js';
@@ -143,24 +147,15 @@ function candidateKeysToFiles(keys, env) {
  * @returns {string} Absolute filesystem path, or an empty string.
  */
 export function resolveAuditAssetRoot(projectDir, assetRoot) {
-  if (typeof assetRoot !== 'string' || !assetRoot.trim()) return '';
-
-  const normalizedProjectDir = resolve(projectDir || process.cwd());
-  const normalizedRoot = assetRoot.trim();
-
-  if (isAbsolute(normalizedRoot)) {
-    const absoluteRoot = resolve(normalizedRoot);
-
-    return safeExists(absoluteRoot)
-      ? absoluteRoot
-      : resolve(normalizedProjectDir, `.${normalizedRoot}`);
-  }
-
-  return resolve(normalizedProjectDir, normalizedRoot);
+  return toAbsoluteAssetRoot(projectDir, assetRoot);
 }
 
 /**
  * Return filesystem roots that Storybook can use for @assets source() calls.
+ *
+ * Existence filtering stays off here because callers do their own directory
+ * check, and a configured-but-missing root is worth reporting rather than
+ * silently dropping.
  *
  * @param {object} env - Normalized environment.
  * @param {object} [options={}] - Asset root options.
@@ -168,20 +163,7 @@ export function resolveAuditAssetRoot(projectDir, assetRoot) {
  * @returns {string[]} Absolute asset roots.
  */
 export function auditAssetRoots(env = {}, { includeGenerated = false } = {}) {
-  const projectDir = env.projectDir || process.cwd();
-  const configuredRoots = Array.isArray(env?.projectStructure?.assetRoots)
-    ? env.projectStructure.assetRoots
-    : [];
-  const fallbackRoots = ['assets', 'src/assets'];
-  const generatedRoots = includeGenerated ? ['dist/assets'] : [];
-
-  return Array.from(
-    new Set(
-      [...fallbackRoots, ...configuredRoots, ...generatedRoots]
-        .map((root) => resolveAuditAssetRoot(projectDir, root))
-        .filter(Boolean),
-    ),
-  );
+  return resolveAssetRoots(env, { includeGenerated, existingOnly: false });
 }
 
 /**

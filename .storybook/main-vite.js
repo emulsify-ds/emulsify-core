@@ -6,6 +6,7 @@ import {
   mergeReactSingletonResolve,
 } from '../config/vite/utils/react-singleton.js';
 import { createDevServerLogger } from '../config/vite/plugins/reporter/vite-logger.js';
+import { STORYBOOK_VITE_ASSETS_DIR } from '../config/vite/plugins/assets/storybook-output.js';
 import { makeGeneratedDistFilesPlugin } from './main-static-assets.js';
 
 // Twig glob maps are provided by config/vite/plugins/twig/virtual-twig-globs.js.
@@ -29,9 +30,13 @@ const twigRuntimeOptimizeDepsExclude = [
  * keeping generated chunks in a separate folder avoids concurrent writers in
  * `.out/assets`.
  *
+ * Imported rather than repeated: Core plugins read this value back off the
+ * resolved config to tell a Storybook build from a theme build, so the two
+ * must never drift.
+ *
  * @type {string}
  */
-const storybookViteAssetsDir = 'storybook-assets';
+const storybookViteAssetsDir = STORYBOOK_VITE_ASSETS_DIR;
 
 /**
  * Merge Storybook and project optimizeDeps excludes with Core Twig runtime IDs.

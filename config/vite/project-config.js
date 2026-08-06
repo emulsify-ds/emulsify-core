@@ -60,7 +60,27 @@ function projectConfigEnvSignature(env = {}) {
     EMULSIFY_PLATFORM: platformOverride
       ? normalizePlatformName(platformOverride)
       : '',
+    EMULSIFY_ASSET_REBASE: normalizeIdentifier(env.EMULSIFY_ASSET_REBASE),
   });
+}
+
+/**
+ * Resolve whether the build may repair unresolvable CSS asset URLs.
+ *
+ * On by default: the URLs it repairs are already broken in every output shape
+ * except mirrored Drupal SDC, so an opt-in would leave the defect in place for
+ * anyone who does not read a changelog. The env override is the bisect tool —
+ * a consumer can turn the repair off for one build without editing config.
+ *
+ * @param {object} rawConfig - Parsed project.emulsify.json contents.
+ * @param {NodeJS.ProcessEnv|Record<string,string>} env - Environment values.
+ * @returns {boolean} TRUE when the rebase is enabled.
+ */
+function resolveAssetRebase(rawConfig = {}, env = {}) {
+  const override = normalizeIdentifier(env.EMULSIFY_ASSET_REBASE);
+  if (override) return !['0', 'false', 'off', 'no'].includes(override);
+
+  return rawConfig?.assets?.rebase !== false;
 }
 
 /**
@@ -201,6 +221,7 @@ export function resolveProjectConfig(
     rawStructureImplementations,
   );
   const assetRoots = normalizeAssetRoots(root, rawAssetRoots(rawConfig));
+  const assetRebase = resolveAssetRebase(rawConfig, env);
   const structureRoots = structureImplementations.map(
     (implementation) => implementation.directory,
   );
@@ -212,6 +233,7 @@ export function resolveProjectConfig(
     structureImplementations,
     assetRoots: assetRoots.roots,
     ignoredAssetRoots: assetRoots.ignored,
+    assetRebase,
     platformAdapter,
   });
 
@@ -231,6 +253,7 @@ export function resolveProjectConfig(
     structureRoots,
     assetRoots: projectStructure.assetRoots,
     ignoredAssetRoots: projectStructure.ignoredAssetRoots,
+    assetRebase: projectStructure.assetRebase,
     componentRoots: projectStructure.componentRoots,
     globalRoots: projectStructure.globalRoots,
     namespaceRoots: projectStructure.namespaceRoots,

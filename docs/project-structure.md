@@ -113,6 +113,19 @@ are ignored and reported by `emulsify-audit`. Existing root `assets/` and
 `src/assets/` directories are still checked automatically for `@assets`
 references.
 
+Roots are resolved in precedence order — configured roots first, then `assets/`,
+then `src/assets/` — which is the order Storybook serves them at `/assets`. The
+Vite build and `emulsify-audit` read that same list, so a `url('/assets/...')`
+reference resolves identically in stories, in built CSS, and in the audit.
+
+Asset roots are never copied into the output directory. Built CSS references
+them where they live, so `dist/` holds compiled and generated output only — the
+`dist/assets/icons.svg` sprite being the generated case.
+
+`assets.rebase` (default `true`) controls whether the build repairs CSS asset
+URLs it could not otherwise resolve. See
+[Asset References](asset-references.md#why-a-relative-path-is-not-portable).
+
 ## Story Roots
 
 Stories remain colocated with components. Storybook discovers stories from the normalized source roots regardless of whether a project uses:

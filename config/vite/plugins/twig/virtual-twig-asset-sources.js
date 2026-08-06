@@ -8,6 +8,11 @@
 import { readFileSync, readdirSync } from 'fs';
 import { relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import {
+  resolveAssetRoots,
+  toAbsoluteAssetRoot,
+} from '../../utils/asset-roots.js';
+import { isStorybookOutput } from '../assets/storybook-output.js';
 import { safeExists } from '../../utils/fs-safe.js';
 import { toPosixPath } from '../../utils/paths.js';
 import { unique } from '../../../../src/extensions/shared/lists.js';
@@ -33,55 +38,14 @@ const PUBLIC_ASSET_ROOTS = new Map([
 ]);
 
 /**
- * Resolve a configured asset root to an absolute filesystem path.
- *
- * @param {string} projectDir - Absolute project root.
- * @param {string} assetRoot - Absolute, project-relative, or Vite root-relative asset root.
- * @returns {string} Absolute filesystem path.
- */
-function toAbsoluteAssetRoot(projectDir, assetRoot) {
-  const normalizedProjectDir = toPosixPath(projectDir || '').replace(
-    /\/+$/,
-    '',
-  );
-  const normalizedRoot = toPosixPath(assetRoot || '').replace(/\/+$/, '');
-
-  if (!normalizedRoot) return '';
-  if (
-    normalizedProjectDir &&
-    (normalizedRoot === normalizedProjectDir ||
-      normalizedRoot.startsWith(`${normalizedProjectDir}/`))
-  ) {
-    return normalizedRoot;
-  }
-  if (normalizedRoot.startsWith('/') && normalizedProjectDir) {
-    if (safeExists(normalizedRoot)) {
-      return normalizedRoot;
-    }
-    return `${normalizedProjectDir}${normalizedRoot}`;
-  }
-
-  return toPosixPath(resolve(projectDir || '.', normalizedRoot));
-}
-
-/**
  * Resolve existing project asset roots for Storybook source() text imports.
  *
  * @param {{ projectDir?: string, projectStructure?: { assetRoots?: string[] } }} env - Emulsify environment.
  * @returns {string[]} Existing Vite root-relative asset root paths.
  */
 export function assetSourceRoots(env) {
-  const configuredRoots =
-    Array.isArray(env?.projectStructure?.assetRoots) &&
-    env.projectStructure.assetRoots.length
-      ? env.projectStructure.assetRoots
-      : [];
-  const fallbackRoots = ['/assets', '/src/assets'];
-
   return unique(
-    [...configuredRoots, ...fallbackRoots]
-      .map((root) => toAbsoluteAssetRoot(env?.projectDir, root))
-      .filter((root) => root && safeExists(root))
+    resolveAssetRoots(env)
       .map((root) => toRootRelativePath(env?.projectDir, root))
       .filter(Boolean),
   );
@@ -226,9 +190,13 @@ export function publicAssetSourceEntries(env) {
  * Generate the virtual module source for lazy text asset maps.
  *
  * @param {{ projectDir?: string, projectStructure?: { assetRoots?: string[] } }} env - Emulsify environment.
+ * @param {{ inlineTextAssets?: boolean }} [options={}] - Generation options.
  * @returns {string} JavaScript module source.
  */
-export function generateVirtualTwigAssetSourcesModule(env) {
+export function generateVirtualTwigAssetSourcesModule(
+  env,
+  { inlineTextAssets = true } = {},
+) {
   const rootPrefixes = assetSourceRoots(env).map((root) =>
     `${root === '/' ? '' : root}/`.replace(/\/{2,}/g, '/'),
   );
@@ -239,7 +207,12 @@ export function generateVirtualTwigAssetSourcesModule(env) {
     ...generatedRootPrefixes,
     ...generatedAssetRootPrefixes(),
   ]);
-  const patterns = assetSourceGlobPatterns(env);
+  // Each glob entry becomes a lazy chunk carrying one asset's bytes as a
+  // JavaScript string. Storybook needs them so source('@assets/...') can inline
+  // an SVG synchronously; a theme build does not, and emitting them there just
+  // copies the asset tree into dist/ in another form. The fetch entries below
+  // keep source() working at runtime without bundling anything.
+  const patterns = inlineTextAssets ? assetSourceGlobPatterns(env) : [];
   const globEntries = patterns.length
     ? patterns
         .map(
@@ -304,8 +277,15 @@ export const getAssetText = assetSourceRuntime.getAssetText;
  * @returns {import('vite').PluginOption} Virtual module plugin.
  */
 export function virtualTwigAssetSourcesPlugin(env) {
+  let inlineTextAssets = true;
+
   return {
     name: 'emulsify-virtual-twig-asset-sources',
+
+    configResolved(config) {
+      inlineTextAssets = isStorybookOutput(config);
+    },
+
     resolveId(id) {
       if (id === VIRTUAL_TWIG_ASSET_SOURCES_ID) {
         return RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID;
@@ -318,7 +298,9 @@ export function virtualTwigAssetSourcesPlugin(env) {
     },
     load(id) {
       if (id === RESOLVED_VIRTUAL_TWIG_ASSET_SOURCES_ID) {
-        return generateVirtualTwigAssetSourcesModule(env);
+        return generateVirtualTwigAssetSourcesModule(env, {
+          inlineTextAssets,
+        });
       }
       if (id === RESOLVED_VIRTUAL_TWIG_ASSET_SOURCE_RUNTIME_ID) {
         this.addWatchFile(ASSET_SOURCE_RUNTIME_PATH);
