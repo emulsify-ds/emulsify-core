@@ -140,6 +140,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *   recordWarning: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
+ *   recordAssetRebase: (entry: {status?: string, url?: string, rewritten?: string, importer?: string, resolvedAsset?: string, candidates?: string[]}) => void,
  *   recordImportError: (entry: {file?: string, line?: number, specifier?: string}) => void,
  *   recordSyntaxError: (entry: {minifier?: string, message?: string, declaration?: string}) => void,
  *   hasCapturedBuildErrors: () => boolean,
@@ -147,6 +148,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
  *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
  *     unresolvedAssets: Array<{url: string, importer: string|undefined, count: number}>,
+ *     assetRebases: Array<{status: string, url: string, rewritten: string|undefined, importer: string|undefined, resolvedAsset: string|undefined, candidates: string[]|undefined, count: number}>,
  *     importErrors: Array<{file: string|undefined, line: number|undefined, specifier: string, count: number}>,
  *     syntaxErrors: Array<{minifier: string|undefined, message: string, declaration: string|undefined, count: number}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
@@ -167,6 +169,8 @@ export function createDiagnosticsCollector() {
   let errors = new Map();
   /** @type {Map<string, {url: string, importer: string|undefined, count: number}>} */
   let unresolvedAssets = new Map();
+  /** @type {Map<string, object>} */
+  let assetRebases = new Map();
   /** @type {Map<string, object>} */
   let importErrors = new Map();
   /** @type {Map<string, object>} */
@@ -285,6 +289,45 @@ export function createDiagnosticsCollector() {
       unresolvedAssets.set(url, { url, importer, count: 1 });
     },
 
+    /**
+     * Record one CSS `url()` the build repaired, or could not choose for.
+     *
+     * A separate channel from `recordUnresolvedAsset` on purpose: Vite already
+     * warned about every one of these URLs, and folding them into that map
+     * would double the occurrence count it reports. `snapshot()` subtracts
+     * repaired URLs from the unresolved list instead.
+     *
+     * @param {{status?: string, url?: string, rewritten?: string, importer?: string, resolvedAsset?: string, candidates?: string[]}} entry - Rebase record.
+     * @returns {void}
+     */
+    recordAssetRebase({
+      status = 'rebased',
+      url,
+      rewritten,
+      importer,
+      resolvedAsset,
+      candidates,
+    } = {}) {
+      if (!url) return;
+
+      const key = `${importer || ''}\0${url}`;
+      const existing = assetRebases.get(key);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+
+      assetRebases.set(key, {
+        status,
+        url,
+        rewritten,
+        importer,
+        resolvedAsset,
+        candidates,
+        count: 1,
+      });
+    },
+
     snapshot() {
       const deprecationList = [...deprecations.values()]
         .map((bucket) => ({
@@ -315,10 +358,23 @@ export function createDiagnosticsCollector() {
           (a.line ?? 0) - (b.line ?? 0),
       );
 
+      const assetRebaseList = [...assetRebases.values()];
+      const repairedUrls = new Set(
+        assetRebaseList
+          .filter((entry) => entry.status === 'rebased')
+          .map((entry) => entry.url),
+      );
+      // Vite warns about a URL before the rebase plugin repairs it, so without
+      // this a repaired URL is reported as an outstanding problem.
+      const outstandingAssets = unresolvedAssetList.filter(
+        (asset) => !repairedUrls.has(asset.url),
+      );
+
       return {
         deprecations: deprecationList,
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
-        unresolvedAssets: unresolvedAssetList,
+        unresolvedAssets: outstandingAssets,
+        assetRebases: assetRebaseList,
         importErrors: importErrorList,
         syntaxErrors: [...syntaxErrors.values()],
         warnings: warningList,
@@ -332,7 +388,7 @@ export function createDiagnosticsCollector() {
           errorList.length > 0 ||
           warningList.length > 0 ||
           deprecationList.length > 0 ||
-          unresolvedAssetList.length > 0 ||
+          outstandingAssets.length > 0 ||
           importErrorList.length > 0 ||
           syntaxErrors.size > 0,
       };
@@ -360,6 +416,7 @@ export function createDiagnosticsCollector() {
       warnings = new Map();
       errors = new Map();
       unresolvedAssets = new Map();
+      assetRebases = new Map();
       importErrors = new Map();
       syntaxErrors = new Map();
     },

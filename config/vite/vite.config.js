@@ -45,7 +45,7 @@ import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command } = {}) => {
   /**
    * Environment details for this build (project paths, platform, flags).
    * @typedef {Object} EmulsifyEnv
@@ -65,11 +65,21 @@ export default defineConfig(async () => {
 
   // The develop reporter takes over output only for `vite build --watch`, the
   // watcher `npm run develop` runs. One-shot builds, Storybook, and the release
-  // fixture verifications keep their existing output untouched, so no warning
-  // is ever collected without also being reported.
+  // fixture verifications keep their existing output untouched.
   const watching = isWatchInvocation();
-  const diagnostics = watching ? createDiagnosticsCollector() : undefined;
+
+  // The collector itself is a handful of Maps, and one-shot builds need one
+  // too: an unresolved CSS asset URL used to print a single raw Vite line and
+  // exit 0, so a broken asset path shipped through CI unnoticed. The reporter
+  // plugin decides whether to speak, and for a one-shot build it stays silent
+  // unless there is an asset problem — a clean project's output is unchanged.
+  const diagnostics = createDiagnosticsCollector();
   const envWithSourceFileIndex = { ...env, sourceFileIndex, diagnostics };
+
+  // `vite build` and `vite build --watch` both resolve `command: 'build'`.
+  // Storybook pins `serve` for both of its commands, so it keeps Vite's own
+  // logger and never has its notices swallowed by a reporter that will not run.
+  const captureViteNotices = !watching && command === 'build' && !isVerbose();
 
   // Build the Rollup/Vite entry map: keys encode output paths, values source files.
   /** @type {Record<string, string>} */
@@ -137,7 +147,15 @@ export default defineConfig(async () => {
     // build reporter consults the level and never consults the logger.
     // `build.reportCompressedSize` is deliberately left alone; it suppresses
     // only the gzip column, and the table it belongs to is already gone.
-    ...(diagnostics
+    //
+    // A one-shot build takes only the second switch. `logLevel: 'warn'` is what
+    // stops Rolldown instrumenting transforms, so setting it there would delete
+    // the module count and the per-file asset table from `npm run build` — the
+    // one command whose output people actually read. The comment above already
+    // establishes the two are independent, and this relies on that: the logger
+    // captures the unresolved-URL notices, the reporter prints them back as one
+    // block, and Rolldown's report is untouched.
+    ...(watching
       ? {
           logLevel: isVerbose() ? 'info' : 'warn',
           customLogger: createReporterLogger(
@@ -145,7 +163,9 @@ export default defineConfig(async () => {
             createLogger(isVerbose() ? 'info' : 'warn'),
           ),
         }
-      : {}),
+      : captureViteNotices
+        ? { customLogger: createReporterLogger(diagnostics, createLogger()) }
+        : {}),
 
     // Keep React-based story helpers on the consumer project's React singleton.
     resolve: mergeReactSingletonResolve(),
@@ -161,7 +181,7 @@ export default defineConfig(async () => {
       // collector instead of letting Dart Sass print a formatted block per
       // occurrence. The reporter prints one deduplicated tally per cycle, so
       // the deprecation debt stays visible without the repetition.
-      ...(diagnostics
+      ...(watching
         ? { preprocessorOptions: { scss: createSassOptions(diagnostics) } }
         : {}),
     },

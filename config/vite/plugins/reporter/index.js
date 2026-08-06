@@ -37,7 +37,12 @@ import {
   sharedMissingDirectory,
 } from './asset-resolver.js';
 import { classifyBuildError } from './build-errors.js';
-import { renderBanner, renderRebuild, renderSummary } from './render.js';
+import {
+  renderAssetSummary,
+  renderBanner,
+  renderRebuild,
+  renderSummary,
+} from './render.js';
 import { createStyler, supportsColor, supportsUnicode } from './format.js';
 import {
   buildInputFileRows,
@@ -48,6 +53,11 @@ import {
   summarizeBundle,
   watchedRootLabel,
 } from './source-roots.js';
+import {
+  STRICTNESS,
+  countStrictAssetFailures,
+  resolveAssetStrictness,
+} from './strict-mode.js';
 import { isDetailed } from './verbosity.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
 
@@ -109,6 +119,7 @@ export function developReporterPlugin({
   colorEnabled,
   unicodeEnabled,
   detailed,
+  strictness,
   version,
 } = {}) {
   const styler = createStyler(
@@ -117,8 +128,13 @@ export function developReporterPlugin({
   const unicode =
     unicodeEnabled === undefined ? supportsUnicode() : unicodeEnabled;
   const verbose = detailed === undefined ? isDetailed() : detailed;
+  const strictLevel =
+    strictness === undefined ? resolveAssetStrictness() : strictness;
 
   let watching = false;
+  let oneShot = false;
+  let oneShotPrinted = false;
+  let strictFailures = 0;
   let outDir = 'dist';
   let inputRows = [];
   let inputFiles = [];
@@ -272,6 +288,44 @@ export function developReporterPlugin({
     changedFiles = [];
   };
 
+  /**
+   * Report CSS asset problems after a one-shot build.
+   *
+   * Watch builds get the full per-cycle summary; a one-shot `vite build` or
+   * `storybook build` gets this and nothing else, and only when there is
+   * something to say. Until now those builds printed one raw Vite line per
+   * unresolved URL and exited 0, so a broken asset path shipped through CI
+   * unnoticed.
+   *
+   * @returns {void}
+   */
+  const reportOneShot = () => {
+    if (!oneShot || oneShotPrinted) return;
+    oneShotPrinted = true;
+
+    const snapshot = diagnostics.snapshot();
+    strictFailures = countStrictAssetFailures(snapshot, strictLevel);
+
+    const rebases = snapshot.assetRebases || [];
+    if (!snapshot.unresolvedAssets.length && !rebases.length) return;
+
+    // Enriching walks the project, so it only runs when there is an unresolved
+    // URL to attribute. Rebase records already carry their own importer.
+    const resolver = snapshot.unresolvedAssets.length
+      ? createAssetResolver(env)
+      : undefined;
+
+    emit(
+      renderAssetSummary({
+        assetRows: resolver
+          ? buildAssetRows(snapshot.unresolvedAssets, resolver)
+          : [],
+        rebases,
+        styler,
+      }),
+    );
+  };
+
   return {
     name: 'emulsify-develop-reporter',
 
@@ -284,6 +338,10 @@ export function developReporterPlugin({
 
     configResolved(config) {
       watching = Boolean(config.build?.watch);
+      // Everything below is watch-only setup. A one-shot build stays silent
+      // unless it has an asset problem to report, which keeps `npm run build`,
+      // `storybook build`, and the release fixtures byte for byte identical.
+      oneShot = !watching;
       if (!watching) return;
 
       outDir = config.build?.outDir || 'dist';
@@ -412,6 +470,23 @@ export function developReporterPlugin({
 
     closeBundle() {
       reportCycle();
+      // Printed from here, not writeBundle, so the block lands after Rolldown's
+      // own asset table rather than in the middle of it.
+      reportOneShot();
+
+      if (!oneShot || strictLevel === STRICTNESS.off || !strictFailures) return;
+
+      // Not `process.exitCode`: `storybook build` ends with `process.exit(0)`
+      // in a commander postAction hook, which discards it. Rejecting the build
+      // is the only signal both runners honor. `closeBundle` also runs after
+      // mirrorComponentsToRoot's writeBundle, so a strict failure can never
+      // leave a half-mirrored tree behind.
+      const error = new Error(
+        `Emulsify: ${strictFailures} CSS asset URL(s) did not resolve. ` +
+          'Unset EMULSIFY_STRICT_ASSETS to report without failing.',
+      );
+      error.stack = error.message;
+      throw error;
     },
   };
 }

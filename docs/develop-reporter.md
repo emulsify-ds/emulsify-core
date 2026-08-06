@@ -283,14 +283,17 @@ whose `.npmrc` raises `loglevel` permanently can still pin the reporter down wit
 
 ## Environment Variables
 
-| Variable                | Effect                                                                                                                                                                                         |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EMULSIFY_VERBOSE=1`    | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table and every Sass deprecation block. Use when diagnosing something the summary has collapsed. |
-| `EMULSIFY_VERBOSE=2`    | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                          |
-| `EMULSIFY_VERBOSE=0`    | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                               |
-| `EMULSIFY_NO_UNICODE=1` | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                               |
-| `NO_COLOR=1`            | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                    |
-| `FORCE_COLOR=1`         | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                        |
+| Variable                   | Effect                                                                                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMULSIFY_VERBOSE=1`       | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table and every Sass deprecation block. Use when diagnosing something the summary has collapsed. |
+| `EMULSIFY_VERBOSE=2`       | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                          |
+| `EMULSIFY_VERBOSE=0`       | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                               |
+| `EMULSIFY_NO_UNICODE=1`    | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                               |
+| `EMULSIFY_STRICT_ASSETS=1` | Fail a one-shot build when a CSS asset URL cannot be resolved. Off by default, because an unresolvable URL is occasionally an intentional runtime path.                                        |
+| `EMULSIFY_STRICT_ASSETS=2` | Also fail on URLs the build had to repair, for projects that want the canonical `/assets/...` form written in source rather than fixed up at build time.                                       |
+| `EMULSIFY_ASSET_REBASE=0`  | Turn the CSS asset URL repair off for one build. The permanent switch is `assets.rebase` in `project.emulsify.json`.                                                                           |
+| `NO_COLOR=1`               | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                    |
+| `FORCE_COLOR=1`            | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                        |
 
 ## Why The Output Is Append-Only
 

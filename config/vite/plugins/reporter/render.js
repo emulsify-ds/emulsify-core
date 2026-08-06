@@ -1106,6 +1106,69 @@ function renderSizeTable(rows, styler) {
 }
 
 /**
+ * Render the standalone CSS asset block a one-shot build prints.
+ *
+ * One-shot builds are silent unless something is wrong, so this is deliberately
+ * the whole report rather than a section of one: no banner, no project facts,
+ * no deprecation tally. A clean project keeps its output byte for byte.
+ *
+ * @param {{assetRows?: Array<object>, rebases?: Array<object>, styler: Function}} options - Render inputs.
+ * @returns {string[]} Report lines.
+ */
+export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
+  const repaired = rebases.filter((entry) => entry.status === 'rebased');
+  const ambiguous = rebases.filter((entry) => entry.status === 'ambiguous');
+
+  if (!assetRows.length && !repaired.length && !ambiguous.length) return [];
+
+  const lines = [''];
+
+  if (repaired.length) {
+    lines.push(
+      `${INDENT}${styler(
+        'gray',
+        `${pluralize(repaired.length, 'css asset url')} rebased to /assets/`,
+      )}`,
+      '',
+    );
+
+    for (const entry of repaired.slice(0, MAX_ASSET_ROWS)) {
+      lines.push(
+        `${DETAIL_INDENT}${styler('gray', `${entry.url} -> ${entry.rewritten}`)}`,
+      );
+    }
+
+    const hidden = repaired.length - MAX_ASSET_ROWS;
+    if (hidden > 0) {
+      lines.push(
+        `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      );
+    }
+
+    lines.push(
+      '',
+      `${DETAIL_INDENT}${styler(
+        'gray',
+        'run `emulsify-audit --fix` to write these canonically in source',
+      )}`,
+    );
+  }
+
+  for (const entry of ambiguous) {
+    lines.push(
+      `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler(
+        'yellow',
+        `${entry.url} matches more than one asset root`,
+      )}`,
+    );
+  }
+
+  lines.push(...renderUnresolvedAssets(assetRows, styler));
+
+  return lines;
+}
+
+/**
  * Render the summary printed after the first successful watch build.
  *
  * Emitted as four labelled sections — project, build, and whichever problem

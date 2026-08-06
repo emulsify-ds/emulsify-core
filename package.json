@@ -81,6 +81,7 @@
     "config/vite/plugins/reporter/render.js",
     "config/vite/plugins/reporter/sass-logger.js",
     "config/vite/plugins/reporter/source-roots.js",
+    "config/vite/plugins/reporter/strict-mode.js",
     "config/vite/plugins/reporter/verbosity.js",
     "config/vite/plugins/reporter/vite-logger.js",
     "config/vite/plugins/reporter/watch-mode.js",
