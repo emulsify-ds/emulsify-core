@@ -197,13 +197,22 @@ These are suppressed at the default level and restored in either verbose mode.
 The rebuild line already reports the same event more precisely, and under
 `concurrently` these interleave with it on the shared pipe.
 
-The volume has a cause worth knowing about: `build.emptyOutDir` clears the output
+There used to be many more of these. `build.emptyOutDir` clears the output
 directory on **every** watch cycle, not just the first, and Storybook imports its
-compiled CSS from `dist/`. So each save deletes and recreates every file
-Storybook is watching, and each one becomes an HMR event. Suppressing the notices
-hides the noise; it does not reduce the work. Leaving `dist/` intact between
-cycles would, at the cost of letting output from a deleted or renamed component
-linger until the next restart.
+compiled CSS from `dist/`, so each save deleted and recreated every file
+Storybook was watching. Deleting a file reached through an eager
+`import.meta.glob` is a full-reload invalidation rather than a style swap, and
+the copied Twig templates were rewritten on every cycle as well — so a one-line
+stylesheet edit reloaded the preview iframe instead of swapping the stylesheet.
+
+Emulsify now lets Vite empty the directory for the first cycle only, then writes
+incrementally: an emitted asset, a copied template, or a copied static file whose
+bytes already match what is on disk is left alone. One saved stylesheet updates
+one stylesheet and the preview no longer reloads. The tradeoff is that output
+from a component deleted or renamed mid-session lingers until the watcher is
+restarted. One-shot `npm run build`, `storybook build`, and the release fixture
+verifications are unaffected — each starts from an emptied directory and writes
+every file.
 
 ## Verbose Mode
 

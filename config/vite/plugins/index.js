@@ -16,6 +16,7 @@ import { cssAssetRebasePlugin } from './assets/css-asset-rebase.js';
 import { cssAssetUrlRelativizer } from './assets/css-asset-relativizer.js';
 import { mirrorComponentsToRoot } from './assets/mirror-components.js';
 import { createSourceFileIndex } from './assets/source-file-index.js';
+import { stableWatchOutputPlugin } from './assets/stable-watch-output.js';
 import { svgSpriteFilePlugin } from './assets/svg-sprite.js';
 import { developReporterPlugin } from './reporter/index.js';
 import { requireContextCompatPlugin } from './require-context.js';
@@ -61,6 +62,13 @@ export function makePlugins(env) {
   // -> where that file actually lives, relative to the project root.
   /** @type {Map<string, string>} */
   const publishedAssetSources = new Map();
+
+  // Filled by the stable-output plugin, read by the reporter: emitted files it
+  // dropped this cycle because the bytes on disk already match. The reporter
+  // diffs one cycle's bundle against the last, so without this a skipped file
+  // would be listed as a deleted one.
+  /** @type {Set<string>} */
+  const unchangedOutputs = new Set();
 
   const basePlugins = [
     virtualTwigExtensionInstallersPlugin(envWithStructure),
@@ -110,6 +118,15 @@ export function makePlugins(env) {
       env: envWithStructure,
       publishedAssetSources,
     }),
+
+    // Last of the CSS chain: once the text is final, an unchanged stylesheet is
+    // dropped rather than rewritten, so a watch rebuild does not send HMR
+    // updates for stylesheets the edit never touched.
+    stableWatchOutputPlugin({
+      projectDir,
+      mirrorComponentOutput: structure.mirrorComponentOutput,
+      unchangedOutputs,
+    }),
   ];
 
   return [
@@ -130,7 +147,13 @@ export function makePlugins(env) {
     // Summarize the build for `npm run develop`. Present only when the Vite
     // config supplied a diagnostics collector, which it does for watch builds.
     ...(env.diagnostics
-      ? [developReporterPlugin({ env, diagnostics: env.diagnostics })]
+      ? [
+          developReporterPlugin({
+            env,
+            diagnostics: env.diagnostics,
+            unchangedOutputs,
+          }),
+        ]
       : []),
   ];
 }

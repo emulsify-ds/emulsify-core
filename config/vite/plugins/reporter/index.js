@@ -107,8 +107,11 @@ export function countEntries(input) {
  *   clock?: () => Date,
  *   colorEnabled?: boolean,
  *   detailed?: boolean,
+ *   unchangedOutputs?: Set<string>,
  *   version?: string
- * }} options - Plugin options.
+ * }} options - Plugin options. `unchangedOutputs` carries the files
+ *   `stableWatchOutputPlugin` dropped from this cycle's bundle because the
+ *   bytes on disk already matched.
  * @returns {import('vite').PluginOption} Develop reporter plugin.
  */
 export function developReporterPlugin({
@@ -121,6 +124,7 @@ export function developReporterPlugin({
   unicodeEnabled,
   detailed,
   strictness,
+  unchangedOutputs = new Set(),
   version,
 } = {}) {
   const styler = createStyler(
@@ -458,6 +462,14 @@ export function developReporterPlugin({
           // a rebuild changed — which is what keeps the watch loop from paying
           // Rolldown's `computing gzip size...` pause on every keystroke.
           const current = fingerprintBundle(bundle);
+
+          // A file the stable-output plugin dropped is still on disk with the
+          // same bytes, so carry its fingerprint forward. Without this the
+          // diff below sees it missing from the bundle and calls it removed.
+          for (const fileName of unchangedOutputs) {
+            const previous = fingerprints.get(fileName);
+            if (previous !== undefined) current.set(fileName, previous);
+          }
 
           if (firstCycleComplete) {
             const diff = diffFingerprints(fingerprints, current);

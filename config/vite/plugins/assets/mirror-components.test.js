@@ -13,10 +13,8 @@ import fs, {
 } from 'fs';
 import { join } from 'path';
 
-import {
-  filesHaveSameBytes,
-  mirrorComponentsToRoot,
-} from './mirror-components.js';
+import { mirrorComponentsToRoot } from './mirror-components.js';
+import { filesHaveSameBytes } from './output-freshness.js';
 import { makeTempProject } from '../../test-utils/plugins.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';

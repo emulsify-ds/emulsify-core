@@ -59,6 +59,7 @@ describe('Vite plugin public barrel', () => {
         'emulsify-yaml',
         'emulsify-require-context-compat',
         'emulsify-css-asset-url-relativizer',
+        'emulsify-stable-watch-output',
         'emulsify-copy-twig-files',
         'emulsify-copy-all-src-assets',
         'emulsify-mirror-components-to-root',

@@ -187,7 +187,10 @@ export default defineConfig(async ({ command } = {}) => {
     },
 
     build: {
-      // Clean the output directory before building.
+      // Clean the output directory before building. Vite re-empties it on every
+      // watch rebuild, not just the first, which rewrites stylesheets no edit
+      // touched; `stableWatchOutputPlugin` turns that off once the develop
+      // loop's first cycle has produced a clean tree.
       emptyOutDir: true,
 
       // All outputs are written into ./dist/
