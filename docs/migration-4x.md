@@ -257,30 +257,40 @@ $font-url: '/assets/fonts/example';
 ```
 
 Storybook serves root `./assets` at `/assets`. During the Vite build, Emulsify
-rewrites CSS `url('/assets/...')` and `url('assets/...')` references to paths
-relative to the emitted CSS file, so the same authored Sass can work in
-Storybook and built platform CSS.
+resolves the URL against the project's asset roots and rewrites the reference
+relative to the emitted CSS file, so the same authored Sass works in Storybook
+and in built platform CSS.
+
+The asset is not copied into `dist/`. Built CSS reaches the theme's own
+`assets/` directory by climbing out of the output directory, which keeps
+`dist/` limited to compiled and generated output. If you deploy `dist/`
+without the rest of the theme, that assumption no longer holds.
 
 Avoid hard-coded platform or deployment paths in Sass. They may work in a single
 runtime, but they bypass Storybook's static asset mount and make components
 harder to reuse.
 
 Vite also resolves ordinary relative `url(...)` values relative to the
-stylesheet it is compiling. When a stylesheet points outside the normalized
-Emulsify source roots, Vite may leave the URL unchanged and print a message such
-as:
+stylesheet it is compiling. A relative URL whose depth suits the _emitted_ CSS
+rather than the stylesheet — `url('../../assets/images/hero.jpg')` — does not
+resolve, and Vite prints a message such as:
 
 ```text
 ../../../assets/fonts/Example-Regular.woff2 referenced in ../../../assets/fonts/Example-Regular.woff2 didn't resolve at build time, it will remain unchanged to be resolved at runtime
 ```
 
-That can be intentional when the URL points at an asset the runtime serves
-directly. Verify that the unchanged URL is valid from the compiled CSS file in
-`dist/` or mirrored `components/` output.
+Such a URL is then re-anchored to wherever the CSS landed, and that location
+differs per project shape — so a depth that works on mirrored Drupal SDC output
+breaks under every other shape. Emulsify repairs these: when the URL names the
+published `assets/` prefix and matches exactly one file under one asset root, it
+is rewritten to `/assets/...` and the asset is emitted. Each repair is reported,
+and `emulsify-audit --fix` writes the canonical form back into the source. See
+[Asset References](asset-references.md#why-a-relative-path-is-not-portable) for
+the depth table and the `assets.rebase` opt-out.
 
-To make Vite resolve and rebase the asset at build time, keep the asset under a
-normalized source root and reference it relative to the authored stylesheet, or
-keep it under project root `assets/` and use `/assets/...`.
+A URL the repair cannot place — a typo, or a filename that exists under two
+asset roots — is still left unchanged and reported. Set
+`EMULSIFY_STRICT_ASSETS=1` to make that fail the build in CI.
 
 See [Asset References](asset-references.md) for Sass/CSS and Twig examples,
 including inline SVGs through `source('@assets/...')`.

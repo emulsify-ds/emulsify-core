@@ -3,6 +3,7 @@
  */
 
 import { basename, dirname, resolve } from 'node:path';
+import { assetTailFor } from '../../../config/vite/plugins/assets/asset-url-rebase.js';
 import {
   compiledAssetOutputPath,
   storybookStyleOutputPath,
@@ -60,23 +61,35 @@ function maskStyleComments(source) {
 /**
  * Extract URL references from CSS or Sass source.
  *
+ * `start` and `end` bracket the specifier *without* its quotes, so an autofix
+ * can splice a replacement in without disturbing quote style. Comment masking
+ * preserves positions, so offsets taken from the scanned copy are valid in the
+ * original source: `source.slice(start, end) === raw`.
+ *
  * @param {string} source - Stylesheet source.
- * @returns {{value: string, raw: string, line: number}[]} URL references.
+ * @returns {{value: string, raw: string, line: number, start: number, end: number}[]} URL references.
  */
 export function findCssUrlReferences(source) {
   const scanSource = maskStyleComments(source);
   const variables = findSassStringVariables(scanSource);
   const references = [];
-  const pattern = /url\(\s*(?:(['"])(.*?)\1|([^'")][^)]*?))\s*\)/g;
+  const pattern = /url\(\s*(?:(['"])(.*?)\1|([^'")][^)]*?))\s*\)/dg;
 
   for (const match of scanSource.matchAll(pattern)) {
-    const raw = (match[2] ?? match[3] ?? '').trim();
+    const untrimmed = match[2] ?? match[3] ?? '';
+    const [groupStart] = match.indices?.[2] ??
+      match.indices?.[3] ?? [match.index || 0];
+    const raw = untrimmed.trim();
+    const start =
+      groupStart + (untrimmed.length - untrimmed.trimStart().length);
     const value = resolveSassUrlValue(raw, variables).trim();
 
     references.push({
       value,
       raw,
       line: lineNumberAt(source, match.index || 0),
+      start,
+      end: start + raw.length,
     });
   }
 
@@ -84,23 +97,47 @@ export function findCssUrlReferences(source) {
 }
 
 /**
- * Determine whether a CSS URL should be skipped by filesystem checks.
+ * Determine whether a CSS URL can never name a file on disk.
+ *
+ * Absolute paths used to be lumped in here, which meant the documented
+ * `/assets/...` convention was never validated at all — a typo in
+ * `/assets/images/typoo.jpg` was caught by nothing. Classification of absolute
+ * URLs now lives in `classifyCssAssetUrl`; this stays the pure transport test.
  *
  * @param {string} value - URL value.
- * @returns {boolean} TRUE when the URL is not a local relative asset path.
+ * @returns {boolean} TRUE when the URL is not a filesystem path.
  */
 export function isNonFilesystemCssUrl(value) {
   return (
     !value ||
     value.startsWith('#') ||
-    value.startsWith('/') ||
     value.startsWith('//') ||
     value.startsWith('$') ||
-    value.startsWith('#{') ||
+    // Anywhere, not just at position 0: an expanded `$font-url` leaves the
+    // interpolation mid-string, and guessing at it is how false findings start.
+    value.includes('#{') ||
     /^[a-z][a-z0-9+.-]*:/i.test(value) ||
     /^var\(/i.test(value) ||
     /^env\(/i.test(value)
   );
+}
+
+/**
+ * Classify how a filesystem-ish CSS URL should be resolved.
+ *
+ * - `asset-root` — `/assets/...` or `assets/...`. Resolved against the project
+ *   asset roots, which is what Storybook serves and what the build rebases to.
+ * - `runtime` — some other absolute URL (`/sites/default/files/...`). The
+ *   platform serves it; the audit has nothing to check.
+ * - `relative` — resolved from the stylesheet's own directory.
+ *
+ * @param {string} value - URL value.
+ * @returns {'asset-root'|'runtime'|'relative'} Resolution strategy.
+ */
+export function classifyCssAssetUrl(value) {
+  if (assetTailFor(cssUrlPath(value))) return 'asset-root';
+
+  return value.startsWith('/') ? 'runtime' : 'relative';
 }
 
 /**

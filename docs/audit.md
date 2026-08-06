@@ -136,7 +136,52 @@ The process exit codes are:
 
 - `0`: The scan completed and did not meet its failure threshold.
 - `1`: The scan completed and met its failure threshold.
-- `2`: Arguments were invalid, or audit setup/execution failed.
+- `2`: Arguments were invalid, a fix could not be written, or audit
+  setup/execution failed.
+
+## Fixing CSS Asset URLs
+
+`--fix` rewrites CSS and Sass asset URLs to the canonical `/assets/...` form
+when exactly one file under one asset root answers to them. That covers the two
+non-portable shapes: the bare `url('assets/...')` form, and a relative URL whose
+depth suits the emitted CSS rather than the stylesheet. See
+[Asset References](asset-references.md#why-a-relative-path-is-not-portable) for
+why those break.
+
+```bash
+npx emulsify-audit --fix --dry-run   # report the rewrites, touch nothing
+npx emulsify-audit --fix             # apply them
+```
+
+`--dry-run` requires `--fix`; on its own it is an argument error. Quote style
+and any `?query` or `#hash` suffix are preserved. A URL whose Sass interpolation
+has not been expanded is never rewritten — the edit belongs on the variable
+declaration, and same-file variable scanning cannot see what else depends on it.
+An ambiguous URL is reported with its candidates and left alone.
+
+`--fail-on` is evaluated against the findings that remain after fixing, so a
+real `--fix` run can turn a failing audit green. That is safe because the fix is
+idempotent: re-running the audit on the rewritten source reports nothing. A
+`--dry-run` subtracts nothing.
+
+In JSON mode, `--fix` adds an optional top-level `fixes` block:
+
+```json
+{
+  "fixes": {
+    "dryRun": false,
+    "applied": [
+      {
+        "path": "src/components/card/card.scss",
+        "line": 4,
+        "from": "../../assets/images/hero.jpg",
+        "to": "/assets/images/hero.jpg"
+      }
+    ],
+    "skipped": []
+  }
+}
+```
 
 An exit status of 1 still produces a normal report. In JSON mode, an exit
 status of 2 produces a distinct error document instead of a findings report:

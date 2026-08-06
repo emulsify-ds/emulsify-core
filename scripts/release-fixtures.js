@@ -34,14 +34,45 @@ const customElementBrowserTest = join(
 const largeTwigComponentCount = 80;
 // Storybook 10.5 changes its own manager/runtime chunks under Vite 8, so keep
 // the regression gate focused on fixture-owned output. The exclusive ceiling
-// preserves the original 484-byte budget over the current 178,698-byte result.
-const largeTwigStorybookFixtureJsLimit = 179_182;
+// preserves the original 484-byte budget over the current 181,845-byte result.
+const largeTwigStorybookFixtureJsLimit = 182_329;
 const largeTwigStorybookFixtureJsPatterns = [
   'storybook-assets/_content-*.js',
   'storybook-assets/gallery-*.js',
   'storybook-assets/gallery.stories-*.js',
   'storybook-assets/item-*.js',
 ];
+
+// The lint rule bans double-quoted strings, and these patterns need a literal
+// single quote to match single-quoted CSS.
+const QUOTE = String.fromCharCode(39);
+
+/**
+ * Reject every CSS asset URL form that is wrong for a given stylesheet.
+ *
+ * Each fixture authors the same three URLs — canonical, bare, and a
+ * deliberately wrong-depth relative one — and the build must converge all three
+ * on the depth that stylesheet actually needs. These rejects are anchored on
+ * `url(` and repeated per quote style, so a correct deeper path can never
+ * satisfy them and minifier quoting cannot make them vacuous.
+ *
+ * @param {string} pattern - Emitted stylesheet to check.
+ * @returns {{pattern: string, strings: string[]}} Reject rule.
+ */
+const rejectWrongAssetUrls = (pattern) => ({
+  pattern,
+  strings: [
+    'url(../assets/',
+    'url("../assets/',
+    `url(${QUOTE}../assets/`,
+    'url(/assets/',
+    'url("/assets/',
+    `url(${QUOTE}/assets/`,
+    'url(assets/',
+    'url("assets/',
+    `url(${QUOTE}assets/`,
+  ],
+});
 
 const releaseFixtures = [
   {
@@ -55,12 +86,30 @@ const releaseFixtures = [
       'components/card/card.asset.txt',
     ],
     reject: [
+      // dist/ is build output: the theme's own assets/ directory is source and
+      // is already web-served, so no copy of it belongs here.
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
       'dist/components/card/card.js',
       'dist/components/card/card.css',
       'dist/components/card/card.twig',
       'dist/components/card/card.component.yml',
       'dist/components/card/card.asset.txt',
     ],
+    assertContent: [
+      {
+        // Mirrored component CSS already sits at the theme root, two levels
+        // above assets/, so its depth is unchanged by leaving dist/ alone.
+        pattern: 'components/card/card.css',
+        strings: [
+          '../../assets/images/canonical.svg',
+          '../../assets/images/bare.svg',
+          '../../assets/images/relative.svg',
+        ],
+      },
+    ],
+    rejectContent: [rejectWrongAssetUrls('components/card/card.css')],
   },
   {
     name: 'no-platform-src-components',
@@ -77,6 +126,9 @@ const releaseFixtures = [
       'dist/extension-marker.txt',
     ],
     reject: [
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
       'components/card/card.js',
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
@@ -87,12 +139,23 @@ const releaseFixtures = [
         pattern: 'dist/global/base/css/base.css',
         strings: ['.sass-glob-fixture', '.legacy-sass-glob-fixture'],
       },
+      {
+        // Bucketed component CSS sits four levels below the theme root once
+        // dist/ is counted, and reaches the source assets/ from there.
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          '../../../../assets/images/canonical.svg',
+          '../../../../assets/images/bare.svg',
+          '../../../../assets/images/relative.svg',
+        ],
+      },
     ],
     rejectContent: [
       {
         pattern: 'dist/**/*.js',
         strings: ['window.Drupal', 'Drupal.behaviors', 'attachBehaviors'],
       },
+      rejectWrongAssetUrls('dist/components/card/css/card.css'),
     ],
   },
   {
@@ -152,7 +215,27 @@ const releaseFixtures = [
       'dist/storybook/src/layout/grid/sb-grid.css',
       'dist/tokens/spacing/spacing.json',
     ],
-    reject: ['components/button/button.js'],
+    reject: [
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
+      'components/button/button.js',
+    ],
+    assertContent: [
+      {
+        // Structure-override CSS depth is not uniform: this root keeps its
+        // `src/` segment, so the same authored URLs climb five levels.
+        pattern: 'dist/css/src/foundation/colors/colors.css',
+        strings: [
+          '../../../../../assets/images/canonical.svg',
+          '../../../../../assets/images/bare.svg',
+          '../../../../../assets/images/relative.svg',
+        ],
+      },
+    ],
+    rejectContent: [
+      rejectWrongAssetUrls('dist/css/src/foundation/colors/colors.css'),
+    ],
   },
   {
     name: 'mixed-storybook',

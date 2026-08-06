@@ -197,13 +197,22 @@ These are suppressed at the default level and restored in either verbose mode.
 The rebuild line already reports the same event more precisely, and under
 `concurrently` these interleave with it on the shared pipe.
 
-The volume has a cause worth knowing about: `build.emptyOutDir` clears the output
+There used to be many more of these. `build.emptyOutDir` clears the output
 directory on **every** watch cycle, not just the first, and Storybook imports its
-compiled CSS from `dist/`. So each save deletes and recreates every file
-Storybook is watching, and each one becomes an HMR event. Suppressing the notices
-hides the noise; it does not reduce the work. Leaving `dist/` intact between
-cycles would, at the cost of letting output from a deleted or renamed component
-linger until the next restart.
+compiled CSS from `dist/`, so each save deleted and recreated every file
+Storybook was watching. Deleting a file reached through an eager
+`import.meta.glob` is a full-reload invalidation rather than a style swap, and
+the copied Twig templates were rewritten on every cycle as well — so a one-line
+stylesheet edit reloaded the preview iframe instead of swapping the stylesheet.
+
+Emulsify now lets Vite empty the directory for the first cycle only, then writes
+incrementally: an emitted asset, a copied template, or a copied static file whose
+bytes already match what is on disk is left alone. One saved stylesheet updates
+one stylesheet and the preview no longer reloads. The tradeoff is that output
+from a component deleted or renamed mid-session lingers until the watcher is
+restarted. One-shot `npm run build`, `storybook build`, and the release fixture
+verifications are unaffected — each starts from an emptied directory and writes
+every file.
 
 ## Verbose Mode
 
@@ -283,14 +292,17 @@ whose `.npmrc` raises `loglevel` permanently can still pin the reporter down wit
 
 ## Environment Variables
 
-| Variable                | Effect                                                                                                                                                                                         |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EMULSIFY_VERBOSE=1`    | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table and every Sass deprecation block. Use when diagnosing something the summary has collapsed. |
-| `EMULSIFY_VERBOSE=2`    | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                          |
-| `EMULSIFY_VERBOSE=0`    | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                               |
-| `EMULSIFY_NO_UNICODE=1` | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                               |
-| `NO_COLOR=1`            | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                    |
-| `FORCE_COLOR=1`         | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                        |
+| Variable                   | Effect                                                                                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMULSIFY_VERBOSE=1`       | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table and every Sass deprecation block. Use when diagnosing something the summary has collapsed. |
+| `EMULSIFY_VERBOSE=2`       | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                          |
+| `EMULSIFY_VERBOSE=0`       | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                               |
+| `EMULSIFY_NO_UNICODE=1`    | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                               |
+| `EMULSIFY_STRICT_ASSETS=1` | Fail a one-shot build when a CSS asset URL cannot be resolved. Off by default, because an unresolvable URL is occasionally an intentional runtime path.                                        |
+| `EMULSIFY_STRICT_ASSETS=2` | Also fail on URLs the build had to repair, for projects that want the canonical `/assets/...` form written in source rather than fixed up at build time.                                       |
+| `EMULSIFY_ASSET_REBASE=0`  | Turn the CSS asset URL repair off for one build. The permanent switch is `assets.rebase` in `project.emulsify.json`.                                                                           |
+| `NO_COLOR=1`               | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                    |
+| `FORCE_COLOR=1`            | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                        |
 
 ## Why The Output Is Append-Only
 

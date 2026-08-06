@@ -6,13 +6,14 @@
  */
 
 import { copyFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
   copiedComponentOutputPath,
   copiedGlobalOutputPath,
   findSourceRoot,
 } from '../../project-structure.js';
+import { filesHaveSameBytes, resolveFinalPath } from './output-freshness.js';
 import {
   createSourceFileIndex,
   isStaticSourceAsset,
@@ -29,6 +30,7 @@ export function copyAllSrcAssetsPlugin({
   sourceFileIndex = createSourceFileIndex(structure),
 }) {
   let outDir = 'dist';
+  let projectDir = process.cwd();
   let watching = false;
   /** @type {Array<{absPath: string, relDest: string}>|undefined} */
   let plan;
@@ -78,6 +80,7 @@ export function copyAllSrcAssetsPlugin({
     /** Capture outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
+      projectDir = cfg.root || process.cwd();
       watching = Boolean(cfg.build?.watch);
     },
 
@@ -98,6 +101,15 @@ export function copyAllSrcAssetsPlugin({
   };
 
   /**
+   * Resolve the output directory to an absolute path.
+   *
+   * @returns {string} Absolute output directory.
+   */
+  function absoluteOutDir() {
+    return isAbsolute(outDir) ? outDir : resolve(projectDir, outDir);
+  }
+
+  /**
    * Copy one file into the output directory.
    *
    * @param {string} absPath - Absolute source path.
@@ -107,8 +119,22 @@ export function copyAllSrcAssetsPlugin({
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return;
 
-    // Copied unconditionally; see the note in copy-twig-files.js — `emptyOutDir`
-    // clears the destination on every cycle, so nothing is ever up to date.
+    // Skipped during watch when the bytes already match; see the note in
+    // copy-twig-files.js for why the destination is now worth checking.
+    if (
+      watching &&
+      filesHaveSameBytes(
+        absPath,
+        resolveFinalPath(relDest, {
+          outDir: absoluteOutDir(),
+          projectDir,
+          mirrored: structure?.mirrorComponentOutput,
+        }),
+      )
+    ) {
+      return;
+    }
+
     const destPath = join(outDir, relDest);
     mkdirSync(dirname(destPath), { recursive: true });
     try {

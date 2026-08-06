@@ -816,6 +816,61 @@ function renderUnresolvedAssets(rows, styler) {
 }
 
 /**
+ * Render the tally of modules Vite externalized for browser compatibility.
+ *
+ * A dependency reaching for a Node builtin is a property of that dependency,
+ * not of the edit just made, so this belongs with the inherited debt rather
+ * than in "needs attention". Vite repeats the notice once per importing file on
+ * every cycle; one line per module, with its occurrence count, says the same
+ * thing without the repetition.
+ *
+ * @param {Array<{module: string, importer?: string, count: number}>} modules - Externalized modules.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Report lines.
+ */
+function renderExternalizedModules(modules = [], styler) {
+  if (modules.length === 0) return [];
+
+  const lines = [
+    `${INDENT}${styler('gray', `${pluralize(modules.length, 'module')} externalized for the browser`)}`,
+    '',
+  ];
+
+  for (const entry of modules.slice(0, MAX_ASSET_ROWS)) {
+    const times = entry.count > 1 ? ` (${entry.count}\u00d7)` : '';
+    lines.push(`${DETAIL_INDENT}${styler('gray', `${entry.module}${times}`)}`);
+  }
+
+  const hidden = modules.length - MAX_ASSET_ROWS;
+  if (hidden > 0) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+    );
+  }
+
+  return lines;
+}
+
+/**
+ * Determine whether a build cycle failed.
+ *
+ * Import and syntax errors live in their own buckets rather than in
+ * `snapshot.errors`, so a check against errors alone reads a stylesheet that
+ * never compiled as a success. That is precisely how a mistyped `@use` used to
+ * report "rebuilt in 1.69s" while dist/ kept the previous CSS.
+ *
+ * @param {{errors?: object[], importErrors?: object[], syntaxErrors?: object[]}} snapshot - Diagnostics snapshot.
+ * @returns {boolean} TRUE when the cycle produced no usable output.
+ */
+export function hasCycleFailure(snapshot = {}) {
+  return (
+    (snapshot.errors?.length || 0) > 0 ||
+    (snapshot.importErrors?.length || 0) > 0 ||
+    (snapshot.syntaxErrors?.length || 0) > 0
+  );
+}
+
+/**
  * Render the problem blocks shared by first builds and rebuilds.
  *
  * @param {object} snapshot - Diagnostics snapshot.
@@ -834,6 +889,7 @@ function renderProblems(
   importErrors,
   syntaxErrors,
   unicode = true,
+  includeDebt = true,
 ) {
   const attention = [];
 
@@ -876,7 +932,22 @@ function renderProblems(
     attention.push(...assetLines);
   }
 
-  const debt = renderDeprecations(snapshot, projectDir, styler, sourceGlob);
+  // Rebuilds pass includeDebt: false. Restating 190 inherited deprecations on
+  // every keystroke is the noise this reporter exists to remove.
+  const debt = includeDebt
+    ? renderDeprecations(snapshot, projectDir, styler, sourceGlob)
+    : [];
+
+  if (includeDebt) {
+    const externalized = renderExternalizedModules(
+      snapshot.externalizedModules,
+      styler,
+    );
+    if (externalized.length > 0) {
+      if (debt.length > 0) debt.push('');
+      debt.push(...externalized);
+    }
+  }
 
   const lines = [];
 
@@ -1106,6 +1177,69 @@ function renderSizeTable(rows, styler) {
 }
 
 /**
+ * Render the standalone CSS asset block a one-shot build prints.
+ *
+ * One-shot builds are silent unless something is wrong, so this is deliberately
+ * the whole report rather than a section of one: no banner, no project facts,
+ * no deprecation tally. A clean project keeps its output byte for byte.
+ *
+ * @param {{assetRows?: Array<object>, rebases?: Array<object>, styler: Function}} options - Render inputs.
+ * @returns {string[]} Report lines.
+ */
+export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
+  const repaired = rebases.filter((entry) => entry.status === 'rebased');
+  const ambiguous = rebases.filter((entry) => entry.status === 'ambiguous');
+
+  if (!assetRows.length && !repaired.length && !ambiguous.length) return [];
+
+  const lines = [''];
+
+  if (repaired.length) {
+    lines.push(
+      `${INDENT}${styler(
+        'gray',
+        `${pluralize(repaired.length, 'css asset url')} rebased to /assets/`,
+      )}`,
+      '',
+    );
+
+    for (const entry of repaired.slice(0, MAX_ASSET_ROWS)) {
+      lines.push(
+        `${DETAIL_INDENT}${styler('gray', `${entry.url} -> ${entry.rewritten}`)}`,
+      );
+    }
+
+    const hidden = repaired.length - MAX_ASSET_ROWS;
+    if (hidden > 0) {
+      lines.push(
+        `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      );
+    }
+
+    lines.push(
+      '',
+      `${DETAIL_INDENT}${styler(
+        'gray',
+        'run `emulsify-audit --fix` to write these canonically in source',
+      )}`,
+    );
+  }
+
+  for (const entry of ambiguous) {
+    lines.push(
+      `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler(
+        'yellow',
+        `${entry.url} matches more than one asset root`,
+      )}`,
+    );
+  }
+
+  lines.push(...renderUnresolvedAssets(assetRows, styler));
+
+  return lines;
+}
+
+/**
  * Render the summary printed after the first successful watch build.
  *
  * Emitted as four labelled sections — project, build, and whichever problem
@@ -1233,14 +1367,21 @@ export function renderRebuild({
   durationMs,
   changedFiles = [],
   projectDir = '',
+  outDir = 'dist',
+  sourceGlob,
+  assetRows = [],
+  importErrors = {},
+  syntaxErrors = [],
+  recovered = false,
   moduleCount,
   changedOutputs = [],
   removedOutputs = [],
   detailed = false,
+  unicode = true,
   styler,
   now = new Date(),
 }) {
-  const failed = snapshot.errors.length > 0;
+  const failed = hasCycleFailure(snapshot);
   const [firstChange] = changedFiles;
   const changeLabel =
     changedFiles.length > 1
@@ -1251,20 +1392,52 @@ export function renderRebuild({
 
   const outcome = failed
     ? styler('red', `rebuild failed after ${formatDuration(durationMs)}`)
-    : styler('gray', `rebuilt in ${formatDuration(durationMs)}`);
+    : recovered
+      ? styler(
+          'green',
+          `recovered${SEPARATOR}rebuilt in ${formatDuration(durationMs)}`,
+        )
+      : styler('gray', `rebuilt in ${formatDuration(durationMs)}`);
 
+  // A recovered rebuild gets the success tick rather than the change caret, so
+  // the save that fixed a broken build is distinguishable from an ordinary one.
   const symbol = failed
     ? styler('red', SYMBOLS.error)
-    : styler('gray', SYMBOLS.change);
+    : recovered
+      ? styler('green', SYMBOLS.ok)
+      : styler('gray', SYMBOLS.change);
 
   const lines = [
     `${INDENT}${styler('gray', formatClockTime(now))} ${symbol} ${changeLabel}${styler('gray', SEPARATOR)}${outcome}`,
   ];
 
-  // Repeating the deprecation tally on every keystroke would recreate the noise
-  // this reporter exists to remove, so rebuilds only surface hard failures.
   if (failed) {
-    lines.push(...renderDetailRows(snapshot.errors, projectDir, styler));
+    // Nothing is written when a cycle fails, so the previous build is still on
+    // disk and whatever is serving it shows no change. Saying so is the whole
+    // difference between "my edit did nothing" and "my edit did not compile".
+    lines.push(
+      `${DETAIL_INDENT}${styler(
+        'yellow',
+        `output not updated${SEPARATOR}${outDir} still holds the last successful build`,
+      )}`,
+    );
+
+    // The same blocks the first build renders, minus the inherited deprecation
+    // debt, so a rebuild failure names its cause instead of only its verdict.
+    lines.push(
+      ...renderProblems(
+        snapshot,
+        projectDir,
+        styler,
+        sourceGlob,
+        assetRows,
+        importErrors,
+        syntaxErrors,
+        unicode,
+        false,
+      ),
+    );
+
     return lines;
   }
 

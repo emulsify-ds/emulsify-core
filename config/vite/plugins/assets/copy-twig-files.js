@@ -6,12 +6,13 @@
  */
 
 import { copyFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
   copiedComponentOutputPath,
   copiedGlobalOutputPath,
 } from '../../project-structure.js';
+import { filesHaveSameBytes, resolveFinalPath } from './output-freshness.js';
 import {
   createSourceFileIndex,
   isComponentMetadataFile,
@@ -28,6 +29,7 @@ export function copyTwigFilesPlugin({
   sourceFileIndex = createSourceFileIndex(structure),
 }) {
   let outDir = 'dist';
+  let projectDir = process.cwd();
   let watching = false;
   /** @type {Array<{absPath: string, relDest: string}>|undefined} */
   let plan;
@@ -86,6 +88,7 @@ export function copyTwigFilesPlugin({
     /** Capture the final outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
+      projectDir = cfg.root || process.cwd();
       watching = Boolean(cfg.build?.watch);
     },
 
@@ -109,6 +112,15 @@ export function copyTwigFilesPlugin({
   };
 
   /**
+   * Resolve the output directory to an absolute path.
+   *
+   * @returns {string} Absolute output directory.
+   */
+  function absoluteOutDir() {
+    return isAbsolute(outDir) ? outDir : resolve(projectDir, outDir);
+  }
+
+  /**
    * Copy one file into the output directory.
    *
    * @param {string} absPath - Absolute source path.
@@ -118,9 +130,26 @@ export function copyTwigFilesPlugin({
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return;
 
-    // Copied unconditionally, because `build.emptyOutDir` clears the output
-    // directory on every watch cycle and not just the first — a freshness check
-    // against the destination can never find anything to skip.
+    // A rewritten template in the output tree is a full preview reload rather
+    // than a style swap, so during watch the copy is skipped when the bytes
+    // already match. `stableWatchOutputPlugin` stops Vite emptying the output
+    // directory after the first cycle, which is what leaves anything there to
+    // compare against; one-shot builds start from an empty tree and copy
+    // unconditionally as before.
+    if (
+      watching &&
+      filesHaveSameBytes(
+        absPath,
+        resolveFinalPath(relDest, {
+          outDir: absoluteOutDir(),
+          projectDir,
+          mirrored: structure?.mirrorComponentOutput,
+        }),
+      )
+    ) {
+      return;
+    }
+
     const destPath = join(outDir, relDest);
     mkdirSync(dirname(destPath), { recursive: true });
     try {

@@ -58,14 +58,49 @@ export function formatAuditReport(result) {
 
   if (!result.findings.length) {
     lines.push('No audit findings found.');
-    return lines.join('\n');
   }
 
   for (const finding of result.findings) {
     lines.push('', ...formatFinding(finding, result.projectDir));
   }
 
+  lines.push(...formatFixSection(result.fixes, result.projectDir));
+
   return lines.join('\n');
+}
+
+/**
+ * Format the autofix section appended by `--fix`.
+ *
+ * @param {{dryRun: boolean, applied: object[], skipped: object[]}} [fixes] - Fix result.
+ * @param {string} projectDir - Absolute scanned root.
+ * @returns {string[]} Report lines.
+ */
+function formatFixSection(fixes, projectDir) {
+  if (!fixes) return [];
+
+  const lines = ['', 'Fixes'];
+  const verb = fixes.dryRun ? 'Would apply' : 'Applied';
+
+  if (!fixes.applied.length) {
+    lines.push(`${verb} 0 fix(es).`);
+  } else {
+    lines.push(`${verb} ${fixes.applied.length} fix(es):`);
+    for (const { finding, from, to } of fixes.applied) {
+      const where = `${displayPath(projectDir, finding.filePath)}:${finding.line}`;
+      lines.push(`  ${where}  ${from} -> ${to}`);
+    }
+  }
+
+  if (fixes.skipped.length) {
+    lines.push(`Skipped ${fixes.skipped.length} fixable finding(s):`);
+    for (const { finding, reason } of fixes.skipped) {
+      const where = `${displayPath(projectDir, finding.filePath)}:${finding.line}`;
+      lines.push(`  ${where}  ${reason}`);
+    }
+  }
+
+  return lines;
 }
 
 /**
@@ -219,13 +254,50 @@ export function createAuditJsonReport(result, options = {}) {
     normalizeAuditFinding(finding, result.projectDir, options.defaultSeverity),
   );
 
-  return {
+  const document = {
     schemaVersion: AUDIT_REPORT_SCHEMA_VERSION,
     tool: createToolIdentity(),
     root: '.',
     summary: summarizeFindings(findings),
     files: normalizeFileCounts(result.files),
     findings,
+  };
+
+  // Present only when --fix ran, so the document shape is unchanged for every
+  // existing consumer.
+  if (result.fixes) {
+    document.fixes = normalizeFixes(result.fixes, result.projectDir);
+  }
+
+  return document;
+}
+
+/**
+ * Normalize the autofix result for the machine-readable report.
+ *
+ * @param {{dryRun: boolean, applied: object[], skipped: object[]}} fixes - Fix result.
+ * @param {string} projectDir - Absolute scanned root.
+ * @returns {object} JSON fix block.
+ */
+function normalizeFixes(fixes, projectDir) {
+  const locate = (finding) => ({
+    path: displayPath(projectDir, finding.filePath) || '.',
+    ...(Number.isInteger(finding.line) && finding.line > 0
+      ? { line: finding.line }
+      : {}),
+  });
+
+  return {
+    dryRun: Boolean(fixes.dryRun),
+    applied: fixes.applied.map(({ finding, from, to }) => ({
+      ...locate(finding),
+      from,
+      to,
+    })),
+    skipped: fixes.skipped.map(({ finding, reason }) => ({
+      ...locate(finding),
+      reason,
+    })),
   };
 }
 

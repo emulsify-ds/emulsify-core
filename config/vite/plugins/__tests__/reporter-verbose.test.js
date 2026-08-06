@@ -406,9 +406,10 @@ describe('detailed mode through the plugin lifecycle', () => {
    * Drive a reporter plugin through configResolved and a first write.
    *
    * @param {boolean} detailed - Whether detailed mode is on.
+   * @param {Set<string>} [unchangedOutputs] - Files the stable-output plugin dropped.
    * @returns {{plugin: object, lines: string[], bundle: object}} Harness.
    */
-  const harness = (detailed) => {
+  const harness = (detailed, unchangedOutputs = new Set()) => {
     const lines = [];
     const plugin = developReporterPlugin({
       env: {
@@ -425,6 +426,7 @@ describe('detailed mode through the plugin lifecycle', () => {
       colorEnabled: false,
       unicodeEnabled: true,
       detailed,
+      unchangedOutputs,
       version: '4.3.1',
     });
 
@@ -515,6 +517,52 @@ describe('detailed mode through the plugin lifecycle', () => {
     expect(output).toContain('1 output changed');
     expect(output).toContain('b.css');
     expect(output).not.toContain('a.css');
+  });
+
+  it('does not call a skipped output a removed one', () => {
+    // stableWatchOutputPlugin drops bytes-identical stylesheets from the
+    // bundle so they are never rewritten. The file is still on disk, so the
+    // cycle-to-cycle diff has to treat it as unchanged rather than deleted.
+    const unchangedOutputs = new Set();
+    const { plugin, lines } = harness(true, unchangedOutputs);
+
+    plugin.buildStart();
+    plugin.writeBundle(
+      {},
+      {
+        'a.css': { type: 'asset', source: 'one' },
+        'b.css': { type: 'asset', source: 'two' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    unchangedOutputs.add('a.css');
+    plugin.writeBundle({}, { 'b.css': { type: 'asset', source: 'CHANGED' } });
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output changed');
+    expect(output).not.toContain('removed');
+    expect(output).not.toContain('a.css');
+  });
+
+  it('still reports an output that genuinely disappeared', () => {
+    const { plugin, lines } = harness(true);
+
+    plugin.buildStart();
+    plugin.writeBundle(
+      {},
+      {
+        'a.css': { type: 'asset', source: 'one' },
+        'b.css': { type: 'asset', source: 'two' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    plugin.writeBundle({}, { 'b.css': { type: 'asset', source: 'two' } });
+
+    expect(lines.join('\n')).toContain('1 output removed');
   });
 
   it('leaves the transform hook returning nothing so it never alters code', () => {

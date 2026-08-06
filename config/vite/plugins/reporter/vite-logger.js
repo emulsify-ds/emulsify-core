@@ -34,6 +34,18 @@ const UNRESOLVED_ASSET_PATTERN =
   /^(.+?) referenced in (.+?) didn't resolve at build time/;
 
 /**
+ * Matches Vite's browser-compatibility externalization notice.
+ *
+ * One dependency reaching for a Node builtin emits this once per importing file
+ * on every cycle. It says nothing new after the first build, and in a Twig theme
+ * it is never actionable, so the reporter tallies it rather than reprinting it.
+ *
+ * @type {RegExp}
+ */
+const EXTERNALIZED_MODULE_PATTERN =
+  /Module "(.+?)" has been externalized for browser compatibility(?:, imported by "(.+?)")?/;
+
+/**
  * Remove ANSI escape sequences so pattern matching sees plain text.
  *
  * @param {string} value - Possibly styled text.
@@ -179,6 +191,19 @@ export function parseUnresolvedAsset(message) {
  * @param {import('vite').Logger} baseLogger - Logger to delegate to.
  * @returns {import('vite').Logger} Wrapped logger.
  */
+/**
+ * Parse Vite's externalization notice into a module and its importer.
+ *
+ * @param {string} message - Raw log message.
+ * @returns {{module: string, importer: string|undefined}|null} Parsed notice.
+ */
+export function parseExternalizedModule(message) {
+  const match = EXTERNALIZED_MODULE_PATTERN.exec(stripAnsi(String(message)));
+  if (!match) return null;
+
+  return { module: match[1], importer: match[2] || undefined };
+}
+
 export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
   const passRawThrough = verbose === undefined ? isVerbose() : verbose;
 
@@ -190,10 +215,18 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
    */
   const capture = (message) => {
     const unresolvedAsset = parseUnresolvedAsset(message);
-    if (!unresolvedAsset) return false;
+    if (unresolvedAsset) {
+      collector.recordUnresolvedAsset(unresolvedAsset);
+      return true;
+    }
 
-    collector.recordUnresolvedAsset(unresolvedAsset);
-    return true;
+    const externalized = parseExternalizedModule(message);
+    if (externalized) {
+      collector.recordExternalizedModule?.(externalized);
+      return true;
+    }
+
+    return false;
   };
 
   /**

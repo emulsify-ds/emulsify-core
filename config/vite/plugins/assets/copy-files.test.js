@@ -2,7 +2,15 @@
  * @file Tests for source Twig, metadata, and static asset copy plugins.
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'fs';
 import { join } from 'path';
 
 import { resolveProjectConfig } from '../../project-config.js';
@@ -282,6 +290,56 @@ describe('source copy plugins', () => {
       expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
         true,
       );
+    });
+
+    it('does not rewrite a file whose bytes did not change', () => {
+      // A rewritten template in the output tree makes the Twig plugin send a
+      // full preview reload, which is the flash a stylesheet edit used to
+      // cause. mtime is what a watcher acts on, so assert on mtime.
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir, watch: {} };
+      const twigPath = join(outDir, 'components/card/card.twig');
+      const svgPath = join(outDir, 'components/card/icon.svg');
+
+      const runCycle = () => {
+        for (const factory of [copyTwigFilesPlugin, copyAllSrcAssetsPlugin]) {
+          const plugin = factory({ structure });
+          plugin.configResolved({ build });
+          plugin.writeBundle();
+        }
+      };
+
+      runCycle();
+      const stamp = new Date(1000);
+      utimesSync(twigPath, stamp, stamp);
+      utimesSync(svgPath, stamp, stamp);
+
+      runCycle();
+
+      expect(statSync(twigPath).mtimeMs).toBe(1000);
+      expect(statSync(svgPath).mtimeMs).toBe(1000);
+    });
+
+    it('copies unconditionally for a one-shot build', () => {
+      // A release build starts from an emptied output directory, so the check
+      // would never match; keeping it off leaves that path exactly as it was.
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir };
+      const twigPath = join(outDir, 'components/card/card.twig');
+
+      const runCycle = () => {
+        const plugin = copyTwigFilesPlugin({ structure });
+        plugin.configResolved({ build });
+        plugin.writeBundle();
+      };
+
+      runCycle();
+      const stamp = new Date(1000);
+      utimesSync(twigPath, stamp, stamp);
+
+      runCycle();
+
+      expect(statSync(twigPath).mtimeMs).not.toBe(1000);
     });
   });
 

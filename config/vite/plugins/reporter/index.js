@@ -37,7 +37,13 @@ import {
   sharedMissingDirectory,
 } from './asset-resolver.js';
 import { classifyBuildError } from './build-errors.js';
-import { renderBanner, renderRebuild, renderSummary } from './render.js';
+import {
+  hasCycleFailure,
+  renderAssetSummary,
+  renderBanner,
+  renderRebuild,
+  renderSummary,
+} from './render.js';
 import { createStyler, supportsColor, supportsUnicode } from './format.js';
 import {
   buildInputFileRows,
@@ -48,6 +54,11 @@ import {
   summarizeBundle,
   watchedRootLabel,
 } from './source-roots.js';
+import {
+  STRICTNESS,
+  countStrictAssetFailures,
+  resolveAssetStrictness,
+} from './strict-mode.js';
 import { isDetailed } from './verbosity.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
 
@@ -96,8 +107,11 @@ export function countEntries(input) {
  *   clock?: () => Date,
  *   colorEnabled?: boolean,
  *   detailed?: boolean,
+ *   unchangedOutputs?: Set<string>,
  *   version?: string
- * }} options - Plugin options.
+ * }} options - Plugin options. `unchangedOutputs` carries the files
+ *   `stableWatchOutputPlugin` dropped from this cycle's bundle because the
+ *   bytes on disk already matched.
  * @returns {import('vite').PluginOption} Develop reporter plugin.
  */
 export function developReporterPlugin({
@@ -109,6 +123,8 @@ export function developReporterPlugin({
   colorEnabled,
   unicodeEnabled,
   detailed,
+  strictness,
+  unchangedOutputs = new Set(),
   version,
 } = {}) {
   const styler = createStyler(
@@ -117,8 +133,13 @@ export function developReporterPlugin({
   const unicode =
     unicodeEnabled === undefined ? supportsUnicode() : unicodeEnabled;
   const verbose = detailed === undefined ? isDetailed() : detailed;
+  const strictLevel =
+    strictness === undefined ? resolveAssetStrictness() : strictness;
 
   let watching = false;
+  let oneShot = false;
+  let oneShotPrinted = false;
+  let strictFailures = 0;
   let outDir = 'dist';
   let inputRows = [];
   let inputFiles = [];
@@ -126,6 +147,7 @@ export function developReporterPlugin({
   let cycleStart = 0;
   let cyclePrinted = true;
   let firstCycleComplete = false;
+  let previousCycleFailed = false;
   let changedFiles = [];
   let writeTally;
   let outputFiles = [];
@@ -191,6 +213,47 @@ export function developReporterPlugin({
 
     const snapshot = diagnostics.snapshot();
     const durationMs = now() - cycleStart;
+    const failed = hasCycleFailure(snapshot);
+
+    // Enriching costs a filesystem read per stylesheet, so it only runs when
+    // the cycle actually produced something to attribute. A resolver is built
+    // per cycle so its read cache never serves stale contents after an edit.
+    //
+    // Rebuilds need this too, not just the first build: a rebuild that fails on
+    // a missing Sass import has to name the import, and that attribution is
+    // what turns "rebuild failed" into something actionable.
+    const needsResolver =
+      snapshot.unresolvedAssets.length > 0 ||
+      snapshot.importErrors.length > 0 ||
+      snapshot.syntaxErrors.length > 0;
+    const resolver = needsResolver ? createAssetResolver(env) : undefined;
+
+    const assetRows = resolver
+      ? buildAssetRows(snapshot.unresolvedAssets, resolver)
+      : [];
+
+    const importRows = resolver
+      ? buildImportRows(snapshot.importErrors, resolver, env.projectDir)
+      : [];
+    const sharedDirectory = sharedMissingDirectory(importRows, env.projectDir);
+    const importErrors = {
+      rows: importRows,
+      sharedDirectory,
+      directoryExists: Boolean(
+        sharedDirectory &&
+        env.projectDir &&
+        existsSync(join(env.projectDir, sharedDirectory)),
+      ),
+    };
+
+    // The minifier reports against generated CSS, so the only route back to
+    // a source file is searching for the literals in the offending rule.
+    const syntaxErrors = resolver
+      ? snapshot.syntaxErrors.map((error) => ({
+          ...error,
+          lead: findLikelySource(error.declaration, resolver),
+        }))
+      : snapshot.syntaxErrors;
 
     if (firstCycleComplete) {
       emit(
@@ -199,45 +262,23 @@ export function developReporterPlugin({
           durationMs,
           changedFiles,
           projectDir: env.projectDir,
+          outDir,
+          sourceGlob: resolveSourceGlob(env),
+          assetRows,
+          importErrors,
+          syntaxErrors,
+          recovered: previousCycleFailed && !failed,
           moduleCount: verbose ? transformedModules.size : undefined,
           changedOutputs,
           removedOutputs,
           detailed: verbose,
+          unicode,
           styler,
           now: clock(),
         }),
       );
     } else {
       firstCycleComplete = true;
-      // Enriching costs a filesystem read per stylesheet, so it only runs when
-      // the build actually produced unresolved URLs. A resolver is built per
-      // cycle so its read cache never serves stale contents after an edit.
-      const needsResolver =
-        snapshot.unresolvedAssets.length > 0 ||
-        snapshot.importErrors.length > 0 ||
-        snapshot.syntaxErrors.length > 0;
-      const resolver = needsResolver ? createAssetResolver(env) : undefined;
-
-      const assetRows = resolver
-        ? buildAssetRows(snapshot.unresolvedAssets, resolver)
-        : [];
-
-      const importRows = resolver
-        ? buildImportRows(snapshot.importErrors, resolver, env.projectDir)
-        : [];
-      const sharedDirectory = sharedMissingDirectory(
-        importRows,
-        env.projectDir,
-      );
-
-      // The minifier reports against generated CSS, so the only route back to
-      // a source file is searching for the literals in the offending rule.
-      const syntaxErrors = resolver
-        ? snapshot.syntaxErrors.map((error) => ({
-            ...error,
-            lead: findLikelySource(error.declaration, resolver),
-          }))
-        : snapshot.syntaxErrors;
 
       emit(
         renderSummary({
@@ -248,15 +289,7 @@ export function developReporterPlugin({
           sourceGlob: resolveSourceGlob(env),
           assetRows,
           syntaxErrors,
-          importErrors: {
-            rows: importRows,
-            sharedDirectory,
-            directoryExists: Boolean(
-              sharedDirectory &&
-              env.projectDir &&
-              existsSync(join(env.projectDir, sharedDirectory)),
-            ),
-          },
+          importErrors,
           platform: env.platform,
           inputRows,
           watchLabel,
@@ -269,7 +302,46 @@ export function developReporterPlugin({
       );
     }
 
+    previousCycleFailed = failed;
     changedFiles = [];
+  };
+
+  /**
+   * Report CSS asset problems after a one-shot build.
+   *
+   * Watch builds get the full per-cycle summary; a one-shot `vite build` or
+   * `storybook build` gets this and nothing else, and only when there is
+   * something to say. Until now those builds printed one raw Vite line per
+   * unresolved URL and exited 0, so a broken asset path shipped through CI
+   * unnoticed.
+   *
+   * @returns {void}
+   */
+  const reportOneShot = () => {
+    if (!oneShot || oneShotPrinted) return;
+    oneShotPrinted = true;
+
+    const snapshot = diagnostics.snapshot();
+    strictFailures = countStrictAssetFailures(snapshot, strictLevel);
+
+    const rebases = snapshot.assetRebases || [];
+    if (!snapshot.unresolvedAssets.length && !rebases.length) return;
+
+    // Enriching walks the project, so it only runs when there is an unresolved
+    // URL to attribute. Rebase records already carry their own importer.
+    const resolver = snapshot.unresolvedAssets.length
+      ? createAssetResolver(env)
+      : undefined;
+
+    emit(
+      renderAssetSummary({
+        assetRows: resolver
+          ? buildAssetRows(snapshot.unresolvedAssets, resolver)
+          : [],
+        rebases,
+        styler,
+      }),
+    );
   };
 
   return {
@@ -284,6 +356,10 @@ export function developReporterPlugin({
 
     configResolved(config) {
       watching = Boolean(config.build?.watch);
+      // Everything below is watch-only setup. A one-shot build stays silent
+      // unless it has an asset problem to report, which keeps `npm run build`,
+      // `storybook build`, and the release fixtures byte for byte identical.
+      oneShot = !watching;
       if (!watching) return;
 
       outDir = config.build?.outDir || 'dist';
@@ -387,6 +463,14 @@ export function developReporterPlugin({
           // Rolldown's `computing gzip size...` pause on every keystroke.
           const current = fingerprintBundle(bundle);
 
+          // A file the stable-output plugin dropped is still on disk with the
+          // same bytes, so carry its fingerprint forward. Without this the
+          // diff below sees it missing from the bundle and calls it removed.
+          for (const fileName of unchangedOutputs) {
+            const previous = fingerprints.get(fileName);
+            if (previous !== undefined) current.set(fileName, previous);
+          }
+
           if (firstCycleComplete) {
             const diff = diffFingerprints(fingerprints, current);
             const changed = new Set(diff.changed);
@@ -412,6 +496,23 @@ export function developReporterPlugin({
 
     closeBundle() {
       reportCycle();
+      // Printed from here, not writeBundle, so the block lands after Rolldown's
+      // own asset table rather than in the middle of it.
+      reportOneShot();
+
+      if (!oneShot || strictLevel === STRICTNESS.off || !strictFailures) return;
+
+      // Not `process.exitCode`: `storybook build` ends with `process.exit(0)`
+      // in a commander postAction hook, which discards it. Rejecting the build
+      // is the only signal both runners honor. `closeBundle` also runs after
+      // mirrorComponentsToRoot's writeBundle, so a strict failure can never
+      // leave a half-mirrored tree behind.
+      const error = new Error(
+        `Emulsify: ${strictFailures} CSS asset URL(s) did not resolve. ` +
+          'Unset EMULSIFY_STRICT_ASSETS to report without failing.',
+      );
+      error.stack = error.message;
+      throw error;
     },
   };
 }

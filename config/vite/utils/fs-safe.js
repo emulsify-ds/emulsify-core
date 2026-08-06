@@ -2,7 +2,7 @@
  * @file Safe filesystem helpers for Vite config and scripts.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, realpathSync } from 'fs';
 
 /**
  * Determine whether a path exists without throwing on inaccessible files.
@@ -63,4 +63,22 @@ export function safeReadJson(filePath) {
  */
 export function firstExistingPath(candidates = []) {
   return candidates.filter(Boolean).find((candidate) => safeExists(candidate));
+}
+
+/**
+ * Resolve symlinks without throwing on missing or inaccessible paths.
+ *
+ * Used to tell "two asset roots that overlap" apart from "two different files
+ * with the same name", so an overlapping root configuration is not mistaken for
+ * an ambiguous asset reference.
+ *
+ * @param {string} filePath - Absolute or relative filesystem path.
+ * @returns {string} Canonical path, or the input path when unavailable.
+ */
+export function safeRealPath(filePath) {
+  try {
+    return realpathSync(filePath);
+  } catch {
+    return filePath;
+  }
 }
