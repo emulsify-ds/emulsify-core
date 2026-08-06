@@ -104,6 +104,53 @@ function isBareStackTrace(message) {
 const HMR_UPDATE_PATTERN = /(^|\s)hmr update\s/;
 
 /**
+ * Matches the `File:` line Vite appends to a transform failure.
+ *
+ * `buildErrorMessage` composes a dev-server error as the message, the source
+ * excerpt with its caret, then `Plugin:` and `File:`. Everything after that is
+ * `err.stack` — which begins by repeating the message and excerpt verbatim and
+ * then lists the frames.
+ *
+ * @type {RegExp}
+ */
+const ERROR_FILE_LINE = /^\s*File:\s/;
+
+/**
+ * Matches a JavaScript stack frame.
+ *
+ * @type {RegExp}
+ */
+const STACK_FRAME = /^\s*at\s+\S/;
+
+/**
+ * Reduce a dev-server error to the part that names the problem.
+ *
+ * One mistyped semicolon in a stylesheet prints around fifty lines: the Sass
+ * error, the same error again out of `err.stack`, and thirty-odd frames inside
+ * `sass.dart.js` that point at the compiler rather than at the stylesheet. The
+ * first block — message, excerpt, caret, import chain, and the file it came
+ * from — is the whole of what a themer can act on.
+ *
+ * The stack is only dropped when there is a `File:` line or a recognizable
+ * frame to cut at, so an error shaped differently than expected is passed
+ * through whole rather than truncated on a guess.
+ *
+ * @param {string} message - Raw error text.
+ * @returns {string} Message without the repeated body and the stack.
+ */
+export function compactDevServerError(message) {
+  const lines = String(message).split('\n');
+  const fileLine = lines.findIndex((line) => ERROR_FILE_LINE.test(line));
+
+  if (fileLine !== -1) return lines.slice(0, fileLine + 1).join('\n');
+
+  const firstFrame = lines.findIndex((line) => STACK_FRAME.test(line));
+  if (firstFrame > 0) return lines.slice(0, firstFrame).join('\n').trimEnd();
+
+  return String(message);
+}
+
+/**
  * Wrap the Storybook dev server's logger to drop HMR notices.
  *
  * These come from Storybook's Vite dev server, not from the watch build, and
@@ -120,6 +167,11 @@ const HMR_UPDATE_PATTERN = /(^|\s)hmr update\s/;
  * line that says the same thing more precisely. Under `concurrently` both
  * processes share one pipe, so these interleave with the build's output and are
  * the last thing making one command look like two.
+ *
+ * Transform failures are compacted for the same reason. The dev server prints
+ * the error, then repeats it out of `err.stack`, then lists thirty frames
+ * inside `sass.dart.js`; only the first block names anything in the project.
+ * See {@link compactDevServerError}.
  *
  * The wrapper delegates to whatever logger is already configured rather than
  * replacing it, so Storybook keeps its own prefixes and styling for every other
@@ -153,7 +205,14 @@ export function createDevServerLogger({ baseLogger, verbose } = {}) {
 
     warn: (message, options) => baseLogger.warn(message, options),
     warnOnce: (message, options) => baseLogger.warnOnce(message, options),
-    error: (message, options) => baseLogger.error(message, options),
+
+    error(message, options) {
+      baseLogger.error(
+        passThrough ? message : compactDevServerError(message),
+        options,
+      );
+    },
+
     clearScreen: (type) => baseLogger.clearScreen(type),
     hasErrorLogged: (error) => baseLogger.hasErrorLogged(error),
   };

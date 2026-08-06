@@ -36,7 +36,10 @@ import { makePlugins } from './plugins.js';
 import { buildInputs } from './entries.js';
 import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
-import { createSassOptions } from './plugins/reporter/sass-logger.js';
+import {
+  createSassOptions,
+  shouldQuietSass,
+} from './plugins/reporter/sass-logger.js';
 import {
   createReporterLogger,
   isVerbose,
@@ -177,11 +180,11 @@ export default defineConfig(async ({ command } = {}) => {
     css: {
       devSourcemap: true,
 
-      // During a watch build, route Sass warnings into the diagnostics
-      // collector instead of letting Dart Sass print a formatted block per
-      // occurrence. The reporter prints one deduplicated tally per cycle, so
-      // the deprecation debt stays visible without the repetition.
-      ...(watching
+      // Route Sass warnings into the diagnostics collector instead of letting
+      // Dart Sass print a formatted block per occurrence. The reporter prints
+      // one deduplicated tally per session, so the debt stays visible without
+      // the repetition. `shouldQuietSass` owns which invocations get this.
+      ...(shouldQuietSass({ watching, command, verbose: isVerbose() })
         ? { preprocessorOptions: { scss: createSassOptions(diagnostics) } }
         : {}),
     },

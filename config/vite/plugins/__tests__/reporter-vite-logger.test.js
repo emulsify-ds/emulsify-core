@@ -6,6 +6,7 @@
 
 import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import {
+  compactDevServerError,
   createDevServerLogger,
   createReporterLogger,
   parseUnresolvedAsset,
@@ -146,6 +147,66 @@ describe('reporter logger', () => {
   });
 });
 
+// Shape Vite's dev server actually prints for a Sass syntax error: the
+// message, the excerpt, `Plugin:`/`File:`, then `err.stack` — which repeats the
+// message and excerpt before listing frames inside the compiler bundle.
+const QUOTE = String.fromCharCode(39);
+const EXCERPT = `@use ${QUOTE}../../base/global/colors/color-vars${QUOTE} as *`;
+const SASS_DEV_SERVER_ERROR = [
+  'Internal server error: [sass] expected ";".',
+  '  ╷',
+  `5 │ ${EXCERPT}`,
+  '  │                                                ^',
+  '  ╵',
+  '  src/tab-refresh.scss 5:48  root stylesheet',
+  '  Plugin: vite:css',
+  '  File: /project/src/tab-refresh.scss:5:48',
+  '  [sass] expected ";".',
+  '    ╷',
+  `  5 │ ${EXCERPT}`,
+  '    │                                                ^',
+  '    ╵',
+  '    src/tab-refresh.scss 5:48  root stylesheet',
+  '      at Object.wrapException (/project/node_modules/sass/sass.dart.js:2310:47)',
+  '      at SpanScanner.error$3$length$position (/project/node_modules/sass/sass.dart.js:87501:15)',
+  '      at async loadAndTransform (/project/node_modules/vite/dist/node/chunks/node.js:20619:26)',
+].join('\n');
+
+describe('compactDevServerError', () => {
+  it('cuts everything after the File line', () => {
+    expect(compactDevServerError(SASS_DEV_SERVER_ERROR).split('\n')).toEqual(
+      SASS_DEV_SERVER_ERROR.split('\n').slice(0, 8),
+    );
+  });
+
+  it('falls back to the first stack frame when there is no File line', () => {
+    const message = [
+      'Internal server error: boom',
+      '  something useful',
+      '    at Object.thing (/x/y.js:1:1)',
+      '    at other (/x/z.js:2:2)',
+    ].join('\n');
+
+    expect(compactDevServerError(message)).toBe(
+      'Internal server error: boom\n  something useful',
+    );
+  });
+
+  it('leaves a message with no stack alone', () => {
+    // Truncating on a guess would be worse than printing one extra line.
+    const message = 'Internal server error: something unfamiliar';
+
+    expect(compactDevServerError(message)).toBe(message);
+  });
+
+  it('leaves a message that is nothing but frames alone', () => {
+    // Cutting at index 0 would print nothing at all.
+    const message = '    at a (/x.js:1:1)\n    at b (/y.js:2:2)';
+
+    expect(compactDevServerError(message)).toBe(message);
+  });
+});
+
 describe('storybook dev server logger', () => {
   // Vite colors the notice, so the fixture carries escapes the filter has to
   // look past. Built from the escape character to keep it out of the source.
@@ -199,6 +260,29 @@ describe('storybook dev server logger', () => {
 
     expect(base.warn).toHaveBeenCalled();
     expect(base.error).toHaveBeenCalled();
+  });
+
+  it('compacts a transform failure down to the part that names it', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    logger.error(SASS_DEV_SERVER_ERROR);
+
+    const printed = base.error.mock.calls[0][0];
+    expect(printed).toContain('expected ";".');
+    expect(printed).toContain('tab-refresh.scss 5:48');
+    expect(printed).toContain('File: /project/src/tab-refresh.scss:5:48');
+    expect(printed).not.toContain('sass.dart.js');
+    expect(printed.split('\n')).toHaveLength(8);
+  });
+
+  it('keeps the whole dump when more output was requested', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: true });
+
+    logger.error(SASS_DEV_SERVER_ERROR);
+
+    expect(base.error).toHaveBeenCalledWith(SASS_DEV_SERVER_ERROR, undefined);
   });
 
   it('keeps a message that merely mentions hmr in prose', () => {

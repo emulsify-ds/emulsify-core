@@ -214,6 +214,48 @@ restarted. One-shot `npm run build`, `storybook build`, and the release fixture
 verifications are unaffected — each starts from an emptied directory and writes
 every file.
 
+### Sass Deprecations From Storybook
+
+Storybook runs its own Vite process, and it compiles the same stylesheets the
+watcher does. It resolves the shared config with `command: 'serve'`, which used
+to miss the branch that installs the quiet Sass logger, so Dart Sass printed its
+full formatted block — message, recommendation, excerpt, caret, import chain —
+for every deprecation it met. On a project carrying a few hundred of them that
+is most of a screen at startup, and the same screen again after every save,
+restating a tally the reporter had already printed once from the other process.
+
+Storybook now takes the same logger. It has no summary of its own to print and
+needs none: the watcher compiles the same source tree, so its `pre-existing
+debt` block already covers everything Storybook would have reported.
+
+The debt is never invisible. `npm run develop` prints it once per session, and
+one-shot `npm run build` keeps Dart Sass's own output untouched, because nothing
+runs alongside it to summarize. `EMULSIFY_VERBOSE=1` hands Storybook's raw
+output back.
+
+### Transform Failures
+
+A dev-server transform failure prints the error, then repeats it out of
+`err.stack`, then lists thirty-odd frames inside `sass.dart.js` — roughly fifty
+lines in which the only project path is in the first six. Everything from the
+`File:` line on is dropped at the default level, leaving the message, the source
+excerpt with its caret, the import chain, and the file:
+
+```text
+  [vite] Internal server error: [sass] expected ";".
+    ╷
+  5 │ @use '../../base/global/colors/color-vars' as *
+    │                                                ^
+    ╵
+    src/components/organisms/tab-refresh/tab-refresh.scss 5:48  root stylesheet
+    Plugin: vite:css
+    File: src/components/organisms/tab-refresh/tab-refresh.scss:5:48
+```
+
+An error that carries neither a `File:` line nor a recognizable stack frame is
+passed through whole rather than truncated on a guess, and either verbose mode
+restores the full dump.
+
 ## Verbose Mode
 
 Two ways in, both reaching the same place:
@@ -292,17 +334,17 @@ whose `.npmrc` raises `loglevel` permanently can still pin the reporter down wit
 
 ## Environment Variables
 
-| Variable                   | Effect                                                                                                                                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EMULSIFY_VERBOSE=1`       | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table and every Sass deprecation block. Use when diagnosing something the summary has collapsed. |
-| `EMULSIFY_VERBOSE=2`       | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                          |
-| `EMULSIFY_VERBOSE=0`       | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                               |
-| `EMULSIFY_NO_UNICODE=1`    | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                               |
-| `EMULSIFY_STRICT_ASSETS=1` | Fail a one-shot build when a CSS asset URL cannot be resolved. Off by default, because an unresolvable URL is occasionally an intentional runtime path.                                        |
-| `EMULSIFY_STRICT_ASSETS=2` | Also fail on URLs the build had to repair, for projects that want the canonical `/assets/...` form written in source rather than fixed up at build time.                                       |
-| `EMULSIFY_ASSET_REBASE=0`  | Turn the CSS asset URL repair off for one build. The permanent switch is `assets.rebase` in `project.emulsify.json`.                                                                           |
-| `NO_COLOR=1`               | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                    |
-| `FORCE_COLOR=1`            | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                        |
+| Variable                   | Effect                                                                                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `EMULSIFY_VERBOSE=1`       | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table, Storybook's Sass deprecation blocks, and full dev-server stack traces. Use when diagnosing something the summary has collapsed. |
+| `EMULSIFY_VERBOSE=2`       | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                                                                |
+| `EMULSIFY_VERBOSE=0`       | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                                                                     |
+| `EMULSIFY_NO_UNICODE=1`    | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                                                                     |
+| `EMULSIFY_STRICT_ASSETS=1` | Fail a one-shot build when a CSS asset URL cannot be resolved. Off by default, because an unresolvable URL is occasionally an intentional runtime path.                                                                              |
+| `EMULSIFY_STRICT_ASSETS=2` | Also fail on URLs the build had to repair, for projects that want the canonical `/assets/...` form written in source rather than fixed up at build time.                                                                             |
+| `EMULSIFY_ASSET_REBASE=0`  | Turn the CSS asset URL repair off for one build. The permanent switch is `assets.rebase` in `project.emulsify.json`.                                                                                                                 |
+| `NO_COLOR=1`               | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                                                          |
+| `FORCE_COLOR=1`            | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                                                              |
 
 ## Why The Output Is Append-Only
 
