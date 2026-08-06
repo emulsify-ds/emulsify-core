@@ -141,6 +141,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
  *   recordAssetRebase: (entry: {status?: string, url?: string, rewritten?: string, importer?: string, resolvedAsset?: string, candidates?: string[]}) => void,
+ *   recordExternalizedModule: (entry: {module?: string, importer?: string}) => void,
  *   recordImportError: (entry: {file?: string, line?: number, specifier?: string}) => void,
  *   recordSyntaxError: (entry: {minifier?: string, message?: string, declaration?: string}) => void,
  *   hasCapturedBuildErrors: () => boolean,
@@ -171,6 +172,8 @@ export function createDiagnosticsCollector() {
   let unresolvedAssets = new Map();
   /** @type {Map<string, object>} */
   let assetRebases = new Map();
+  /** @type {Map<string, {module: string, importer: string|undefined, count: number}>} */
+  let externalizedModules = new Map();
   /** @type {Map<string, object>} */
   let importErrors = new Map();
   /** @type {Map<string, object>} */
@@ -328,6 +331,29 @@ export function createDiagnosticsCollector() {
       });
     },
 
+    /**
+     * Record one module Vite externalized for browser compatibility.
+     *
+     * Vite emits this once per importing file per cycle, so a single dependency
+     * that reaches for a Node builtin prints on every keystroke. The identity
+     * that matters is the module, not the importer, so occurrences are tallied
+     * against the module name.
+     *
+     * @param {{module?: string, importer?: string}} entry - Externalized module.
+     * @returns {void}
+     */
+    recordExternalizedModule({ module, importer } = {}) {
+      if (!module) return;
+
+      const existing = externalizedModules.get(module);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+
+      externalizedModules.set(module, { module, importer, count: 1 });
+    },
+
     snapshot() {
       const deprecationList = [...deprecations.values()]
         .map((bucket) => ({
@@ -375,6 +401,9 @@ export function createDiagnosticsCollector() {
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
         unresolvedAssets: outstandingAssets,
         assetRebases: assetRebaseList,
+        externalizedModules: [...externalizedModules.values()].sort(
+          (a, b) => b.count - a.count || a.module.localeCompare(b.module),
+        ),
         importErrors: importErrorList,
         syntaxErrors: [...syntaxErrors.values()],
         warnings: warningList,
@@ -417,6 +446,7 @@ export function createDiagnosticsCollector() {
       errors = new Map();
       unresolvedAssets = new Map();
       assetRebases = new Map();
+      externalizedModules = new Map();
       importErrors = new Map();
       syntaxErrors = new Map();
     },

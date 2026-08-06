@@ -38,6 +38,7 @@ import {
 } from './asset-resolver.js';
 import { classifyBuildError } from './build-errors.js';
 import {
+  hasCycleFailure,
   renderAssetSummary,
   renderBanner,
   renderRebuild,
@@ -142,6 +143,7 @@ export function developReporterPlugin({
   let cycleStart = 0;
   let cyclePrinted = true;
   let firstCycleComplete = false;
+  let previousCycleFailed = false;
   let changedFiles = [];
   let writeTally;
   let outputFiles = [];
@@ -207,6 +209,47 @@ export function developReporterPlugin({
 
     const snapshot = diagnostics.snapshot();
     const durationMs = now() - cycleStart;
+    const failed = hasCycleFailure(snapshot);
+
+    // Enriching costs a filesystem read per stylesheet, so it only runs when
+    // the cycle actually produced something to attribute. A resolver is built
+    // per cycle so its read cache never serves stale contents after an edit.
+    //
+    // Rebuilds need this too, not just the first build: a rebuild that fails on
+    // a missing Sass import has to name the import, and that attribution is
+    // what turns "rebuild failed" into something actionable.
+    const needsResolver =
+      snapshot.unresolvedAssets.length > 0 ||
+      snapshot.importErrors.length > 0 ||
+      snapshot.syntaxErrors.length > 0;
+    const resolver = needsResolver ? createAssetResolver(env) : undefined;
+
+    const assetRows = resolver
+      ? buildAssetRows(snapshot.unresolvedAssets, resolver)
+      : [];
+
+    const importRows = resolver
+      ? buildImportRows(snapshot.importErrors, resolver, env.projectDir)
+      : [];
+    const sharedDirectory = sharedMissingDirectory(importRows, env.projectDir);
+    const importErrors = {
+      rows: importRows,
+      sharedDirectory,
+      directoryExists: Boolean(
+        sharedDirectory &&
+        env.projectDir &&
+        existsSync(join(env.projectDir, sharedDirectory)),
+      ),
+    };
+
+    // The minifier reports against generated CSS, so the only route back to
+    // a source file is searching for the literals in the offending rule.
+    const syntaxErrors = resolver
+      ? snapshot.syntaxErrors.map((error) => ({
+          ...error,
+          lead: findLikelySource(error.declaration, resolver),
+        }))
+      : snapshot.syntaxErrors;
 
     if (firstCycleComplete) {
       emit(
@@ -215,45 +258,23 @@ export function developReporterPlugin({
           durationMs,
           changedFiles,
           projectDir: env.projectDir,
+          outDir,
+          sourceGlob: resolveSourceGlob(env),
+          assetRows,
+          importErrors,
+          syntaxErrors,
+          recovered: previousCycleFailed && !failed,
           moduleCount: verbose ? transformedModules.size : undefined,
           changedOutputs,
           removedOutputs,
           detailed: verbose,
+          unicode,
           styler,
           now: clock(),
         }),
       );
     } else {
       firstCycleComplete = true;
-      // Enriching costs a filesystem read per stylesheet, so it only runs when
-      // the build actually produced unresolved URLs. A resolver is built per
-      // cycle so its read cache never serves stale contents after an edit.
-      const needsResolver =
-        snapshot.unresolvedAssets.length > 0 ||
-        snapshot.importErrors.length > 0 ||
-        snapshot.syntaxErrors.length > 0;
-      const resolver = needsResolver ? createAssetResolver(env) : undefined;
-
-      const assetRows = resolver
-        ? buildAssetRows(snapshot.unresolvedAssets, resolver)
-        : [];
-
-      const importRows = resolver
-        ? buildImportRows(snapshot.importErrors, resolver, env.projectDir)
-        : [];
-      const sharedDirectory = sharedMissingDirectory(
-        importRows,
-        env.projectDir,
-      );
-
-      // The minifier reports against generated CSS, so the only route back to
-      // a source file is searching for the literals in the offending rule.
-      const syntaxErrors = resolver
-        ? snapshot.syntaxErrors.map((error) => ({
-            ...error,
-            lead: findLikelySource(error.declaration, resolver),
-          }))
-        : snapshot.syntaxErrors;
 
       emit(
         renderSummary({
@@ -264,15 +285,7 @@ export function developReporterPlugin({
           sourceGlob: resolveSourceGlob(env),
           assetRows,
           syntaxErrors,
-          importErrors: {
-            rows: importRows,
-            sharedDirectory,
-            directoryExists: Boolean(
-              sharedDirectory &&
-              env.projectDir &&
-              existsSync(join(env.projectDir, sharedDirectory)),
-            ),
-          },
+          importErrors,
           platform: env.platform,
           inputRows,
           watchLabel,
@@ -285,6 +298,7 @@ export function developReporterPlugin({
       );
     }
 
+    previousCycleFailed = failed;
     changedFiles = [];
   };
 
