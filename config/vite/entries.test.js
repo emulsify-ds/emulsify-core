@@ -35,6 +35,8 @@ const fakeSourceFileIndex = ({ componentFiles = [], globalFiles = [] }) => ({
 const jsxExclusionEntryPaths = [
   'src/components/card/Card.jsx',
   'src/components/card/Card.stories.jsx',
+  'src/components/card/Card.docs.jsx',
+  'src/components/card/Card.doc.jsx',
   'src/components/card/Card.component.jsx',
   'src/components/card/Card.min.jsx',
   'src/components/card/Card.test.jsx',
@@ -147,6 +149,8 @@ describe('buildInputs structure outputs', () => {
         'src/components/card/card.scss',
         'src/components/card/_partial.scss',
         'src/components/card/card.stories.js',
+        'src/components/card/card.docs.js',
+        'src/components/card/card.doc.js',
         'src/components/card/card.component.js',
         'src/components/card/card.min.js',
         'src/components/card/card.test.js',
@@ -194,7 +198,7 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
-  it('excludes JSX story, component, minified, and test files', () => {
+  it('excludes JSX story, docs, component, minified, and test files', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
       componentFilePaths: jsxExclusionEntryPaths,
