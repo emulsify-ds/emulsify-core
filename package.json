@@ -208,14 +208,14 @@
     "@emulsify/cli": "^2.2.0",
     "@eslint/js": "^9.39.5",
     "@mlnop/vite-plugin-sass-glob-import": "^6.2.0",
-    "@storybook/addon-a11y": "^10.5.4",
-    "@storybook/addon-links": "^10.5.4",
-    "@storybook/addon-themes": "^10.5.4",
-    "@storybook/react": "^10.5.4",
-    "@storybook/react-vite": "^10.5.4",
+    "@storybook/addon-a11y": "^10.5.7",
+    "@storybook/addon-links": "^10.5.7",
+    "@storybook/addon-themes": "^10.5.7",
+    "@storybook/react": "^10.5.7",
+    "@storybook/react-vite": "^10.5.7",
     "@vituum/vite-plugin-twig": "^2.0.1",
     "autoprefixer": "^10.5.4",
-    "axe-core": "^4.12.1",
+    "axe-core": "^4.13.0",
     "babel-preset-minify": "^0.5.2",
     "concurrently": "^10.0.4",
     "eslint": "^9.39.5",
@@ -224,7 +224,7 @@
     "eslint-plugin-jest": "^29.16.0",
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-security": "^4.0.1",
-    "eslint-plugin-storybook": "^10.5.4",
+    "eslint-plugin-storybook": "^10.5.7",
     "glob": "^13.0.6",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
@@ -232,17 +232,17 @@
     "normalize.css": "^8.0.1",
     "open-cli": "^9.0.0",
     "pa11y": "^9.1.1",
-    "postcss": "^8.5.23",
+    "postcss": "^8.5.26",
     "postcss-scss": "^4.0.9",
     "sass": "^1.102.0",
-    "storybook": "^10.5.4",
+    "storybook": "^10.5.7",
     "stylelint": "^17.14.1",
     "stylelint-config-standard-scss": "^17.0.0",
     "stylelint-prettier": "^5.0.3",
     "stylelint-selector-bem-pattern": "^5.0.0",
     "twig": "^3.0.0",
     "twig-drupal-filters": "^3.2.0",
-    "vite": "^8.2.0"
+    "vite": "^8.2.1"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
@@ -255,10 +255,10 @@
     "@semantic-release/release-notes-generator": "^14.1.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
-    "puppeteer": "^25.3.0",
+    "puppeteer": "^25.5.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "semantic-release": "^25.0.8"
+    "semantic-release": "^25.0.9"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -275,6 +275,7 @@
     "fsevents@2.3.3": true,
     "puppeteer@24.43.1": true,
     "unrs-resolver@1.12.2": true,
-    "puppeteer@25.4.0": true
+    "puppeteer@25.4.0": true,
+    "puppeteer@25.5.0": true
   }
 }
