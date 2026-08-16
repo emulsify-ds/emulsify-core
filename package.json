@@ -36,9 +36,6 @@
   },
   "homepage": "https://github.com/emulsify-ds/emulsify-core#readme",
   "files": [
-    "!scripts/audit/**/*.test.js",
-    "!scripts/audit/**/__snapshots__/**",
-    "!scripts/audit/test-utils.js",
     ".cli/init.js",
     ".storybook/_drupal.js",
     ".storybook/css-components.js",
@@ -146,7 +143,10 @@
     "src/storybook/twig/resolver.js",
     "src/storybook/twig/setup.js",
     "src/storybook/twig/source-function.js",
-    "src/storybook/twig/source.js"
+    "src/storybook/twig/source.js",
+    "!scripts/audit/**/*.test.js",
+    "!scripts/audit/**/__snapshots__/**",
+    "!scripts/audit/test-utils.js"
   ],
   "exports": {
     ".": "./src/extensions/index.js",
