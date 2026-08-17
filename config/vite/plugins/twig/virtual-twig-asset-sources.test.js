@@ -93,15 +93,15 @@ describe('virtual Twig asset source module plugin', () => {
     expect(publicAssetSourceEntries(env)).toEqual([
       {
         key: '/assets/icons/arrow.svg',
-        url: '/assets/icons/arrow.svg',
+        url: './assets/icons/arrow.svg',
       },
       {
         key: '/dist/assets/icons.svg',
-        url: '/assets/icons.svg',
+        url: './assets/icons.svg',
       },
     ]);
     expect(source).toContain(
-      '"/assets/icons/arrow.svg": fetchAssetText("/assets/icons/arrow.svg")',
+      '"/assets/icons/arrow.svg": fetchAssetText("./assets/icons/arrow.svg")',
     );
     expect(source).toContain('export const getAssetText =');
   });
@@ -125,11 +125,11 @@ describe('virtual Twig asset source module plugin', () => {
     expect(publicAssetSourceEntries(env)).toEqual([
       {
         key: '/dist/assets/icons.svg',
-        url: '/assets/icons.svg',
+        url: './assets/icons.svg',
       },
     ]);
     expect(source).toContain(
-      '"/dist/assets/icons.svg": fetchAssetText("/assets/icons.svg")',
+      '"/dist/assets/icons.svg": fetchAssetText("./assets/icons.svg")',
     );
   });
 
@@ -143,14 +143,14 @@ describe('virtual Twig asset source module plugin', () => {
     expect(publicAssetSourceEntries(env)).toEqual([
       {
         key: '/dist/assets/icons.svg',
-        url: '/assets/icons.svg',
+        url: './assets/icons.svg',
       },
     ]);
     expect(source).toContain(
       'export const generatedAssetRootPrefixes = ["/dist/assets/"];',
     );
     expect(source).toContain(
-      '"/dist/assets/icons.svg": fetchAssetText("/assets/icons.svg")',
+      '"/dist/assets/icons.svg": fetchAssetText("./assets/icons.svg")',
     );
     expect(source).not.toContain('import.meta.glob');
   });
@@ -197,6 +197,32 @@ describe('virtual Twig asset source module plugin', () => {
       '/design/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
       '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
     ]);
+  });
+
+  it('resolves generated public asset URLs beneath a nested Storybook path', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'assets/icons'), { recursive: true });
+    writeFileSync(join(projectDir, 'assets/icons/arrow.svg'), '<svg></svg>');
+    const env = { projectDir, projectStructure: {} };
+    const entries = publicAssetSourceEntries(env);
+    const arrow = entries.find(
+      (entry) => entry.key === '/assets/icons/arrow.svg',
+    );
+
+    // Lookup keys stay root-relative because the runtime resolves asset sources
+    // by key. Only the fetched URL follows Storybook's preview document.
+    expect(arrow).toEqual({
+      key: '/assets/icons/arrow.svg',
+      url: './assets/icons/arrow.svg',
+    });
+    expect(
+      new URL(arrow.url, 'https://example.test/project/iframe.html').pathname,
+    ).toBe('/project/assets/icons/arrow.svg');
+    expect(
+      new URL(arrow.url, 'https://example.test/iframe.html').pathname,
+    ).toBe('/assets/icons/arrow.svg');
+    expect(entries.every((entry) => entry.key.startsWith('/'))).toBe(true);
+    expect(entries.every((entry) => entry.url.startsWith('./'))).toBe(true);
   });
 
   it('emits no asset globs when no asset roots exist', () => {

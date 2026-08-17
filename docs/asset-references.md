@@ -157,8 +157,10 @@ Other SVG references, such as `source('@assets/icons/refresh.svg')`, resolve
 from project-authored asset roots.
 
 For raster images, fonts, and other binary assets, `source('@assets/...')`
-returns a public `/assets/...` URL or image markup instead of inlining file
-contents. In Sass and CSS, use `/assets/...` directly rather than `@assets`.
+returns a public `./assets/...` URL or image markup instead of inlining file
+contents. That URL is relative to Storybook's preview document, so a static
+build resolves it correctly from a domain root and from any deployment subpath.
+In Sass and CSS, use `/assets/...` directly rather than `@assets`.
 
 Inline text assets are bundled for Storybook only. Storybook needs each one as a
 string so `source()` can return it synchronously; a theme's `vite build` does

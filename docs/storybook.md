@@ -454,7 +454,17 @@ The generated sprite is a special asset alias: `source('@assets/icons.svg')` res
 
 The first text source call lazy-loads the raw text and triggers a re-render; later calls return the cached text synchronously.
 
-Raster image assets still produce image markup. Font files and other binary assets return a public URL under `/assets/...`. Storybook serves root `./assets` at that URL prefix, so files such as `assets/images/example.png` and `assets/fonts/example.woff2` can be referenced with `source('@assets/images/example.png')` and `source('@assets/fonts/example.woff2')`.
+Raster image assets still produce image markup. Font files and other binary assets return a public URL under `./assets/...`. Storybook serves root `./assets` at that URL prefix, so files such as `assets/images/example.png` and `assets/fonts/example.woff2` can be referenced with `source('@assets/images/example.png')` and `source('@assets/fonts/example.woff2')`.
+
+Public asset URLs returned by `source()` are relative to Storybook's preview
+document rather than the domain root. A static build copies `assets/` beside
+`iframe.html`, so `./assets/icons/arrow.svg` resolves to
+`/assets/icons/arrow.svg` when Storybook is served from a domain root and to
+`/project/assets/icons/arrow.svg` when the same build is hosted beneath
+`/project/`. One build therefore works from a domain root, from project Pages
+URLs such as `https://example.gitlab.io/project/`, from custom domains, and
+from arbitrary nested deployment paths, with no hosting-provider configuration.
+Asset lookup keys stay root-relative; only the public URL is relative.
 
 For Sass and CSS, reference the same project files with `/assets/...` URLs
 rather than the Twig-only `@assets` alias:

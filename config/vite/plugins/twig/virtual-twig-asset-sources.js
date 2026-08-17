@@ -32,9 +32,13 @@ const ASSET_SOURCE_RUNTIME_URL = new URL(
 const ASSET_SOURCE_RUNTIME_PATH = fileURLToPath(ASSET_SOURCE_RUNTIME_URL);
 const GENERATED_ASSET_ALIASES = new Set(['icons.svg']);
 const GENERATED_ASSET_ROOTS = ['/dist/assets'];
+// Keys stay Vite root-relative because the runtime looks asset sources up by
+// root-relative key. The values are the public URLs Storybook fetches, and they
+// stay relative to the preview document so a static build works at a domain
+// root and under any deployment subpath.
 const PUBLIC_ASSET_ROOTS = new Map([
-  ['/assets', '/assets'],
-  ['/dist/assets', '/assets'],
+  ['/assets', './assets'],
+  ['/dist/assets', './assets'],
 ]);
 
 /**
@@ -93,6 +97,9 @@ export function assetSourceGlobPatterns(env) {
 
 /**
  * Return a public URL base for asset roots served by Storybook staticDirs.
+ *
+ * The base is relative to Storybook's preview document rather than the domain
+ * root, so generated fetch URLs resolve under any deployment subpath.
  *
  * @param {string} root - Vite root-relative asset source root.
  * @returns {string} Public URL base, or an empty string for non-public roots.
