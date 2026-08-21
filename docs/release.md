@@ -99,6 +99,8 @@ automate:
 
 - `drupal-sdc-src-components` builds Drupal SDC component sources and verifies mirrored root `components/` output while rejecting stale `dist/components/` component files.
 - `no-platform-src-components` verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
+- `asset-rebase-disabled` verifies that `assets.rebase: false` keeps Vite's
+  emitted asset copies and leaves repairable CSS URLs unchanged.
 - `wordpress-src-components` verifies the WordPress adapter keeps global assets under `dist/global`, component output under `dist/components`, avoids root `components/` mirroring, and rejects Drupal globals in emitted JavaScript.
 - `legacy-components` verifies that projects using the legacy `components/`
   source layout continue to build into `dist/components/`.

@@ -118,12 +118,14 @@ then `src/assets/` — which is the order Storybook serves them at `/assets`. Th
 Vite build and `emulsify-audit` read that same list, so a `url('/assets/...')`
 reference resolves identically in stories, in built CSS, and in the audit.
 
-Asset roots are never copied into the output directory. Built CSS references
-them where they live, so `dist/` holds compiled and generated output only — the
+With `assets.rebase` enabled (the default), Vite-emitted copies of project asset
+root files are removed from the output directory. Built CSS references them
+where they live, so `dist/` holds compiled and generated output only — the
 `dist/assets/icons.svg` sprite being the generated case.
 
-`assets.rebase` (default `true`) controls whether the build repairs CSS asset
-URLs it could not otherwise resolve. See
+Setting `assets.rebase` to `false` disables the complete pipeline: unresolved
+CSS asset URLs are not repaired, emitted CSS is not relativized by Emulsify,
+and Vite-emitted project asset copies remain under `dist/assets/`. See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable).
 
 ## Story Roots

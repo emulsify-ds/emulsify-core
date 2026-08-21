@@ -164,6 +164,23 @@ const releaseFixtures = [
     ],
   },
   {
+    name: 'asset-rebase-disabled',
+    type: 'vite',
+    assert: [
+      'dist/assets/images/canonical.svg',
+      'dist/components/card/css/card.css',
+    ],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          'url(/assets/images/canonical.svg)',
+          'url(../assets/images/canonical.svg)',
+        ],
+      },
+    ],
+  },
+  {
     name: 'wordpress-src-components',
     type: 'vite',
     assert: [

@@ -261,10 +261,11 @@ resolves the URL against the project's asset roots and rewrites the reference
 relative to the emitted CSS file, so the same authored Sass works in Storybook
 and in built platform CSS.
 
-The asset is not copied into `dist/`. Built CSS reaches the theme's own
-`assets/` directory by climbing out of the output directory, which keeps
-`dist/` limited to compiled and generated output. If you deploy `dist/`
-without the rest of the theme, that assumption no longer holds.
+By default, the asset is not copied into `dist/`. Built CSS reaches the theme's
+own `assets/` directory by climbing out of the output directory, which keeps
+`dist/` limited to compiled and generated output. Projects that deploy `dist/`
+without the rest of the theme can set `assets.rebase` to `false`; that keeps
+Vite's asset copies and disables Emulsify's URL repair and relativization.
 
 Avoid hard-coded platform or deployment paths in Sass. They may work in a single
 runtime, but they bypass Storybook's static asset mount and make components

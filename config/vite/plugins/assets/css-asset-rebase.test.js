@@ -393,20 +393,46 @@ describe('cssAssetRebasePlugin', () => {
     ).toBeNull();
   });
 
-  it('can be switched off with assets.rebase', () => {
+  it('switches off the full pipeline with assets.rebase', () => {
     const env = setup({ assetRebase: false });
-    const plugin = make(env);
+    const rebase = make(env);
+    const relativizer = cssAssetUrlRelativizer({
+      assetsRoot: 'assets',
+      env,
+      publishedAssetSources,
+    });
+    const input = [
+      '.relative{background:url(../assets/images/x.svg)}',
+      '.canonical{background:url("/assets/images/x.svg")}',
+    ].join('');
+    const copiedAsset = viteCopyOf('assets/images/x.svg');
+    const bundle = {
+      'assets/images/x.svg': copiedAsset,
+      'components/card/css/card.css': {
+        type: 'asset',
+        source: input,
+      },
+    };
+    const config = { build: { outDir: join(projectDir, 'dist') } };
 
-    plugin.configResolved({ build: {} });
-    plugin.buildStart();
+    rebase.configResolved(config);
+    relativizer.configResolved(config);
+    rebase.buildStart();
 
     expect(
       transform(
-        plugin,
-        '.a{background:url(../../assets/images/x.svg)}',
+        rebase,
+        input,
         join(projectDir, 'src/components/card/card.scss'),
       ),
     ).toBeNull();
+
+    rebase.generateBundle({}, bundle);
+    relativizer.generateBundle({}, bundle);
+
+    expect(bundle['assets/images/x.svg']).toBe(copiedAsset);
+    expect(bundle['components/card/css/card.css'].source).toBe(input);
+    expect(publishedAssetSources.size).toBe(0);
   });
 
   it('reads assets.rebase and assets.roots off project.emulsify.json', () => {

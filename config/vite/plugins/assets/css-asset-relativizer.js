@@ -53,6 +53,7 @@ export function cssAssetUrlRelativizer({
   env = {},
   publishedAssetSources = new Map(),
 } = {}) {
+  const enabled = env?.projectStructure?.assetRebase !== false;
   const projectDir = env?.projectDir || process.cwd();
   const mirrorComponentOutput = Boolean(
     env?.projectStructure?.mirrorComponentOutput,
@@ -98,6 +99,8 @@ export function cssAssetUrlRelativizer({
     },
 
     generateBundle(_, bundle) {
+      if (!enabled) return;
+
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'asset') continue;
         if (!fileName.endsWith('.css')) continue;

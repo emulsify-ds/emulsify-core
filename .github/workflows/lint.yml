@@ -67,6 +67,7 @@ jobs:
         fixture:
           - drupal-sdc-src-components
           - no-platform-src-components
+          - asset-rebase-disabled
           - wordpress-src-components
           - legacy-components
           - structure-implementations

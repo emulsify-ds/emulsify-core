@@ -179,7 +179,7 @@ export function cssAssetRebasePlugin({
 
     // Runs before the relativizer, which consumes the map this fills in.
     generateBundle(_, bundle) {
-      if (!ownsOutput) return;
+      if (!enabled || !ownsOutput) return;
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'asset' || fileName.endsWith('.css')) continue;

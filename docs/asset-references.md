@@ -119,7 +119,10 @@ To turn the repair off, set `assets.rebase` to `false`:
 ```
 
 `EMULSIFY_ASSET_REBASE=0` does the same for a single build, which is the quicker
-way to check whether the repair is involved in something unexpected.
+way to check whether the repair is involved in something unexpected. This is
+an end-to-end opt-out: Emulsify skips unresolved-URL repair, keeps Vite-emitted
+project-asset copies in `dist/assets/`, and leaves Vite's emitted CSS URLs
+untouched by the final relativizer. URLs Vite cannot resolve remain as authored.
 
 Set `EMULSIFY_STRICT_ASSETS=1` to fail a build on any CSS asset URL that cannot
 be resolved, or `=2` to also fail on URLs the build had to repair.
