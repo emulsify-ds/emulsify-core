@@ -129,11 +129,33 @@ describe('strict asset mode', () => {
     [{ EMULSIFY_STRICT_ASSETS: 'false' }, STRICTNESS.off],
     [{ EMULSIFY_STRICT_ASSETS: '1' }, STRICTNESS.unresolved],
     [{ EMULSIFY_STRICT_ASSETS: '2' }, STRICTNESS.all],
+    [
+      {
+        EMULSIFY_STRICT_ASSETS: '',
+        npm_config_strict_assets: '2',
+      },
+      STRICTNESS.all,
+    ],
     // npm claims some flag names for itself, so the bridge verbosity.js
     // documents is honored here too.
     [{ npm_config_strict_assets: 'true' }, STRICTNESS.unresolved],
   ])('resolves %j to %s', (env, expected) => {
     expect(resolveAssetStrictness(env)).toBe(expected);
+  });
+
+  it('warns when strict asset mode receives an unrecognized value', () => {
+    const warn = jest.fn();
+
+    expect(resolveAssetStrictness({ EMULSIFY_STRICT_ASSETS: '3' }, warn)).toBe(
+      STRICTNESS.unresolved,
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('EMULSIFY_STRICT_ASSETS'),
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"3"'));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('0, false, off, no, 1, true, 2, all'),
+    );
   });
 
   it.each([
@@ -156,12 +178,17 @@ describe('strict asset mode', () => {
       strictness: STRICTNESS.unresolved,
     });
 
-    collector.recordUnresolvedAsset({ url: './missing.svg' });
+    collector.recordUnresolvedAsset({
+      url: './missing.svg',
+      importer: '/project/src/components/card/card.scss',
+    });
 
-    expect(() => plugin.closeBundle()).toThrow(/did not resolve/);
+    expect(() => plugin.closeBundle()).toThrow(
+      /CSS asset URL did not resolve:[\s\S]*\.\/missing\.svg \(imported by src\/components\/card\/card\.scss\)/,
+    );
   });
 
-  it('does not fail on a repaired URL unless strictness is raised', () => {
+  it('names repaired URLs without claiming they failed to resolve', () => {
     const repaired = () => {
       const harness = createOneShotHarness({
         strictness: STRICTNESS.unresolved,
@@ -179,9 +206,32 @@ describe('strict asset mode', () => {
     strict.collector.recordAssetRebase({
       url: 'assets/x.svg',
       rewritten: '/assets/x.svg',
+      importer: '/project/src/components/card/card.scss',
+    });
+    strict.collector.recordAssetRebase({
+      url: '../assets/y.svg',
+      rewritten: '/assets/y.svg',
+      importer: '/project/src/components/teaser/teaser.scss',
     });
 
-    expect(() => strict.plugin.closeBundle()).toThrow(/did not resolve/);
+    let failure;
+    try {
+      strict.plugin.closeBundle();
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toContain(
+      '2 CSS asset URLs were repaired during the build',
+    );
+    expect(failure.message).toContain(
+      'assets/x.svg -> /assets/x.svg (imported by src/components/card/card.scss)',
+    );
+    expect(failure.message).toContain(
+      '../assets/y.svg -> /assets/y.svg (imported by src/components/teaser/teaser.scss)',
+    );
+    expect(failure.message).not.toContain('did not resolve');
   });
 
   it('never fails a watch build', () => {

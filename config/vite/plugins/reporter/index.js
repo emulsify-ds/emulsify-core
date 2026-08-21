@@ -44,7 +44,13 @@ import {
   renderRebuild,
   renderSummary,
 } from './render.js';
-import { createStyler, supportsColor, supportsUnicode } from './format.js';
+import {
+  createStyler,
+  displayPath,
+  pluralize,
+  supportsColor,
+  supportsUnicode,
+} from './format.js';
 import {
   buildInputFileRows,
   buildInputRows,
@@ -97,6 +103,84 @@ export function countEntries(input) {
 }
 
 /**
+ * Render one strict-mode asset failure with the stylesheet that imported it.
+ *
+ * @param {{url: string, rewritten?: string, importer?: string}} entry - Asset diagnostic.
+ * @param {string} [projectDir] - Project root used to shorten the importer.
+ * @returns {string} One actionable failure line.
+ */
+const strictAssetFailureLine = (entry, projectDir) => {
+  const rewrite = entry.rewritten ? ` -> ${entry.rewritten}` : '';
+  return `  ${entry.url}${rewrite} (imported by ${displayPath(entry.importer, projectDir)})`;
+};
+
+/**
+ * Explain every CSS asset URL that strict mode is rejecting.
+ *
+ * Level 1 includes only URLs that remained unresolved. Level 2 also includes
+ * URLs repaired by the build and ambiguous asset-root matches; keeping those
+ * in separate sections avoids describing a successful repair as unresolved.
+ *
+ * @param {{unresolvedAssets?: object[], assetRebases?: object[]}} snapshot - Diagnostics snapshot.
+ * @param {string} strictness - One of {@link STRICTNESS}.
+ * @param {string} [projectDir] - Project root used to shorten importers.
+ * @param {Array<{where?: string, url?: string}>} [assetRows] - Resolved source locations for notices without an importer.
+ * @returns {string} Complete build failure message.
+ */
+const strictAssetFailureMessage = (
+  snapshot,
+  strictness,
+  projectDir,
+  assetRows = [],
+) => {
+  const unresolved = snapshot.unresolvedAssets || [];
+  const rebases =
+    strictness === STRICTNESS.all ? snapshot.assetRebases || [] : [];
+  const repaired = rebases.filter((entry) => entry.status === 'rebased');
+  const ambiguous = rebases.filter((entry) => entry.status !== 'rebased');
+  const lines = ['Emulsify: strict CSS asset checks failed.'];
+
+  if (unresolved.length) {
+    const unresolvedLines = unresolved.flatMap((entry) => {
+      if (entry.importer) return [strictAssetFailureLine(entry, projectDir)];
+
+      const sourceRows = assetRows.filter(
+        (row) => row.url === entry.url && row.where && row.where !== '—',
+      );
+      if (!sourceRows.length) {
+        return [strictAssetFailureLine(entry, projectDir)];
+      }
+
+      return sourceRows.map((row) =>
+        strictAssetFailureLine({ ...entry, importer: row.where }, projectDir),
+      );
+    });
+
+    lines.push(
+      `${pluralize(unresolved.length, 'CSS asset URL')} did not resolve:`,
+      ...unresolvedLines,
+    );
+  }
+
+  if (repaired.length) {
+    lines.push(
+      `${pluralize(repaired.length, 'CSS asset URL')} ${repaired.length === 1 ? 'was' : 'were'} repaired during the build:`,
+      ...repaired.map((entry) => strictAssetFailureLine(entry, projectDir)),
+    );
+  }
+
+  if (ambiguous.length) {
+    lines.push(
+      `${pluralize(ambiguous.length, 'CSS asset URL')} matched multiple asset roots:`,
+      ...ambiguous.map((entry) => strictAssetFailureLine(entry, projectDir)),
+    );
+  }
+
+  lines.push('Set EMULSIFY_STRICT_ASSETS=0 to report without failing.');
+  return lines.join('\n');
+};
+
+/**
  * Create the Emulsify develop reporter plugin.
  *
  * @param {{
@@ -139,7 +223,7 @@ export function developReporterPlugin({
   let watching = false;
   let oneShot = false;
   let oneShotPrinted = false;
-  let strictFailures = 0;
+  let oneShotAssetRows = [];
   let outDir = 'dist';
   let inputRows = [];
   let inputFiles = [];
@@ -322,8 +406,6 @@ export function developReporterPlugin({
     oneShotPrinted = true;
 
     const snapshot = diagnostics.snapshot();
-    strictFailures = countStrictAssetFailures(snapshot, strictLevel);
-
     const rebases = snapshot.assetRebases || [];
     if (!snapshot.unresolvedAssets.length && !rebases.length) return;
 
@@ -332,12 +414,13 @@ export function developReporterPlugin({
     const resolver = snapshot.unresolvedAssets.length
       ? createAssetResolver(env)
       : undefined;
+    oneShotAssetRows = resolver
+      ? buildAssetRows(snapshot.unresolvedAssets, resolver)
+      : [];
 
     emit(
       renderAssetSummary({
-        assetRows: resolver
-          ? buildAssetRows(snapshot.unresolvedAssets, resolver)
-          : [],
+        assetRows: oneShotAssetRows,
         rebases,
         styler,
       }),
@@ -500,6 +583,8 @@ export function developReporterPlugin({
       // own asset table rather than in the middle of it.
       reportOneShot();
 
+      const snapshot = diagnostics.snapshot();
+      const strictFailures = countStrictAssetFailures(snapshot, strictLevel);
       if (!oneShot || strictLevel === STRICTNESS.off || !strictFailures) return;
 
       // Not `process.exitCode`: `storybook build` ends with `process.exit(0)`
@@ -508,8 +593,12 @@ export function developReporterPlugin({
       // mirrorComponentsToRoot's writeBundle, so a strict failure can never
       // leave a half-mirrored tree behind.
       const error = new Error(
-        `Emulsify: ${strictFailures} CSS asset URL(s) did not resolve. ` +
-          'Unset EMULSIFY_STRICT_ASSETS to report without failing.',
+        strictAssetFailureMessage(
+          snapshot,
+          strictLevel,
+          env.projectDir,
+          oneShotAssetRows,
+        ),
       );
       error.stack = error.message;
       throw error;

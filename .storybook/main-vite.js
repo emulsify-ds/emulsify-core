@@ -128,7 +128,7 @@ function makeTwigVirtualModuleOptimizerPlugin() {
  * @returns {Function} Storybook `viteFinal` callback.
  */
 export function createViteFinal(resolvedStorybookEnv) {
-  return async function viteFinal(config) {
+  return async function viteFinal(config, { configType } = {}) {
     const { createLogger, mergeConfig } = await import('vite');
     const env = resolvedStorybookEnv;
     const storybookBuildConfig = config?.build || {};
@@ -137,9 +137,12 @@ export function createViteFinal(resolvedStorybookEnv) {
     // has historically consumed that branch, while `mode` still reflects
     // whether Storybook is running in development or production.
     const mode = config?.mode || 'development';
+    const isStorybookBuild = configType
+      ? configType === 'PRODUCTION'
+      : mode === 'production';
     const baseViteConfig =
       typeof viteConfig === 'function'
-        ? await viteConfig({ command: 'serve', mode })
+        ? await viteConfig({ command: 'serve', mode, isStorybookBuild })
         : viteConfig;
     const existingDefine = (config && config.define) || {};
     const viteDefine = (baseViteConfig && baseViteConfig.define) || {};

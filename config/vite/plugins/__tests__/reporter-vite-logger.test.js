@@ -63,6 +63,14 @@ describe('unresolved asset parsing', () => {
     ).toEqual({ url: '../images/plus.png', importer: undefined });
   });
 
+  it('drops a fragment-stripped url masquerading as an importer', () => {
+    expect(
+      parseUnresolvedAsset(
+        notice('../images/plus.svg#icon', '../images/plus.svg'),
+      ),
+    ).toEqual({ url: '../images/plus.svg#icon', importer: undefined });
+  });
+
   it('tolerates ansi styling around the message', () => {
     const styled = `[33m${NOTICE.trim()}[39m`;
     expect(parseUnresolvedAsset(styled)?.url).toBe('../images/bg-lines.png');
@@ -84,6 +92,23 @@ describe('reporter logger', () => {
     logger.warnOnce(NOTICE);
 
     expect(base.warnOnce).not.toHaveBeenCalled();
+    expect(collector.snapshot().unresolvedAssets).toEqual([
+      {
+        url: '../images/bg-lines.png',
+        importer: 'src/components/base/base.scss',
+        count: 1,
+      },
+    ]);
+  });
+
+  it('captures unresolved notices without hiding raw verbose output', () => {
+    const collector = createDiagnosticsCollector();
+    const base = createBaseLogger();
+    const logger = createReporterLogger(collector, base, { verbose: true });
+
+    logger.warnOnce(NOTICE);
+
+    expect(base.warnOnce).toHaveBeenCalledWith(NOTICE, undefined);
     expect(collector.snapshot().unresolvedAssets).toEqual([
       {
         url: '../images/bg-lines.png',

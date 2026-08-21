@@ -48,7 +48,7 @@ import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
-export default defineConfig(async ({ command } = {}) => {
+async function createViteConfig({ command, isStorybookBuild = false } = {}) {
   /**
    * Environment details for this build (project paths, platform, flags).
    * @typedef {Object} EmulsifyEnv
@@ -82,9 +82,12 @@ export default defineConfig(async ({ command } = {}) => {
   const envWithSourceFileIndex = { ...env, sourceFileIndex, diagnostics };
 
   // `vite build` and `vite build --watch` both resolve `command: 'build'`.
-  // Storybook pins `serve` for both of its commands, so it keeps Vite's own
-  // logger and never has its notices swallowed by a reporter that will not run.
-  const captureViteNotices = !watching && command === 'build' && !isVerbose();
+  // Storybook pins `serve` for both of its commands, so its Vite adapter
+  // supplies the separate static-build signal. Raw verbose output still needs
+  // the wrapper: it passes the notice through while retaining a copy for
+  // strict asset mode.
+  const captureViteNotices =
+    !watching && (command === 'build' || isStorybookBuild);
 
   // Build the Rollup/Vite entry map: keys encode output paths, values source files.
   /** @type {Record<string, string>} */
@@ -108,7 +111,9 @@ export default defineConfig(async ({ command } = {}) => {
    *   extendConfig?: (base: import('vite').UserConfig, ctx: { env: EmulsifyEnv }) => import('vite').UserConfig
    * }}
    */
-  const { projectPlugins, extendConfig } = await loadProjectExtensions({ env });
+  const { projectPlugins, extendConfig } = await loadProjectExtensions({
+    env,
+  });
 
   // Assemble the base config before applying project extensions.
   /** @type {import('vite').UserConfig} */
@@ -272,4 +277,6 @@ export default defineConfig(async ({ command } = {}) => {
       : base;
 
   return patched;
-});
+}
+
+export default defineConfig(createViteConfig);

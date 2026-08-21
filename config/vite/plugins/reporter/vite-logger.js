@@ -236,7 +236,10 @@ export function parseUnresolvedAsset(message) {
     url,
     // Vite reports the URL as its own importer when the referencing stylesheet
     // is not known. Recording that adds nothing, so it is dropped.
-    importer: importer === url ? undefined : importer,
+    // Vite shadows the stylesheet id while resolving CSS URLs. The value after
+    // `referenced in` is therefore usually the URL itself; for fragments it is
+    // the same URL with the fragment removed. Neither identifies an importer.
+    importer: importer === url.split('#')[0] ? undefined : importer,
   };
 }
 
@@ -322,11 +325,13 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
     info: (message, options) => baseLogger.info(message, options),
 
     warn(message, options) {
-      if (!capture(message)) baseLogger.warn(message, options);
+      const captured = capture(message);
+      if (!captured || passRawThrough) baseLogger.warn(message, options);
     },
 
     warnOnce(message, options) {
-      if (!capture(message)) baseLogger.warnOnce(message, options);
+      const captured = capture(message);
+      if (!captured || passRawThrough) baseLogger.warnOnce(message, options);
     },
 
     error(message, options) {
