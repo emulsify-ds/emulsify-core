@@ -34,6 +34,11 @@
 import { isAbsolute, posix as pathPosix, relative, resolve } from 'path';
 
 import { toPosixPath } from '../../utils/paths.js';
+import {
+  CSS_URL_RE,
+  PUBLIC_ASSET_PREFIX,
+  splitUrlSuffix,
+} from './asset-url-rebase.js';
 import { isStorybookOutput } from './storybook-output.js';
 
 /**
@@ -103,8 +108,21 @@ export function cssAssetUrlRelativizer({
         // Length-changing rewrite: read the sourcemap warning in the file
         // header before pairing this plugin with CSS sourcemaps.
         chunk.source = chunk.source.replace(
-          /url\((['"]?)\/?assets\/([^)'"]+)\1\)/g,
-          (match, quote = '', rest) => {
+          CSS_URL_RE,
+          (match, inner, quoted) => {
+            const quote = quoted ? quoted[0] : '';
+            const value = quoted ? quoted.slice(1, -1) : String(inner).trim();
+            const { path: urlPath, suffix } = splitUrlSuffix(value);
+            const absolutePrefix = `/${PUBLIC_ASSET_PREFIX}/`;
+            const barePrefix = `${PUBLIC_ASSET_PREFIX}/`;
+            const rest = urlPath.startsWith(absolutePrefix)
+              ? urlPath.slice(absolutePrefix.length)
+              : urlPath.startsWith(barePrefix)
+                ? urlPath.slice(barePrefix.length)
+                : '';
+
+            if (!rest) return match;
+
             const published = pathPosix.join(assetsRoot, rest);
             // An asset the build kept in its output — the SVG sprite — is
             // reached inside the output directory. One left in the source tree
@@ -116,7 +134,7 @@ export function cssAssetUrlRelativizer({
             const target = publishedAssetSources.get(published) || inOutput;
             const rel = pathPosix.relative(fromDir, target);
 
-            return `url(${quote}${rel}${quote})`;
+            return `url(${quote}${rel}${suffix}${quote})`;
           },
         );
       }

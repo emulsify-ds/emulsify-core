@@ -6,6 +6,14 @@
   background-image: url('/assets/images/canonical.svg');
 }
 
+.asset-canonical-query {
+  background-image: url('/assets/images/canonical.svg?v=2');
+}
+
+.asset-canonical-fragment {
+  background-image: url('/assets/images/canonical.svg#icon');
+}
+
 .asset-bare {
   background-image: url('assets/images/bare.svg');
 }

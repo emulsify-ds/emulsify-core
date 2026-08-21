@@ -182,6 +182,63 @@ describe('cssAssetUrlRelativizer', () => {
     ).toBe(`.a{background:url(${open}../../../assets/x.svg${close})}`);
   });
 
+  it.each([
+    ['a query', '?v=2'],
+    ['a fragment', '#icon'],
+    ['a query and fragment', '?v=2#icon'],
+    ['a bare query marker', '?'],
+    ['a bare fragment marker', '#'],
+  ])('preserves %s after the source lookup', (_label, suffix) => {
+    expect(
+      sourceOf(
+        'components/card/card.css',
+        `.a{background:url('/assets/x.svg${suffix}')}`,
+      ),
+    ).toBe(`.a{background:url('../../../assets/x.svg${suffix}')}`);
+  });
+
+  it('accepts whitespace around a URL value', () => {
+    expect(
+      sourceOf(
+        'components/card/card.css',
+        `.a{background:url( ${QUOTE}/assets/x.svg${QUOTE} )}`,
+      ),
+    ).toBe(`.a{background:url(${QUOTE}../../../assets/x.svg${QUOTE})}`);
+  });
+
+  it('accepts a closing parenthesis inside a quoted URL', () => {
+    expect(
+      sourceOf(
+        'components/card/card.css',
+        `.a{background:url(${DOUBLE_QUOTE}/assets/x).svg?v=2${DOUBLE_QUOTE})}`,
+        {
+          publishedAssetSources: new Map([['assets/x).svg', 'assets/x).svg']]),
+        },
+      ),
+    ).toBe(
+      `.a{background:url(${DOUBLE_QUOTE}../../../assets/x).svg?v=2${DOUBLE_QUOTE})}`,
+    );
+  });
+
+  it('never points published assets into the output directory', () => {
+    const output = sourceOf(
+      'components/card/card.css',
+      [
+        `.a{background:url(${QUOTE}/assets/x.svg?v=2${QUOTE})}`,
+        `.b{background:url(${QUOTE}/assets/x.svg#icon${QUOTE})}`,
+      ].join(''),
+      {
+        build: { outDir: '/p/release-output' },
+        env: {
+          projectDir: '/p',
+          projectStructure: { mirrorComponentOutput: true },
+        },
+      },
+    );
+
+    expect(output).not.toContain('release-output/');
+  });
+
   it('leaves mismatched quotes alone', () => {
     // The pattern backreferences the opening quote, so a malformed URL is not
     // silently "repaired" into something different.

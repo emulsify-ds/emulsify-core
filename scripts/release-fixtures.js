@@ -52,9 +52,11 @@ const QUOTE = String.fromCharCode(39);
  *
  * Each fixture authors the same three URLs — canonical, bare, and a
  * deliberately wrong-depth relative one — and the build must converge all three
- * on the depth that stylesheet actually needs. These rejects are anchored on
- * `url(` and repeated per quote style, so a correct deeper path can never
- * satisfy them and minifier quoting cannot make them vacuous.
+ * on the depth that stylesheet actually needs. The URL-prefix rejects are
+ * anchored on `url(` and repeated per quote style, so a correct deeper path can
+ * never satisfy them and minifier quoting cannot make them vacuous. The
+ * `dist/assets/` sentinel rejects a dead output path at any depth or quote
+ * style, including URLs with query and fragment suffixes.
  *
  * @param {string} pattern - Emitted stylesheet to check.
  * @returns {{pattern: string, strings: string[]}} Reject rule.
@@ -71,6 +73,7 @@ const rejectWrongAssetUrls = (pattern) => ({
     'url(assets/',
     'url("assets/',
     `url(${QUOTE}assets/`,
+    'dist/assets/',
   ],
 });
 
@@ -104,6 +107,8 @@ const releaseFixtures = [
         pattern: 'components/card/card.css',
         strings: [
           '../../assets/images/canonical.svg',
+          '../../assets/images/canonical.svg?v=2',
+          '../../assets/images/canonical.svg#icon',
           '../../assets/images/bare.svg',
           '../../assets/images/relative.svg',
         ],
