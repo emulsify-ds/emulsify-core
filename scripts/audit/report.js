@@ -296,7 +296,7 @@ function normalizeFixes(fixes, projectDir) {
     })),
     skipped: fixes.skipped.map(({ finding, reason }) => ({
       ...locate(finding),
-      reason,
+      reason: normalizeReportText(reason, projectDir),
     })),
   };
 }
@@ -305,13 +305,13 @@ function normalizeFixes(fixes, projectDir) {
  * Create a structured machine-readable CLI or audit failure.
  *
  * @param {*} error - Failure value.
- * @param {{code?: string, projectDir?: string}} [options={}] - Error options.
+ * @param {{code?: string, projectDir?: string, fixes?: object}} [options={}] - Error options.
  * @returns {object} JSON error document.
  */
 export function createAuditJsonErrorReport(error, options = {}) {
   const message = error?.message || error;
 
-  return {
+  const document = {
     schemaVersion: AUDIT_REPORT_SCHEMA_VERSION,
     tool: createToolIdentity(),
     error: {
@@ -319,6 +319,12 @@ export function createAuditJsonErrorReport(error, options = {}) {
       message: normalizeReportText(message, options.projectDir || ''),
     },
   };
+
+  if (options.fixes) {
+    document.fixes = normalizeFixes(options.fixes, options.projectDir || '');
+  }
+
+  return document;
 }
 
 /**
@@ -337,7 +343,7 @@ export function formatAuditJsonReport(result, options = {}) {
  * Format a CLI or audit failure as machine-readable JSON.
  *
  * @param {*} error - Failure value.
- * @param {{code?: string, projectDir?: string}} [options={}] - Error options.
+ * @param {{code?: string, projectDir?: string, fixes?: object}} [options={}] - Error options.
  * @returns {string} JSON error document.
  */
 export function formatAuditJsonErrorReport(error, options = {}) {

@@ -44,7 +44,7 @@ describe('auditCssAssetReferences', () => {
     expect(findings.filter(({ severity }) => severity !== 'info')).toEqual([]);
     expect(findings.every(({ fix }) => fix === undefined)).toBe(true);
 
-    const result = applyAuditFixes(findings);
+    const result = applyAuditFixes(findings, { projectDir });
     expect(result.applied).toEqual([]);
     expect(readFileSync(styleFile, 'utf8')).toBe(before);
   };
@@ -212,7 +212,7 @@ describe('auditCssAssetReferences', () => {
       replacement: '/assets/spinner.gif',
     });
 
-    const result = applyAuditFixes([finding]);
+    const result = applyAuditFixes([finding], { projectDir });
     expect(result.applied).toHaveLength(1);
     expect(readFileSync(styleFile, 'utf8')).toBe(
       '.card { background-image: url("/assets/spinner.gif"); }',

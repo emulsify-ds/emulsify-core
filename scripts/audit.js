@@ -16,7 +16,9 @@ import {
   formatAuditJsonErrorReport,
   formatAuditJsonReport,
   formatAuditReport,
+  summarizeFindings,
 } from './audit/report.js';
+import { displayPath } from './audit/lib/findings.js';
 
 export { auditProject, runAudits } from './audit/index.js';
 export {
@@ -193,7 +195,10 @@ export function runCli(argv = process.argv.slice(2)) {
 
     if (options.fix) {
       try {
-        result.fixes = applyAuditFixes(findings, { dryRun: options.dryRun });
+        result.fixes = applyAuditFixes(findings, {
+          dryRun: options.dryRun,
+          projectDir: result.projectDir,
+        });
       } catch (error) {
         return reportFixFailure(error, options);
       }
@@ -202,7 +207,9 @@ export function runCli(argv = process.argv.slice(2)) {
       // run removed the findings it fixed from the source, so the threshold
       // must be judged on what is left.
       if (!options.dryRun) {
-        findings = remainingFindings(findings, result.fixes.applied);
+        result.findings = remainingFindings(findings, result.fixes.applied);
+        result.summary = summarizeFindings(result.findings);
+        findings = result.findings;
       }
     }
 
@@ -237,15 +244,43 @@ export function runCli(argv = process.argv.slice(2)) {
  * @returns {number} Exit code.
  */
 function reportFixFailure(error, options) {
+  const projectDir = resolve(options.projectDir);
+
   if (options.json) {
     console.log(
       formatAuditJsonErrorReport(error, {
         code: 'fix-failed',
-        projectDir: resolve(options.projectDir),
+        projectDir,
+        fixes: error?.fixes,
       }),
     );
   } else {
-    console.error(`Audit fix failed: ${error.message || error}`);
+    const lines = [`Audit fix failed: ${error.message || error}`];
+    const applied = error?.fixes?.applied || [];
+    const rewrittenFiles = Array.from(
+      new Set(applied.map(({ finding }) => finding.filePath)),
+    ).sort();
+
+    if (rewrittenFiles.length) {
+      const verb = error?.fixes?.dryRun ? 'Would apply' : 'Applied';
+      lines.push(
+        `${verb} ${applied.length} fix(es) across ${rewrittenFiles.length} file(s) before the failure:`,
+        ...rewrittenFiles.map(
+          (filePath) => `  ${displayPath(projectDir, filePath)}`,
+        ),
+      );
+    }
+
+    const skipped = error?.fixes?.skipped || [];
+    if (skipped.length) {
+      lines.push(`Skipped ${skipped.length} fixable finding(s):`);
+      for (const { finding, reason } of skipped) {
+        const where = `${displayPath(projectDir, finding.filePath)}:${finding.line}`;
+        lines.push(`  ${where}  ${reason}`);
+      }
+    }
+
+    console.error(lines.join('\n'));
   }
 
   return cliFailureExitCode;
