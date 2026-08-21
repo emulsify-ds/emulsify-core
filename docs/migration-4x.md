@@ -23,6 +23,7 @@ compatibility impact.
 | Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                                    | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
 | Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `none`, `wordpress`, and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | WordPress/Timber projects can use `wordpress`; other non-Drupal projects can use `none` unless they need a dedicated adapter.    |
 | Extension configuration | Vite extension files live under `config/emulsify-core/vite/plugins.*`.                                                      | Storybook overrides still live under `config/emulsify-core/storybook/...`; a11y config still lives at `config/emulsify-core/a11y.config.js`.          | Projects with old Webpack override files should replace them with Vite extensions.                                               |
+| CSS asset URLs          | Canonical, bare, and wrong-depth project-asset URLs now resolve to the correct emitted depth.                               | `dist/` remains self-contained by default, with referenced project assets under `dist/assets/`.                                                       | No consumer action is required; lean output is an explicit opt-in.                                                               |
 
 ## Known Limitations
 
@@ -37,6 +38,8 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 - Twig and React stories can coexist in the same Storybook instance.
 - `project.emulsify.json` is the source of truth for platform and structure configuration.
 - Platform-specific behavior is controlled by platform adapters instead of being assumed globally.
+- Project-asset URLs that Vite cannot resolve are repaired when exactly one
+  configured asset root matches, including bare and wrong-depth forms.
 
 ## What Did Not Change
 
@@ -45,6 +48,8 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 - Drupal SDC output mirroring remains supported when the Drupal adapter and `project.singleDirectoryComponents` enable it.
 - Twig component authoring remains supported.
 - Component metadata and static component assets are still copied beside component output.
+- Referenced project assets still keep `dist/` deployable as a self-contained
+  unit by default.
 
 ## What May Require Changes
 
@@ -261,11 +266,13 @@ resolves the URL against the project's asset roots and rewrites the reference
 relative to the emitted CSS file, so the same authored Sass works in Storybook
 and in built platform CSS.
 
-By default, the asset is not copied into `dist/`. Built CSS reaches the theme's
-own `assets/` directory by climbing out of the output directory, which keeps
-`dist/` limited to compiled and generated output. Projects that deploy `dist/`
-without the rest of the theme can set `assets.rebase` to `false`; that keeps
-Vite's asset copies and disables Emulsify's URL repair and relativization.
+By default, referenced project assets are kept or emitted under `dist/assets/`,
+and built CSS points at those copies. The output therefore remains deployable
+as a self-contained unit while canonical, bare, and wrong-depth URL forms gain
+the repair described below. Projects that always deploy the complete theme can
+set `assets.selfContainedOutput` to `false` for leaner output whose CSS reaches
+the source asset roots instead. `assets.rebase: false` is the separate,
+end-to-end escape hatch that disables repair and final relativization.
 
 Avoid hard-coded platform or deployment paths in Sass. They may work in a single
 runtime, but they bypass Storybook's static asset mount and make components
@@ -287,7 +294,7 @@ published `assets/` prefix and matches exactly one file under one asset root, it
 is rewritten to `/assets/...` and the asset is emitted. Each repair is reported,
 and `emulsify-audit --fix` writes the canonical form back into the source. See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable) for
-the depth table and the `assets.rebase` opt-out.
+the depth table, output-mode control, and `assets.rebase` opt-out.
 
 A URL the repair cannot place — a typo, or a filename that exists under two
 asset roots — is still left unchanged and reported. Set
@@ -305,3 +312,7 @@ including inline SVGs through `source('@assets/...')`.
 5. Run `npx --no-install emulsify-audit` and update actively maintained Twig stories to use `renderTwig()`.
 6. Keep Drupal SDC settings in `project.singleDirectoryComponents` when needed.
 7. Add React stories directly where useful; no Twig refactor is required.
+
+No migration step is required for CSS asset resolution: the default output
+remains self-contained and the newly handled URL forms were unresolved in
+4.3.2.

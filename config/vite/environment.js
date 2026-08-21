@@ -10,6 +10,8 @@
  *  - `structureOverrides`: true when safe `variant.structureImplementations` exist.
  *  - `structureRoots`: array of directories from `variant.structureImplementations`.
  *  - `assetRoots`: array of directories from safe `assets.roots` config.
+ *  - `assetRebase`: whether unresolved CSS asset URLs are repaired.
+ *  - `selfContainedOutput`: whether project assets remain under `dist/assets`.
  *  - `platformAdapter`: active adapter for platform-specific behavior.
  */
 
@@ -28,6 +30,8 @@ import { resolveProjectConfig } from './project-config.js';
  *   structureRoots: string[],
  *   structureImplementations: Array<{name: string, directory: string}>,
  *   assetRoots: string[],
+ *   assetRebase: boolean,
+ *   selfContainedOutput: boolean,
  *   componentRoots: string[],
  *   globalRoots: string[],
  *   namespaceRoots: Record<string, string>,

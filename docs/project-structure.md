@@ -102,7 +102,9 @@ asset roots use `assets.roots` and are resolved relative to the project root:
     "machineName": "example"
   },
   "assets": {
-    "roots": ["./design-system/assets", "./prototype-assets"]
+    "roots": ["./design-system/assets", "./prototype-assets"],
+    "rebase": true,
+    "selfContainedOutput": true
   }
 }
 ```
@@ -118,14 +120,22 @@ then `src/assets/` — which is the order Storybook serves them at `/assets`. Th
 Vite build and `emulsify-audit` read that same list, so a `url('/assets/...')`
 reference resolves identically in stories, in built CSS, and in the audit.
 
-With `assets.rebase` enabled (the default), Vite-emitted copies of project asset
-root files are removed from the output directory. Built CSS references them
-where they live, so `dist/` holds compiled and generated output only — the
-`dist/assets/icons.svg` sprite being the generated case.
+The asset controls are independent:
+
+| Setting                      | Default | One-build environment override   | Effect                                                                                                                                           |
+| ---------------------------- | ------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `assets.rebase`              | `true`  | `EMULSIFY_ASSET_REBASE`          | Repairs otherwise unresolved asset URLs and calculates the correct emitted depth.                                                                |
+| `assets.selfContainedOutput` | `true`  | `EMULSIFY_SELF_CONTAINED_OUTPUT` | Keeps or emits project assets under `dist/assets/`, so the output directory remains deployable by itself. Set `false` for lean source-tree URLs. |
+
+Each override accepts `0`, `false`, `off`, or `no` to select false. With
+`selfContainedOutput: false`, Vite-emitted project-asset copies are removed and
+CSS points at each configured source root's real project location. This is
+appropriate only when the complete theme directory is deployed.
 
 Setting `assets.rebase` to `false` disables the complete pipeline: unresolved
 CSS asset URLs are not repaired, emitted CSS is not relativized by Emulsify,
-and Vite-emitted project asset copies remain under `dist/assets/`. See
+and Vite-emitted project asset copies remain under `dist/assets/` regardless of
+`selfContainedOutput`. See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable).
 
 ## Story Roots

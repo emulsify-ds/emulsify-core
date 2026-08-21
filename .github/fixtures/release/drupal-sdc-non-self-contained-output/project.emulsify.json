@@ -1,0 +1,11 @@
+{
+  "project": {
+    "platform": "drupal",
+    "name": "drupal-sdc-non-self-contained-output",
+    "machineName": "drupal_sdc_non_self_contained_output",
+    "singleDirectoryComponents": true
+  },
+  "assets": {
+    "selfContainedOutput": false
+  }
+}

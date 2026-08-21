@@ -117,8 +117,11 @@ describe('virtual Twig asset source module plugin', () => {
     expect(generatedAssetSourceRoots(env)).toEqual(['/dist/assets']);
     expect(assetSourceGlobPatterns(env)).toEqual([
       '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
-      '/dist/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+      '/dist/assets/icons.svg',
     ]);
+    expect(source).toMatch(
+      /import\.meta\.glob\("\/dist\/assets\/icons\.svg", \{ eager: false, query: '\?raw', import: 'default' \}\)/,
+    );
     expect(source).toContain(
       'export const generatedAssetAliases = ["icons.svg"];',
     );
@@ -131,6 +134,62 @@ describe('virtual Twig asset source module plugin', () => {
     expect(source).toContain(
       '"/dist/assets/icons.svg": fetchAssetText("./assets/icons.svg")',
     );
+  });
+
+  it('does not recursively glob project asset copies in generated roots', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'assets/images'), { recursive: true });
+    mkdirSync(join(projectDir, 'dist/assets/images'), { recursive: true });
+    writeFileSync(
+      join(projectDir, 'assets/images/canonical.svg'),
+      '<svg></svg>',
+    );
+    writeFileSync(
+      join(projectDir, 'dist/assets/images/canonical.svg'),
+      '<svg></svg>',
+    );
+    writeFileSync(join(projectDir, 'dist/assets/icons.svg'), '<svg></svg>');
+    const env = { projectDir, projectStructure: {} };
+    const source = generateVirtualTwigAssetSourcesModule(env);
+    const globLines = source
+      .split('\n')
+      .filter((line) => line.includes('import.meta.glob'));
+
+    expect(assetSourceGlobPatterns(env)).toEqual([
+      '/assets/**/*.{svg,html,twig,css,js,json,txt,md}',
+      '/dist/assets/icons.svg',
+    ]);
+    expect(globLines).toHaveLength(2);
+    expect(globLines[0]).toContain(
+      '"/assets/**/*.{svg,html,twig,css,js,json,txt,md}"',
+    );
+    expect(globLines[1]).toContain('"/dist/assets/icons.svg"');
+    expect(globLines.join('\n')).not.toContain('/dist/assets/**/*');
+    expect(globLines.join('\n')).not.toContain(
+      '/dist/assets/images/canonical.svg',
+    );
+  });
+
+  it('omits raw asset globs from theme builds when generated assets exist', () => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'assets/images'), { recursive: true });
+    mkdirSync(join(projectDir, 'dist/assets/images'), { recursive: true });
+    writeFileSync(
+      join(projectDir, 'assets/images/canonical.svg'),
+      '<svg></svg>',
+    );
+    writeFileSync(
+      join(projectDir, 'dist/assets/images/canonical.svg'),
+      '<svg></svg>',
+    );
+    writeFileSync(join(projectDir, 'dist/assets/icons.svg'), '<svg></svg>');
+    const env = { projectDir, projectStructure: {} };
+    const plugin = virtualTwigAssetSourcesPlugin(env);
+    const resolvedId = plugin.resolveId(VIRTUAL_TWIG_ASSET_SOURCES_ID);
+
+    plugin.configResolved({ build: { assetsDir: 'assets' } });
+
+    expect(plugin.load(resolvedId)).not.toContain('import.meta.glob');
   });
 
   it('keeps the generated sprite alias available before dist assets exist', () => {

@@ -84,15 +84,25 @@ function generatedAssetRootPrefixes() {
 /**
  * Build Vite glob patterns from text asset roots.
  *
+ * Project roots stay recursive. Generated roots contain build output, so only
+ * the aliases Twig can resolve from those roots belong in the source map.
+ *
  * @param {{ projectDir?: string, projectStructure?: { assetRoots?: string[] } }} env - Emulsify environment.
  * @returns {string[]} Root-relative text asset glob patterns.
  */
 export function assetSourceGlobPatterns(env) {
   const extensions = Array.from(INLINE_ASSET_EXTS).join(',');
-
-  return [...assetSourceRoots(env), ...generatedAssetSourceRoots(env)].map(
+  const projectPatterns = assetSourceRoots(env).map(
     (root) => `${root === '/' ? '' : root}/**/*.{${extensions}}`,
   );
+  const generatedPatterns = generatedAssetSourceRoots(env).flatMap((root) =>
+    Array.from(
+      GENERATED_ASSET_ALIASES,
+      (alias) => `${root === '/' ? '' : root}/${alias}`,
+    ),
+  );
+
+  return unique([...projectPatterns, ...generatedPatterns]);
 }
 
 /**

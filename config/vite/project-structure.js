@@ -220,6 +220,7 @@ function normalizeAssetRoots(projectDir, assetRoots = []) {
  *   assetRoots?: string[],
  *   ignoredAssetRoots?: string[],
  *   assetRebase?: boolean,
+ *   selfContainedOutput?: boolean,
  *   platformAdapter?: object
  * }} [env] - Normalized project environment.
  * @returns {object} Project structure model.
@@ -247,6 +248,7 @@ export function resolveProjectStructure(env) {
     assetRoots: rawAssetRoots = [],
     ignoredAssetRoots = [],
     assetRebase = true,
+    selfContainedOutput = true,
     platformAdapter = {},
   } = resolvedEnv;
   const structureImplementations =
@@ -314,6 +316,7 @@ export function resolveProjectStructure(env) {
     globalRoots,
     assetRoots,
     assetRebase: assetRebase !== false,
+    selfContainedOutput: selfContainedOutput !== false,
     sourceRoots,
     ignoredAssetRoots: unique(ignoredAssetRoots),
     sourceRootRecords,

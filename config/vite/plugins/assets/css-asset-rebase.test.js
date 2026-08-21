@@ -238,8 +238,16 @@ describe('cssAssetRebasePlugin', () => {
 
   const make = (env) => cssAssetRebasePlugin({ env, publishedAssetSources });
 
-  const transform = (plugin, code, id) =>
-    plugin.transform.call({ addWatchFile: () => {} }, code, id);
+  const transform = (plugin, code, id, context = {}) =>
+    plugin.transform.call(
+      {
+        addWatchFile: jest.fn(),
+        emitFile: jest.fn(),
+        ...context,
+      },
+      code,
+      id,
+    );
 
   const viteCopyOf = (source) => ({
     type: 'asset',
@@ -247,7 +255,7 @@ describe('cssAssetRebasePlugin', () => {
   });
 
   it('rewrites a stylesheet URL and records where the file lives', () => {
-    const env = setup();
+    const env = setup({ selfContainedOutput: false });
     const plugin = make(env);
 
     plugin.configResolved({ build: {} });
@@ -270,10 +278,55 @@ describe('cssAssetRebasePlugin', () => {
     );
   });
 
+  it('emits each repaired asset once per self-contained build cycle', () => {
+    const env = setup();
+    const plugin = make(env);
+    const emitFile = jest.fn();
+    const addWatchFile = jest.fn();
+    const context = { emitFile, addWatchFile };
+    const importer = join(projectDir, 'src/components/card/card.scss');
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+
+    const result = transform(
+      plugin,
+      '.a{background:url(../../assets/images/x.svg?v=2)}',
+      importer,
+      context,
+    );
+    transform(
+      plugin,
+      '.b{background:url(/assets/images/x.svg#icon)}',
+      importer,
+      context,
+    );
+
+    expect(result.code).toBe('.a{background:url(/assets/images/x.svg?v=2)}');
+    expect(emitFile).toHaveBeenCalledTimes(1);
+    expect(emitFile).toHaveBeenCalledWith({
+      type: 'asset',
+      fileName: 'assets/images/x.svg',
+      source: Buffer.from('<svg/>'),
+    });
+    expect(addWatchFile).toHaveBeenCalledTimes(2);
+    expect(publishedAssetSources.size).toBe(0);
+
+    plugin.buildStart();
+    transform(
+      plugin,
+      '.c{background:url(/assets/images/x.svg)}',
+      importer,
+      context,
+    );
+
+    expect(emitFile).toHaveBeenCalledTimes(2);
+  });
+
   it('removes the copy Vite emitted of a project asset', () => {
     // dist/ is build output. The theme's assets/ is source and already
     // web-served, so shipping the same bytes twice is what this prevents.
-    const env = setup();
+    const env = setup({ selfContainedOutput: false });
     const plugin = make(env);
     const bundle = {
       'assets/images/x.svg': viteCopyOf('assets/images/x.svg'),
@@ -288,6 +341,23 @@ describe('cssAssetRebasePlugin', () => {
     expect(publishedAssetSources.get('assets/images/x.svg')).toBe(
       'assets/images/x.svg',
     );
+  });
+
+  it('keeps Vite asset copies in self-contained output', () => {
+    const env = setup();
+    const plugin = make(env);
+    const copiedAsset = viteCopyOf('assets/images/x.svg');
+    const bundle = {
+      'assets/images/x.svg': copiedAsset,
+      'components/card/css/card.css': { type: 'asset', source: '' },
+    };
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+    plugin.generateBundle({}, bundle);
+
+    expect(bundle['assets/images/x.svg']).toBe(copiedAsset);
+    expect(publishedAssetSources.size).toBe(0);
   });
 
   it('keeps generated output and compiled CSS in the bundle', () => {
@@ -357,7 +427,7 @@ describe('cssAssetRebasePlugin', () => {
   });
 
   it('drops a stale map between watch rebuilds', () => {
-    const env = setup();
+    const env = setup({ selfContainedOutput: false });
     const plugin = make(env);
 
     plugin.configResolved({ build: {} });
@@ -447,7 +517,10 @@ describe('cssAssetRebasePlugin', () => {
     );
     writeProjectConfig(projectDir, {
       project: { platform: 'none' },
-      assets: { roots: ['./design-system/assets'] },
+      assets: {
+        roots: ['./design-system/assets'],
+        selfContainedOutput: false,
+      },
     });
 
     const env = resolveProjectConfig(projectDir, {});
@@ -471,13 +544,52 @@ describe('cssAssetRebasePlugin', () => {
       'design-system/assets/brand/logo.svg',
     );
     expect(env.assetRebase).toBe(true);
+    expect(env.selfContainedOutput).toBe(false);
+  });
+
+  it('emits configured-root assets into self-contained output', () => {
+    projectDir = makeTempProject();
+    publishedAssetSources = new Map();
+    mkdirSync(join(projectDir, 'design-system/assets/brand'), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(projectDir, 'design-system/assets/brand/logo.svg'),
+      '<svg/>',
+    );
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+      assets: { roots: ['./design-system/assets'] },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+    const plugin = make(env);
+    const emitFile = jest.fn();
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+    transform(
+      plugin,
+      '.a{background:url(/assets/brand/logo.svg)}',
+      join(projectDir, 'src/components/card/card.scss'),
+      { emitFile },
+    );
+
+    expect(env.selfContainedOutput).toBe(true);
+    expect(env.projectStructure.selfContainedOutput).toBe(true);
+    expect(emitFile).toHaveBeenCalledWith({
+      type: 'asset',
+      fileName: 'assets/brand/logo.svg',
+      source: Buffer.from('<svg/>'),
+    });
+    expect(publishedAssetSources.size).toBe(0);
   });
 
   it('feeds the relativizer, which then produces the emitted depth', () => {
     // Ordering contract from config/vite/plugins/index.js: rebase normalizes to
     // /assets/... and fills the map, and only then can the relativizer point
     // the URL at the file. Reverse the two and an absolute URL ships.
-    const env = setup();
+    const env = setup({ selfContainedOutput: false });
     const plugin = make(env);
 
     plugin.configResolved({ build: {} });
@@ -509,5 +621,49 @@ describe('cssAssetRebasePlugin', () => {
     expect(bundle['components/card/css/card.css'].source).toBe(
       '.a{background:url(../../../../assets/images/x.svg)}',
     );
+  });
+
+  it('feeds the relativizer a self-contained emitted asset', () => {
+    const env = setup();
+    const plugin = make(env);
+    const bundle = {};
+    const emitFile = jest.fn((asset) => {
+      bundle[asset.fileName] = asset;
+    });
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+
+    const { code } = transform(
+      plugin,
+      '.a{background:url(../../assets/images/x.svg)}',
+      join(projectDir, 'src/components/card/card.scss'),
+      { emitFile },
+    );
+    bundle['components/card/css/card.css'] = {
+      type: 'asset',
+      fileName: 'components/card/css/card.css',
+      source: code,
+    };
+
+    plugin.generateBundle({}, bundle);
+
+    const relativizer = cssAssetUrlRelativizer({
+      assetsRoot: 'assets',
+      env,
+      publishedAssetSources,
+    });
+    relativizer.configResolved({ build: { outDir: join(projectDir, 'dist') } });
+    relativizer.generateBundle({}, bundle);
+
+    expect(bundle['assets/images/x.svg']).toMatchObject({
+      type: 'asset',
+      fileName: 'assets/images/x.svg',
+      source: Buffer.from('<svg/>'),
+    });
+    expect(bundle['components/card/css/card.css'].source).toBe(
+      '.a{background:url(../../../assets/images/x.svg)}',
+    );
+    expect(publishedAssetSources.size).toBe(0);
   });
 });

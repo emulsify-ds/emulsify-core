@@ -61,6 +61,9 @@ function projectConfigEnvSignature(env = {}) {
       ? normalizePlatformName(platformOverride)
       : '',
     EMULSIFY_ASSET_REBASE: normalizeIdentifier(env.EMULSIFY_ASSET_REBASE),
+    EMULSIFY_SELF_CONTAINED_OUTPUT: normalizeIdentifier(
+      env.EMULSIFY_SELF_CONTAINED_OUTPUT,
+    ),
   });
 }
 
@@ -81,6 +84,24 @@ function resolveAssetRebase(rawConfig = {}, env = {}) {
   if (override) return !['0', 'false', 'off', 'no'].includes(override);
 
   return rawConfig?.assets?.rebase !== false;
+}
+
+/**
+ * Resolve whether project assets remain inside the build output.
+ *
+ * Self-contained output preserves the existing deployment contract by default.
+ * Projects that deploy the complete theme directory may opt into leaner output
+ * through project config or a one-build environment override.
+ *
+ * @param {object} rawConfig - Parsed project.emulsify.json contents.
+ * @param {NodeJS.ProcessEnv|Record<string,string>} env - Environment values.
+ * @returns {boolean} TRUE when project assets remain in the output directory.
+ */
+function resolveSelfContainedOutput(rawConfig = {}, env = {}) {
+  const override = normalizeIdentifier(env.EMULSIFY_SELF_CONTAINED_OUTPUT);
+  if (override) return !['0', 'false', 'off', 'no'].includes(override);
+
+  return rawConfig?.assets?.selfContainedOutput !== false;
 }
 
 /**
@@ -222,6 +243,7 @@ export function resolveProjectConfig(
   );
   const assetRoots = normalizeAssetRoots(root, rawAssetRoots(rawConfig));
   const assetRebase = resolveAssetRebase(rawConfig, env);
+  const selfContainedOutput = resolveSelfContainedOutput(rawConfig, env);
   const structureRoots = structureImplementations.map(
     (implementation) => implementation.directory,
   );
@@ -234,6 +256,7 @@ export function resolveProjectConfig(
     assetRoots: assetRoots.roots,
     ignoredAssetRoots: assetRoots.ignored,
     assetRebase,
+    selfContainedOutput,
     platformAdapter,
   });
 
@@ -254,6 +277,7 @@ export function resolveProjectConfig(
     assetRoots: projectStructure.assetRoots,
     ignoredAssetRoots: projectStructure.ignoredAssetRoots,
     assetRebase: projectStructure.assetRebase,
+    selfContainedOutput: projectStructure.selfContainedOutput,
     componentRoots: projectStructure.componentRoots,
     globalRoots: projectStructure.globalRoots,
     namespaceRoots: projectStructure.namespaceRoots,

@@ -453,6 +453,69 @@ describe('resolveProjectConfig', () => {
     expect(env.projectStructure.assetRoots).toEqual(expectedRoots);
   });
 
+  it('keeps build output self-contained by default', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.selfContainedOutput).toBe(true);
+    expect(env.projectStructure.selfContainedOutput).toBe(true);
+  });
+
+  it('reads assets.selfContainedOutput from project config', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+      assets: { selfContainedOutput: false },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.selfContainedOutput).toBe(false);
+    expect(env.projectStructure.selfContainedOutput).toBe(false);
+  });
+
+  it.each(['0', 'false', 'off', 'no'])(
+    'accepts EMULSIFY_SELF_CONTAINED_OUTPUT=%s as false',
+    (override) => {
+      projectDir = makeTempProject();
+      writeProjectConfig(projectDir, {
+        project: { platform: 'none' },
+      });
+
+      const env = resolveProjectConfig(projectDir, {
+        EMULSIFY_SELF_CONTAINED_OUTPUT: override,
+      });
+
+      expect(env.selfContainedOutput).toBe(false);
+      expect(env.projectStructure.selfContainedOutput).toBe(false);
+    },
+  );
+
+  it('lets the environment enable self-contained output and keeps overrides in separate cache entries', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+      assets: { selfContainedOutput: false },
+    });
+
+    const enabled = resolveProjectConfig(projectDir, {
+      EMULSIFY_SELF_CONTAINED_OUTPUT: 'true',
+    });
+    const disabled = resolveProjectConfig(projectDir, {
+      EMULSIFY_SELF_CONTAINED_OUTPUT: 'off',
+    });
+
+    expect(enabled).not.toBe(disabled);
+    expect(enabled.selfContainedOutput).toBe(true);
+    expect(enabled.projectStructure.selfContainedOutput).toBe(true);
+    expect(disabled.selfContainedOutput).toBe(false);
+    expect(disabled.projectStructure.selfContainedOutput).toBe(false);
+  });
+
   it('ignores unsafe asset root paths', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'src/assets'), { recursive: true });

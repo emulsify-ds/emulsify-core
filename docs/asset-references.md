@@ -62,19 +62,31 @@ same roots and rewrites the reference to a path relative to the emitted CSS
 file. That lets built CSS under `dist/` or mirrored component output resolve
 the same project assets without hard-coding a platform-specific theme path.
 
-The build does not copy the asset. `dist/` holds build output; `assets/` is
-source, already web-served from the theme root, so the rewritten URL climbs out
-of the output directory to reach it — `dist/components/card/css/card.css`
-references `../../../../assets/images/hero.jpg`. One copy of every image, and
-`dist/` stays limited to compiled and generated files. The one asset that is
-genuinely build output, the `dist/assets/icons.svg` sprite, is referenced
-inside `dist/` as usual.
+By default, the build keeps `dist/` self-contained. Vite copies the project
+assets it resolves, and Emulsify emits matching copies for the bare and
+wrong-depth forms Vite could not resolve. The final URL points at that copy —
+`dist/components/card/css/card.css` references
+`../../../assets/images/hero.jpg`. Mirrored Drupal SDC CSS outside the output
+uses a path such as `../../dist/assets/images/hero.jpg`. Deploying `dist/`
+therefore preserves the same asset contract as 4.3.2 while resolving more
+authored URL forms.
 
-Two consequences worth knowing. `dist/` is not self-contained: deploying it
-without the theme's `assets/` directory alongside it will break these URLs.
-And a configured `assets.roots` directory is reached where it really is
-(`../../../../design-system/assets/logo.svg`), not through the `/assets`
-alias Storybook serves it under.
+Projects that deploy the whole theme directory can opt into leaner output:
+
+```json
+{
+  "assets": {
+    "selfContainedOutput": false
+  }
+}
+```
+
+In that mode, Vite's project-asset copies are removed and built CSS reaches the
+real source root instead — for example
+`../../../../design-system/assets/logo.svg`. The complete theme, including
+every configured `assets.roots` directory, must be deployed together. Set
+`EMULSIFY_SELF_CONTAINED_OUTPUT=0` for the same one-build opt-in; `false`,
+`off`, and `no` are accepted too.
 
 Avoid Sass URLs that hard-code a platform or deployment directory. They may work
 in one runtime, but they bypass Storybook's static asset mount and make the
@@ -123,6 +135,9 @@ way to check whether the repair is involved in something unexpected. This is
 an end-to-end opt-out: Emulsify skips unresolved-URL repair, keeps Vite-emitted
 project-asset copies in `dist/assets/`, and leaves Vite's emitted CSS URLs
 untouched by the final relativizer. URLs Vite cannot resolve remain as authored.
+This control is independent from `assets.selfContainedOutput`: disabling the
+repair wins and leaves the whole pipeline unchanged regardless of the output
+setting.
 
 Set `EMULSIFY_STRICT_ASSETS=1` to fail a build on any CSS asset URL that cannot
 be resolved, or `=2` to also fail on URLs the build had to repair.

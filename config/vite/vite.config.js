@@ -59,6 +59,8 @@ export default defineConfig(async ({ command } = {}) => {
    * @property {boolean} [SDC] - Single Directory Components toggle, if available.
    * @property {boolean} [structureOverrides] - Whether component structure overrides are enabled.
    * @property {string[]} [structureRoots] - Override roots, if provided.
+   * @property {boolean} [assetRebase] - Whether unresolved CSS asset URLs are repaired.
+   * @property {boolean} [selfContainedOutput] - Whether project assets remain in the output.
    * @property {object} [platformAdapter] - Active platform behavior adapter.
    */
 

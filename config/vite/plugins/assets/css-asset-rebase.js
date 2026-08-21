@@ -1,9 +1,11 @@
 /**
  * @file CSS asset URL rebase plugin.
  *
- * Repairs CSS `url()` references to project assets that Vite could not resolve,
- * and keeps `dist/` free of copies of those assets. See `asset-url-rebase.js`
- * for the repair rules; this module is the Vite wiring.
+ * Repairs CSS `url()` references to project assets that Vite could not resolve.
+ * By default, repaired assets are emitted into the self-contained build output;
+ * projects that deploy the whole theme can opt into lean output that references
+ * the source asset tree instead. See `asset-url-rebase.js` for the repair rules;
+ * this module is the Vite wiring.
  *
  * ## Why this runs in a normal-order `transform`
  *
@@ -20,23 +22,20 @@
  * only literals left are ones Vite gave up on. Nothing that works today can be
  * displaced.
  *
- * ## Why it deletes assets from the bundle
+ * ## Self-contained and lean output
  *
- * `dist/` is build output. A theme's `assets/` directory is source, it is
- * already web-served from the theme root, and copying it into `dist/` ships the
- * same bytes twice — most visibly on Drupal SDC, where the mirror moves every
- * real output to `components/` and leaves `dist/` holding nothing but asset
- * copies. Vite emits one of those copies for every `url('/assets/...')` it
- * resolves, so they are removed here and the emitted CSS is pointed at the
- * source directory instead.
+ * The default keeps `dist/` deployable on its own. Vite already copies assets it
+ * resolves, while this plugin explicitly emits assets for the URL forms Vite
+ * could not resolve. In both cases the relativizer points CSS at the output copy.
  *
- * Removing an asset is only half of it: the emitted URL still names the path
- * the copy would have had. Each removal is recorded in `publishedAssetSources`,
- * keyed by that path, so `css-asset-relativizer.js` can rewrite the URL to
- * wherever the file actually lives — which matters for a configured
- * `assets.roots` directory, whose real location is not `assets/` at all.
+ * With `assets.selfContainedOutput: false`, each source path is instead recorded
+ * in `publishedAssetSources`, keyed by the path the output copy would have had.
+ * Vite copies are removed and `css-asset-relativizer.js` points URLs at the
+ * source tree. This matters for configured `assets.roots`, whose real location
+ * is not necessarily `assets/`.
  */
 
+import { readFileSync } from 'fs';
 import { relative } from 'path';
 
 import { resolveAssetRoots } from '../../utils/asset-roots.js';
@@ -86,7 +85,7 @@ function copiedAssetSource(chunk, assetRootPrefixes) {
 }
 
 /**
- * Rebase unresolvable CSS asset URLs and keep asset copies out of `dist/`.
+ * Rebase unresolvable CSS asset URLs and manage their output target.
  *
  * @param {{env?: object, diagnostics?: object, publishedAssetSources?: Map<string, string>}} [opts={}] - Plugin options.
  * @returns {import('vite').PluginOption} Rebase plugin.
@@ -97,7 +96,10 @@ export function cssAssetRebasePlugin({
   publishedAssetSources = new Map(),
 } = {}) {
   const enabled = env?.projectStructure?.assetRebase !== false;
+  const selfContainedOutput =
+    env?.projectStructure?.selfContainedOutput !== false;
   const projectDir = env?.projectDir || process.cwd();
+  const emittedAssetFileNames = new Set();
 
   /** @type {string[]} */
   let roots = [];
@@ -115,16 +117,14 @@ export function cssAssetRebasePlugin({
         .filter((prefix) => prefix !== '/' && !prefix.startsWith('..'));
 
       // Storybook serves every asset root at `/assets` through staticDirs and
-      // copies them into its own output, so its bundle keeps the copies and
-      // its CSS keeps output-relative URLs. Only the theme build points out of
-      // its output directory at the source tree.
+      // copies them into its own output, so this plugin never owns that output.
       ownsOutput = !isStorybookOutput(config);
     },
 
-    // Watch rebuilds must not inherit a stale map, or a reference deleted in
-    // this cycle keeps steering URLs at a file nothing references any more.
+    // Watch rebuilds must not inherit stale publication or emission state.
     buildStart() {
       publishedAssetSources.clear();
+      emittedAssetFileNames.clear();
     },
 
     transform(code, id) {
@@ -143,10 +143,23 @@ export function cssAssetRebasePlugin({
         (plan) => {
           if (plan.status === 'rebased' || plan.status === 'publish') {
             if (ownsOutput) {
-              publishedAssetSources.set(
-                plan.emitAs,
-                toPosixPath(relative(projectDir, plan.file)),
-              );
+              if (selfContainedOutput) {
+                const fileName = plan.emitAs.replace(/^\/+/, '');
+
+                if (!emittedAssetFileNames.has(fileName)) {
+                  this.emitFile({
+                    type: 'asset',
+                    fileName,
+                    source: readFileSync(plan.file),
+                  });
+                  emittedAssetFileNames.add(fileName);
+                }
+              } else {
+                publishedAssetSources.set(
+                  plan.emitAs,
+                  toPosixPath(relative(projectDir, plan.file)),
+                );
+              }
             }
             // Static assets are outside Rollup's module graph, so a swapped
             // image would otherwise go unnoticed until an unrelated rebuild.
@@ -177,9 +190,10 @@ export function cssAssetRebasePlugin({
       return { code: next, map: { mappings: '' } };
     },
 
-    // Runs before the relativizer, which consumes the map this fills in.
+    // Lean output removes Vite's copies before the relativizer consumes the
+    // source map. Self-contained output keeps those copies and an empty map.
     generateBundle(_, bundle) {
-      if (!enabled || !ownsOutput) return;
+      if (!enabled || !ownsOutput || selfContainedOutput) return;
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'asset' || fileName.endsWith('.css')) continue;

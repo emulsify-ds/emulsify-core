@@ -6,22 +6,21 @@
  *
  * ## What the path is relative to
  *
- * `dist/` holds build output; a theme's `assets/` directory is source, already
- * web-served from the theme root. So a rewritten URL points at the source
- * directory rather than at a copy inside the output — `dist/components/card/
- * css/card.css` reaches `assets/images/x.jpg` by climbing four levels, not
- * three. `css-asset-rebase.js` supplies `publishedAssetSources`, which maps the
- * published path of each asset to where the file actually lives relative to the
- * project root. That indirection matters for a configured `assets.roots`
- * directory, whose real location is not `assets/` at all.
+ * By default, `dist/` is self-contained and a rewritten URL points at the asset
+ * copy inside the output. With `assets.selfContainedOutput: false`,
+ * `css-asset-rebase.js` supplies `publishedAssetSources`, which maps each
+ * published path to where the file lives in the source tree. That indirection
+ * matters for a configured `assets.roots` directory, whose real location is not
+ * necessarily `assets/`.
  *
  * Two cases stay output-relative. Component CSS mirrored out of `dist/` already
  * sits at the project root, so its path within the output is the project path.
  * And a Storybook build copies every asset root into its own output and serves
  * them at `/assets`, so nothing there should reach outside that output.
  *
- * An asset with no entry in the map — the generated SVG sprite, most notably —
- * really does live in the output, and keeps an output-relative path.
+ * An asset with no entry in the map lives in the output. This includes every
+ * project asset in the default self-contained mode and generated assets such as
+ * the SVG sprite in either mode.
  *
  * Sourcemap warning: this rewrites emitted CSS in `generateBundle` without
  * adjusting positions, and every replacement changes the length of the line it
@@ -127,10 +126,9 @@ export function cssAssetUrlRelativizer({
             if (!rest) return match;
 
             const published = pathPosix.join(assetsRoot, rest);
-            // An asset the build kept in its output — the SVG sprite — is
-            // reached inside the output directory. One left in the source tree
-            // is reached where it actually lives. Both are expressed relative
-            // to the project root so the same subtraction works for either.
+            // A copied or generated asset is reached inside the output. In lean
+            // mode, a mapped project asset is reached where it lives in source.
+            // Both targets are project-relative so the same subtraction works.
             const inOutput = ownsOutput
               ? pathPosix.join(outDirFromProject, published)
               : published;

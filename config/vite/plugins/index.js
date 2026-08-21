@@ -58,8 +58,9 @@ export function makePlugins(env) {
   const sourceFileIndex =
     env.sourceFileIndex || createSourceFileIndex(structure);
 
-  // Filled by the rebase plugin, read by the relativizer: published asset path
-  // -> where that file actually lives, relative to the project root.
+  // In lean-output mode, filled by the rebase plugin and read by the
+  // relativizer: published asset path -> where that file actually lives,
+  // relative to the project root. It stays empty for self-contained output.
   /** @type {Map<string, string>} */
   const publishedAssetSources = new Map();
 
@@ -100,11 +101,10 @@ export function makePlugins(env) {
     // Legacy Storybook stories may still enumerate assets with require.context.
     requireContextCompatPlugin(),
 
-    // Repair CSS asset URLs Vite could not resolve, and strip the asset copies
-    // Vite would otherwise leave in the output. Ordering against the
-    // relativizer below is load-bearing in both directions: this normalizes
-    // URLs to `/assets/...` and fills `publishedAssetSources`, and only then
-    // can the relativizer point each URL at where the file actually lives.
+    // Repair CSS asset URLs Vite could not resolve. Ordering against the
+    // relativizer below is load-bearing: this normalizes URLs to `/assets/...`
+    // and either emits an output asset or records its source-tree location;
+    // only then can the relativizer select and calculate the final target.
     cssAssetRebasePlugin({
       env: envWithStructure,
       diagnostics: env.diagnostics,
