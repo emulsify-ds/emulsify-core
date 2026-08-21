@@ -144,7 +144,11 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../images/bg.png')).toEqual([
-      { file: 'base/_base.scss', line: 2 },
+      {
+        file: 'base/_base.scss',
+        sourceFile: 'src/components/base/_base.scss',
+        line: 2,
+      },
     ]);
   });
 
@@ -159,7 +163,11 @@ describe('asset resolver', () => {
     // "images/bg.png" is a substring of "../images/bg.png", so a naive search
     // would wrongly attribute it to _base.scss as well.
     expect(resolver.references('images/bg.png')).toEqual([
-      { file: 'pages/_pages.scss', line: 1 },
+      {
+        file: 'pages/_pages.scss',
+        sourceFile: 'src/components/pages/_pages.scss',
+        line: 1,
+      },
     ]);
   });
 
@@ -185,8 +193,38 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../img/x.png')).toEqual([
-      { file: 'a/_a.scss', line: 1 },
-      { file: 'a/_a.scss', line: 2 },
+      {
+        file: 'a/_a.scss',
+        sourceFile: 'src/components/a/_a.scss',
+        line: 1,
+      },
+      {
+        file: 'a/_a.scss',
+        sourceFile: 'src/components/a/_a.scss',
+        line: 2,
+      },
+    ]);
+  });
+
+  it('preserves full source identity when display path tails collide', () => {
+    const resolver = withProject({
+      'src/components/a/shared/_card.scss':
+        '.a { background: url("../img/x.png"); }',
+      'src/patterns/b/shared/_card.scss':
+        '.b { background: url("../img/x.png"); }',
+    });
+
+    expect(resolver.references('../img/x.png')).toEqual([
+      {
+        file: 'shared/_card.scss',
+        sourceFile: 'src/components/a/shared/_card.scss',
+        line: 1,
+      },
+      {
+        file: 'shared/_card.scss',
+        sourceFile: 'src/patterns/b/shared/_card.scss',
+        line: 1,
+      },
     ]);
   });
 
@@ -210,7 +248,11 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../images/x.png')).toEqual([
-      { file: 'pages/_pages.scss', line: 2 },
+      {
+        file: 'pages/_pages.scss',
+        sourceFile: 'src/components/pages/_pages.scss',
+        line: 2,
+      },
     ]);
   });
 
@@ -226,7 +268,11 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../images/plus.png')).toEqual([
-      { file: 'atoms/_buttons.scss', line: 1 },
+      {
+        file: 'atoms/_buttons.scss',
+        sourceFile: 'src/components/atoms/_buttons.scss',
+        line: 1,
+      },
     ]);
   });
 
@@ -238,7 +284,11 @@ describe('asset resolver', () => {
 
     // _b.scss would match on filename, but an exact hit exists so it wins.
     expect(resolver.references('../images/x.png')).toEqual([
-      { file: 'a/_a.scss', line: 1 },
+      {
+        file: 'a/_a.scss',
+        sourceFile: 'src/components/a/_a.scss',
+        line: 1,
+      },
     ]);
   });
 
@@ -256,7 +306,11 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../images/bg.png')).toEqual([
-      { file: 'base/_base.scss', line: 2 },
+      {
+        file: 'base/_base.scss',
+        sourceFile: 'src/components/base/_base.scss',
+        line: 2,
+      },
     ]);
   });
 
@@ -270,7 +324,11 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../images/bg.png')).toEqual([
-      { file: 'base/_base.scss', line: 1 },
+      {
+        file: 'base/_base.scss',
+        sourceFile: 'src/components/base/_base.scss',
+        line: 1,
+      },
     ]);
   });
 
@@ -280,7 +338,11 @@ describe('asset resolver', () => {
     });
 
     expect(resolver.references('../images/bg.png')).toEqual([
-      { file: 'components/style.css', line: 1 },
+      {
+        file: 'components/style.css',
+        sourceFile: 'components/style.css',
+        line: 1,
+      },
     ]);
   });
 
@@ -343,6 +405,88 @@ describe('asset row construction', () => {
         url: '../img/x.png',
         status: 'found',
         label: 'src/assets/img/',
+      },
+    ]);
+  });
+
+  it('scopes the same url to one row per known importer', () => {
+    const url = '../images/logo.png';
+    const sites = [
+      {
+        file: 'a/_a.scss',
+        sourceFile: 'src/components/a/_a.scss',
+        line: 3,
+      },
+      {
+        file: 'b/_b.scss',
+        sourceFile: 'src/components/b/_b.scss',
+        line: 7,
+      },
+      {
+        file: 'c/_c.scss',
+        sourceFile: 'src/components/c/_c.scss',
+        line: 11,
+      },
+    ];
+    const rows = buildAssetRows(
+      sites.map((reference) => ({
+        url,
+        importer: reference.sourceFile,
+      })),
+      stubResolver(
+        { [url]: { status: 'missing', label: 'not found' } },
+        {
+          // A repeated URL in one importer remains one collector site and one
+          // row; its first source line is only a navigation hint.
+          [url]: [sites[0], { ...sites[0], line: 5 }, ...sites.slice(1)],
+        },
+      ),
+    );
+
+    expect(rows).toEqual(
+      sites.map((reference) => ({
+        where: `${reference.file}:${reference.line}`,
+        url,
+        status: 'missing',
+        label: 'not found',
+      })),
+    );
+  });
+
+  it('uses full source identity when display paths have the same tail', () => {
+    const url = '../images/logo.png';
+    const rows = buildAssetRows(
+      [
+        {
+          url,
+          importer: '/project/src/patterns/b/shared/_card.scss',
+        },
+      ],
+      stubResolver(
+        { [url]: { status: 'missing', label: 'not found' } },
+        {
+          [url]: [
+            {
+              file: 'shared/_card.scss',
+              sourceFile: 'src/components/a/shared/_card.scss',
+              line: 3,
+            },
+            {
+              file: 'shared/_card.scss',
+              sourceFile: 'src/patterns/b/shared/_card.scss',
+              line: 9,
+            },
+          ],
+        },
+      ),
+    );
+
+    expect(rows).toEqual([
+      {
+        where: 'shared/_card.scss:9',
+        url,
+        status: 'missing',
+        label: 'not found',
       },
     ]);
   });

@@ -36,6 +36,18 @@ const entryKey = (entry) =>
   `${locationKey(entry.file, entry.line)}|${entry.message || ''}`;
 
 /**
+ * Build the identity of one CSS asset reference site.
+ *
+ * The same URL text in two stylesheets represents two separate edits, while
+ * repeat notices for the same stylesheet and URL are one problem to tally.
+ *
+ * @param {string|undefined} importer - Referencing stylesheet.
+ * @param {string|undefined} url - Referenced asset URL.
+ * @returns {string} Stable asset-reference key.
+ */
+const assetReferenceKey = (importer, url) => `${importer || ''}\0${url || ''}`;
+
+/**
  * Record one occurrence against a location map, incrementing when repeated.
  *
  * @param {Map<string, {file: string|undefined, line: number|undefined, count: number}>} locations - Location map.
@@ -273,8 +285,8 @@ export function createDiagnosticsCollector() {
     /**
      * Record one CSS `url()` that Vite could not resolve at build time.
      *
-     * Keyed by URL, because the same asset referenced from two stylesheets with
-     * different relative paths is two separate things for an author to fix.
+     * Keyed by importer and URL, because the same spelling in two stylesheets
+     * is two separate source sites for an author to fix.
      *
      * @param {{url?: string, importer?: string}} entry - Unresolved asset.
      * @returns {void}
@@ -282,14 +294,14 @@ export function createDiagnosticsCollector() {
     recordUnresolvedAsset({ url, importer } = {}) {
       if (!url) return;
 
-      const existing = unresolvedAssets.get(url);
+      const key = assetReferenceKey(importer, url);
+      const existing = unresolvedAssets.get(key);
       if (existing) {
         existing.count += 1;
-        existing.importer = existing.importer || importer;
         return;
       }
 
-      unresolvedAssets.set(url, { url, importer, count: 1 });
+      unresolvedAssets.set(key, { url, importer, count: 1 });
     },
 
     /**
@@ -313,7 +325,7 @@ export function createDiagnosticsCollector() {
     } = {}) {
       if (!url) return;
 
-      const key = `${importer || ''}\0${url}`;
+      const key = assetReferenceKey(importer, url);
       const existing = assetRebases.get(key);
       if (existing) {
         existing.count += 1;
@@ -375,7 +387,10 @@ export function createDiagnosticsCollector() {
       const errorList = [...errors.values()];
       const warningList = [...warnings.values()];
       const unresolvedAssetList = [...unresolvedAssets.values()].sort(
-        (a, b) => b.count - a.count || a.url.localeCompare(b.url),
+        (a, b) =>
+          b.count - a.count ||
+          a.url.localeCompare(b.url) ||
+          String(a.importer || '').localeCompare(String(b.importer || '')),
       );
 
       const importErrorList = [...importErrors.values()].sort(
@@ -385,16 +400,32 @@ export function createDiagnosticsCollector() {
       );
 
       const assetRebaseList = [...assetRebases.values()];
+      const repairedReferences = new Set(
+        assetRebaseList
+          .filter((entry) => entry.status === 'rebased')
+          .map((entry) => assetReferenceKey(entry.importer, entry.url)),
+      );
       const repairedUrls = new Set(
         assetRebaseList
           .filter((entry) => entry.status === 'rebased')
           .map((entry) => entry.url),
       );
       // Vite warns about a URL before the rebase plugin repairs it, so without
-      // this a repaired URL is reported as an outstanding problem.
-      const outstandingAssets = unresolvedAssetList.filter(
-        (asset) => !repairedUrls.has(asset.url),
-      );
+      // this a repaired reference is reported as an outstanding problem. The
+      // importer remains part of the identity: repairing one stylesheet must
+      // not hide the same broken URL spelling in another stylesheet. When
+      // Vite's notice lacks an importer, fall back to URL matching because it
+      // sometimes reports the URL itself in the importer position.
+      const outstandingAssets = unresolvedAssetList.filter((asset) => {
+        if (
+          repairedReferences.has(assetReferenceKey(asset.importer, asset.url))
+        ) {
+          return false;
+        }
+
+        if (!asset.importer) return !repairedUrls.has(asset.url);
+        return true;
+      });
 
       return {
         deprecations: deprecationList,

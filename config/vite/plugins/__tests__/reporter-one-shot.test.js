@@ -88,6 +88,54 @@ describe('one-shot asset reporting', () => {
     expect(lines.join('\n')).not.toContain('unresolved css url');
   });
 
+  it('subtracts a repair only from the matching importer', () => {
+    const collector = createDiagnosticsCollector();
+    const url = '../images/logo.png';
+
+    collector.recordUnresolvedAsset({ url, importer: 'a.scss' });
+    collector.recordUnresolvedAsset({ url, importer: 'b.scss' });
+    collector.recordAssetRebase({
+      url,
+      importer: 'a.scss',
+      rewritten: '/assets/images/logo.png',
+    });
+
+    expect(collector.snapshot().unresolvedAssets).toEqual([
+      { url, importer: 'b.scss', count: 1 },
+    ]);
+  });
+
+  it('matches a locationless Vite notice to a located repair by URL', () => {
+    const collector = createDiagnosticsCollector();
+    const url = '../images/logo.png';
+
+    collector.recordUnresolvedAsset({ url });
+    collector.recordAssetRebase({
+      url,
+      importer: 'a.scss',
+      rewritten: '/assets/images/logo.png',
+    });
+
+    expect(collector.snapshot().unresolvedAssets).toEqual([]);
+  });
+
+  it('does not let a locationless repair hide known importers', () => {
+    const collector = createDiagnosticsCollector();
+    const url = '../images/logo.png';
+
+    collector.recordUnresolvedAsset({ url, importer: 'a.scss' });
+    collector.recordUnresolvedAsset({ url, importer: 'b.scss' });
+    collector.recordAssetRebase({
+      url,
+      rewritten: '/assets/images/logo.png',
+    });
+
+    expect(collector.snapshot().unresolvedAssets).toEqual([
+      { url, importer: 'a.scss', count: 1 },
+      { url, importer: 'b.scss', count: 1 },
+    ]);
+  });
+
   it('names an ambiguous URL rather than guessing at it', () => {
     const { plugin, lines, collector } = createOneShotHarness();
 
@@ -169,6 +217,34 @@ describe('strict asset mode', () => {
     };
 
     expect(countStrictAssetFailures(snapshot, strictness)).toBe(expected);
+  });
+
+  it('counts the same broken url once for each importer', () => {
+    const { plugin, collector } = createOneShotHarness({
+      strictness: STRICTNESS.unresolved,
+    });
+    const url = '../images/logo.png';
+
+    for (const importer of ['a.scss', 'b.scss', 'c.scss']) {
+      collector.recordUnresolvedAsset({ url, importer });
+    }
+
+    const snapshot = collector.snapshot();
+    expect(snapshot.unresolvedAssets).toHaveLength(3);
+    expect(countStrictAssetFailures(snapshot, STRICTNESS.unresolved)).toBe(3);
+
+    let failure;
+    try {
+      plugin.closeBundle();
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toContain('3 CSS asset URLs did not resolve');
+    for (const importer of ['a.scss', 'b.scss', 'c.scss']) {
+      expect(failure.message).toContain(`${url} (imported by ${importer})`);
+    }
   });
 
   it('fails the build when an asset URL cannot be resolved', () => {

@@ -106,21 +106,103 @@ const HMR_UPDATE_PATTERN = /(^|\s)hmr update\s/;
 /**
  * Matches the `File:` line Vite appends to a transform failure.
  *
- * `buildErrorMessage` composes a dev-server error as the message, the source
- * excerpt with its caret, then `Plugin:` and `File:`. Everything after that is
- * `err.stack` — which begins by repeating the message and excerpt verbatim and
- * then lists the frames.
+ * `buildErrorMessage` composes a dev-server error as the message, `Plugin:` and
+ * `File:`, the source frame, then `err.stack`. Sass is a special case: its
+ * multiline message already contains the source frame, so the body after
+ * `File:` repeats what was printed before the metadata. Other transformers put
+ * their only caret excerpt after `File:`.
  *
  * @type {RegExp}
  */
 const ERROR_FILE_LINE = /^\s*File:\s/;
 
 /**
- * Matches a JavaScript stack frame.
+ * Matches a JavaScript stack frame with a source location.
+ *
+ * Requiring a `line:column` suffix keeps ordinary diagnostic prose such as
+ * "at least one value is required" from being mistaken for a stack frame.
  *
  * @type {RegExp}
  */
-const STACK_FRAME = /^\s*at\s+\S/;
+const STACK_FRAME =
+  /^\s*at\s+(?:(?:async|new)\s+)?(?:.+\s+\()?[^()\s]+:\d+:\d+\)?\s*$/;
+
+/**
+ * Find the last line matching a pattern.
+ *
+ * A diagnostic's own text can contain a `File:`-looking line. Vite's metadata
+ * follows the diagnostic body, so the final match is the useful anchor.
+ *
+ * @param {string[]} lines - Message lines.
+ * @param {RegExp} pattern - Pattern to match.
+ * @returns {number} Matching index, or -1.
+ */
+function findLastLine(lines, pattern) {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (pattern.test(stripAnsi(lines[index]))) return index;
+  }
+
+  return -1;
+}
+
+/**
+ * Normalize one copy of an error body for duplicate comparison.
+ *
+ * Vite prefixes the first copy with `Internal server error:` and Sass's stack
+ * can prefix the repeated copy with `Error:`. Sass also changes indentation
+ * between the two copies, so only leading/trailing whitespace is discarded.
+ *
+ * @param {string[]} lines - Error-body lines.
+ * @returns {string} Normalized body.
+ */
+function normalizeErrorBody(lines) {
+  const normalized = lines
+    .map((line) => stripAnsi(line).trim())
+    .filter(Boolean);
+
+  if (normalized.length > 0) {
+    normalized[0] = normalized[0]
+      .replace(/^Internal server error:\s*/, '')
+      .replace(/^Error:\s*/, '');
+  }
+
+  return normalized.join('\n');
+}
+
+/**
+ * Determine whether Sass's post-`File:` frame repeats its message.
+ *
+ * Vite assigns Sass's multiline message to `error.frame`. Its first rendered
+ * block therefore already contains the excerpt, while the text after `File:`
+ * repeats that same body from the stack. Other transformers put their only
+ * code frame after `File:`, so those frames must be retained.
+ *
+ * @param {string[]} lines - Complete dev-server error.
+ * @param {number} fileLine - Index of Vite's final `File:` metadata line.
+ * @param {number} firstStackFrame - Index of the first real stack frame.
+ * @returns {boolean} TRUE when the post-file body is a Sass duplicate.
+ */
+function hasDuplicateSassFrame(lines, fileLine, firstStackFrame) {
+  const pluginLine = findLastLine(
+    lines.slice(0, fileLine),
+    /^\s*Plugin:\s+vite:css\s*$/,
+  );
+  if (pluginLine === -1) return false;
+
+  const messageBody = normalizeErrorBody(lines.slice(0, pluginLine));
+  const repeatedBody = normalizeErrorBody(
+    lines.slice(
+      fileLine + 1,
+      firstStackFrame === -1 ? lines.length : firstStackFrame,
+    ),
+  );
+
+  return (
+    messageBody.startsWith('[sass]') &&
+    repeatedBody.startsWith('[sass]') &&
+    messageBody === repeatedBody
+  );
+}
 
 /**
  * Reduce a dev-server error to the part that names the problem.
@@ -129,22 +211,30 @@ const STACK_FRAME = /^\s*at\s+\S/;
  * error, the same error again out of `err.stack`, and thirty-odd frames inside
  * `sass.dart.js` that point at the compiler rather than at the stylesheet. The
  * first block — message, excerpt, caret, import chain, and the file it came
- * from — is the whole of what a themer can act on.
+ * from — is the whole of what a themer can act on. Other transformers keep
+ * their unique source frame; only the JavaScript stack beneath it is removed.
  *
- * The stack is only dropped when there is a `File:` line or a recognizable
- * frame to cut at, so an error shaped differently than expected is passed
- * through whole rather than truncated on a guess.
+ * The stack is only dropped at a recognizable frame. Sass's post-`File:` body
+ * is dropped earlier only when it is demonstrably a duplicate of the message,
+ * so an error shaped differently than expected is not truncated on a guess.
  *
  * @param {string} message - Raw error text.
  * @returns {string} Message without the repeated body and the stack.
  */
 export function compactDevServerError(message) {
   const lines = String(message).split('\n');
-  const fileLine = lines.findIndex((line) => ERROR_FILE_LINE.test(line));
+  const fileLine = findLastLine(lines, ERROR_FILE_LINE);
+  const stackSearchStart = fileLine === -1 ? 0 : fileLine + 1;
+  const relativeStackFrame = lines
+    .slice(stackSearchStart)
+    .findIndex((line) => STACK_FRAME.test(stripAnsi(line)));
+  const firstFrame =
+    relativeStackFrame === -1 ? -1 : stackSearchStart + relativeStackFrame;
 
-  if (fileLine !== -1) return lines.slice(0, fileLine + 1).join('\n');
+  if (fileLine !== -1 && hasDuplicateSassFrame(lines, fileLine, firstFrame)) {
+    return lines.slice(0, fileLine + 1).join('\n');
+  }
 
-  const firstFrame = lines.findIndex((line) => STACK_FRAME.test(line));
   if (firstFrame > 0) return lines.slice(0, firstFrame).join('\n').trimEnd();
 
   return String(message);

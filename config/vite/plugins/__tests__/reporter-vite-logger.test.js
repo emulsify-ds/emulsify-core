@@ -160,6 +160,24 @@ describe('reporter logger', () => {
     expect(asset.count).toBe(2);
   });
 
+  it('keeps the same url separate for every importing stylesheet', () => {
+    const collector = createDiagnosticsCollector();
+    const logger = createReporterLogger(collector, createBaseLogger());
+    const importers = ['a.scss', 'b.scss', 'c.scss'];
+
+    for (const importer of importers) {
+      logger.warnOnce(notice('../images/logo.png', importer));
+    }
+
+    expect(collector.snapshot().unresolvedAssets).toEqual(
+      importers.map((importer) => ({
+        url: '../images/logo.png',
+        importer,
+        count: 1,
+      })),
+    );
+  });
+
   it('keeps differently spelled urls apart', () => {
     const collector = createDiagnosticsCollector();
     const logger = createReporterLogger(collector, createBaseLogger());
@@ -198,10 +216,84 @@ const SASS_DEV_SERVER_ERROR = [
 ].join('\n');
 
 describe('compactDevServerError', () => {
-  it('cuts everything after the File line', () => {
+  it('drops the Sass frame when it duplicates the message', () => {
     expect(compactDevServerError(SASS_DEV_SERVER_ERROR).split('\n')).toEqual(
       SASS_DEV_SERVER_ERROR.split('\n').slice(0, 8),
     );
+  });
+
+  it('recognizes a styled Sass duplicate without removing its styling', () => {
+    const escape = String.fromCharCode(27);
+    const styled = SASS_DEV_SERVER_ERROR.replace(
+      'Plugin: vite:css',
+      `Plugin: ${escape}[36mvite:css${escape}[39m`,
+    ).replace(
+      'File: /project/src/tab-refresh.scss:5:48',
+      `File: ${escape}[36m/project/src/tab-refresh.scss:5:48${escape}[39m`,
+    );
+
+    const compacted = compactDevServerError(styled);
+    expect(compacted.split('\n')).toHaveLength(8);
+    expect(compacted).toContain(`${escape}[36mvite:css${escape}[39m`);
+    expect(compacted).not.toContain('sass.dart.js');
+  });
+
+  it('uses the last File line when the error body contains one', () => {
+    const message = [
+      'Internal server error: Invalid configuration.',
+      '  File: must be supplied by the theme.',
+      '  The configured token was not found.',
+      '  Plugin: theme-config',
+      '  File: /project/src/configuration.js:3:1',
+      '  2 | export const configuration = {',
+      '  3 |   token: missingToken,',
+      '    |          ^',
+      '      at transform (/project/node_modules/theme-config/index.js:91:7)',
+    ].join('\n');
+
+    const compacted = compactDevServerError(message);
+    expect(compacted).toContain('The configured token was not found.');
+    expect(compacted).toContain('Plugin: theme-config');
+    expect(compacted).toContain('File: /project/src/configuration.js:3:1');
+    expect(compacted).toContain('|          ^');
+    expect(compacted).not.toContain('theme-config/index.js');
+  });
+
+  it('does not mistake Sass error text beginning with at for a stack frame', () => {
+    const message = [
+      'Internal server error: [sass] Validation failed.',
+      'at least one value is required for $spacing',
+      '    at Object.wrapException (/project/node_modules/sass/sass.dart.js:2310:47)',
+      '    at async loadAndTransform (/project/node_modules/vite/node.js:20619:26)',
+    ].join('\n');
+
+    expect(compactDevServerError(message)).toBe(
+      [
+        'Internal server error: [sass] Validation failed.',
+        'at least one value is required for $spacing',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps an esbuild code frame that appears after the File line', () => {
+    const message = [
+      'Internal server error: Transform failed with 1 error:',
+      '/project/src/card.stories.jsx:8:17: ERROR: Expected ">" but found "label"',
+      '  Plugin: vite:esbuild',
+      '  File: /project/src/card.stories.jsx:8:17',
+      '  6 | export const Card = () => (',
+      '  7 |   <article>',
+      '  8 |     <span label="Card"</span>',
+      '    |           ^',
+      '  9 |   </article>',
+      '      at failureErrorWithLog (/project/node_modules/esbuild/lib/main.js:1472:15)',
+      '      at responseCallbacks.<computed> (/project/node_modules/esbuild/lib/main.js:622:9)',
+    ].join('\n');
+
+    const compacted = compactDevServerError(message);
+    expect(compacted).toContain('8 |     <span label="Card"</span>');
+    expect(compacted).toContain('|           ^');
+    expect(compacted).not.toContain('esbuild/lib/main.js');
   });
 
   it('falls back to the first stack frame when there is no File line', () => {
