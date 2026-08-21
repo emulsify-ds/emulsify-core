@@ -41,12 +41,16 @@ const asset = (source) => ({ type: 'asset', source });
  * @param {object} [environment] - Plugin context environment.
  * @returns {object} The same bundle object, after reduction.
  */
-const cycle = (plugin, bundle, environment) => {
-  const context = { environment };
+const cycle = (
+  plugin,
+  bundle,
+  environment = { config: { build: { emptyOutDir: true } } },
+) => {
+  const context = { environment, warn: jest.fn() };
 
   plugin.buildStart.call(context);
-  plugin.renderStart.call(context);
   plugin.generateBundle.call(context, {}, bundle);
+  plugin.writeBundle.handler.call(context, {}, bundle);
 
   return bundle;
 };
@@ -99,7 +103,7 @@ describe('stableWatchOutputPlugin', () => {
     expect(Object.keys(bundle)).toEqual(['components/card/css/card.css']);
   });
 
-  it('writes everything on the first cycle', () => {
+  it('keeps an emitted stylesheet when no matching output exists', () => {
     const { plugin } = harness();
 
     const bundle = cycle(plugin, {
@@ -168,10 +172,43 @@ describe('stableWatchOutputPlugin', () => {
     // at the start of every rebuild, so nothing is left to compare against.
     const { plugin } = harness();
     const environment = { config: { build: { emptyOutDir: true } } };
+    const context = { environment, warn: jest.fn() };
 
-    plugin.renderStart.call({ environment });
+    plugin.buildStart.call(context);
+
+    expect(environment.config.build.emptyOutDir).toBe(true);
+
+    plugin.writeBundle.handler.call(context);
+    plugin.buildStart.call(context);
 
     expect(environment.config.build.emptyOutDir).toBe(false);
+  });
+
+  it('still lets Vite empty a retry after an unfinished first cycle', () => {
+    const { plugin } = harness();
+    const environment = { config: { build: { emptyOutDir: true } } };
+    const context = { environment, warn: jest.fn() };
+
+    plugin.buildStart.call(context);
+    // Simulate a transform failure: writeBundle is never reached.
+    plugin.buildStart.call(context);
+
+    expect(environment.config.build.emptyOutDir).toBe(true);
+    expect(context.warn).not.toHaveBeenCalled();
+  });
+
+  it('warns when Vite build options are unavailable on a rebuild', () => {
+    const { plugin } = harness();
+    const context = { environment: undefined, warn: jest.fn() };
+
+    plugin.buildStart.call(context);
+    plugin.writeBundle.handler.call(context);
+    plugin.buildStart.call(context);
+
+    expect(context.warn).toHaveBeenCalledTimes(1);
+    expect(context.warn).toHaveBeenCalledWith(
+      expect.stringContaining('this.environment.config.build is unavailable'),
+    );
   });
 
   it('leaves emptying alone for a one-shot build', () => {
@@ -180,7 +217,7 @@ describe('stableWatchOutputPlugin', () => {
     const environment = { config: { build: { emptyOutDir: true } } };
 
     plugin.configResolved({ build: { outDir: 'dist' } });
-    plugin.renderStart.call({ environment });
+    plugin.buildStart.call({ environment, warn: jest.fn() });
 
     expect(environment.config.build.emptyOutDir).toBe(true);
   });

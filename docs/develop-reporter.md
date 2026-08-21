@@ -208,11 +208,12 @@ stylesheet edit reloaded the preview iframe instead of swapping the stylesheet.
 Emulsify now lets Vite empty the directory for the first cycle only, then writes
 incrementally: an emitted asset, a copied template, or a copied static file whose
 bytes already match what is on disk is left alone. One saved stylesheet updates
-one stylesheet and the preview no longer reloads. The tradeoff is that output
-from a component deleted or renamed mid-session lingers until the watcher is
-restarted. One-shot `npm run build`, `storybook build`, and the release fixture
-verifications are unaffected — each starts from an emptied directory and writes
-every file.
+one stylesheet and the preview no longer reloads. On a delete or rename, the
+copy plugins refresh their shared source index and remove only stale outputs they
+wrote in an earlier cycle; renamed Twig templates, component metadata, and static
+assets are then copied under their new names. One-shot `npm run build`,
+`storybook build`, and the release fixture verifications are unaffected — each
+starts from an emptied directory and writes every file.
 
 ### Sass Deprecations From Storybook
 

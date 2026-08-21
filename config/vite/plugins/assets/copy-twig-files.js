@@ -5,14 +5,18 @@
  * structure using the same routing rules as compiled JS and CSS entries.
  */
 
-import { copyFileSync, mkdirSync, unlinkSync } from 'fs';
+import { copyFileSync, lstatSync, mkdirSync, unlinkSync } from 'fs';
 import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
   copiedComponentOutputPath,
   copiedGlobalOutputPath,
 } from '../../project-structure.js';
-import { filesHaveSameBytes, resolveFinalPath } from './output-freshness.js';
+import {
+  fileContentFingerprint,
+  filesHaveSameBytes,
+  resolveFinalPath,
+} from './output-freshness.js';
 import {
   createSourceFileIndex,
   isComponentMetadataFile,
@@ -31,9 +35,14 @@ export function copyTwigFilesPlugin({
   let outDir = 'dist';
   let projectDir = process.cwd();
   let watching = false;
+  let completedWatchCycles = 0;
   /** @type {Array<{absPath: string, relDest: string}>|undefined} */
   let plan;
-  let previousOutputs = new Set();
+  /**
+   * @type {Map<string, {sourcePaths: Set<string>, fingerprint: string}>}
+   * Owned destination -> sources and the bytes this plugin established.
+   */
+  let previousOutputs = new Map();
 
   /**
    * Resolve every file this plugin copies, paired with where it lands.
@@ -114,14 +123,54 @@ export function copyTwigFilesPlugin({
     writeBundle() {
       const currentPlan = copyPlan();
       const currentOutputs = watching
-        ? removeStaleOutputs(currentPlan)
-        : previousOutputs;
+        ? removeStaleOutputs(currentPlan, (message) => this.warn?.(message))
+        : new Map();
+      const unverifiedWrites = new Set();
 
       for (const { absPath, relDest } of currentPlan) {
-        copyToOutDir(absPath, relDest);
+        const copyResult = copyToOutDir(absPath, relDest);
+        if (!watching || !relDest) continue;
+
+        if (copyResult.status === 'written') {
+          // A successful write replaces any prior bytes. Only retain deletion
+          // authority when those new bytes were fingerprinted successfully.
+          currentOutputs.delete(relDest);
+          if (copyResult.fingerprint) {
+            unverifiedWrites.delete(relDest);
+            recordOwnedOutput(
+              currentOutputs,
+              relDest,
+              [absPath],
+              copyResult.fingerprint,
+            );
+          } else {
+            unverifiedWrites.add(relDest);
+          }
+        } else if (unverifiedWrites.has(relDest)) {
+          continue;
+        } else if (currentOutputs.has(relDest)) {
+          const currentOwnership = currentOutputs.get(relDest);
+          recordOwnedOutput(
+            currentOutputs,
+            relDest,
+            [absPath],
+            currentOwnership.fingerprint,
+          );
+        } else if (previousOutputs.has(relDest)) {
+          const previousOwnership = previousOutputs.get(relDest);
+          recordOwnedOutput(
+            currentOutputs,
+            relDest,
+            [...previousOwnership.sourcePaths, absPath],
+            previousOwnership.fingerprint,
+          );
+        }
       }
 
-      if (watching) previousOutputs = currentOutputs;
+      if (watching) {
+        previousOutputs = currentOutputs;
+        completedWatchCycles += 1;
+      }
     },
   };
 
@@ -138,29 +187,107 @@ export function copyTwigFilesPlugin({
    * Remove outputs owned in the previous cycle whose sources disappeared.
    *
    * @param {Array<{relDest: string}>} currentPlan - Current cycle copy plan.
-   * @returns {Set<string>} Current output paths for the next comparison.
+   * @param {(message: string) => void} warn - Build warning reporter.
+   * @returns {Map<string, {sourcePaths: Set<string>, fingerprint: string}>} Outputs still owned after pruning.
    */
-  function removeStaleOutputs(currentPlan) {
-    const currentOutputs = new Set(
+  function removeStaleOutputs(currentPlan, warn) {
+    const plannedOutputs = new Set(
       currentPlan.map(({ relDest }) => relDest).filter(Boolean),
     );
+    const retainedOutputs = new Map();
 
-    for (const relDest of previousOutputs) {
-      if (currentOutputs.has(relDest)) continue;
+    for (const [relDest, ownership] of previousOutputs) {
+      if (plannedOutputs.has(relDest)) continue;
+      if (![...ownership.sourcePaths].every(sourceNoLongerExists)) {
+        recordOwnedOutput(
+          retainedOutputs,
+          relDest,
+          ownership.sourcePaths,
+          ownership.fingerprint,
+        );
+        continue;
+      }
 
       const stalePath = resolveFinalPath(relDest, {
         outDir: absoluteOutDir(),
         projectDir,
         mirrored: structure?.mirrorComponentOutput,
       });
+      const currentFingerprint = fileContentFingerprint(stalePath);
+      if (currentFingerprint === null) {
+        if (!sourceNoLongerExists(stalePath)) {
+          recordOwnedOutput(
+            retainedOutputs,
+            relDest,
+            ownership.sourcePaths,
+            ownership.fingerprint,
+          );
+          warn?.(
+            `Unable to verify stale copied output ${stalePath}; leaving it in place and retrying on the next rebuild.`,
+          );
+        }
+        continue;
+      }
+
+      if (currentFingerprint !== ownership.fingerprint) {
+        // Another writer replaced the output, so this plugin no longer has
+        // authority to remove that destination.
+        continue;
+      }
+
       try {
         unlinkSync(stalePath);
-      } catch {
-        /* noop */
+      } catch (error) {
+        // An already-absent output needs no retry. Keep ownership after any
+        // other failure so a later cycle can try pruning it again.
+        if (error?.code !== 'ENOENT') {
+          recordOwnedOutput(
+            retainedOutputs,
+            relDest,
+            ownership.sourcePaths,
+            ownership.fingerprint,
+          );
+          warn?.(
+            `Unable to remove stale copied output ${stalePath}: ${error?.message || error}`,
+          );
+        }
       }
     }
 
-    return currentOutputs;
+    return retainedOutputs;
+  }
+
+  /**
+   * Record the source paths for an output this plugin owns.
+   *
+   * @param {Map<string, {sourcePaths: Set<string>, fingerprint: string}>} outputs - Ownership map to update.
+   * @param {string} relDest - Destination relative to `outDir`.
+   * @param {Iterable<string>} sourcePaths - Source paths backing the output.
+   * @param {string} fingerprint - Bytes this plugin established.
+   * @returns {void}
+   */
+  function recordOwnedOutput(outputs, relDest, sourcePaths, fingerprint) {
+    const sources = outputs.get(relDest)?.sourcePaths || new Set();
+    for (const sourcePath of sourcePaths) sources.add(sourcePath);
+    outputs.set(relDest, { sourcePaths: sources, fingerprint });
+  }
+
+  /**
+   * Determine whether a former source is definitively gone.
+   *
+   * Errors such as EACCES are not evidence of deletion. Keeping the output and
+   * its ownership lets a later cycle retry after a transient filesystem issue.
+   *
+   * @param {string} sourcePath - Absolute source path.
+   * @returns {boolean} TRUE only for a missing path or missing parent segment.
+   */
+  function sourceNoLongerExists(sourcePath) {
+    try {
+      lstatSync(sourcePath);
+      return false;
+    } catch (error) {
+      return error?.code === 'ENOENT' || error?.code === 'ENOTDIR';
+    }
   }
 
   /**
@@ -168,19 +295,19 @@ export function copyTwigFilesPlugin({
    *
    * @param {string} absPath - Absolute source path.
    * @param {string} relDest - Destination relative to `outDir`.
-   * @returns {void}
+   * @returns {{status: 'written'|'skipped'|'failed', fingerprint: string|null}} Copy result and fingerprint of newly written bytes.
    */
   function copyToOutDir(absPath, relDest) {
-    if (!relDest) return;
+    if (!relDest) return { status: 'failed', fingerprint: null };
 
-    // A rewritten template in the output tree is a full preview reload rather
-    // than a style swap, so during watch the copy is skipped when the bytes
-    // already match. `stableWatchOutputPlugin` stops Vite emptying the output
-    // directory after the first cycle, which is what leaves anything there to
-    // compare against; one-shot builds start from an empty tree and copy
-    // unconditionally as before.
+    // A mirrored first watch cycle copies unconditionally so this plugin
+    // establishes ownership when a generated project-root destination survived
+    // a prior process. Otherwise byte-identical templates are skipped: rewriting
+    // one is a full preview reload rather than a style swap. One-shot builds
+    // continue to copy unconditionally as before.
     if (
       watching &&
+      (completedWatchCycles > 0 || !structure?.mirrorComponentOutput) &&
       filesHaveSameBytes(
         absPath,
         resolveFinalPath(relDest, {
@@ -190,15 +317,19 @@ export function copyTwigFilesPlugin({
         }),
       )
     ) {
-      return;
+      return { status: 'skipped', fingerprint: null };
     }
 
     const destPath = join(outDir, relDest);
     mkdirSync(dirname(destPath), { recursive: true });
     try {
       copyFileSync(absPath, destPath);
+      return {
+        status: 'written',
+        fingerprint: watching ? fileContentFingerprint(destPath) : null,
+      };
     } catch {
-      /* noop */
+      return { status: 'failed', fingerprint: null };
     }
   }
 }

@@ -80,6 +80,7 @@ export function stableWatchOutputPlugin({
 } = {}) {
   let outDir = 'dist';
   let watching = false;
+  let completedCycles = 0;
 
   return {
     name: 'emulsify-stable-watch-output',
@@ -99,23 +100,40 @@ export function stableWatchOutputPlugin({
 
     buildStart() {
       unchangedOutputs.clear();
-    },
-
-    // Vite empties the output directory from its own `renderStart`, declared
-    // `order: 'pre'`. By the time this runs the first cycle has already had its
-    // clean tree, so switching the flag off here keeps that behavior exactly as
-    // it is and stops every later cycle from deleting the tree again. Leaving
-    // the decision to Vite for that first cycle also inherits its refusal to
-    // empty an output directory that sits outside the project root.
-    //
-    // The flag has to be set on `this.environment.config`: the config object
-    // `configResolved` receives is a different one, and mutating that has no
-    // effect on what Vite reads per cycle.
-    renderStart() {
       if (!watching) return;
 
+      // Leave the first successfully completed cycle entirely to Vite,
+      // including its refusal to empty an output directory outside the project
+      // root. On later cycles this hook runs before Vite's `renderStart`
+      // emptying hook, so the flag is disabled before Vite decides whether to
+      // clear the tree. A failed initial cycle never reaches `writeBundle`, so
+      // its retry still starts clean.
+      if (completedCycles === 0) return;
+
+      // The flag has to be set on `this.environment.config`: the config object
+      // `configResolved` receives is a different one, and mutating that has no
+      // effect on what Vite reads per cycle.
       const buildOptions = this.environment?.config?.build;
-      if (buildOptions) buildOptions.emptyOutDir = false;
+      if (!buildOptions) {
+        this.warn(
+          'Unable to keep watch output stable because ' +
+            'this.environment.config.build is unavailable; Vite may empty ' +
+            'the output directory on this rebuild.',
+        );
+        return;
+      }
+
+      buildOptions.emptyOutDir = false;
+    },
+
+    // Count only cycles that made it through all normal output writers. Using
+    // buildStart here would mistake a transform or render failure for a
+    // completed first cycle and suppress cleaning on the retry.
+    writeBundle: {
+      order: 'post',
+      handler() {
+        if (watching) completedCycles += 1;
+      },
     },
 
     generateBundle(_options, bundle) {

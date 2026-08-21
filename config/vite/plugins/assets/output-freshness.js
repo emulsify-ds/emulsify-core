@@ -8,12 +8,66 @@
  * what makes a freshness check meaningful at all.
  */
 
+import { createHash } from 'crypto';
 import { closeSync, openSync, readFileSync, readSync, statSync } from 'fs';
 import { join } from 'path';
 
 import { safeExists } from '../../utils/fs-safe.js';
 
 const FILE_COMPARE_CHUNK_SIZE = 64 * 1024;
+
+/**
+ * Fingerprint a file without loading the whole asset into memory.
+ *
+ * A null result means the bytes could not be established reliably. Callers
+ * that use the fingerprint as deletion authority must treat that as "not
+ * owned" and leave the path alone.
+ *
+ * @param {string} filePath - File to fingerprint.
+ * @returns {string|null} SHA-256 fingerprint, or null when unreadable.
+ */
+export function fileContentFingerprint(filePath) {
+  let handle;
+  let fingerprint = null;
+
+  try {
+    const stats = statSync(filePath);
+    if (!stats.isFile()) return null;
+
+    handle = openSync(filePath, 'r');
+    const hash = createHash('sha256');
+    const buffer = Buffer.allocUnsafe(FILE_COMPARE_CHUNK_SIZE);
+    let position = 0;
+
+    while (position < stats.size) {
+      const bytesRead = readSync(
+        handle,
+        buffer,
+        0,
+        Math.min(FILE_COMPARE_CHUNK_SIZE, stats.size - position),
+        position,
+      );
+      if (bytesRead === 0) return null;
+
+      hash.update(buffer.subarray(0, bytesRead));
+      position += bytesRead;
+    }
+
+    fingerprint = hash.digest('hex');
+  } catch {
+    fingerprint = null;
+  } finally {
+    if (handle !== undefined) {
+      try {
+        closeSync(handle);
+      } catch {
+        fingerprint = null;
+      }
+    }
+  }
+
+  return fingerprint;
+}
 
 /**
  * Determine whether two files already contain the same bytes.
