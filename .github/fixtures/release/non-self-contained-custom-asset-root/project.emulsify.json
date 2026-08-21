@@ -1,0 +1,11 @@
+{
+  "project": {
+    "platform": "none",
+    "name": "non-self-contained-custom-asset-root",
+    "machineName": "non_self_contained_custom_asset_root"
+  },
+  "assets": {
+    "roots": ["./design-system/assets"],
+    "selfContainedOutput": false
+  }
+}

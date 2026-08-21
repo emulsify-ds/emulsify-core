@@ -196,6 +196,42 @@ const releaseFixtures = [
     ],
   },
   {
+    name: 'non-self-contained-src-assets',
+    type: 'vite',
+    assert: ['dist/components/card/css/card.css'],
+    reject: ['dist/src/assets/images/hero.svg'],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../src/assets/images/hero.svg'],
+      },
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['url(/src/assets/images/hero.svg)'],
+      },
+    ],
+  },
+  {
+    name: 'non-self-contained-custom-asset-root',
+    type: 'vite',
+    assert: ['dist/components/card/css/card.css'],
+    reject: ['dist/design-system/assets/images/hero.svg'],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../design-system/assets/images/hero.svg'],
+      },
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['url(/design-system/assets/images/hero.svg)'],
+      },
+    ],
+  },
+  {
     name: 'asset-rebase-disabled',
     type: 'vite',
     assert: [

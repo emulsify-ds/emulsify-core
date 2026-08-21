@@ -68,6 +68,8 @@ jobs:
           - drupal-sdc-src-components
           - no-platform-src-components
           - drupal-sdc-non-self-contained-output
+          - non-self-contained-src-assets
+          - non-self-contained-custom-asset-root
           - asset-rebase-disabled
           - wordpress-src-components
           - legacy-components

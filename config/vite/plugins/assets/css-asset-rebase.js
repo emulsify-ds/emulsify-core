@@ -30,9 +30,10 @@
  *
  * With `assets.selfContainedOutput: false`, each source path is instead recorded
  * in `publishedAssetSources`, keyed by the path the output copy would have had.
- * Vite copies are removed and `css-asset-relativizer.js` points URLs at the
- * source tree. This matters for configured `assets.roots`, whose real location
- * is not necessarily `assets/`.
+ * `css-asset-relativizer.js` points CSS URLs at the source tree and removes a
+ * Vite copy only after that rewrite actually happens. Copies still referenced
+ * by JavaScript or another emitted file remain in the output. This matters for
+ * configured `assets.roots`, whose real location is not necessarily `assets/`.
  */
 
 import { readFileSync } from 'fs';
@@ -87,13 +88,14 @@ function copiedAssetSource(chunk, assetRootPrefixes) {
 /**
  * Rebase unresolvable CSS asset URLs and manage their output target.
  *
- * @param {{env?: object, diagnostics?: object, publishedAssetSources?: Map<string, string>}} [opts={}] - Plugin options.
+ * @param {{env?: object, diagnostics?: object, publishedAssetSources?: Map<string, string>, removablePublishedAssets?: Set<string>}} [opts={}] - Plugin options.
  * @returns {import('vite').PluginOption} Rebase plugin.
  */
 export function cssAssetRebasePlugin({
   env = {},
   diagnostics,
   publishedAssetSources = new Map(),
+  removablePublishedAssets = new Set(),
 } = {}) {
   const enabled = env?.projectStructure?.assetRebase !== false;
   const selfContainedOutput =
@@ -124,6 +126,7 @@ export function cssAssetRebasePlugin({
     // Watch rebuilds must not inherit stale publication or emission state.
     buildStart() {
       publishedAssetSources.clear();
+      removablePublishedAssets.clear();
       emittedAssetFileNames.clear();
     },
 
@@ -190,8 +193,9 @@ export function cssAssetRebasePlugin({
       return { code: next, map: { mappings: '' } };
     },
 
-    // Lean output removes Vite's copies before the relativizer consumes the
-    // source map. Self-contained output keeps those copies and an empty map.
+    // Lean output records every Vite copy the relativizer may redirect. The
+    // relativizer owns deletion because only an actual CSS rewrite proves the
+    // copy is redundant; JS-only and generated assets must survive.
     generateBundle(_, bundle) {
       if (!enabled || !ownsOutput || selfContainedOutput) return;
 
@@ -202,7 +206,7 @@ export function cssAssetRebasePlugin({
         if (!source) continue;
 
         publishedAssetSources.set(fileName, source);
-        delete bundle[fileName];
+        removablePublishedAssets.add(fileName);
       }
     },
   };

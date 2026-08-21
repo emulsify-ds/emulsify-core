@@ -63,6 +63,10 @@ export function makePlugins(env) {
   // relative to the project root. It stays empty for self-contained output.
   /** @type {Map<string, string>} */
   const publishedAssetSources = new Map();
+  // The subset above that came from Vite copies. An actual CSS rewrite plus
+  // membership here authorizes the relativizer to remove a redundant copy.
+  /** @type {Set<string>} */
+  const removablePublishedAssets = new Set();
 
   // Filled by the stable-output plugin, read by the reporter: emitted files it
   // dropped this cycle because the bytes on disk already match. The reporter
@@ -109,6 +113,7 @@ export function makePlugins(env) {
       env: envWithStructure,
       diagnostics: env.diagnostics,
       publishedAssetSources,
+      removablePublishedAssets,
     }),
 
     // Point CSS asset URLs at the file each one names, relative to the
@@ -117,6 +122,7 @@ export function makePlugins(env) {
       assetsRoot: 'assets',
       env: envWithStructure,
       publishedAssetSources,
+      removablePublishedAssets,
     }),
 
     // Last of the CSS chain: once the text is final, an unchanged stylesheet is

@@ -102,6 +102,11 @@ automate:
 - `drupal-sdc-non-self-contained-output` verifies that
   `assets.selfContainedOutput: false` removes project-asset copies and keeps
   query, fragment, and spaced CSS URLs pointed at the source asset tree.
+- `non-self-contained-src-assets` verifies that a URL Vite resolves directly
+  from `src/assets/` is rewritten to the source tree before its output copy is
+  removed.
+- `non-self-contained-custom-asset-root` applies the same invariant to a
+  project-defined `assets.roots` directory.
 - `asset-rebase-disabled` verifies that `assets.rebase: false` keeps Vite's
   emitted asset copies and leaves repairable CSS URLs unchanged.
 - `wordpress-src-components` verifies the WordPress adapter keeps global assets under `dist/global`, component output under `dist/components`, avoids root `components/` mirroring, and rejects Drupal globals in emitted JavaScript.

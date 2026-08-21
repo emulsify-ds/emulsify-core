@@ -128,9 +128,11 @@ The asset controls are independent:
 | `assets.selfContainedOutput` | `true`  | `EMULSIFY_SELF_CONTAINED_OUTPUT` | Keeps or emits project assets under `dist/assets/`, so the output directory remains deployable by itself. Set `false` for lean source-tree URLs. |
 
 Each override accepts `0`, `false`, `off`, or `no` to select false. With
-`selfContainedOutput: false`, Vite-emitted project-asset copies are removed and
-CSS points at each configured source root's real project location. This is
-appropriate only when the complete theme directory is deployed.
+`selfContainedOutput: false`, CSS points at each configured source root's real
+project location. A Vite-emitted copy is removed only when an emitted CSS URL
+was redirected to that source; copies referenced by JavaScript or other output
+remain available. This mode is appropriate only when the complete theme
+directory is deployed.
 
 Setting `assets.rebase` to `false` disables the complete pipeline: unresolved
 CSS asset URLs are not repaired, emitted CSS is not relativized by Emulsify,

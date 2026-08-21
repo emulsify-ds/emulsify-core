@@ -8,7 +8,7 @@
  */
 
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import { resolveAssetRoots } from '../../utils/asset-roots.js';
 import { resolveProjectConfig } from '../../project-config.js';
@@ -219,10 +219,12 @@ describe('asset URL rebase rules', () => {
 describe('cssAssetRebasePlugin', () => {
   let projectDir;
   let publishedAssetSources;
+  let removablePublishedAssets;
 
   const setup = (overrides = {}) => {
     projectDir = makeTempProject();
     publishedAssetSources = new Map();
+    removablePublishedAssets = new Set();
     mkdirSync(join(projectDir, 'assets/images'), { recursive: true });
     mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
     writeFileSync(join(projectDir, 'assets/images/x.svg'), '<svg/>');
@@ -236,7 +238,20 @@ describe('cssAssetRebasePlugin', () => {
     if (projectDir) rmSync(projectDir, { recursive: true, force: true });
   });
 
-  const make = (env) => cssAssetRebasePlugin({ env, publishedAssetSources });
+  const make = (env) =>
+    cssAssetRebasePlugin({
+      env,
+      publishedAssetSources,
+      removablePublishedAssets,
+    });
+
+  const makeRelativizer = (env) =>
+    cssAssetUrlRelativizer({
+      assetsRoot: 'assets',
+      env,
+      publishedAssetSources,
+      removablePublishedAssets,
+    });
 
   const transform = (plugin, code, id, context = {}) =>
     plugin.transform.call(
@@ -253,6 +268,18 @@ describe('cssAssetRebasePlugin', () => {
     type: 'asset',
     originalFileNames: [source],
   });
+
+  const runBundlePipeline = (env, bundle) => {
+    const rebase = make(env);
+    const relativizer = makeRelativizer(env);
+    const config = { build: { outDir: join(projectDir, 'dist') } };
+
+    rebase.configResolved(config);
+    relativizer.configResolved(config);
+    rebase.buildStart();
+    rebase.generateBundle({}, bundle);
+    relativizer.generateBundle({}, bundle);
+  };
 
   it('rewrites a stylesheet URL and records where the file lives', () => {
     const env = setup({ selfContainedOutput: false });
@@ -323,13 +350,12 @@ describe('cssAssetRebasePlugin', () => {
     expect(emitFile).toHaveBeenCalledTimes(2);
   });
 
-  it('removes the copy Vite emitted of a project asset', () => {
-    // dist/ is build output. The theme's assets/ is source and already
-    // web-served, so shipping the same bytes twice is what this prevents.
+  it('records the copy Vite emitted for the relativizer to decide', () => {
     const env = setup({ selfContainedOutput: false });
     const plugin = make(env);
+    const copiedAsset = viteCopyOf('assets/images/x.svg');
     const bundle = {
-      'assets/images/x.svg': viteCopyOf('assets/images/x.svg'),
+      'assets/images/x.svg': copiedAsset,
       'components/card/css/card.css': { type: 'asset', source: '' },
     };
 
@@ -337,10 +363,194 @@ describe('cssAssetRebasePlugin', () => {
     plugin.buildStart();
     plugin.generateBundle({}, bundle);
 
-    expect(Object.keys(bundle)).toEqual(['components/card/css/card.css']);
+    expect(bundle['assets/images/x.svg']).toBe(copiedAsset);
     expect(publishedAssetSources.get('assets/images/x.svg')).toBe(
       'assets/images/x.svg',
     );
+    expect(removablePublishedAssets).toEqual(new Set(['assets/images/x.svg']));
+  });
+
+  it('rewrites and removes a Vite-resolved src/assets copy', () => {
+    const env = setup({ selfContainedOutput: false });
+    mkdirSync(join(projectDir, 'src/assets/images'), { recursive: true });
+    writeFileSync(join(projectDir, 'src/assets/images/hero.jpg'), 'hero');
+    const bundle = {
+      'src/assets/images/hero.jpg': viteCopyOf('src/assets/images/hero.jpg'),
+      'components/card/css/card.css': {
+        type: 'asset',
+        source: '.card{background:url(/src/assets/images/hero.jpg?v=2#hero)}',
+      },
+    };
+
+    runBundlePipeline(env, bundle);
+
+    expect(bundle['src/assets/images/hero.jpg']).toBeUndefined();
+    expect(bundle['components/card/css/card.css'].source).toBe(
+      '.card{background:url(../../../../src/assets/images/hero.jpg?v=2#hero)}',
+    );
+    expect(publishedAssetSources.get('src/assets/images/hero.jpg')).toBe(
+      'src/assets/images/hero.jpg',
+    );
+  });
+
+  it('rewrites and removes a Vite-resolved configured-root copy', () => {
+    const env = setup({ selfContainedOutput: false });
+    const configuredRoot = join(projectDir, 'design-system/assets');
+    env.projectStructure.assetRoots = [configuredRoot];
+    mkdirSync(join(configuredRoot, 'images'), { recursive: true });
+    writeFileSync(join(configuredRoot, 'images/hero.jpg'), 'hero');
+    const bundle = {
+      'design-system/assets/images/hero.jpg': viteCopyOf(
+        'design-system/assets/images/hero.jpg',
+      ),
+      'components/card/css/card.css': {
+        type: 'asset',
+        source: '.card{background:url(/design-system/assets/images/hero.jpg)}',
+      },
+    };
+
+    runBundlePipeline(env, bundle);
+
+    expect(bundle['design-system/assets/images/hero.jpg']).toBeUndefined();
+    expect(bundle['components/card/css/card.css'].source).toBe(
+      '.card{background:url(../../../../design-system/assets/images/hero.jpg)}',
+    );
+    expect(
+      publishedAssetSources.get('design-system/assets/images/hero.jpg'),
+    ).toBe('design-system/assets/images/hero.jpg');
+  });
+
+  it.each([
+    [
+      'the emitted URL is malformed',
+      '.card{background:url(\'/src/assets/images/hero.jpg")}',
+    ],
+    [
+      'the emitted relative URL names a different bundle path',
+      '.card{background:url(../../src/assets/images/hero.jpg)}',
+    ],
+    [
+      'a bare relative URL only resembles a bundle-root path',
+      '.card{background:url(src/assets/images/hero.jpg)}',
+    ],
+  ])('keeps a Vite copy when %s', (_label, css) => {
+    const env = setup({ selfContainedOutput: false });
+    mkdirSync(join(projectDir, 'src/assets/images'), { recursive: true });
+    writeFileSync(join(projectDir, 'src/assets/images/hero.jpg'), 'hero');
+    const copiedAsset = viteCopyOf('src/assets/images/hero.jpg');
+    const bundle = {
+      'src/assets/images/hero.jpg': copiedAsset,
+      'components/card/css/card.css': { type: 'asset', source: css },
+    };
+
+    runBundlePipeline(env, bundle);
+
+    expect(bundle['src/assets/images/hero.jpg']).toBe(copiedAsset);
+    expect(bundle['components/card/css/card.css'].source).toBe(css);
+  });
+
+  it('rewrites a matching relative emitted URL before removing its copy', () => {
+    const env = setup({ selfContainedOutput: false });
+    mkdirSync(join(projectDir, 'src/assets/images'), { recursive: true });
+    writeFileSync(join(projectDir, 'src/assets/images/hero.jpg'), 'hero');
+    const bundle = {
+      'src/assets/images/hero.jpg': viteCopyOf('src/assets/images/hero.jpg'),
+      'components/card/css/card.css': {
+        type: 'asset',
+        source: '.card{background:url(../../../src/assets/images/hero.jpg)}',
+      },
+    };
+
+    runBundlePipeline(env, bundle);
+
+    expect(bundle['src/assets/images/hero.jpg']).toBeUndefined();
+    expect(bundle['components/card/css/card.css'].source).toBe(
+      '.card{background:url(../../../../src/assets/images/hero.jpg)}',
+    );
+  });
+
+  it('deletes only assets whose emitted CSS now reaches the source', () => {
+    const env = setup({ selfContainedOutput: false });
+    mkdirSync(join(projectDir, 'src/assets/images'), { recursive: true });
+    for (const name of ['css-only.jpg', 'shared.jpg']) {
+      writeFileSync(join(projectDir, `src/assets/images/${name}`), name);
+    }
+    writeFileSync(join(projectDir, 'assets/images/js-only.jpg'), 'js');
+
+    const cssFileName = 'components/card/css/card.css';
+    const bundle = {
+      'src/assets/images/css-only.jpg': viteCopyOf(
+        'src/assets/images/css-only.jpg',
+      ),
+      'src/assets/images/shared.jpg': viteCopyOf(
+        'src/assets/images/shared.jpg',
+      ),
+      'assets/images/js-only.jpg': viteCopyOf('assets/images/js-only.jpg'),
+      [cssFileName]: {
+        type: 'asset',
+        source: [
+          '.css{background:url(/src/assets/images/css-only.jpg)}',
+          '.shared{background:url(/src/assets/images/shared.jpg)}',
+        ].join(''),
+      },
+      'components/card/css/card.js': {
+        type: 'chunk',
+        code: '',
+        facadeModuleId: join(projectDir, 'src/components/card/card.scss'),
+        viteMetadata: {
+          importedAssets: new Set([
+            'src/assets/images/css-only.jpg',
+            'src/assets/images/shared.jpg',
+          ]),
+          importedCss: new Set([cssFileName]),
+        },
+      },
+      'components/card/js/card.js': {
+        type: 'chunk',
+        code: [
+          'const jsOnly = "/assets/images/js-only.jpg";',
+          'const shared = "/src/assets/images/shared.jpg";',
+        ].join(''),
+        viteMetadata: {
+          importedAssets: new Set([
+            'assets/images/js-only.jpg',
+            'src/assets/images/shared.jpg',
+          ]),
+        },
+      },
+    };
+    const originalAssets = new Map(
+      Object.entries(bundle)
+        .filter(
+          ([fileName, output]) =>
+            output.type === 'asset' && !fileName.endsWith('.css'),
+        )
+        .map(([fileName, output]) => [
+          fileName,
+          resolve(projectDir, output.originalFileNames[0]),
+        ]),
+    );
+
+    runBundlePipeline(env, bundle);
+
+    const cssSource = bundle[cssFileName].source;
+    const cssTargets = Array.from(cssSource.matchAll(/url\(([^)]+)\)/g)).map(
+      ([, value]) =>
+        resolve(
+          dirname(join(projectDir, 'dist', cssFileName)),
+          value.replace(/^['"]|['"]$/g, ''),
+        ),
+    );
+    const deletedAssets = Array.from(originalAssets.keys()).filter(
+      (fileName) => !bundle[fileName],
+    );
+
+    expect(deletedAssets).toEqual(['src/assets/images/css-only.jpg']);
+    for (const fileName of deletedAssets) {
+      expect(cssTargets).toContain(originalAssets.get(fileName));
+    }
+    expect(bundle['assets/images/js-only.jpg']).toBeDefined();
+    expect(bundle['src/assets/images/shared.jpg']).toBeDefined();
   });
 
   it('keeps Vite asset copies in self-contained output', () => {
@@ -360,30 +570,34 @@ describe('cssAssetRebasePlugin', () => {
     expect(publishedAssetSources.size).toBe(0);
   });
 
-  it('keeps generated output and compiled CSS in the bundle', () => {
+  it('keeps the generated SVG sprite in lean output', () => {
     // The sprite and the JS chunks carry no originalFileNames, which is what
     // separates build output from a copy of a source file.
-    const env = setup();
-    const plugin = make(env);
+    const env = setup({ selfContainedOutput: false });
+    const sprite = {
+      type: 'asset',
+      fileName: 'assets/icons.svg',
+      originalFileNames: [],
+      source: '<svg/>',
+    };
     const bundle = {
-      'assets/icons.svg': { type: 'asset', originalFileNames: [] },
+      'assets/icons.svg': sprite,
       'components/card/css/card.css': {
         type: 'asset',
         originalFileNames: ['src/components/card/card.scss'],
-        source: '',
+        source: '.icon{mask:url(/assets/icons.svg)}',
       },
       'components/card/js/card.js': { type: 'chunk', code: '' },
     };
 
-    plugin.configResolved({ build: {} });
-    plugin.buildStart();
-    plugin.generateBundle({}, bundle);
+    runBundlePipeline(env, bundle);
 
-    expect(Object.keys(bundle)).toEqual([
-      'assets/icons.svg',
-      'components/card/css/card.css',
-      'components/card/js/card.js',
-    ]);
+    expect(bundle['assets/icons.svg']).toBe(sprite);
+    expect(bundle['components/card/css/card.css'].source).toBe(
+      '.icon{mask:url(../../../assets/icons.svg)}',
+    );
+    expect(publishedAssetSources.size).toBe(0);
+    expect(removablePublishedAssets.size).toBe(0);
   });
 
   it('leaves assets sourced from outside an asset root alone', () => {
@@ -466,11 +680,7 @@ describe('cssAssetRebasePlugin', () => {
   it('switches off the full pipeline with assets.rebase', () => {
     const env = setup({ assetRebase: false });
     const rebase = make(env);
-    const relativizer = cssAssetUrlRelativizer({
-      assetsRoot: 'assets',
-      env,
-      publishedAssetSources,
-    });
+    const relativizer = makeRelativizer(env);
     const input = [
       '.relative{background:url(../assets/images/x.svg)}',
       '.canonical{background:url("/assets/images/x.svg")}',
@@ -610,11 +820,7 @@ describe('cssAssetRebasePlugin', () => {
     };
     plugin.generateBundle({}, bundle);
 
-    const relativizer = cssAssetUrlRelativizer({
-      assetsRoot: 'assets',
-      env,
-      publishedAssetSources,
-    });
+    const relativizer = makeRelativizer(env);
     relativizer.configResolved({ build: { outDir: join(projectDir, 'dist') } });
     relativizer.generateBundle({}, bundle);
 
@@ -648,11 +854,7 @@ describe('cssAssetRebasePlugin', () => {
 
     plugin.generateBundle({}, bundle);
 
-    const relativizer = cssAssetUrlRelativizer({
-      assetsRoot: 'assets',
-      env,
-      publishedAssetSources,
-    });
+    const relativizer = makeRelativizer(env);
     relativizer.configResolved({ build: { outDir: join(projectDir, 'dist') } });
     relativizer.generateBundle({}, bundle);
 

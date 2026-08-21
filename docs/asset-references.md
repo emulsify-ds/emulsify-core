@@ -81,12 +81,13 @@ Projects that deploy the whole theme directory can opt into leaner output:
 }
 ```
 
-In that mode, Vite's project-asset copies are removed and built CSS reaches the
-real source root instead — for example
-`../../../../design-system/assets/logo.svg`. The complete theme, including
-every configured `assets.roots` directory, must be deployed together. Set
-`EMULSIFY_SELF_CONTAINED_OUTPUT=0` for the same one-build opt-in; `false`,
-`off`, and `no` are accepted too.
+In that mode, built CSS reaches the real source root instead — for example
+`../../../../design-system/assets/logo.svg` — and a Vite-emitted copy is removed
+only after an emitted CSS URL has been redirected successfully. Copies still
+needed by JavaScript, HTML, or another non-CSS output remain in `dist/`. The
+complete theme, including every configured `assets.roots` directory, must be
+deployed together. Set `EMULSIFY_SELF_CONTAINED_OUTPUT=0` for the same one-build
+opt-in; `false`, `off`, and `no` are accepted too.
 
 Avoid Sass URLs that hard-code a platform or deployment directory. They may work
 in one runtime, but they bypass Storybook's static asset mount and make the
