@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   utimesSync,
@@ -341,6 +342,64 @@ describe('source copy plugins', () => {
 
       expect(statSync(twigPath).mtimeMs).not.toBe(1000);
     });
+
+    it.each([
+      ['Twig template', copyTwigFilesPlugin, 'card.twig'],
+      ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
+    ])(
+      'removes a deleted copied %s on the next cycle',
+      (_name, factory, file) => {
+        const { structure, outDir } = scaffold();
+        const build = { outDir, root: projectDir, watch: {} };
+        const source = join(projectDir, 'src/components/card', file);
+        const output = join(outDir, 'components/card', file);
+        const plugin = factory({ structure });
+        const runCycle = () => {
+          plugin.buildStart.call({ addWatchFile: jest.fn() });
+          plugin.writeBundle();
+        };
+
+        plugin.configResolved({ build });
+        runCycle();
+        rmSync(source);
+        plugin.watchChange(source, { event: 'delete' });
+        runCycle();
+
+        expect(existsSync(output)).toBe(false);
+      },
+    );
+
+    it.each([
+      ['Twig template', copyTwigFilesPlugin, 'card.twig', 'renamed.twig'],
+      ['static asset', copyAllSrcAssetsPlugin, 'icon.svg', 'renamed.svg'],
+    ])(
+      'replaces a renamed copied %s on the next cycle',
+      (_name, factory, originalName, renamedName) => {
+        const { structure, outDir } = scaffold();
+        const build = { outDir, root: projectDir, watch: {} };
+        const sourceDir = join(projectDir, 'src/components/card');
+        const outputDir = join(outDir, 'components/card');
+        const originalSource = join(sourceDir, originalName);
+        const renamedSource = join(sourceDir, renamedName);
+        const plugin = factory({ structure });
+        const addWatchFile = jest.fn();
+        const runCycle = () => {
+          addWatchFile.mockClear();
+          plugin.buildStart.call({ addWatchFile });
+          plugin.writeBundle();
+        };
+
+        plugin.configResolved({ build });
+        runCycle();
+        renameSync(originalSource, renamedSource);
+        plugin.watchChange(originalSource, { event: 'delete' });
+        runCycle();
+
+        expect(existsSync(join(outputDir, originalName))).toBe(false);
+        expect(existsSync(join(outputDir, renamedName))).toBe(true);
+        expect(addWatchFile).toHaveBeenCalledWith(renamedSource);
+      },
+    );
   });
 
   describe('underscored templates', () => {

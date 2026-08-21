@@ -35,11 +35,14 @@ const fakeSourceFileIndex = ({ componentFiles = [], globalFiles = [] }) => ({
 const jsxExclusionEntryPaths = [
   'src/components/card/Card.jsx',
   'src/components/card/Card.stories.jsx',
-  'src/components/card/Card.docs.jsx',
-  'src/components/card/Card.doc.jsx',
   'src/components/card/Card.component.jsx',
   'src/components/card/Card.min.jsx',
   'src/components/card/Card.test.jsx',
+];
+
+const jsxDocumentationEntryPaths = [
+  'src/components/card/Card.doc.jsx',
+  'src/components/card/Card.docs.jsx',
 ];
 
 const buildContext = (
@@ -163,6 +166,8 @@ describe('buildInputs structure outputs', () => {
 {
   "components/card/css/card": "src/components/card/card.scss",
   "components/card/js/card": "src/components/card/card.js",
+  "components/card/js/carddoc": "src/components/card/card.doc.js",
+  "components/card/js/carddocs": "src/components/card/card.docs.js",
   "global/base/css/base": "src/base/base.scss",
   "global/base/js/base": "src/base/base.js",
   "storybook/components/card/cl-card": "src/components/card/cl-card.scss",
@@ -198,7 +203,7 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
-  it('excludes JSX story, docs, component, minified, and test files', () => {
+  it('excludes JSX story, component, minified, and test files', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
       componentFilePaths: jsxExclusionEntryPaths,
@@ -207,6 +212,20 @@ describe('buildInputs structure outputs', () => {
     expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
 {
   "components/card/js/Card": "src/components/card/Card.jsx",
+}
+`);
+  });
+
+  it('keeps JSX doc and docs files as production entries', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: jsxDocumentationEntryPaths,
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/js/Carddoc": "src/components/card/Card.doc.jsx",
+  "components/card/js/Carddocs": "src/components/card/Card.docs.jsx",
 }
 `);
   });

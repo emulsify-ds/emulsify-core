@@ -5,7 +5,7 @@
  * them, preserving component and global routing semantics.
  */
 
-import { copyFileSync, mkdirSync } from 'fs';
+import { copyFileSync, mkdirSync, unlinkSync } from 'fs';
 import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
@@ -34,6 +34,7 @@ export function copyAllSrcAssetsPlugin({
   let watching = false;
   /** @type {Array<{absPath: string, relDest: string}>|undefined} */
   let plan;
+  let previousOutputs = new Set();
 
   /**
    * Resolve every asset this plugin copies, paired with where it lands.
@@ -84,6 +85,12 @@ export function copyAllSrcAssetsPlugin({
       watching = Boolean(cfg.build?.watch);
     },
 
+    watchChange(_id, { event } = {}) {
+      if (!watching || (event !== 'create' && event !== 'delete')) return;
+      sourceFileIndex.refresh?.();
+      plan = undefined;
+    },
+
     // Static assets are copied rather than compiled, so like Twig they are absent
     // from Rollup's module graph and a save would otherwise go unnoticed. Swapping
     // an SVG or a font left the old bytes in `dist/` until an unrelated rebuild.
@@ -94,9 +101,16 @@ export function copyAllSrcAssetsPlugin({
 
     /** Copy before the mirror plugin moves dist/components to the project root. */
     writeBundle() {
-      for (const { absPath, relDest } of copyPlan()) {
+      const currentPlan = copyPlan();
+      const currentOutputs = watching
+        ? removeStaleOutputs(currentPlan)
+        : previousOutputs;
+
+      for (const { absPath, relDest } of currentPlan) {
         copyToOutDir(absPath, relDest);
       }
+
+      if (watching) previousOutputs = currentOutputs;
     },
   };
 
@@ -107,6 +121,35 @@ export function copyAllSrcAssetsPlugin({
    */
   function absoluteOutDir() {
     return isAbsolute(outDir) ? outDir : resolve(projectDir, outDir);
+  }
+
+  /**
+   * Remove outputs owned in the previous cycle whose sources disappeared.
+   *
+   * @param {Array<{relDest: string}>} currentPlan - Current cycle copy plan.
+   * @returns {Set<string>} Current output paths for the next comparison.
+   */
+  function removeStaleOutputs(currentPlan) {
+    const currentOutputs = new Set(
+      currentPlan.map(({ relDest }) => relDest).filter(Boolean),
+    );
+
+    for (const relDest of previousOutputs) {
+      if (currentOutputs.has(relDest)) continue;
+
+      const stalePath = resolveFinalPath(relDest, {
+        outDir: absoluteOutDir(),
+        projectDir,
+        mirrored: structure?.mirrorComponentOutput,
+      });
+      try {
+        unlinkSync(stalePath);
+      } catch {
+        /* noop */
+      }
+    }
+
+    return currentOutputs;
   }
 
   /**

@@ -131,7 +131,8 @@ const globalTraversalSkipRoots = (globalRoot, componentRoots) => {
  * @returns {{
  *   all: () => Array<object>,
  *   componentFiles: () => Array<object>,
- *   globalFiles: () => Array<object>
+ *   globalFiles: () => Array<object>,
+ *   refresh: () => void
  * }} Indexed file accessors.
  */
 export function createSourceFileIndex(structure) {
@@ -178,6 +179,11 @@ export function createSourceFileIndex(structure) {
     globalFiles: () => {
       build();
       return globalFilesArr;
+    },
+    refresh: () => {
+      indexedFiles = null;
+      componentFilesArr = null;
+      globalFilesArr = null;
     },
   };
 }

@@ -70,4 +70,28 @@ describe('source file index helpers', () => {
     expect(index.globalFiles()).toHaveLength(1);
     expect(index.all()).toHaveLength(2);
   });
+
+  it('refreshes the indexed tree between watch cycles', () => {
+    projectDir = makeTempProject();
+    const componentRoot = join(projectDir, 'src/components');
+    const globalRoot = join(projectDir, 'src');
+    const original = join(componentRoot, 'card/card.twig');
+    const renamed = join(componentRoot, 'card/renamed.twig');
+    fs.mkdirSync(join(componentRoot, 'card'), { recursive: true });
+    fs.writeFileSync(original, '<article />');
+
+    const index = createSourceFileIndex({
+      componentRootRecords: [{ directory: componentRoot }],
+      globalRootRecords: [{ directory: globalRoot }],
+    });
+    const firstFiles = index.componentFiles();
+
+    fs.renameSync(original, renamed);
+    index.refresh();
+
+    const refreshedFiles = index.componentFiles();
+    expect(refreshedFiles).not.toBe(firstFiles);
+    expect(refreshedFiles.map(({ absPath }) => absPath)).toEqual([renamed]);
+    expect(index.all().map(({ absPath }) => absPath)).toEqual([renamed]);
+  });
 });

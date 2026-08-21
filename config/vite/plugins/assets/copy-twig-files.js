@@ -5,7 +5,7 @@
  * structure using the same routing rules as compiled JS and CSS entries.
  */
 
-import { copyFileSync, mkdirSync } from 'fs';
+import { copyFileSync, mkdirSync, unlinkSync } from 'fs';
 import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
@@ -33,14 +33,15 @@ export function copyTwigFilesPlugin({
   let watching = false;
   /** @type {Array<{absPath: string, relDest: string}>|undefined} */
   let plan;
+  let previousOutputs = new Set();
 
   /**
    * Resolve every file this plugin copies, paired with where it lands.
    *
-   * Built once and reused, because the source index is resolved at config time
-   * and does not change across watch cycles. Both hooks below read this same
-   * list, which is what keeps "gets copied to dist" and "a save triggers the
-   * copy" from drifting apart — a file cannot be added to one without the other.
+   * Shared by both hooks, which keeps "gets copied to dist" and "a save
+   * triggers the copy" from drifting apart. A structural watch event resets
+   * the plan so a rename can replace the old output without restarting the
+   * watcher; content-only edits keep the cached filesystem walk.
    *
    * @returns {Array<{absPath: string, relDest: string}>} Copy plan.
    */
@@ -92,6 +93,12 @@ export function copyTwigFilesPlugin({
       watching = Boolean(cfg.build?.watch);
     },
 
+    watchChange(_id, { event } = {}) {
+      if (!watching || (event !== 'create' && event !== 'delete')) return;
+      sourceFileIndex.refresh?.();
+      plan = undefined;
+    },
+
     // Twig is copied rather than compiled, so none of it reaches Rollup's module
     // graph, and Rollup only watches what is in that graph. Without this, saving
     // a template produced no rebuild at all: `dist/` kept the previous version
@@ -105,9 +112,16 @@ export function copyTwigFilesPlugin({
 
     /** Copy before the mirror plugin moves dist/components to the project root. */
     writeBundle() {
-      for (const { absPath, relDest } of copyPlan()) {
+      const currentPlan = copyPlan();
+      const currentOutputs = watching
+        ? removeStaleOutputs(currentPlan)
+        : previousOutputs;
+
+      for (const { absPath, relDest } of currentPlan) {
         copyToOutDir(absPath, relDest);
       }
+
+      if (watching) previousOutputs = currentOutputs;
     },
   };
 
@@ -118,6 +132,35 @@ export function copyTwigFilesPlugin({
    */
   function absoluteOutDir() {
     return isAbsolute(outDir) ? outDir : resolve(projectDir, outDir);
+  }
+
+  /**
+   * Remove outputs owned in the previous cycle whose sources disappeared.
+   *
+   * @param {Array<{relDest: string}>} currentPlan - Current cycle copy plan.
+   * @returns {Set<string>} Current output paths for the next comparison.
+   */
+  function removeStaleOutputs(currentPlan) {
+    const currentOutputs = new Set(
+      currentPlan.map(({ relDest }) => relDest).filter(Boolean),
+    );
+
+    for (const relDest of previousOutputs) {
+      if (currentOutputs.has(relDest)) continue;
+
+      const stalePath = resolveFinalPath(relDest, {
+        outDir: absoluteOutDir(),
+        projectDir,
+        mirrored: structure?.mirrorComponentOutput,
+      });
+      try {
+        unlinkSync(stalePath);
+      } catch {
+        /* noop */
+      }
+    }
+
+    return currentOutputs;
   }
 
   /**

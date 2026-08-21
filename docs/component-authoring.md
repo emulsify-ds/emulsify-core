@@ -73,19 +73,17 @@ appear in `dist/` or in the mirrored `components/` output:
 
 ```text
 *.stories.js   *.stories.jsx    Storybook stories
-*.docs.js      *.doc.js         Storybook docs pages
 *.component.js *.component.jsx  Component metadata modules
 *.min.js       *.min.jsx        Pre-minified bundles
 *.test.js      *.test.jsx       Unit tests
 ```
 
-The docs suffixes support projects that add
-[`@storybook/addon-docs`](https://storybook.js.org/docs/writing-docs) and keep
-each component's documentation in a `button.docs.js` sibling imported by
-`button.stories.js`. Core does not depend on the addon; it only agrees to leave
-those files out of the build. Everything else matching `*.js` or `*.jsx` under a
-component or global source root is compiled as an entry, so a helper module that
-should ship to the browser must not use one of the suffixes above.
+Everything else matching `*.js` or `*.jsx` under a component or global source
+root is compiled as an entry, so a helper module that should ship to the browser
+must not use one of the suffixes above. In particular, `*.doc.js`, `*.docs.js`,
+and their JSX equivalents remain ordinary production entries for compatibility
+with earlier Emulsify releases. Storybook-only documentation should use a
+supported `*.stories.js` or `*.stories.jsx` file instead.
 
 ## React Component Libraries
 
