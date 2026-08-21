@@ -1283,10 +1283,7 @@ export function renderSummary({
   unicode = true,
   styler,
 }) {
-  const failed =
-    snapshot.errors.length > 0 ||
-    (importErrors.rows || []).length > 0 ||
-    syntaxErrors.length > 0;
+  const failed = hasCycleFailure(snapshot);
   const symbol = failed
     ? styler('red', SYMBOLS.error)
     : styler('green', SYMBOLS.ok);

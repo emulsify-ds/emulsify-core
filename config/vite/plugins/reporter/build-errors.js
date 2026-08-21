@@ -134,7 +134,7 @@ export function parseCssSyntaxError(error) {
 /**
  * Flatten a rolldown build error into the individual errors it wraps.
  *
- * @param {Error & {errors?: Array<object>}} error - Build error.
+ * @param {Error & {errors?: Array<unknown>}} error - Build error.
  * @returns {Array<object>} Individual errors.
  */
 export function flattenBuildErrors(error) {
@@ -143,7 +143,11 @@ export function flattenBuildErrors(error) {
   const nested = error.errors;
   if (!Array.isArray(nested) || nested.length === 0) return [error];
 
-  return nested.flatMap((entry) => flattenBuildErrors(entry));
+  const flattened = nested.flatMap((entry) => flattenBuildErrors(entry));
+
+  // A malformed aggregate can contain only falsy entries. Keep its wrapper so
+  // the failed hook still records an error instead of turning the cycle green.
+  return flattened.length > 0 ? flattened : [error];
 }
 
 /**
@@ -250,7 +254,7 @@ export function describeBuildError(error) {
  * line, and a path that does not resolve — and because one deleted partial
  * commonly produces a dozen of them.
  *
- * @param {Error & {errors?: Array<object>}} error - Build error.
+ * @param {Error & {errors?: Array<unknown>}} error - Build error.
  * @returns {{
  *   importErrors: Array<object>,
  *   syntaxErrors: Array<object>,

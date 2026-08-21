@@ -238,6 +238,27 @@ describe('develop reporter output', () => {
     expect(output).toContain(MISSING_STYLESHEET);
   });
 
+  it('keeps a failed verdict when an aggregate contains only falsy errors', () => {
+    const { plugin, lines, collector, advance } = createHarness();
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+    advance(900);
+    plugin.buildEnd(
+      Object.assign(new Error('Build failed with 1 error:'), {
+        errors: [null],
+      }),
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('✗ build failed after 900ms');
+    expect(output).not.toContain('✓ built in 900ms');
+    expect(collector.snapshot().errors).toEqual([
+      expect.objectContaining({ message: 'Build failed with 1 error:' }),
+    ]);
+  });
+
   it('replaces repeated sass output with a single deduplicated tally', () => {
     const { plugin, lines, collector, advance } = createHarness();
 
@@ -481,6 +502,21 @@ describe('rendering helpers', () => {
     expect(output).toContain('✗ 8 errors');
     expect(output).toContain('+3 more');
     expect(output).not.toContain('boom 7');
+  });
+
+  it('reports a failed summary from the snapshot when enriched import rows are absent', () => {
+    const output = renderSummary({
+      snapshot: {
+        ...emptySnapshot,
+        importErrors: [{ message: MISSING_STYLESHEET }],
+      },
+      durationMs: 1200,
+      importErrors: {},
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('✗ build failed after 1.20s');
+    expect(output).not.toContain('✓ built in 1.20s');
   });
 
   it('caps the deprecation kinds listed under one file', () => {

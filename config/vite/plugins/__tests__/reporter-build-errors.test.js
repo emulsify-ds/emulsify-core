@@ -50,7 +50,7 @@ const sassException = ({ file, line, statement }) =>
  * `errors` is defined as an enumerable getter on a wrapper whose message is
  * only a count.
  *
- * @param {Array<Error>} errors - Individual errors.
+ * @param {Array<unknown>} errors - Individual errors.
  * @returns {Error} Aggregate wrapper.
  */
 const rolldownAggregate = (errors) => {
@@ -100,6 +100,18 @@ describe('build error flattening', () => {
       flattenBuildErrors(Object.assign(new Error('x'), { errors: [] })),
     ).toHaveLength(1);
   });
+
+  it.each([undefined, null, false, 0, ''])(
+    'keeps the aggregate when its nested error is %p',
+    (entry) => {
+      const aggregate = rolldownAggregate([entry]);
+
+      expect(flattenBuildErrors(aggregate)).toEqual([aggregate]);
+      expect(classifyBuildError(aggregate).otherErrors).toEqual([
+        expect.objectContaining({ message: 'Build failed with 1 errors:' }),
+      ]);
+    },
+  );
 });
 
 describe('build error description', () => {
@@ -373,7 +385,10 @@ describe('import error rendering', () => {
    */
   const render = (importErrors) =>
     renderSummary({
-      snapshot: createDiagnosticsCollector().snapshot(),
+      snapshot: {
+        ...createDiagnosticsCollector().snapshot(),
+        importErrors: importErrors.rows || [],
+      },
       durationMs: 871,
       projectDir: '/p',
       importErrors,
