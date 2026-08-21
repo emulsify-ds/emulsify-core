@@ -15,6 +15,7 @@ import {
 import {
   fileContentFingerprint,
   filesHaveSameBytes,
+  removeDestinationSymlink,
   resolveFinalPath,
 } from './output-freshness.js';
 import {
@@ -25,12 +26,13 @@ import {
 /**
  * Copy Twig templates and component metadata to `dist/`.
  *
- * @param {{ structure: object, sourceFileIndex?: object }} opts - Plugin options.
+ * @param {{ structure: object, sourceFileIndex?: object, diagnostics?: object }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Copy plugin.
  */
 export function copyTwigFilesPlugin({
   structure,
   sourceFileIndex = createSourceFileIndex(structure),
+  diagnostics,
 }) {
   let outDir = 'dist';
   let projectDir = process.cwd();
@@ -129,6 +131,12 @@ export function copyTwigFilesPlugin({
 
       for (const { absPath, relDest } of currentPlan) {
         const copyResult = copyToOutDir(absPath, relDest);
+        if (copyResult.status === 'failed' && copyResult.error) {
+          const errno = copyResult.error.code ?? 'unknown error';
+          const message = `Unable to copy ${absPath} to ${join(outDir, relDest)} (${errno}): ${copyResult.error.message}`;
+          diagnostics?.recordError?.({ message, file: absPath });
+          this.warn?.(message);
+        }
         if (!watching || !relDest) continue;
 
         if (copyResult.status === 'written') {
@@ -295,7 +303,7 @@ export function copyTwigFilesPlugin({
    *
    * @param {string} absPath - Absolute source path.
    * @param {string} relDest - Destination relative to `outDir`.
-   * @returns {{status: 'written'|'skipped'|'failed', fingerprint: string|null}} Copy result and fingerprint of newly written bytes.
+   * @returns {{status: 'written'|'skipped'|'failed', fingerprint: string|null, error?: Error}} Copy result and fingerprint of newly written bytes.
    */
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return { status: 'failed', fingerprint: null };
@@ -323,13 +331,18 @@ export function copyTwigFilesPlugin({
     const destPath = join(outDir, relDest);
     mkdirSync(dirname(destPath), { recursive: true });
     try {
+      removeDestinationSymlink(destPath);
       copyFileSync(absPath, destPath);
       return {
         status: 'written',
         fingerprint: watching ? fileContentFingerprint(destPath) : null,
       };
-    } catch {
-      return { status: 'failed', fingerprint: null };
+    } catch (error) {
+      return {
+        status: 'failed',
+        fingerprint: null,
+        error,
+      };
     }
   }
 }

@@ -8,7 +8,14 @@
  * These pin the pair.
  */
 
-import { mkdirSync, statSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'fs';
 import { join } from 'path';
 
 import { makeTempProject } from '../../test-utils/plugins.js';
@@ -87,6 +94,25 @@ describe('stableWatchOutputPlugin', () => {
 
     expect(Object.keys(bundle)).toEqual([]);
     expect([...unchangedOutputs]).toEqual(['global/base/css/base.css']);
+  });
+
+  it('keeps an asset whose matching destination is a symlink', () => {
+    const { plugin, projectDir, outDir, unchangedOutputs } = harness();
+    const sharedFile = join(projectDir, 'shared/base.css');
+    const outputFile = join(outDir, 'global/base/css/base.css');
+    const contents = '.base{color:red}';
+    write(sharedFile, contents);
+    mkdirSync(join(outputFile, '..'), { recursive: true });
+    symlinkSync(sharedFile, outputFile);
+
+    const bundle = cycle(plugin, {
+      'global/base/css/base.css': asset(contents),
+    });
+
+    expect(Object.keys(bundle)).toEqual(['global/base/css/base.css']);
+    expect([...unchangedOutputs]).toEqual([]);
+    expect(existsSync(outputFile)).toBe(false);
+    expect(readFileSync(sharedFile, 'utf8')).toBe(contents);
   });
 
   it('keeps the stylesheet the edit actually changed', () => {

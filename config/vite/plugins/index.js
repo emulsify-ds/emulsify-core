@@ -139,10 +139,18 @@ export function makePlugins(env) {
     ...basePlugins,
 
     // Copy Twig templates and component metadata beside compiled assets.
-    copyTwigFilesPlugin({ structure, sourceFileIndex }),
+    copyTwigFilesPlugin({
+      structure,
+      sourceFileIndex,
+      diagnostics: env.diagnostics,
+    }),
 
     // Copy every non-code asset under src with the same routing.
-    copyAllSrcAssetsPlugin({ structure, sourceFileIndex }),
+    copyAllSrcAssetsPlugin({
+      structure,
+      sourceFileIndex,
+      diagnostics: env.diagnostics,
+    }),
 
     // Drupal projects with src mirror dist/components back to ./components.
     mirrorComponentsToRoot({

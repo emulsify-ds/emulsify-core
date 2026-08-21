@@ -2,23 +2,23 @@
  * @file Tests for Drupal component mirror plugin behavior.
  */
 
-import fs, {
+import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'fs';
 import { join } from 'path';
 
 import { mirrorComponentsToRoot } from './mirror-components.js';
-import { filesHaveSameBytes } from './output-freshness.js';
 import { makeTempProject } from '../../test-utils/plugins.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';
-const LARGE_COMPARE_SIZE = 128 * 1024 + 7;
 
 const readMirrorState = (outDir) =>
   JSON.parse(readFileSync(join(outDir, MIRROR_STATE_FILE), 'utf8'));
@@ -31,54 +31,6 @@ describe('component mirror plugin', () => {
       rmSync(projectDir, { recursive: true, force: true });
     }
     jest.restoreAllMocks();
-  });
-
-  it('compares equal small files by bytes', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    writeFileSync(sourceFile, '<article>{{ title }}</article>');
-    writeFileSync(destinationFile, '<article>{{ title }}</article>');
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(true);
-  });
-
-  it('compares equal large files by bytes', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    const largeContents = Buffer.alloc(LARGE_COMPARE_SIZE, 'a');
-    writeFileSync(sourceFile, largeContents);
-    writeFileSync(destinationFile, largeContents);
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(true);
-  });
-
-  it('detects large files that differ only in the last byte', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    const sourceContents = Buffer.alloc(LARGE_COMPARE_SIZE, 'a');
-    const destinationContents = Buffer.from(sourceContents);
-    destinationContents.write('b', destinationContents.length - 1);
-    writeFileSync(sourceFile, sourceContents);
-    writeFileSync(destinationFile, destinationContents);
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(false);
-  });
-
-  it('short-circuits different-size files without reading file bodies', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    writeFileSync(sourceFile, 'larger');
-    writeFileSync(destinationFile, 'small');
-    const readFileSpy = jest.spyOn(fs, 'readFileSync');
-    const openSpy = jest.spyOn(fs, 'openSync');
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(false);
-    expect(readFileSpy).not.toHaveBeenCalled();
-    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it('mirrors built components when enabled and skips mirroring when disabled', () => {
@@ -132,6 +84,38 @@ describe('component mirror plugin', () => {
 
     expect(existsSync(distComponentFile)).toBe(false);
     expect(statSync(rootComponentFile).mtimeMs).toBe(rootMtimeBefore);
+  });
+
+  it('replaces an identical destination symlink without touching its target', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    const distComponentFile = join(outDir, 'components/card/card.twig');
+    const rootComponentFile = join(projectDir, 'components/card/card.twig');
+    const sharedFile = join(projectDir, 'shared/card.twig');
+    const contents = '<article>{{ title }}</article>';
+    const mirror = mirrorComponentsToRoot({ enabled: true, projectDir });
+
+    mkdirSync(join(distComponentFile, '..'), { recursive: true });
+    mkdirSync(join(rootComponentFile, '..'), { recursive: true });
+    mkdirSync(join(sharedFile, '..'), { recursive: true });
+    writeFileSync(distComponentFile, contents);
+    writeFileSync(sharedFile, contents);
+    utimesSync(
+      sharedFile,
+      new Date('2000-01-01T00:00:00Z'),
+      new Date('2000-01-01T00:00:00Z'),
+    );
+    const sharedMtimeBefore = statSync(sharedFile).mtimeMs;
+    symlinkSync(sharedFile, rootComponentFile);
+
+    mirror.configResolved({ build: { outDir } });
+    expect(mirror.writeBundle()).toBeUndefined();
+
+    expect(existsSync(distComponentFile)).toBe(false);
+    expect(lstatSync(rootComponentFile).isSymbolicLink()).toBe(false);
+    expect(readFileSync(rootComponentFile, 'utf8')).toBe(contents);
+    expect(readFileSync(sharedFile, 'utf8')).toBe(contents);
+    expect(statSync(sharedFile).mtimeMs).toBe(sharedMtimeBefore);
   });
 
   it('keeps interleaved build observations free of partial dist component files', () => {
