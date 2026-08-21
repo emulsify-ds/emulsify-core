@@ -45,6 +45,11 @@ const jsxDocumentationEntryPaths = [
   'src/components/card/Card.docs.jsx',
 ];
 
+const jsDocumentationEntryPaths = [
+  'src/components/card/card.doc.js',
+  'src/components/card/card.docs.js',
+];
+
 const buildContext = (
   projectDir,
   {
@@ -152,8 +157,6 @@ describe('buildInputs structure outputs', () => {
         'src/components/card/card.scss',
         'src/components/card/_partial.scss',
         'src/components/card/card.stories.js',
-        'src/components/card/card.docs.js',
-        'src/components/card/card.doc.js',
         'src/components/card/card.component.js',
         'src/components/card/card.min.js',
         'src/components/card/card.test.js',
@@ -166,11 +169,23 @@ describe('buildInputs structure outputs', () => {
 {
   "components/card/css/card": "src/components/card/card.scss",
   "components/card/js/card": "src/components/card/card.js",
-  "components/card/js/carddoc": "src/components/card/card.doc.js",
-  "components/card/js/carddocs": "src/components/card/card.docs.js",
   "global/base/css/base": "src/base/base.scss",
   "global/base/js/base": "src/base/base.js",
   "storybook/components/card/cl-card": "src/components/card/cl-card.scss",
+}
+`);
+  });
+
+  it('keeps JS doc and docs files as production entries', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: jsDocumentationEntryPaths,
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/js/carddoc": "src/components/card/card.doc.js",
+  "components/card/js/carddocs": "src/components/card/card.docs.js",
 }
 `);
   });

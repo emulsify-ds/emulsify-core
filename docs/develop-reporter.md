@@ -4,10 +4,11 @@
 under `concurrently`. The develop reporter is what makes that read as one tool
 instead of three.
 
-The reporter is active only for `vite build --watch`. One-shot `npm run build`,
-`storybook build`, and every release fixture verification keep their default
-output byte for byte, so nothing a platform ships is affected by anything on this
-page.
+The full session report is active only for `vite build --watch`. One-shot builds
+keep their normal output and add a compact block only for actionable asset
+diagnostics or, in a standalone `storybook build`, Sass deprecations that its
+quiet logger collected. Clean builds and release fixture verification remain
+unchanged, so nothing a platform ships is affected by the presentation here.
 
 ## What It Prints
 
@@ -225,14 +226,16 @@ for every deprecation it met. On a project carrying a few hundred of them that
 is most of a screen at startup, and the same screen again after every save,
 restating a tally the reporter had already printed once from the other process.
 
-Storybook now takes the same logger. It has no summary of its own to print and
-needs none: the watcher compiles the same source tree, so its `pre-existing
-debt` block already covers everything Storybook would have reported.
+Storybook now takes the same logger. During `npm run develop`, the watcher
+compiles the same source tree, so its `pre-existing debt` block already covers
+everything Storybook dev would have reported. A standalone `storybook build`
+has no sibling watcher, so it prints the collected, deduplicated Sass tally when
+the build finishes.
 
-The debt is never invisible. `npm run develop` prints it once per session, and
-one-shot `npm run build` keeps Dart Sass's own output untouched, because nothing
-runs alongside it to summarize. `EMULSIFY_VERBOSE=1` hands Storybook's raw
-output back.
+The debt is never invisible. `npm run develop` prints it once per session,
+`storybook build` prints it once at completion, and one-shot `npm run build`
+keeps Dart Sass's own output untouched. `EMULSIFY_VERBOSE=1` hands Storybook's
+raw output back.
 
 ### Transform Failures
 

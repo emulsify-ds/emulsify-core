@@ -40,8 +40,8 @@ import { yamlModulePlugin } from './yaml-module.js';
  *   srcExists: boolean,
  *   structureOverrides?: boolean,
  *   diagnostics?: object
- * }} env - Project environment. When `diagnostics` is present the develop
- *   reporter is appended; it is supplied only for watch builds.
+ * }} env - Project environment. When `diagnostics` is present the reporter is
+ *   appended for watch summaries and actionable one-shot diagnostics.
  * @returns {import('vite').PluginOption[]} Emulsify Vite plugins.
  */
 export function makePlugins(env) {
@@ -158,8 +158,8 @@ export function makePlugins(env) {
       projectDir,
     }),
 
-    // Summarize the build for `npm run develop`. Present only when the Vite
-    // config supplied a diagnostics collector, which it does for watch builds.
+    // Summarize `npm run develop`, and report actionable diagnostics collected
+    // during one-shot Vite or Storybook builds.
     ...(env.diagnostics
       ? [
           developReporterPlugin({

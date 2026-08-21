@@ -68,16 +68,17 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
   const env = resolveEnvironment();
   const sourceFileIndex = createSourceFileIndex(env.projectStructure);
 
-  // The develop reporter takes over output only for `vite build --watch`, the
-  // watcher `npm run develop` runs. One-shot builds, Storybook, and the release
-  // fixture verifications keep their existing output untouched.
+  // The full develop summary runs only for `vite build --watch`, the watcher
+  // `npm run develop` starts. One-shot builds keep their normal output and add
+  // a compact diagnostic block only when the collector has something to say.
   const watching = isWatchInvocation();
 
   // The collector itself is a handful of Maps, and one-shot builds need one
   // too: an unresolved CSS asset URL used to print a single raw Vite line and
   // exit 0, so a broken asset path shipped through CI unnoticed. The reporter
   // plugin decides whether to speak, and for a one-shot build it stays silent
-  // unless there is an asset problem — a clean project's output is unchanged.
+  // unless there is an asset problem or a collected Sass deprecation tally —
+  // a clean project's output is unchanged.
   const diagnostics = createDiagnosticsCollector();
   const envWithSourceFileIndex = { ...env, sourceFileIndex, diagnostics };
 
@@ -189,8 +190,9 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
 
       // Route Sass warnings into the diagnostics collector instead of letting
       // Dart Sass print a formatted block per occurrence. The reporter prints
-      // one deduplicated tally per session, so the debt stays visible without
-      // the repetition. `shouldQuietSass` owns which invocations get this.
+      // one deduplicated tally per develop session or standalone Storybook
+      // build, so the debt stays visible without the repetition.
+      // `shouldQuietSass` owns which invocations get this.
       ...(shouldQuietSass({ watching, command, verbose: isVerbose() })
         ? { preprocessorOptions: { scss: createSassOptions(diagnostics) } }
         : {}),

@@ -247,10 +247,10 @@ export function createSassOptions(collector, options = {}) {
  *    rebuild, which is the whole point. Raw mode does not turn this off: the
  *    reporter is still what prints the summary, and the firehose would bury it.
  *  - **Storybook** resolves with `command: 'serve'` for both `storybook dev`
- *    and `storybook build`. It has no reporter of its own, and needs none — it
- *    compiles the same stylesheets, from the same source tree, that the watcher
- *    already tallied. Without this it printed Dart Sass's full formatted block
- *    per occurrence, at startup and again after every save.
+ *    and `storybook build`. During development it compiles the same source tree
+ *    the watcher already tallied; a standalone static build prints the
+ *    collector's deduplicated tally at completion. Without this it printed Dart
+ *    Sass's full formatted block per occurrence, at startup and after saves.
  *  - **A one-shot `vite build`** keeps Dart Sass's output. Nothing else is
  *    running to report the debt, so that output is the only report there is.
  *

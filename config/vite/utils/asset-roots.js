@@ -13,6 +13,7 @@
  * what an author's `url('/assets/...')` resolves against at review time.
  */
 
+import { statSync } from 'fs';
 import { isAbsolute, relative, resolve, sep } from 'path';
 
 import { safeExists, safeRealPath } from './fs-safe.js';
@@ -45,6 +46,20 @@ function isSameOrInside(candidate, directory) {
   if (candidate === directory) return true;
   const rel = relative(directory, candidate);
   return Boolean(rel) && !rel.startsWith('..') && !rel.includes(`..${sep}`);
+}
+
+/**
+ * Determine whether an asset candidate is a regular file.
+ *
+ * @param {string} candidate - Absolute candidate path.
+ * @returns {boolean} TRUE when the candidate is a file.
+ */
+function isFile(candidate) {
+  try {
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -140,7 +155,7 @@ export function resolveAssetTail(tail, roots = []) {
 
     // A tail such as `../../etc/passwd` must not escape its root.
     if (!isSameOrInside(candidate, root)) continue;
-    if (!safeExists(candidate)) continue;
+    if (!isFile(candidate)) continue;
 
     const key = safeRealPath(candidate);
     if (seen.has(key)) continue;

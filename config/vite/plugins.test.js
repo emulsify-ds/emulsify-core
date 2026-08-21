@@ -71,8 +71,8 @@ describe('Vite plugin public barrel', () => {
   it('omits the develop reporter unless a diagnostics collector is supplied', () => {
     projectDir = makeTempProject();
 
-    // Storybook and one-shot builds resolve the chain without diagnostics, so
-    // the reporter must not be present to double-print alongside Storybook.
+    // Direct consumers that omit diagnostics must not get a reporter with no
+    // collector to summarize.
     expect(
       pluginNames(pluginsModule.makePlugins(makeEnv(projectDir))),
     ).not.toContain('emulsify-develop-reporter');

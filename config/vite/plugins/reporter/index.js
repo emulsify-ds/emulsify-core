@@ -16,13 +16,12 @@
  *  - `apply: 'build'` excludes Storybook's dev server, which resolves with
  *    `command: 'serve'`. This mirrors the existing guard on the component
  *    mirror plugin.
- *  - A `config.build.watch` check excludes `storybook build`, `npm run build`,
- *    and every fixture verification, all of which run a one-shot production
- *    build where `--watch` is absent. Those commands keep their current output
- *    byte for byte.
+ *  - A `config.build.watch` check selects the full develop summary. One-shot
+ *    production builds remain silent unless the collector has an asset problem
+ *    or a Sass tally that would otherwise be hidden.
  *
- * The net effect is that the reporter only speaks for the long-running watcher
- * started by `develop`, and Storybook keeps printing its own ready box.
+ * Storybook dev stays out of the reporter path and keeps its own ready box;
+ * standalone Storybook builds receive the compact diagnostics they need.
  */
 
 import { join, relative } from 'node:path';
@@ -41,6 +40,7 @@ import {
   hasCycleFailure,
   renderAssetSummary,
   renderBanner,
+  renderDeprecationSummary,
   renderRebuild,
   renderSummary,
 } from './render.js';
@@ -391,13 +391,12 @@ export function developReporterPlugin({
   };
 
   /**
-   * Report CSS asset problems after a one-shot build.
+   * Report collected diagnostics after a one-shot build.
    *
    * Watch builds get the full per-cycle summary; a one-shot `vite build` or
    * `storybook build` gets this and nothing else, and only when there is
-   * something to say. Until now those builds printed one raw Vite line per
-   * unresolved URL and exited 0, so a broken asset path shipped through CI
-   * unnoticed.
+   * something to say. It covers both captured asset diagnostics and Sass
+   * deprecations swallowed by Storybook's quiet logger.
    *
    * @returns {void}
    */
@@ -407,7 +406,14 @@ export function developReporterPlugin({
 
     const snapshot = diagnostics.snapshot();
     const rebases = snapshot.assetRebases || [];
-    if (!snapshot.unresolvedAssets.length && !rebases.length) return;
+    const deprecations = snapshot.deprecations || [];
+    if (
+      !snapshot.unresolvedAssets.length &&
+      !rebases.length &&
+      !deprecations.length
+    ) {
+      return;
+    }
 
     // Enriching walks the project, so it only runs when there is an unresolved
     // URL to attribute. Rebase records already carry their own importer.
@@ -418,13 +424,19 @@ export function developReporterPlugin({
       ? buildAssetRows(snapshot.unresolvedAssets, resolver)
       : [];
 
-    emit(
-      renderAssetSummary({
+    emit([
+      ...renderAssetSummary({
         assetRows: oneShotAssetRows,
         rebases,
         styler,
       }),
-    );
+      ...renderDeprecationSummary({
+        snapshot,
+        projectDir: env.projectDir,
+        sourceGlob: resolveSourceGlob(env),
+        styler,
+      }),
+    ]);
   };
 
   return {
@@ -440,8 +452,7 @@ export function developReporterPlugin({
     configResolved(config) {
       watching = Boolean(config.build?.watch);
       // Everything below is watch-only setup. A one-shot build stays silent
-      // unless it has an asset problem to report, which keeps `npm run build`,
-      // `storybook build`, and the release fixtures byte for byte identical.
+      // unless it has an asset problem or a collected Sass tally to report.
       oneShot = !watching;
       if (!watching) return;
 

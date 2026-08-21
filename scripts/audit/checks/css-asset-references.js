@@ -113,16 +113,39 @@ function auditAssetRootReference({
 }) {
   const tail = assetTailFor(assetPath);
   const resolution = resolveAssetTail(tail, assetRoots);
-  // A `?v=2` or `#id` suffix is part of the authored URL, not of the asset
-  // path, so it survives the rewrite untouched.
-  const canonical = `/assets/${tail}${ref.raw.slice(cssUrlPath(ref.raw).length)}`;
 
   if (resolution.status !== 'resolved') {
     return [unresolvedFinding({ filePath, projectDir, ref, resolution })];
   }
 
+  const interpolated = ref.raw.includes('#{');
+  // A `?v=2` or `#id` suffix is part of the authored URL, not of the asset
+  // path, so it survives the rewrite untouched. Interpolation also begins
+  // with `#`, but it is authored Sass rather than a URL fragment; deriving a
+  // replacement from it would append the complete raw value as a suffix.
+  const canonical = interpolated
+    ? undefined
+    : `/assets/${tail}${ref.raw.slice(cssUrlPath(ref.raw).length)}`;
+
   // Already canonical: nothing to say.
   if (ref.raw === canonical) return [];
+
+  const fix = canonical ? makeUrlFix(filePath, ref, canonical) : undefined;
+  const details = [
+    `Resolved asset: ${displayPath(projectDir, resolution.file)}.`,
+  ];
+
+  if (canonical) {
+    details.push(`Rewrite it as url(${canonical}).`);
+  } else {
+    details.push(
+      'This URL contains Sass interpolation, so review its variable declaration instead of rewriting the reference automatically.',
+    );
+  }
+
+  if (fix) {
+    details.push('Run `emulsify-audit --fix` to apply this automatically.');
+  }
 
   return [
     makeFinding({
@@ -131,13 +154,9 @@ function auditAssetRootReference({
       filePath,
       line: ref.line,
       message: `CSS asset URL "${ref.raw}" is not the canonical asset form, so the build has to repair it.`,
-      details: [
-        `Resolved asset: ${displayPath(projectDir, resolution.file)}.`,
-        `Rewrite it as url(${canonical}).`,
-        'Run `emulsify-audit --fix` to apply this automatically.',
-      ],
+      details,
       docs: ASSET_DOCS,
-      fix: makeUrlFix(filePath, ref, canonical),
+      fix,
     }),
   ];
 }

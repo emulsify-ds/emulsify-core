@@ -513,6 +513,27 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
 }
 
 /**
+ * Render the Sass deprecation worklist for a one-shot build.
+ *
+ * The watch summary supplies its own section spacing. A standalone build has
+ * no surrounding report, so this wrapper adds the leading blank line that
+ * keeps the tally separate from Vite's output.
+ *
+ * @param {{snapshot: object, projectDir?: string, sourceGlob?: string, styler: Function}} options - Render inputs.
+ * @returns {string[]} Report lines.
+ */
+export function renderDeprecationSummary({
+  snapshot,
+  projectDir = '',
+  sourceGlob = 'src/**/*.scss',
+  styler,
+}) {
+  const lines = renderDeprecations(snapshot, projectDir, styler, sourceGlob);
+
+  return lines.length > 0 ? ['', ...lines] : [];
+}
+
+/**
  * Render the `sass-migrator` invocation that resolves most of the debt.
  *
  * The migrator runs exactly one migration per invocation, so a combined command
@@ -1179,9 +1200,9 @@ function renderSizeTable(rows, styler) {
 /**
  * Render the standalone CSS asset block a one-shot build prints.
  *
- * One-shot builds are silent unless something is wrong, so this is deliberately
- * the whole report rather than a section of one: no banner, no project facts,
- * no deprecation tally. A clean project keeps its output byte for byte.
+ * One-shot builds are silent unless something is wrong, so this omits the
+ * banner and project facts. The caller may compose it with a collected Sass
+ * deprecation tally; a clean project keeps its output byte for byte.
  *
  * @param {{assetRows?: Array<object>, rebases?: Array<object>, styler: Function}} options - Render inputs.
  * @returns {string[]} Report lines.

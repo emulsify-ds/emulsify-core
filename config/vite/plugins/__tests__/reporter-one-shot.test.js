@@ -1,5 +1,5 @@
 /**
- * @file Tests for one-shot build asset reporting and strict mode.
+ * @file Tests for one-shot build diagnostics and strict mode.
  *
  * A one-shot `vite build` used to print one raw Vite line per unresolved CSS
  * asset URL and exit 0, so a broken asset path shipped through CI unnoticed.
@@ -39,8 +39,8 @@ function createOneShotHarness({ strictness = STRICTNESS.off } = {}) {
   return { plugin, lines, collector };
 }
 
-describe('one-shot asset reporting', () => {
-  it('prints nothing when the build had no asset problems', () => {
+describe('one-shot reporting', () => {
+  it('prints nothing when the build had no diagnostics', () => {
     // The invariant every release fixture and `npm run build` depends on: a
     // clean project's output stays byte for byte what it was.
     const { plugin, lines } = createOneShotHarness();
@@ -166,6 +166,40 @@ describe('one-shot asset reporting', () => {
     expect(
       lines.filter((line) => line.includes('rebased to /assets/')),
     ).toHaveLength(1);
+  });
+
+  it('reports Sass deprecations from a standalone Storybook build', () => {
+    const lines = [];
+    const collector = createDiagnosticsCollector();
+    const plugin = developReporterPlugin({
+      env: { projectDir: '/project', srcDir: '/project/src' },
+      diagnostics: collector,
+      write: (line) => lines.push(line),
+      colorEnabled: false,
+      unicodeEnabled: true,
+      strictness: STRICTNESS.off,
+    });
+
+    // Storybook resolves the shared config with `serve`, even when its static
+    // builder is running a one-shot production build.
+    plugin.configResolved({
+      command: 'serve',
+      mode: 'production',
+      build: { watch: null, outDir: 'storybook-static/' },
+    });
+    collector.recordDeprecation({
+      id: 'slash-div',
+      file: '/project/src/components/base/_spacing.scss',
+      line: 12,
+    });
+
+    plugin.closeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 sass deprecation');
+    expect(output).toContain('src/components/base/_spacing.scss');
+    expect(output).toContain('slash-div');
+    expect(output).toMatch(/npx sass-migrator division 'src\/\*\*\/\*\.scss'/);
   });
 });
 

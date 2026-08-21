@@ -325,6 +325,11 @@ describe('auditCssAssetReferences', () => {
 
     expect(finding.id).toBe('css-runtime-asset-reference');
     expect(finding.fix).toBeUndefined();
+    expect(finding.details).toContain(
+      'This URL contains Sass interpolation, so review its variable declaration instead of rewriting the reference automatically.',
+    );
+    expect(finding.details.join('\n')).not.toContain('Rewrite it as url(');
+    expect(finding.details.join('\n')).not.toContain('emulsify-audit --fix');
   });
 
   it('reports unresolved CSS asset references', () => {
