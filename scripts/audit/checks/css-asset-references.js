@@ -171,6 +171,14 @@ export function auditCssAssetReferences(context) {
       const assetPath = cssUrlPath(ref.value);
       if (!assetPath) continue;
 
+      // CSS resolves non-absolute URLs from the source stylesheet first. The
+      // build plugin only sees literals Vite already failed to resolve, but the
+      // audit scans authored source and must preserve that precedence itself.
+      // Do not probe `/assets/...` against the filesystem root: it is the
+      // canonical project-asset form, not a source-relative path.
+      const sourceAsset = assetPath.startsWith('/')
+        ? undefined
+        : firstExistingPath([resolve(dirname(filePath), assetPath)]);
       const classification = classifyCssAssetUrl(ref.value);
 
       // Some other absolute URL: the platform serves it, and there is no
@@ -178,6 +186,11 @@ export function auditCssAssetReferences(context) {
       if (classification === 'runtime') continue;
 
       if (classification === 'asset-root') {
+        // Rewriting a working local reference could select a different file
+        // with the same tail under a project asset root. It needs no repair and
+        // is deliberately ineligible for --fix.
+        if (sourceAsset) continue;
+
         findings.push(
           ...auditAssetRootReference({
             assetPath,
@@ -190,9 +203,6 @@ export function auditCssAssetReferences(context) {
         continue;
       }
 
-      const sourceAsset = firstExistingPath([
-        resolve(dirname(filePath), assetPath),
-      ]);
       const runtimeAsset = firstExistingPath(
         runtimeDirs.map((directory) => resolve(directory, assetPath)),
       );

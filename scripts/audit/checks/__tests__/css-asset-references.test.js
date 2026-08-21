@@ -2,7 +2,10 @@
  * @file Tests for the CSS asset reference audit check.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { auditCssAssetReferences } from '../css-asset-references.js';
+import { applyAuditFixes } from '../../fix.js';
 import { resetFileReadCache } from '../../lib/files.js';
 import { findCssUrlReferences } from '../../lib/css.js';
 import {
@@ -33,6 +36,18 @@ describe('auditCssAssetReferences', () => {
       projectDir,
       styleFiles: [styleFile],
     });
+
+  const expectLocalReferenceUntouched = (styleFile) => {
+    const before = readFileSync(styleFile, 'utf8');
+    const findings = audit(styleFile);
+
+    expect(findings.filter(({ severity }) => severity !== 'info')).toEqual([]);
+    expect(findings.every(({ fix }) => fix === undefined)).toBe(true);
+
+    const result = applyAuditFixes(findings);
+    expect(result.applied).toEqual([]);
+    expect(readFileSync(styleFile, 'utf8')).toBe(before);
+  };
 
   it('expands simple Sass variables in CSS URL references', () => {
     expect(
@@ -137,26 +152,71 @@ describe('auditCssAssetReferences', () => {
     expect(audit(styleFile)).toEqual([]);
   });
 
-  it('offers the canonical rewrite for the bare assets/ form', () => {
-    // Documented in docs/asset-references.md, but Vite reads it as a package
-    // specifier, so the build has to repair it.
-    writeFile(projectDir, 'assets/icons/search.svg', '<svg />');
+  it('leaves a bare assets/ URL that resolves beside the stylesheet untouched', () => {
+    writeFile(projectDir, 'src/components/card/assets/spinner.gif', 'LOCAL');
     const styleFile = writeFile(
       projectDir,
-      'src/components/search/search.scss',
-      '.search { mask-image: url("assets/icons/search.svg"); }',
+      'src/components/card/card.scss',
+      '.card { background-image: url("assets/spinner.gif"); }',
+    );
+
+    expectLocalReferenceUntouched(styleFile);
+  });
+
+  it('keeps a local asset when a project-root twin has the same tail', () => {
+    writeFile(projectDir, 'src/components/card/assets/spinner.gif', 'LOCAL');
+    writeFile(projectDir, 'assets/spinner.gif', 'ROOT');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("assets/spinner.gif"); }',
+    );
+
+    expectLocalReferenceUntouched(styleFile);
+  });
+
+  it('still validates canonical URLs only against project asset roots', () => {
+    writeFile(projectDir, 'src/components/card/assets/spinner.gif', 'LOCAL');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("/assets/spinner.gif"); }',
+    );
+
+    const [finding] = audit(styleFile);
+
+    expect(finding.id).toBe('unresolved-css-asset-reference');
+    expect(finding.severity).toBe('warn');
+    expect(finding.fix).toBeUndefined();
+  });
+
+  it('offers the canonical rewrite for a root-only bare assets/ URL', () => {
+    // Documented in docs/asset-references.md, but Vite reads it as a package
+    // specifier, so the build has to repair it.
+    writeFile(projectDir, 'assets/spinner.gif', 'ROOT');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("assets/spinner.gif"); }',
     );
 
     const [finding] = audit(styleFile);
 
     expect(finding.id).toBe('css-runtime-asset-reference');
+    expect(finding.severity).toBe('info');
     expect(finding.details).toContain(
-      'Rewrite it as url(/assets/icons/search.svg).',
+      'Rewrite it as url(/assets/spinner.gif).',
     );
     expect(finding.fix).toMatchObject({
-      original: 'assets/icons/search.svg',
-      replacement: '/assets/icons/search.svg',
+      original: 'assets/spinner.gif',
+      replacement: '/assets/spinner.gif',
     });
+
+    const result = applyAuditFixes([finding]);
+    expect(result.applied).toHaveLength(1);
+    expect(readFileSync(styleFile, 'utf8')).toBe(
+      '.card { background-image: url("/assets/spinner.gif"); }',
+    );
   });
 
   it('offers the canonical rewrite for a wrong-depth relative URL', () => {
@@ -210,7 +270,7 @@ describe('auditCssAssetReferences', () => {
       projectDir,
       'src/foundation/typography/_fonts.scss',
       [
-        '$font-url: "../../../assets/fonts";',
+        '$font-url: "../../../../assets/fonts";',
         '@font-face { src: url("#{$font-url}/Avenir.woff2"); }',
       ].join('\n'),
     );
