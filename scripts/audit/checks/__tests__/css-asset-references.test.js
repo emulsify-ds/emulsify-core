@@ -101,6 +101,52 @@ describe('auditCssAssetReferences', () => {
     ]);
   });
 
+  it.each([
+    ['a block comment', '/* background: url("assets/images/hidden.svg"); */'],
+    [
+      'a trailing line comment',
+      '.note { color: red; } // background: url("assets/images/hidden.svg");',
+    ],
+    [
+      'a quoted string value',
+      '.note::after { content: "url(assets/images/hidden.svg)"; }',
+    ],
+  ])(
+    'ignores url() inside %s but still scans a URL token',
+    (_, hiddenSource) => {
+      writeFile(projectDir, 'assets/images/hidden.svg', '<svg />');
+      writeFile(projectDir, 'assets/images/real.svg', '<svg />');
+      const source = [
+        hiddenSource,
+        '.real { background: url("assets/images/real.svg"); }',
+      ].join('\n');
+      const styleFile = writeFile(
+        projectDir,
+        'src/components/card/card.scss',
+        source,
+      );
+
+      expect(findCssUrlReferences(source).map(({ value }) => value)).toEqual([
+        'assets/images/real.svg',
+      ]);
+
+      const findings = audit(styleFile);
+      expect(findings).toHaveLength(1);
+      expect(findings[0].fix).toMatchObject({
+        original: 'assets/images/real.svg',
+        replacement: '/assets/images/real.svg',
+      });
+
+      expect(applyAuditFixes(findings, { projectDir }).applied).toHaveLength(1);
+      expect(readFileSync(styleFile, 'utf8')).toBe(
+        [
+          hiddenSource,
+          '.real { background: url("/assets/images/real.svg"); }',
+        ].join('\n'),
+      );
+    },
+  );
+
   it('validates the canonical /assets/ form', () => {
     // The headline gap: every absolute URL used to be skipped outright, so a
     // typo in the documented convention was caught by nothing at all.

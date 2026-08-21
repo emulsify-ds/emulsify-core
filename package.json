@@ -96,6 +96,7 @@
     "config/vite/project-extensions.js",
     "config/vite/project-structure.js",
     "config/vite/utils/asset-roots.js",
+    "config/vite/utils/css-urls.js",
     "config/vite/utils/fs-safe.js",
     "config/vite/utils/lru.js",
     "config/vite/utils/package-version.js",

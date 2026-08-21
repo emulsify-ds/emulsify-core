@@ -36,6 +36,7 @@
 import { dirname, posix, resolve } from 'path';
 
 import { resolveAssetTail } from '../../utils/asset-roots.js';
+import { replaceStylesheetUrlTokens } from '../../utils/css-urls.js';
 import { safeExists } from '../../utils/fs-safe.js';
 import { toPosixPath } from '../../utils/paths.js';
 
@@ -47,11 +48,11 @@ import { toPosixPath } from '../../utils/paths.js';
 export const PUBLIC_ASSET_PREFIX = 'assets';
 
 /**
- * Match a CSS `url()` call, preferring the quoted form.
+ * Raw `url()` matcher retained for compatibility with existing deep imports.
  *
- * Mirrors Vite's own `cssUrlRE` so the two agree on what a URL token is. The
- * lookbehind keeps `image-set(...)` and custom `--foo-url(` idents from
- * matching mid-identifier.
+ * Internal scanners must use `tokenizeStylesheetUrls` or
+ * `replaceStylesheetUrlTokens`, which add the comment and string context this
+ * expression cannot represent.
  *
  * @type {RegExp}
  */
@@ -190,10 +191,7 @@ export function planAssetUrl(value, importer, roots = []) {
 export function rewriteStylesheetUrls(code, importer, roots = [], onPlan) {
   let changed = false;
 
-  const next = code.replace(CSS_URL_RE, (match, inner, quoted) => {
-    const quote = quoted ? quoted[0] : '';
-    const value = quoted ? quoted.slice(1, -1) : String(inner).trim();
-
+  const next = replaceStylesheetUrlTokens(code, ({ match, quote, value }) => {
     const plan = planAssetUrl(value, importer, roots);
     if (typeof onPlan === 'function') onPlan(plan, { value });
 

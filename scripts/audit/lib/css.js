@@ -4,6 +4,7 @@
 
 import { basename, dirname, resolve } from 'node:path';
 import { assetTailFor } from '../../../config/vite/plugins/assets/asset-url-rebase.js';
+import { tokenizeStylesheetUrls } from '../../../config/vite/utils/css-urls.js';
 import {
   compiledAssetOutputPath,
   storybookStyleOutputPath,
@@ -45,51 +46,30 @@ function resolveSassUrlValue(value, variables) {
 }
 
 /**
- * Mask style comments while preserving line and character positions.
- *
- * @param {string} source - Stylesheet source.
- * @returns {string} Source with comments replaced by whitespace.
- */
-function maskStyleComments(source) {
-  const blank = (match) => match.replace(/[^\n]/g, ' ');
-
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/^[\t ]*\/\/.*$/gm, blank);
-}
-
-/**
  * Extract URL references from CSS or Sass source.
  *
  * `start` and `end` bracket the specifier *without* its quotes, so an autofix
- * can splice a replacement in without disturbing quote style. Comment masking
- * preserves positions, so offsets taken from the scanned copy are valid in the
- * original source: `source.slice(start, end) === raw`.
+ * can splice a replacement in without disturbing quote style. The shared
+ * tokenizer preserves original positions, so `source.slice(start, end) === raw`.
  *
  * @param {string} source - Stylesheet source.
  * @returns {{value: string, raw: string, line: number, start: number, end: number}[]} URL references.
  */
 export function findCssUrlReferences(source) {
-  const scanSource = maskStyleComments(source);
-  const variables = findSassStringVariables(scanSource);
+  const { urls, sourceWithoutComments } = tokenizeStylesheetUrls(source);
+  const variables = findSassStringVariables(sourceWithoutComments);
   const references = [];
-  const pattern = /url\(\s*(?:(['"])(.*?)\1|([^'")][^)]*?))\s*\)/dg;
 
-  for (const match of scanSource.matchAll(pattern)) {
-    const untrimmed = match[2] ?? match[3] ?? '';
-    const [groupStart] = match.indices?.[2] ??
-      match.indices?.[3] ?? [match.index || 0];
-    const raw = untrimmed.trim();
-    const start =
-      groupStart + (untrimmed.length - untrimmed.trimStart().length);
+  for (const token of urls) {
+    const raw = token.value;
     const value = resolveSassUrlValue(raw, variables).trim();
 
     references.push({
       value,
       raw,
-      line: lineNumberAt(source, match.index || 0),
-      start,
-      end: start + raw.length,
+      line: lineNumberAt(source, token.start),
+      start: token.valueStart,
+      end: token.valueEnd,
     });
   }
 

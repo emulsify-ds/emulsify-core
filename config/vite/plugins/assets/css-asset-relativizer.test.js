@@ -169,6 +169,20 @@ describe('cssAssetUrlRelativizer', () => {
   });
 
   it.each([
+    [
+      'a block comment',
+      `/* background: url(${QUOTE}/assets/x.svg${QUOTE}); */`,
+    ],
+    ['a trailing line comment', '.a { color: red; } // see url(/assets/x.svg)'],
+    [
+      'a quoted string value',
+      `.a { content: ${DOUBLE_QUOTE}url(/assets/x.svg)${DOUBLE_QUOTE}; }`,
+    ],
+  ])('ignores url() text inside %s', (_label, css) => {
+    expect(sourceOf('components/card/card.css', css)).toBe(css);
+  });
+
+  it.each([
     ['unquoted', '', ''],
     ['single quoted', QUOTE, QUOTE],
     ['double quoted', DOUBLE_QUOTE, DOUBLE_QUOTE],

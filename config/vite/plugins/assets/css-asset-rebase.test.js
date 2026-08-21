@@ -26,6 +26,8 @@ import {
   writeProjectConfig,
 } from '../../test-utils/plugins.js';
 
+const QUOTE = String.fromCharCode(39);
+
 describe('asset URL rebase rules', () => {
   let projectDir;
   let roots;
@@ -187,6 +189,53 @@ describe('asset URL rebase rules', () => {
   });
 
   describe('rewriteStylesheetUrls', () => {
+    it.each([
+      [
+        'a block comment',
+        `/* background: url(${QUOTE}assets/images/x.svg${QUOTE}); */`,
+      ],
+      [
+        'a trailing line comment',
+        '.a { color: red; } // see url(assets/images/x.svg)',
+      ],
+      ['a quoted string value', '.a { content: "url(assets/images/x.svg)"; }'],
+    ])('ignores url() text inside %s', (_label, css) => {
+      const onPlan = jest.fn();
+
+      expect(rewriteStylesheetUrls(css, stylesheet, roots, onPlan)).toEqual({
+        code: css,
+        changed: false,
+      });
+      expect(onPlan).not.toHaveBeenCalled();
+    });
+
+    it('still rewrites a real url() token alongside ignored text', () => {
+      const onPlan = jest.fn();
+      const css = [
+        `/* background: url(${QUOTE}assets/images/x.svg${QUOTE}); */`,
+        '.a { color: red; } // see url(assets/images/x.svg)',
+        '.b { content: "url(assets/images/x.svg)"; }',
+        '.c { background: url(assets/images/x.svg); }',
+      ].join('\n');
+
+      expect(rewriteStylesheetUrls(css, stylesheet, roots, onPlan)).toEqual({
+        code: css.replace(
+          '.c { background: url(assets/images/x.svg); }',
+          '.c { background: url(/assets/images/x.svg); }',
+        ),
+        changed: true,
+      });
+      expect(onPlan).toHaveBeenCalledTimes(1);
+      expect(onPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'rebased',
+          originalUrl: 'assets/images/x.svg',
+          url: '/assets/images/x.svg',
+        }),
+        { value: 'assets/images/x.svg' },
+      );
+    });
+
     it('rewrites only what it repairs and reports the rest', () => {
       const seen = [];
       const record = (plan) => seen.push(plan.status);
@@ -267,6 +316,47 @@ describe('cssAssetRebasePlugin', () => {
   const viteCopyOf = (source) => ({
     type: 'asset',
     originalFileNames: [source],
+  });
+
+  it('reports only genuine url() tokens to strict asset diagnostics', () => {
+    const env = setup();
+    const diagnostics = { recordAssetRebase: jest.fn() };
+    const plugin = cssAssetRebasePlugin({
+      env,
+      diagnostics,
+      publishedAssetSources,
+      removablePublishedAssets,
+    });
+    const input = [
+      `/* background: url(${QUOTE}assets/images/x.svg${QUOTE}); */`,
+      '.a { color: red; } // see url(assets/images/x.svg)',
+      '.b { content: "url(assets/images/x.svg)"; }',
+      '.c { background: url(assets/images/x.svg); }',
+    ].join('\n');
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+
+    const result = transform(
+      plugin,
+      input,
+      join(projectDir, 'src/components/card/card.scss'),
+    );
+
+    expect(result.code).toBe(
+      input.replace(
+        '.c { background: url(assets/images/x.svg); }',
+        '.c { background: url(/assets/images/x.svg); }',
+      ),
+    );
+    expect(diagnostics.recordAssetRebase).toHaveBeenCalledTimes(1);
+    expect(diagnostics.recordAssetRebase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'rebased',
+        url: 'assets/images/x.svg',
+        rewritten: '/assets/images/x.svg',
+      }),
+    );
   });
 
   const runBundlePipeline = (env, bundle) => {

@@ -34,12 +34,9 @@
 
 import { isAbsolute, posix as pathPosix, relative, resolve } from 'path';
 
+import { replaceStylesheetUrlTokens } from '../../utils/css-urls.js';
 import { toPosixPath } from '../../utils/paths.js';
-import {
-  CSS_URL_RE,
-  PUBLIC_ASSET_PREFIX,
-  splitUrlSuffix,
-} from './asset-url-rebase.js';
+import { PUBLIC_ASSET_PREFIX, splitUrlSuffix } from './asset-url-rebase.js';
 import { isStorybookOutput } from './storybook-output.js';
 
 /** Stylesheet facades Vite may retain as empty Rollup chunks. */
@@ -234,11 +231,9 @@ export function cssAssetUrlRelativizer({
 
         // Length-changing rewrite: read the sourcemap warning in the file
         // header before pairing this plugin with CSS sourcemaps.
-        chunk.source = chunk.source.replace(
-          CSS_URL_RE,
-          (match, inner, quoted) => {
-            const quote = quoted ? quoted[0] : '';
-            const value = quoted ? quoted.slice(1, -1) : String(inner).trim();
+        chunk.source = replaceStylesheetUrlTokens(
+          chunk.source,
+          ({ match, quote, value }) => {
             const { path: urlPath, suffix } = splitUrlSuffix(value);
             const absolutePrefix = `/${PUBLIC_ASSET_PREFIX}/`;
             const barePrefix = `${PUBLIC_ASSET_PREFIX}/`;
