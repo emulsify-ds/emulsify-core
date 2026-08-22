@@ -34,8 +34,8 @@ const customElementBrowserTest = join(
 const largeTwigComponentCount = 80;
 // Storybook 10.5 changes its own manager/runtime chunks under Vite 8, so keep
 // the regression gate focused on fixture-owned output. The exclusive ceiling
-// preserves the original 484-byte budget over the current 178,698-byte result.
-const largeTwigStorybookFixtureJsLimit = 179_182;
+// preserves the original 484-byte budget over the current 181,845-byte result.
+const largeTwigStorybookFixtureJsLimit = 182_329;
 const largeTwigStorybookFixtureJsPatterns = [
   'storybook-assets/_content-*.js',
   'storybook-assets/gallery-*.js',
@@ -43,23 +43,96 @@ const largeTwigStorybookFixtureJsPatterns = [
   'storybook-assets/item-*.js',
 ];
 
+// The lint rule bans double-quoted strings, and these patterns need a literal
+// single quote to match single-quoted CSS.
+const QUOTE = String.fromCharCode(39);
+
+/**
+ * Reject every CSS asset URL form that is wrong for a given stylesheet.
+ *
+ * The Drupal SDC and no-platform alias fixtures author canonical,
+ * namespaced-alias, bare, and deliberately wrong-depth relative URLs. The
+ * build must converge all four on the depth that stylesheet actually needs.
+ * The URL-prefix rejects are
+ * anchored on `url(` and repeated per quote style, so a correct deeper path can
+ * never satisfy them and minifier quoting cannot make them vacuous. The
+ * optional `dist/assets/` sentinel is for lean-output fixtures, where any
+ * reference into the deliberately removed output asset tree is dead. Default
+ * self-contained fixtures intentionally reference that directory.
+ *
+ * @param {string} pattern - Emitted stylesheet to check.
+ * @param {{rejectOutputPath?: boolean}} [options] - Whether output asset URLs are invalid.
+ * @returns {{pattern: string, strings: string[]}} Reject rule.
+ */
+const rejectWrongAssetUrls = (pattern, { rejectOutputPath = false } = {}) => ({
+  pattern,
+  strings: [
+    'url(../assets/',
+    'url("../assets/',
+    `url(${QUOTE}../assets/`,
+    'url(/assets/',
+    'url("/assets/',
+    `url(${QUOTE}/assets/`,
+    'url(assets/',
+    'url("assets/',
+    `url(${QUOTE}assets/`,
+    'url(@assets/',
+    'url("@assets/',
+    `url(${QUOTE}@assets/`,
+    '@assets/',
+    ...(rejectOutputPath ? ['dist/assets/'] : []),
+  ],
+});
+
 const releaseFixtures = [
   {
     name: 'drupal-sdc-src-components',
     type: 'vite',
+    setup: setupStaleProductionSourceMapFixture,
     assert: [
       'components/card/card.js',
       'components/card/card.css',
       'components/card/card.twig',
       'components/card/card.component.yml',
       'components/card/card.asset.txt',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: [
+      'components/card/carddoc.js',
+      'components/card/carddocs.js',
+      'components/card/card.css.map',
+      'components/card/card.js.map',
       'dist/components/card/card.js',
       'dist/components/card/card.css',
       'dist/components/card/card.twig',
       'dist/components/card/card.component.yml',
       'dist/components/card/card.asset.txt',
+    ],
+    assertContent: [
+      {
+        // Mirrored CSS sits outside dist/, so its self-contained asset target
+        // includes the output directory segment as well as the asset path.
+        pattern: 'components/card/card.css',
+        strings: [
+          '../../dist/assets/images/canonical.svg',
+          '../../dist/assets/images/canonical.svg?alias=variable#icon',
+          '../../dist/assets/images/canonical.svg?alias=literal#icon',
+          '../../dist/assets/images/canonical.svg?v=2',
+          '../../dist/assets/images/canonical.svg#icon',
+          '.card__spaced',
+          '../../dist/assets/images/bare.svg',
+          '../../dist/assets/images/relative.svg',
+        ],
+      },
+    ],
+    rejectContent: [
+      rejectWrongAssetUrls('components/card/card.css'),
+      {
+        pattern: 'components/card/card.css',
+        strings: ['../../assets/images/', 'sourceMappingURL='],
+      },
     ],
   },
   {
@@ -75,9 +148,15 @@ const releaseFixtures = [
       'dist/global/base/js/base.js',
       'dist/global/base/css/base.css',
       'dist/extension-marker.txt',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/logo$2x.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: [
       'components/card/card.js',
+      'dist/components/card/css/card.css.map',
+      'dist/components/card/js/card.js.map',
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
       'dist/components/card/js/card2.js',
@@ -87,11 +166,114 @@ const releaseFixtures = [
         pattern: 'dist/global/base/css/base.css',
         strings: ['.sass-glob-fixture', '.legacy-sass-glob-fixture'],
       },
+      {
+        pattern: 'dist/components/card/js/card.js',
+        strings: ['consumer-js-alias-still-resolves'],
+      },
+      {
+        // Bucketed component CSS reaches the copy at the root of dist/.
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          '../../../assets/images/canonical.svg',
+          '../../../assets/images/canonical.svg?alias=variable#icon',
+          '../../../assets/images/canonical.svg?alias=literal#icon',
+          '../../../assets/images/bare.svg',
+          '../../../assets/images/logo$2x.svg',
+          '../../../assets/images/relative.svg',
+        ],
+      },
     ],
     rejectContent: [
       {
         pattern: 'dist/**/*.js',
         strings: ['window.Drupal', 'Drupal.behaviors', 'attachBehaviors'],
+      },
+      rejectWrongAssetUrls('dist/components/card/css/card.css'),
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../assets/images/'],
+      },
+      {
+        pattern: 'dist/**/*.css',
+        strings: ['Consumer alias shadow that Core must not resolve'],
+      },
+    ],
+  },
+  {
+    name: 'drupal-sdc-non-self-contained-output',
+    type: 'vite',
+    assert: ['components/card/card.css'],
+    reject: ['dist/assets/images/canonical.svg'],
+    assertContent: [
+      {
+        pattern: 'components/card/card.css',
+        strings: [
+          '../../assets/images/canonical.svg',
+          '../../assets/images/canonical.svg?v=2',
+          '../../assets/images/canonical.svg#icon',
+          '.card__spaced',
+        ],
+      },
+    ],
+    rejectContent: [
+      rejectWrongAssetUrls('components/card/card.css', {
+        rejectOutputPath: true,
+      }),
+    ],
+  },
+  {
+    name: 'non-self-contained-src-assets',
+    type: 'vite',
+    assert: ['dist/components/card/css/card.css'],
+    reject: ['dist/src/assets/images/hero.svg'],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../src/assets/images/hero.svg'],
+      },
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['url(/src/assets/images/hero.svg)'],
+      },
+    ],
+  },
+  {
+    name: 'non-self-contained-custom-asset-root',
+    type: 'vite',
+    assert: ['dist/components/card/css/card.css'],
+    reject: ['dist/design-system/assets/images/hero.svg'],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../design-system/assets/images/hero.svg'],
+      },
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          'url(/assets/images/hero.svg)',
+          'url(/design-system/assets/images/hero.svg)',
+        ],
+      },
+    ],
+  },
+  {
+    name: 'asset-rebase-disabled',
+    type: 'vite',
+    assert: [
+      'dist/assets/images/canonical.svg',
+      'dist/components/card/css/card.css',
+    ],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          'url(/assets/images/canonical.svg)',
+          'url(../assets/images/canonical.svg)',
+        ],
       },
     ],
   },
@@ -108,6 +290,9 @@ const releaseFixtures = [
       'dist/global/base/js/base.js',
       'dist/global/base/css/base.css',
       'dist/extension-marker.txt',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: [
       'components/card/card.js',
@@ -119,10 +304,25 @@ const releaseFixtures = [
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
     ],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          '../../../assets/images/canonical.svg',
+          '../../../assets/images/bare.svg',
+          '../../../assets/images/relative.svg',
+        ],
+      },
+    ],
     rejectContent: [
       {
         pattern: 'dist/**/*.js',
         strings: ['window.Drupal', 'Drupal.behaviors', 'attachBehaviors'],
+      },
+      rejectWrongAssetUrls('dist/components/card/css/card.css'),
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../assets/images/'],
       },
     ],
   },
@@ -134,8 +334,28 @@ const releaseFixtures = [
       'dist/components/banner/css/banner.css',
       'dist/components/banner/banner.twig',
       'dist/components/banner/banner.asset.txt',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: ['components/banner/js/banner.js'],
+    assertContent: [
+      {
+        pattern: 'dist/components/banner/css/banner.css',
+        strings: [
+          '../../../assets/images/canonical.svg',
+          '../../../assets/images/bare.svg',
+          '../../../assets/images/relative.svg',
+        ],
+      },
+    ],
+    rejectContent: [
+      rejectWrongAssetUrls('dist/components/banner/css/banner.css'),
+      {
+        pattern: 'dist/components/banner/css/banner.css',
+        strings: ['../../../../assets/images/'],
+      },
+    ],
   },
   {
     name: 'structure-implementations',
@@ -151,8 +371,30 @@ const releaseFixtures = [
       'dist/layout/grid/grid.twig',
       'dist/storybook/src/layout/grid/sb-grid.css',
       'dist/tokens/spacing/spacing.json',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: ['components/button/button.js'],
+    assertContent: [
+      {
+        // Structure-override CSS keeps its `src/` segment and reaches the copy
+        // at the root of dist/ by climbing four levels.
+        pattern: 'dist/css/src/foundation/colors/colors.css',
+        strings: [
+          '../../../../assets/images/canonical.svg',
+          '../../../../assets/images/bare.svg',
+          '../../../../assets/images/relative.svg',
+        ],
+      },
+    ],
+    rejectContent: [
+      rejectWrongAssetUrls('dist/css/src/foundation/colors/colors.css'),
+      {
+        pattern: 'dist/css/src/foundation/colors/colors.css',
+        strings: ['../../../../../assets/images/'],
+      },
+    ],
   },
   {
     name: 'mixed-storybook',
@@ -268,6 +510,13 @@ function copyFixture(fixture) {
   }
   linkFixturePackages(target);
   return target;
+}
+
+function setupStaleProductionSourceMapFixture(projectDir) {
+  const componentDir = join(projectDir, 'components/card');
+  mkdirSync(componentDir, { recursive: true });
+  writeFileSync(join(componentDir, 'card.js.map'), '{"version":3}\n');
+  writeFileSync(join(componentDir, 'card.css.map'), '{"version":3}\n');
 }
 
 function setupLargeTwigStorybookFixture(projectDir) {

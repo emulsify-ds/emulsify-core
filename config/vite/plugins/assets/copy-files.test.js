@@ -2,7 +2,16 @@
  * @file Tests for source Twig, metadata, and static asset copy plugins.
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'fs';
 import { join } from 'path';
 
 import { resolveProjectConfig } from '../../project-config.js';
@@ -73,6 +82,55 @@ describe('source copy plugins', () => {
     expect(existsSync(join(outDir, 'components/card/card.scss'))).toBe(false);
   });
 
+  it('records only copied files whose bytes were written this cycle', () => {
+    projectDir = makeTempProject();
+    const componentDir = join(projectDir, 'src/components/card');
+    const outDir = join(projectDir, 'dist');
+    const outputChanges = new Map();
+    mkdirSync(componentDir, { recursive: true });
+    writeFileSync(join(componentDir, 'card.twig'), '<article></article>');
+    writeFileSync(join(componentDir, 'card.component.yml'), 'name: Card');
+    writeFileSync(join(componentDir, 'icon.svg'), '<svg />');
+
+    const structure = resolveProjectStructure(makeEnv(projectDir));
+    const plugins = [
+      copyTwigFilesPlugin({ structure, outputChanges }),
+      copyAllSrcAssetsPlugin({ structure, outputChanges }),
+    ];
+    for (const plugin of plugins) {
+      plugin.configResolved({ root: projectDir, build: { outDir, watch: {} } });
+      plugin.writeBundle();
+    }
+
+    expect(Object.fromEntries(outputChanges)).toEqual({
+      'components/card/card.component.yml': {
+        kind: 'written',
+        bytes: Buffer.byteLength('name: Card'),
+      },
+      'components/card/card.twig': {
+        kind: 'written',
+        bytes: Buffer.byteLength('<article></article>'),
+      },
+      'components/card/icon.svg': {
+        kind: 'written',
+        bytes: Buffer.byteLength('<svg />'),
+      },
+    });
+
+    outputChanges.clear();
+    for (const plugin of plugins) plugin.writeBundle();
+
+    expect(outputChanges.size).toBe(0);
+
+    // One-shot builds do not render cycle diffs, so they should not pay to
+    // collect reporting metadata even though they rewrite every copied file.
+    for (const plugin of plugins) {
+      plugin.configResolved({ root: projectDir, build: { outDir } });
+      plugin.writeBundle();
+    }
+    expect(outputChanges.size).toBe(0);
+  });
+
   it('copies assets from named structure roots to matching dist folders', () => {
     projectDir = makeTempProject();
     const outDir = join(projectDir, 'dist');
@@ -133,6 +191,54 @@ describe('source copy plugins', () => {
     expect(
       existsSync(join(outDir, 'foundation/icons/icon.component.json')),
     ).toBe(true);
+  });
+
+  it('rejects path-like structure names before a copy can escape outDir', () => {
+    projectDir = makeTempProject();
+    const nestedProjectDir = join(projectDir, 'project');
+    const source = join(nestedProjectDir, 'src/foundation/icons/icon.svg');
+    const outDir = join(nestedProjectDir, 'dist');
+    const outsideFile = join(projectDir, 'escape-target/icons/icon.svg');
+    const outsideBytes = 'hand-authored outside file';
+
+    mkdirSync(join(source, '..'), { recursive: true });
+    mkdirSync(join(outsideFile, '..'), { recursive: true });
+    writeFileSync(source, '<svg />');
+    writeFileSync(outsideFile, outsideBytes);
+    writeProjectConfig(nestedProjectDir, {
+      project: {
+        platform: 'none',
+      },
+      variant: {
+        structureImplementations: [
+          {
+            name: '../../escape-target',
+            directory: './src/foundation/',
+          },
+        ],
+      },
+    });
+
+    const runCycle = () => {
+      const structure = resolveProjectConfig(
+        nestedProjectDir,
+        {},
+      ).projectStructure;
+      const plugin = copyAllSrcAssetsPlugin({ structure });
+      plugin.configResolved({
+        root: nestedProjectDir,
+        build: { outDir, watch: {} },
+      });
+      plugin.writeBundle();
+    };
+
+    expect(runCycle).toThrow('expected a single path segment');
+    expect(readFileSync(outsideFile, 'utf8')).toBe(outsideBytes);
+
+    rmSync(source);
+    expect(runCycle).toThrow('expected a single path segment');
+    expect(existsSync(outsideFile)).toBe(true);
+    expect(readFileSync(outsideFile, 'utf8')).toBe(outsideBytes);
   });
 
   describe('watching what it copies', () => {
@@ -248,6 +354,87 @@ describe('source copy plugins', () => {
       );
     });
 
+    it('requires a watcher restart to discover new files and component directories', () => {
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir, watch: {} };
+      const existingSource = join(projectDir, 'src/components/card/extra.twig');
+      const newComponentSource = join(
+        projectDir,
+        'src/components/badge/badge.twig',
+      );
+      const existingOutput = join(outDir, 'components/card/extra.twig');
+      const newComponentOutput = join(outDir, 'components/badge/badge.twig');
+      const plugin = copyTwigFilesPlugin({ structure });
+      const addWatchFile = jest.fn();
+      const runCycle = (currentPlugin) => {
+        currentPlugin.buildStart.call({ addWatchFile });
+        currentPlugin.writeBundle();
+      };
+
+      plugin.configResolved({ root: projectDir, build });
+      runCycle(plugin);
+
+      writeFileSync(existingSource, '<aside>extra</aside>');
+      mkdirSync(join(newComponentSource, '..'), { recursive: true });
+      writeFileSync(newComponentSource, '<strong>badge</strong>');
+
+      // Neither new path is registered, so the real watcher emits no
+      // watchChange event. Even an unrelated cycle keeps using the cached plan.
+      addWatchFile.mockClear();
+      runCycle(plugin);
+
+      expect(addWatchFile).not.toHaveBeenCalledWith(existingSource);
+      expect(addWatchFile).not.toHaveBeenCalledWith(newComponentSource);
+      expect(existsSync(existingOutput)).toBe(false);
+      expect(existsSync(newComponentOutput)).toBe(false);
+
+      const restartedPlugin = copyTwigFilesPlugin({ structure });
+      addWatchFile.mockClear();
+      restartedPlugin.configResolved({ root: projectDir, build });
+      runCycle(restartedPlugin);
+
+      expect(addWatchFile).toHaveBeenCalledWith(existingSource);
+      expect(addWatchFile).toHaveBeenCalledWith(newComponentSource);
+      expect(existsSync(existingOutput)).toBe(true);
+      expect(existsSync(newComponentOutput)).toBe(true);
+    });
+
+    it('requires a watcher restart to discover a renamed component directory', () => {
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir, watch: {} };
+      const originalDir = join(projectDir, 'src/components/card');
+      const renamedDir = join(projectDir, 'src/components/kard');
+      const renamedSource = join(renamedDir, 'card.twig');
+      const renamedOutput = join(outDir, 'components/kard/card.twig');
+      const plugin = copyTwigFilesPlugin({ structure });
+      const addWatchFile = jest.fn();
+      const runCycle = (currentPlugin) => {
+        currentPlugin.buildStart.call({ addWatchFile });
+        currentPlugin.writeBundle();
+      };
+
+      plugin.configResolved({ root: projectDir, build });
+      runCycle(plugin);
+      renameSync(originalDir, renamedDir);
+
+      // A directory rename does not emit a structural event for the individual
+      // paths in the cached plan. An unrelated cycle therefore keeps the old
+      // paths and cannot discover the renamed tree.
+      addWatchFile.mockClear();
+      runCycle(plugin);
+
+      expect(addWatchFile).not.toHaveBeenCalledWith(renamedSource);
+      expect(existsSync(renamedOutput)).toBe(false);
+
+      const restartedPlugin = copyTwigFilesPlugin({ structure });
+      addWatchFile.mockClear();
+      restartedPlugin.configResolved({ root: projectDir, build });
+      runCycle(restartedPlugin);
+
+      expect(addWatchFile).toHaveBeenCalledWith(renamedSource);
+      expect(existsSync(renamedOutput)).toBe(true);
+    });
+
     it('picks up an edit on the next cycle', () => {
       const { structure, outDir } = scaffold();
       const build = { outDir, watch: {} };
@@ -282,6 +469,145 @@ describe('source copy plugins', () => {
       expect(existsSync(join(outDir, 'components/card/_partial.twig'))).toBe(
         true,
       );
+    });
+
+    it('does not rewrite a file whose bytes did not change', () => {
+      // A rewritten template in the output tree makes the Twig plugin send a
+      // full preview reload, which is the flash a stylesheet edit used to
+      // cause. mtime is what a watcher acts on, so assert on mtime.
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir, watch: {} };
+      const twigPath = join(outDir, 'components/card/card.twig');
+      const svgPath = join(outDir, 'components/card/icon.svg');
+      const plugins = [
+        copyTwigFilesPlugin({ structure }),
+        copyAllSrcAssetsPlugin({ structure }),
+      ];
+      for (const plugin of plugins) plugin.configResolved({ build });
+
+      const runCycle = () => {
+        for (const plugin of plugins) plugin.writeBundle();
+      };
+
+      runCycle();
+      const stamp = new Date(1000);
+      utimesSync(twigPath, stamp, stamp);
+      utimesSync(svgPath, stamp, stamp);
+
+      runCycle();
+
+      expect(statSync(twigPath).mtimeMs).toBe(1000);
+      expect(statSync(svgPath).mtimeMs).toBe(1000);
+    });
+
+    it('copies unconditionally for a one-shot build', () => {
+      // A release build starts from an emptied output directory, so the check
+      // would never match; keeping it off leaves that path exactly as it was.
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir };
+      const twigPath = join(outDir, 'components/card/card.twig');
+
+      const runCycle = () => {
+        const plugin = copyTwigFilesPlugin({ structure });
+        plugin.configResolved({ build });
+        plugin.writeBundle();
+      };
+
+      runCycle();
+      const stamp = new Date(1000);
+      utimesSync(twigPath, stamp, stamp);
+
+      runCycle();
+
+      expect(statSync(twigPath).mtimeMs).not.toBe(1000);
+    });
+
+    it.each([
+      ['Twig template', copyTwigFilesPlugin, 'card.twig'],
+      ['component metadata file', copyTwigFilesPlugin, 'card.component.yml'],
+      ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
+    ])(
+      'leaves a deleted copied %s after the watch cycle',
+      (_name, factory, file) => {
+        const { structure, outDir } = scaffold();
+        const build = { outDir, root: projectDir, watch: {} };
+        const source = join(projectDir, 'src/components/card', file);
+        const output = join(outDir, 'components/card', file);
+        const plugin = factory({ structure });
+        const runCycle = () => {
+          plugin.buildStart.call({ addWatchFile: jest.fn() });
+          plugin.writeBundle();
+        };
+
+        plugin.configResolved({ build });
+        runCycle();
+        rmSync(source);
+        plugin.watchChange(source, { event: 'delete' });
+        runCycle();
+
+        expect(existsSync(output)).toBe(true);
+      },
+    );
+
+    it.each([
+      ['Twig template', copyTwigFilesPlugin, 'card.twig', 'renamed.twig'],
+      [
+        'component metadata file',
+        copyTwigFilesPlugin,
+        'card.component.yml',
+        'renamed.component.yml',
+      ],
+      ['static asset', copyAllSrcAssetsPlugin, 'icon.svg', 'renamed.svg'],
+    ])(
+      'copies a renamed %s without pruning its previous output',
+      (_name, factory, originalName, renamedName) => {
+        const { structure, outDir } = scaffold();
+        const build = { outDir, root: projectDir, watch: {} };
+        const sourceDir = join(projectDir, 'src/components/card');
+        const outputDir = join(outDir, 'components/card');
+        const originalSource = join(sourceDir, originalName);
+        const renamedSource = join(sourceDir, renamedName);
+        const plugin = factory({ structure });
+        const addWatchFile = jest.fn();
+        const runCycle = () => {
+          addWatchFile.mockClear();
+          plugin.buildStart.call({ addWatchFile });
+          plugin.writeBundle();
+        };
+
+        plugin.configResolved({ build });
+        runCycle();
+        renameSync(originalSource, renamedSource);
+        plugin.watchChange(originalSource, { event: 'delete' });
+        runCycle();
+
+        expect(existsSync(join(outputDir, originalName))).toBe(true);
+        expect(existsSync(join(outputDir, renamedName))).toBe(true);
+        expect(addWatchFile).toHaveBeenCalledWith(renamedSource);
+      },
+    );
+
+    it('skips an identical mirrored output during the first watch cycle', () => {
+      const scaffolded = scaffold();
+      const structure = {
+        ...scaffolded.structure,
+        mirrorComponentOutput: true,
+      };
+      const { outDir } = scaffolded;
+      const build = { outDir, root: projectDir, watch: {} };
+      const source = join(projectDir, 'src/components/card/card.twig');
+      const transientOutput = join(outDir, 'components/card/card.twig');
+      const mirroredOutput = join(projectDir, 'components/card/card.twig');
+      mkdirSync(join(mirroredOutput, '..'), { recursive: true });
+      writeFileSync(mirroredOutput, readFileSync(source));
+      const stamp = new Date(1000);
+      utimesSync(mirroredOutput, stamp, stamp);
+      const plugin = copyTwigFilesPlugin({ structure });
+
+      plugin.configResolved({ root: projectDir, build });
+      plugin.writeBundle();
+      expect(existsSync(transientOutput)).toBe(false);
+      expect(statSync(mirroredOutput).mtimeMs).toBe(1000);
     });
   });
 

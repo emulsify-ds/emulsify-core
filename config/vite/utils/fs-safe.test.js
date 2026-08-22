@@ -2,10 +2,11 @@
  * @file Tests for safe filesystem utilities.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
+  firstExistingFile,
   firstExistingPath,
   safeExists,
   safeReadFile,
@@ -61,5 +62,15 @@ describe('safe filesystem utilities', () => {
 
     expect(firstExistingPath([null, first, second])).toBe(second);
     expect(firstExistingPath([first])).toBeUndefined();
+  });
+
+  it('returns the first file without accepting a directory', () => {
+    const directory = join(tempDir, 'looks-like-a-file.svg');
+    const file = join(tempDir, 'actual.svg');
+    mkdirSync(directory);
+    writeFileSync(file, '<svg />');
+
+    expect(firstExistingFile([directory, file])).toBe(file);
+    expect(firstExistingFile([directory])).toBeUndefined();
   });
 });

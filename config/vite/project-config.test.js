@@ -301,7 +301,7 @@ describe('resolveProjectConfig', () => {
         platform: 'drupal',
         structureImplementations: [
           { name: 'components', directory: './src/components/' },
-          { name: 'foundation', directory: './src/foundation/' },
+          { name: ' Foundation ', directory: './src/foundation/' },
           { name: 'layout', directory: './src/layout/' },
           { name: 'tokens', directory: './src/tokens/' },
         ],
@@ -428,6 +428,73 @@ describe('resolveProjectConfig', () => {
     });
   });
 
+  it.each(['.', '..', '../escape', 'foo/bar', 'foo\\bar', 'C:escape'])(
+    'rejects path-like structure implementation name %s',
+    (name) => {
+      projectDir = makeTempProject();
+      mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
+      writeProjectConfig(projectDir, {
+        project: {
+          platform: 'none',
+        },
+        variant: {
+          structureImplementations: [{ name, directory: './src/foundation' }],
+        },
+      });
+
+      expect(() => resolveProjectConfig(projectDir, {})).toThrow(
+        /Invalid variant\.structureImplementations\[0\]\.name .*expected a single path segment/,
+      );
+    },
+  );
+
+  it.each([
+    { label: 'NUL', name: 'foo\u0000bar' },
+    { label: 'newline', name: 'foo\nbar' },
+    { label: 'trailing tab', name: 'foobar\t' },
+    { label: 'DEL', name: 'foo\u007fbar' },
+    { label: 'C1 control', name: 'foo\u0085bar' },
+  ])('rejects $label in a structure implementation name', ({ name }) => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      variant: {
+        structureImplementations: [{ name, directory: './src/foundation' }],
+      },
+    });
+
+    expect(() => resolveProjectConfig(projectDir, {})).toThrow(
+      /Invalid variant\.structureImplementations\[0\]\.name .*without control characters/,
+    );
+  });
+
+  it.each(['card', 'CARD', '\uFEFFcard'])(
+    'rejects structure name %p when it collides after identifier normalization',
+    (name) => {
+      projectDir = makeTempProject();
+      mkdirSync(join(projectDir, 'src/card'), { recursive: true });
+      mkdirSync(join(projectDir, 'src/alternate-card'), { recursive: true });
+      writeProjectConfig(projectDir, {
+        project: {
+          platform: 'none',
+        },
+        variant: {
+          structureImplementations: [
+            { name: 'Card', directory: './src/card' },
+            { name, directory: './src/alternate-card' },
+          ],
+        },
+      });
+
+      expect(() => resolveProjectConfig(projectDir, {})).toThrow(
+        /structureImplementations\[1\]\.name .*normalized name "card" duplicates variant\.structureImplementations\[0\]\.name/,
+      );
+    },
+  );
+
   it('normalizes documented assets.roots into project structure asset roots', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'design-system/assets'), {
@@ -451,6 +518,69 @@ describe('resolveProjectConfig', () => {
 
     expect(env.assetRoots).toEqual(expectedRoots);
     expect(env.projectStructure.assetRoots).toEqual(expectedRoots);
+  });
+
+  it('keeps build output self-contained by default', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.selfContainedOutput).toBe(true);
+    expect(env.projectStructure.selfContainedOutput).toBe(true);
+  });
+
+  it('reads assets.selfContainedOutput from project config', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+      assets: { selfContainedOutput: false },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.selfContainedOutput).toBe(false);
+    expect(env.projectStructure.selfContainedOutput).toBe(false);
+  });
+
+  it.each(['0', 'false', 'off', 'no'])(
+    'accepts EMULSIFY_SELF_CONTAINED_OUTPUT=%s as false',
+    (override) => {
+      projectDir = makeTempProject();
+      writeProjectConfig(projectDir, {
+        project: { platform: 'none' },
+      });
+
+      const env = resolveProjectConfig(projectDir, {
+        EMULSIFY_SELF_CONTAINED_OUTPUT: override,
+      });
+
+      expect(env.selfContainedOutput).toBe(false);
+      expect(env.projectStructure.selfContainedOutput).toBe(false);
+    },
+  );
+
+  it('lets the environment enable self-contained output and keeps overrides in separate cache entries', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+      assets: { selfContainedOutput: false },
+    });
+
+    const enabled = resolveProjectConfig(projectDir, {
+      EMULSIFY_SELF_CONTAINED_OUTPUT: 'true',
+    });
+    const disabled = resolveProjectConfig(projectDir, {
+      EMULSIFY_SELF_CONTAINED_OUTPUT: 'off',
+    });
+
+    expect(enabled).not.toBe(disabled);
+    expect(enabled.selfContainedOutput).toBe(true);
+    expect(enabled.projectStructure.selfContainedOutput).toBe(true);
+    expect(disabled.selfContainedOutput).toBe(false);
+    expect(disabled.projectStructure.selfContainedOutput).toBe(false);
   });
 
   it('ignores unsafe asset root paths', () => {

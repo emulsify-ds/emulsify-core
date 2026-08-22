@@ -27,7 +27,7 @@ const WATCH_FLAGS = ['--watch', '-w'];
  * Determine whether the current process was invoked as a Vite watch build.
  *
  * @param {string[]} [argv] - Process arguments.
- * @returns {boolean} TRUE when a watch flag is present.
+ * @returns {boolean} TRUE when a watch flag enables watch mode.
  */
 export function isWatchInvocation(argv = process.argv) {
   if (!Array.isArray(argv)) return false;
@@ -35,6 +35,10 @@ export function isWatchInvocation(argv = process.argv) {
   return argv.some(
     (arg) =>
       WATCH_FLAGS.includes(arg) ||
-      WATCH_FLAGS.some((flag) => arg.startsWith(`${flag}=`)),
+      WATCH_FLAGS.some(
+        (flag) =>
+          arg.startsWith(`${flag}=`) &&
+          arg.slice(flag.length + 1).toLowerCase() !== 'false',
+      ),
   );
 }

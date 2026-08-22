@@ -8,6 +8,7 @@ import { renderFacts, renderReady, renderSummary } from '../reporter/render.js';
 import {
   MAX_GLOBAL_DIRECTORY_ROWS,
   buildInputRows,
+  buildOutputSummaryRows,
   displayRoot,
   sharedRootPath,
   summarizeBundle,
@@ -364,13 +365,15 @@ describe('write tally', () => {
   it('reduces a bundle to file count, total bytes, and the largest file', () => {
     const tally = summarizeBundle({
       'style.css': { type: 'asset', source: 'a'.repeat(4096) },
+      'style.css.map': { type: 'asset', source: 'm'.repeat(16384) },
       'main.js': { type: 'chunk', code: 'x'.repeat(1024) },
       'logo.svg': { type: 'asset', source: new Uint8Array(512) },
+      'regions.map': { type: 'asset', source: 'r'.repeat(256) },
     });
 
     expect(tally).toEqual({
-      fileCount: 3,
-      totalBytes: 4096 + 1024 + 512,
+      fileCount: 4,
+      totalBytes: 4096 + 1024 + 512 + 256,
       largest: { fileName: 'style.css', bytes: 4096 },
     });
   });
@@ -386,6 +389,68 @@ describe('write tally', () => {
   it('returns nothing for an absent or empty bundle', () => {
     expect(summarizeBundle()).toBeUndefined();
     expect(summarizeBundle({})).toBeUndefined();
+    expect(
+      summarizeBundle({ 'only.js.MAP': { source: 'debug metadata' } }),
+    ).toBeUndefined();
+  });
+
+  it('attributes mirrored bundle files to their final output directories', () => {
+    const rows = buildOutputSummaryRows({
+      bundle: {
+        'global/style.css': { type: 'asset', source: 'a'.repeat(100) },
+        'global/style.css.map': { type: 'asset', source: 'm'.repeat(1000) },
+        'components-old/keep.js': { type: 'chunk', code: 'd'.repeat(50) },
+        'components/card/card.js': { type: 'chunk', code: 'b'.repeat(300) },
+        'components/card/card.js.map': {
+          type: 'asset',
+          source: 'm'.repeat(2000),
+        },
+        'components/button/button.css': {
+          type: 'asset',
+          source: 'c'.repeat(200),
+        },
+      },
+      outDir: 'dist/',
+      mirrorComponentOutput: true,
+      componentOutput: 'components',
+    });
+
+    expect(rows).toEqual([
+      {
+        path: 'dist/',
+        write: {
+          fileCount: 2,
+          totalBytes: 150,
+          largest: { fileName: 'global/style.css', bytes: 100 },
+        },
+      },
+      {
+        path: 'components/',
+        write: {
+          fileCount: 2,
+          totalBytes: 500,
+          largest: { fileName: 'card/card.js', bytes: 300 },
+        },
+      },
+    ]);
+  });
+
+  it('keeps a non-mirrored bundle on one output row', () => {
+    expect(
+      buildOutputSummaryRows({
+        bundle: { 'components/card/card.js': { code: 'abc' } },
+        outDir: 'build/',
+      }),
+    ).toEqual([
+      {
+        path: 'build/',
+        write: {
+          fileCount: 1,
+          totalBytes: 3,
+          largest: { fileName: 'components/card/card.js', bytes: 3 },
+        },
+      },
+    ]);
   });
 
   it('formats sizes without implying precision that does not matter', () => {
@@ -460,6 +525,55 @@ describe('facts block', () => {
     expect(output).toContain('41 files');
     expect(output).toContain('1.0 MB');
     expect(output).toContain('largest style.css 388 kB');
+    expect(output).not.toContain('total');
+  });
+
+  it('names every final output destination for mirrored components', () => {
+    const rows = renderFacts({
+      platform: 'drupal',
+      inputRows,
+      outDir: 'dist/',
+      outputRows: [
+        {
+          path: 'dist/',
+          write: {
+            fileCount: 9,
+            totalBytes: 409600,
+            largest: { fileName: 'global/style.css', bytes: 397312 },
+          },
+        },
+        {
+          path: 'components/',
+          write: {
+            fileCount: 32,
+            totalBytes: 1048576,
+            largest: { fileName: 'card/card.js', bytes: 131072 },
+          },
+        },
+      ],
+      write: {
+        fileCount: 41,
+        totalBytes: 1458176,
+        largest: { fileName: 'components/card/card.js', bytes: 397312 },
+      },
+      styler: plain,
+    });
+
+    const output = rows.join('\n');
+
+    expect(rows.filter((line) => line.includes('output'))).toHaveLength(1);
+    expect(rows.find((line) => line.includes('dist/'))).toContain(
+      'largest global/style.css 388 kB',
+    );
+    expect(
+      rows.find(
+        (line) => line.includes('components/') && line.includes('largest'),
+      ),
+    ).toContain('largest card/card.js 128 kB');
+    expect(rows.find((line) => line.includes('total'))).toContain(
+      '41 files · 1.4 MB',
+    );
+    expect(output).not.toContain('largest components/card/card.js');
   });
 
   it('states the output directory before the first build has written', () => {

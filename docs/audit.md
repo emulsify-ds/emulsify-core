@@ -34,7 +34,7 @@ A schema-version 1 report has this shape:
   "schemaVersion": 1,
   "tool": {
     "name": "@emulsify/core",
-    "version": "4.3.0"
+    "version": "4.4.0"
   },
   "root": ".",
   "summary": {
@@ -138,6 +138,72 @@ The process exit codes are:
 - `1`: The scan completed and met its failure threshold.
 - `2`: Arguments were invalid, or audit setup/execution failed.
 
+## Fixing CSS Asset URLs
+
+With asset rebasing enabled (the default), `/assets/...` and `@assets/...` are
+equivalent first-class Sass/CSS asset aliases. The audit validates both against
+the same project asset roots and leaves both unchanged without a repair
+finding. If `assets.rebase` is disabled, the audit warns that Core will not
+resolve `@assets/...`.
+
+`--fix` rewrites legacy CSS and Sass asset URLs to `/assets/...`, the stable
+canonical autofix output, when exactly one file under one asset root answers to
+them. That covers the two non-portable shapes: the bare `url('assets/...')`
+form, and a relative URL whose depth suits the emitted CSS rather than the
+stylesheet. See
+[Asset References](asset-references.md#why-a-relative-path-is-not-portable) for
+why those break.
+
+```bash
+npx emulsify-audit --fix --dry-run   # report the rewrites, touch nothing
+npx emulsify-audit --fix             # apply them
+```
+
+`--dry-run` requires `--fix`; on its own it is an argument error. Quote style
+and any `?query` or `#hash` suffix are preserved. A URL whose Sass interpolation
+has not been expanded is never rewritten — the edit belongs on the variable
+declaration, and same-file variable scanning cannot see what else depends on it.
+An ambiguous URL is reported with its candidates and left alone.
+
+`--fail-on` is evaluated against the findings that remain after fixing, so a
+real `--fix` run can turn a failing audit green. That is safe because the fix is
+idempotent: re-running the audit on the rewritten source reports nothing. A
+`--dry-run` subtracts nothing. If one source file cannot be read, validated, or
+replaced, its fixes are listed as skipped with the reason, its findings remain
+in the report, and other files are still attempted.
+
+Real fixes use an exclusive same-directory temporary file and atomic rename.
+The replacement preserves the target's mode and ownership, cleans active temp
+files on normal errors, process exit, `SIGINT`, and `SIGTERM`, and sweeps temp
+orphans belonging to dead processes at the start of the next real `--fix` run.
+A dry run never performs that cleanup.
+
+Atomic rename replaces the inode at the target path. Consequently, hardlinks
+to the old inode keep the old bytes while the rewritten path becomes a new
+single-link inode. On POSIX systems, a read-only file can still be replaced
+when its parent directory permits replacement; the new inode retains the
+read-only mode. File mode alone is therefore not a way to protect a source from
+`--fix`—make the parent directory non-writable or use `--dry-run` instead.
+
+In JSON mode, `--fix` adds an optional top-level `fixes` block:
+
+```json
+{
+  "fixes": {
+    "dryRun": false,
+    "applied": [
+      {
+        "path": "src/components/card/card.scss",
+        "line": 4,
+        "from": "../../assets/images/hero.jpg",
+        "to": "/assets/images/hero.jpg"
+      }
+    ],
+    "skipped": []
+  }
+}
+```
+
 An exit status of 1 still produces a normal report. In JSON mode, an exit
 status of 2 produces a distinct error document instead of a findings report:
 
@@ -146,7 +212,7 @@ status of 2 produces a distinct error document instead of a findings report:
   "schemaVersion": 1,
   "tool": {
     "name": "@emulsify/core",
-    "version": "4.3.0"
+    "version": "4.4.0"
   },
   "error": {
     "code": "invalid-arguments",

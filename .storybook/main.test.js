@@ -292,6 +292,164 @@ describe('Storybook main config', () => {
     expect(build.emptyOutDir).toBe(false);
   });
 
+  it('fails strict asset mode for a Storybook static build', async () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-strict-storybook-'));
+      const componentDir = path.join(projectRoot, 'src/components/card');
+      mkdirSync(componentDir, { recursive: true });
+      writeFileSync(
+        path.join(componentDir, 'card.scss'),
+        ".card { background: url('./missing.svg#icon'); }",
+      );
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+      const finalConfig = await config.viteFinal(
+        {
+          mode: 'production',
+          build: { outDir: '.out' },
+          server: { fs: { allow: [] } },
+          optimizeDeps: {},
+        },
+        { configType: 'PRODUCTION' },
+      );
+      const reporter = finalConfig.plugins
+        .flat(Infinity)
+        .find((plugin) => plugin?.name === 'emulsify-develop-reporter');
+
+      const originalErrorWrite = process.stderr.write;
+      process.stderr.write = () => true;
+      try {
+        finalConfig.customLogger.warnOnce(
+          "./missing.svg#icon referenced in ./missing.svg didn't resolve at build time, " +
+            'it will remain unchanged to be resolved at runtime',
+        );
+      } finally {
+        process.stderr.write = originalErrorWrite;
+      }
+      reporter.configResolved(finalConfig);
+
+      const originalWrite = process.stdout.write;
+      process.stdout.write = () => true;
+      let failure;
+      try {
+        reporter.closeBundle();
+      } catch (error) {
+        failure = error.message;
+      } finally {
+        process.stdout.write = originalWrite;
+      }
+
+      process.chdir(repoRoot);
+      rmSync(projectRoot, { recursive: true, force: true });
+      console.log(JSON.stringify({ failure }));
+    `;
+    const output = execFileSync(
+      process.execPath,
+      ['--input-type=module', '--eval', script],
+      {
+        env: {
+          ...process.env,
+          EMULSIFY_STRICT_ASSETS: '1',
+          // Raw output must not disable the strict-mode collector.
+          EMULSIFY_VERBOSE: '1',
+        },
+      },
+    );
+    const { failure } = JSON.parse(output.toString());
+
+    expect(failure).toContain('1 CSS asset URL did not resolve');
+    expect(failure).toContain('./missing.svg#icon');
+    expect(failure).toContain('card/card.scss:1');
+  });
+
+  it('reports Sass deprecations for a Storybook static build', async () => {
+    const script = `
+      const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const path = await import('node:path');
+      const { pathToFileURL } = await import('node:url');
+
+      const repoRoot = process.cwd();
+      const projectRoot = mkdtempSync(path.join(tmpdir(), 'emulsify-sass-storybook-'));
+      const stylesheet = path.join(
+        projectRoot,
+        'src/components/card/card.scss',
+      );
+      mkdirSync(path.dirname(stylesheet), { recursive: true });
+      writeFileSync(stylesheet, '.card { width: 12px / 2; }');
+      process.chdir(projectRoot);
+
+      const { default: config } = await import(
+        pathToFileURL(path.join(repoRoot, '.storybook/main.js')).href
+      );
+      const finalConfig = await config.viteFinal(
+        {
+          mode: 'production',
+          build: { outDir: '.out' },
+          server: { fs: { allow: [] } },
+          optimizeDeps: {},
+        },
+        { configType: 'PRODUCTION' },
+      );
+      const reporter = finalConfig.plugins
+        .flat(Infinity)
+        .find((plugin) => plugin?.name === 'emulsify-develop-reporter');
+      const sassLogger = finalConfig.css?.preprocessorOptions?.scss?.logger;
+
+      sassLogger.warn('Using / for division is deprecated.', {
+        deprecation: true,
+        deprecationType: { id: 'slash-div' },
+        span: {
+          url: pathToFileURL(stylesheet),
+          start: { line: 0 },
+        },
+      });
+      reporter.configResolved(finalConfig);
+
+      let report = '';
+      const originalWrite = process.stdout.write;
+      process.stdout.write = (chunk) => {
+        report += String(chunk);
+        return true;
+      };
+      try {
+        reporter.closeBundle();
+      } finally {
+        process.stdout.write = originalWrite;
+      }
+
+      process.chdir(repoRoot);
+      rmSync(projectRoot, { recursive: true, force: true });
+      console.log(JSON.stringify({ report }));
+    `;
+    const output = execFileSync(
+      process.execPath,
+      ['--input-type=module', '--eval', script],
+      {
+        env: {
+          ...process.env,
+          EMULSIFY_STRICT_ASSETS: '0',
+          EMULSIFY_VERBOSE: '0',
+        },
+      },
+    );
+    const { report } = JSON.parse(output.toString());
+
+    expect(report).toContain('1 sass deprecation');
+    expect(report).toContain('components/card/card.scss');
+    expect(report).toContain('slash-div');
+    expect(report).toContain('npx sass-migrator division');
+  });
+
   it('serves generated dist assets that appear after Storybook config loads', async () => {
     const script = `
       const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');

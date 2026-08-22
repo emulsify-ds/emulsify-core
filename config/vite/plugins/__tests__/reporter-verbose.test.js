@@ -24,6 +24,7 @@ import {
 } from '../reporter/source-roots.js';
 
 const plain = createStyler(false);
+const writeBundle = (plugin, ...args) => plugin.writeBundle.handler(...args);
 
 const emptySnapshot = () => createDiagnosticsCollector().snapshot();
 
@@ -149,6 +150,7 @@ describe('output file listing', () => {
     'small.css': { type: 'asset', source: 'a'.repeat(1024) },
     'big.css': { type: 'asset', source: 'b'.repeat(8192) },
     'font.woff2': { type: 'asset', source: new Uint8Array(4096) },
+    'regions.map': { type: 'asset', source: 'r'.repeat(2048) },
     'bundle.js.map': { type: 'asset', source: 'c'.repeat(65536) },
   };
 
@@ -156,9 +158,9 @@ describe('output file listing', () => {
     const rows = buildOutputFileRows(bundle);
 
     expect(rows.map((row) => row.fileName)).toEqual([
-      'bundle.js.map',
       'big.css',
       'font.woff2',
+      'regions.map',
       'small.css',
     ]);
   });
@@ -170,9 +172,10 @@ describe('output file listing', () => {
     );
 
     expect(typeof byName['big.css']).toBe('number');
-    // Fonts are already compressed, and a sourcemap is a diagnostic artifact
-    // nobody ships — gzipping either buys a misleading number for real time.
+    // Fonts are already compressed, so gzipping one buys a misleading number
+    // for real transfer time. Source maps are omitted from the rows entirely.
     expect(byName['font.woff2']).toBeUndefined();
+    expect(byName['regions.map']).toBeUndefined();
     expect(byName['bundle.js.map']).toBeUndefined();
   });
 
@@ -232,6 +235,22 @@ describe('output change detection', () => {
     expect(
       diffFingerprints(fingerprintBundle(bundle), fingerprintBundle(bundle)),
     ).toEqual({ changed: [], removed: [] });
+  });
+
+  it('does not fingerprint source maps for rebuild reporting', () => {
+    const before = fingerprintBundle({
+      'a.js': { code: 'same' },
+      'a.js.map': { source: 'old map' },
+    });
+    const after = fingerprintBundle({
+      'a.js': { code: 'same' },
+      'a.js.map': { source: 'changed map' },
+    });
+
+    expect(diffFingerprints(before, after)).toEqual({
+      changed: [],
+      removed: [],
+    });
   });
 });
 
@@ -362,6 +381,14 @@ describe('detailed rebuild rendering', () => {
     expect(output).toContain('old.css');
   });
 
+  it('does not call a removal-only cycle unchanged', () => {
+    const output = rebuildOf({ removedOutputs: ['old.twig'] });
+
+    expect(output).toContain('1 output removed');
+    expect(output).toContain('old.twig');
+    expect(output).not.toContain('no output changed');
+  });
+
   it('inflects the module count', () => {
     expect(rebuildOf({ moduleCount: 1 })).toContain('1 module transformed');
     expect(rebuildOf({ moduleCount: 2 })).toContain('2 modules transformed');
@@ -406,9 +433,15 @@ describe('detailed mode through the plugin lifecycle', () => {
    * Drive a reporter plugin through configResolved and a first write.
    *
    * @param {boolean} detailed - Whether detailed mode is on.
+   * @param {Set<string>} [unchangedOutputs] - Files the stable-output plugin dropped.
+   * @param {Map<string, {kind: 'written'|'removed', bytes?: number}>} [copiedOutputChanges] - Successful copied-output mutations.
    * @returns {{plugin: object, lines: string[], bundle: object}} Harness.
    */
-  const harness = (detailed) => {
+  const harness = (
+    detailed,
+    unchangedOutputs = new Set(),
+    copiedOutputChanges = new Map(),
+  ) => {
     const lines = [];
     const plugin = developReporterPlugin({
       env: {
@@ -425,6 +458,8 @@ describe('detailed mode through the plugin lifecycle', () => {
       colorEnabled: false,
       unicodeEnabled: true,
       detailed,
+      unchangedOutputs,
+      copiedOutputChanges,
       version: '4.3.1',
     });
 
@@ -444,7 +479,8 @@ describe('detailed mode through the plugin lifecycle', () => {
     const { plugin, lines } = harness(true);
 
     plugin.buildStart();
-    plugin.writeBundle(
+    writeBundle(
+      plugin,
       {},
       { 'a.css': { type: 'asset', source: 'x'.repeat(1024) } },
     );
@@ -460,7 +496,7 @@ describe('detailed mode through the plugin lifecycle', () => {
     const { plugin, lines } = harness(false);
 
     plugin.buildStart();
-    plugin.writeBundle({}, { 'a.css': { type: 'asset', source: 'x' } });
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'x' } });
 
     const output = lines.join('\n');
     expect(output).not.toContain('input files');
@@ -479,12 +515,12 @@ describe('detailed mode through the plugin lifecycle', () => {
     plugin.buildStart();
     plugin.transform('', join(fixture, 'src/a.scss'));
     plugin.transform('', join(fixture, 'src/b.scss'));
-    plugin.writeBundle({}, { 'a.css': { type: 'asset', source: 'one' } });
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'one' } });
     lines.length = 0;
 
     plugin.buildStart();
     plugin.transform('', join(fixture, 'src/a.scss'));
-    plugin.writeBundle({}, { 'a.css': { type: 'asset', source: 'two' } });
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'two' } });
 
     expect(lines.join('\n')).toContain('1 module transformed');
   });
@@ -493,7 +529,8 @@ describe('detailed mode through the plugin lifecycle', () => {
     const { plugin, lines } = harness(true);
 
     plugin.buildStart();
-    plugin.writeBundle(
+    writeBundle(
+      plugin,
       {},
       {
         'a.css': { type: 'asset', source: 'one' },
@@ -503,7 +540,8 @@ describe('detailed mode through the plugin lifecycle', () => {
     lines.length = 0;
 
     plugin.buildStart();
-    plugin.writeBundle(
+    writeBundle(
+      plugin,
       {},
       {
         'a.css': { type: 'asset', source: 'one' },
@@ -515,6 +553,283 @@ describe('detailed mode through the plugin lifecycle', () => {
     expect(output).toContain('1 output changed');
     expect(output).toContain('b.css');
     expect(output).not.toContain('a.css');
+  });
+
+  it('omits source maps from detailed rebuild and copied-output reports', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(true, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.js': { type: 'chunk', code: 'same' },
+        'a.js.map': { type: 'asset', source: 'old map' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('components/card/copied.js.map', {
+      kind: 'written',
+      bytes: 4096,
+    });
+    copiedOutputChanges.set('components/card/removed.js.map', {
+      kind: 'removed',
+    });
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.js': { type: 'chunk', code: 'same' },
+        'a.js.map': { type: 'asset', source: 'changed map' },
+      },
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('no output changed');
+    expect(output).not.toContain('.map');
+  });
+
+  it('does not report source-map removals outside detailed mode', () => {
+    const { plugin, lines } = harness(false);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.js': { type: 'chunk', code: 'same' },
+        'a.js.map': { type: 'asset', source: 'map' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'a.js': { type: 'chunk', code: 'same' } });
+
+    const output = lines.join('\n');
+    expect(output).not.toContain('removed');
+    expect(output).not.toContain('.map');
+  });
+
+  it('includes successful copied-file writes in a detailed rebuild', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(true, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'same' } });
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('components/card/card.twig', {
+      kind: 'written',
+      bytes: 2048,
+    });
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'same' } });
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output changed');
+    expect(output).toContain('components/card/card.twig');
+    expect(output).toContain('2.00 kB');
+    expect(output).not.toContain('no output changed');
+  });
+
+  it('treats a copied write as authoritative over the same bundle row', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(true, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'same.css': { type: 'asset', source: 'old' } });
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('same.css', { kind: 'written', bytes: 7 });
+    writeBundle(
+      plugin,
+      {},
+      { 'same.css': { type: 'asset', source: 'changed bundle bytes' } },
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output changed');
+    expect(output).toContain('same.css');
+    expect(output).toContain('0.01 kB');
+    expect(output).not.toContain('gzip');
+  });
+
+  it('lets a copied removal override a changed bundle row', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(true, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'same.css': { type: 'asset', source: 'old' } });
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('same.css', { kind: 'removed' });
+    writeBundle(
+      plugin,
+      {},
+      { 'same.css': { type: 'asset', source: 'changed' } },
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output removed');
+    expect(output).not.toContain('output changed');
+  });
+
+  it('lets a copied write override a bundle removal', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(true, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'same.css': { type: 'asset', source: 'old' } });
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('same.css', { kind: 'written', bytes: 8 });
+    writeBundle(plugin, {}, {});
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output changed');
+    expect(output).not.toContain('output removed');
+  });
+
+  it('always names a copied-file removal, even outside detailed mode', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(false, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'same' } });
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('components/card/new.twig', {
+      kind: 'written',
+      bytes: 12,
+    });
+    copiedOutputChanges.set('components/card/old.twig', { kind: 'removed' });
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'same' } });
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output removed');
+    expect(output).toContain('no longer written');
+    expect(output).toContain('components/card/old.twig');
+    expect(output).not.toContain('components/card/new.twig');
+    expect(output).not.toContain('no output changed');
+  });
+
+  it('clears copied-output events at the start of the next cycle', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(false, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'same' } });
+    lines.length = 0;
+
+    copiedOutputChanges.set('components/card/old.twig', { kind: 'removed' });
+    plugin.buildStart();
+    expect(copiedOutputChanges.size).toBe(0);
+    writeBundle(plugin, {}, { 'a.css': { type: 'asset', source: 'same' } });
+
+    expect(lines.join('\n')).not.toContain('components/card/old.twig');
+  });
+
+  it('does not call a skipped output a removed one', () => {
+    // stableWatchOutputPlugin drops bytes-identical stylesheets from the
+    // bundle so they are never rewritten. The file is still on disk, so the
+    // cycle-to-cycle diff has to treat it as unchanged rather than deleted.
+    const unchangedOutputs = new Set();
+    const { plugin, lines } = harness(true, unchangedOutputs);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.css': { type: 'asset', source: 'one' },
+        'b.css': { type: 'asset', source: 'two' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    unchangedOutputs.add('a.css');
+    writeBundle(plugin, {}, { 'b.css': { type: 'asset', source: 'CHANGED' } });
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output changed');
+    expect(output).not.toContain('removed');
+    expect(output).not.toContain('a.css');
+  });
+
+  it('does not call a skipped output removed in quiet mode', () => {
+    const unchangedOutputs = new Set();
+    const { plugin, lines } = harness(false, unchangedOutputs);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.css': { type: 'asset', source: 'one' },
+        'b.css': { type: 'asset', source: 'two' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    unchangedOutputs.add('a.css');
+    writeBundle(plugin, {}, { 'b.css': { type: 'asset', source: 'CHANGED' } });
+
+    const output = lines.join('\n');
+    expect(output).not.toContain('removed');
+    expect(output).not.toContain('a.css');
+  });
+
+  it('still reports an output that genuinely disappeared', () => {
+    const { plugin, lines } = harness(true);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.css': { type: 'asset', source: 'one' },
+        'b.css': { type: 'asset', source: 'two' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'b.css': { type: 'asset', source: 'two' } });
+
+    expect(lines.join('\n')).toContain('1 output removed');
+  });
+
+  it('names a bundle removal when detailed mode is off', () => {
+    const { plugin, lines } = harness(false);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.css': { type: 'asset', source: 'one' },
+        'b.css': { type: 'asset', source: 'two' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'b.css': { type: 'asset', source: 'two' } });
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 output removed');
+    expect(output).toContain('a.css');
+    expect(output).not.toContain('no output changed');
   });
 
   it('leaves the transform hook returning nothing so it never alters code', () => {

@@ -7,7 +7,7 @@
  * per project directory and relevant environment signature for one process.
  */
 
-import { normalize, resolve, sep } from 'path';
+import { normalize, posix, resolve, sep, win32 } from 'path';
 import { getPlatformAdapter, normalizePlatformName } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
 import { safeExists, safeReadJson } from './utils/fs-safe.js';
@@ -47,6 +47,51 @@ function normalizeIdentifier(value) {
   return (value || '').toString().toLowerCase().trim();
 }
 
+/** Match Unicode characters in the General_Category=Control class. */
+const CONTROL_CHARACTER_RE = /\p{Cc}/u;
+
+/**
+ * Normalize a structure implementation name without allowing path semantics.
+ *
+ * Names become output-directory segments and Twig namespace keys. Rejecting
+ * path-like values is safer than stripping them: two distinct configured
+ * names must never silently collapse onto the same output directory.
+ *
+ * @param {*} value - Candidate implementation name.
+ * @param {number} index - Implementation index for fallback and diagnostics.
+ * @returns {string} Safe normalized name.
+ * @throws {Error} When an explicit name is not a control-free path segment.
+ */
+function normalizeStructureImplementationName(value, index) {
+  if (typeof value !== 'string') {
+    return `structure-${index + 1}`;
+  }
+
+  if (CONTROL_CHARACTER_RE.test(value)) {
+    throw new Error(
+      `Invalid variant.structureImplementations[${index}].name ${JSON.stringify(value)}: expected a single path segment without control characters.`,
+    );
+  }
+
+  if (!value.trim()) {
+    return `structure-${index + 1}`;
+  }
+
+  const name = normalizeIdentifier(value);
+  if (
+    name === '.' ||
+    name === '..' ||
+    posix.basename(name) !== name ||
+    win32.basename(name) !== name
+  ) {
+    throw new Error(
+      `Invalid variant.structureImplementations[${index}].name ${JSON.stringify(value)}: expected a single path segment.`,
+    );
+  }
+
+  return name;
+}
+
 /**
  * Build the environment signature for config values that affect resolution.
  *
@@ -60,7 +105,48 @@ function projectConfigEnvSignature(env = {}) {
     EMULSIFY_PLATFORM: platformOverride
       ? normalizePlatformName(platformOverride)
       : '',
+    EMULSIFY_ASSET_REBASE: normalizeIdentifier(env.EMULSIFY_ASSET_REBASE),
+    EMULSIFY_SELF_CONTAINED_OUTPUT: normalizeIdentifier(
+      env.EMULSIFY_SELF_CONTAINED_OUTPUT,
+    ),
   });
+}
+
+/**
+ * Resolve whether the build may repair unresolvable CSS asset URLs.
+ *
+ * On by default: the URLs it repairs are already broken in every output shape
+ * except mirrored Drupal SDC, so an opt-in would leave the defect in place for
+ * anyone who does not read a changelog. The env override is the bisect tool —
+ * a consumer can turn the repair off for one build without editing config.
+ *
+ * @param {object} rawConfig - Parsed project.emulsify.json contents.
+ * @param {NodeJS.ProcessEnv|Record<string,string>} env - Environment values.
+ * @returns {boolean} TRUE when the rebase is enabled.
+ */
+function resolveAssetRebase(rawConfig = {}, env = {}) {
+  const override = normalizeIdentifier(env.EMULSIFY_ASSET_REBASE);
+  if (override) return !['0', 'false', 'off', 'no'].includes(override);
+
+  return rawConfig?.assets?.rebase !== false;
+}
+
+/**
+ * Resolve whether project assets remain inside the build output.
+ *
+ * Self-contained output preserves the existing deployment contract by default.
+ * Projects that deploy the complete theme directory may opt into leaner output
+ * through project config or a one-build environment override.
+ *
+ * @param {object} rawConfig - Parsed project.emulsify.json contents.
+ * @param {NodeJS.ProcessEnv|Record<string,string>} env - Environment values.
+ * @returns {boolean} TRUE when project assets remain in the output directory.
+ */
+function resolveSelfContainedOutput(rawConfig = {}, env = {}) {
+  const override = normalizeIdentifier(env.EMULSIFY_SELF_CONTAINED_OUTPUT);
+  if (override) return !['0', 'false', 'off', 'no'].includes(override);
+
+  return rawConfig?.assets?.selfContainedOutput !== false;
 }
 
 /**
@@ -69,30 +155,38 @@ function projectConfigEnvSignature(env = {}) {
  * @param {string} projectDir - Absolute project root.
  * @param {Array} implementations - Raw implementation entries.
  * @returns {{name: string, directory: string}[]} Safe implementation entries.
+ * @throws {Error} When valid entries normalize to the same name.
  */
 function normalizeStructureImplementations(projectDir, implementations = []) {
   if (!Array.isArray(implementations)) return [];
 
-  return implementations
-    .map((item, index) => {
-      const rawDirectory =
-        typeof item?.directory === 'string' ? item.directory : null;
-      const directory = rawDirectory
-        ? coerceToProjectPath(projectDir, rawDirectory)
-        : null;
-      if (!directory) return null;
+  const normalized = [];
+  const nameIndexes = new Map();
 
-      const name =
-        typeof item?.name === 'string' && item.name.trim()
-          ? normalizeIdentifier(item.name)
-          : `structure-${index + 1}`;
+  for (const [index, item] of implementations.entries()) {
+    const name = normalizeStructureImplementationName(item?.name, index);
+    const rawDirectory =
+      typeof item?.directory === 'string' ? item.directory : null;
+    const directory = rawDirectory
+      ? coerceToProjectPath(projectDir, rawDirectory)
+      : null;
+    if (!directory) continue;
 
-      return {
-        name,
-        directory: normalize(directory),
-      };
-    })
-    .filter(Boolean);
+    const previousIndex = nameIndexes.get(name);
+    if (previousIndex !== undefined) {
+      throw new Error(
+        `Invalid variant.structureImplementations[${index}].name ${JSON.stringify(item?.name)}: normalized name ${JSON.stringify(name)} duplicates variant.structureImplementations[${previousIndex}].name.`,
+      );
+    }
+
+    nameIndexes.set(name, index);
+    normalized.push({
+      name,
+      directory: normalize(directory),
+    });
+  }
+
+  return normalized;
 }
 
 /**
@@ -201,6 +295,8 @@ export function resolveProjectConfig(
     rawStructureImplementations,
   );
   const assetRoots = normalizeAssetRoots(root, rawAssetRoots(rawConfig));
+  const assetRebase = resolveAssetRebase(rawConfig, env);
+  const selfContainedOutput = resolveSelfContainedOutput(rawConfig, env);
   const structureRoots = structureImplementations.map(
     (implementation) => implementation.directory,
   );
@@ -212,6 +308,8 @@ export function resolveProjectConfig(
     structureImplementations,
     assetRoots: assetRoots.roots,
     ignoredAssetRoots: assetRoots.ignored,
+    assetRebase,
+    selfContainedOutput,
     platformAdapter,
   });
 
@@ -231,6 +329,8 @@ export function resolveProjectConfig(
     structureRoots,
     assetRoots: projectStructure.assetRoots,
     ignoredAssetRoots: projectStructure.ignoredAssetRoots,
+    assetRebase: projectStructure.assetRebase,
+    selfContainedOutput: projectStructure.selfContainedOutput,
     componentRoots: projectStructure.componentRoots,
     globalRoots: projectStructure.globalRoots,
     namespaceRoots: projectStructure.namespaceRoots,

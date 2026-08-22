@@ -18,6 +18,7 @@ import { gzipSync } from 'node:zlib';
 import { statSync } from 'node:fs';
 
 import { findSourceRoot, relativeFrom } from '../../project-structure.js';
+import { isGeneratedSourceMap } from '../../utils/source-maps.js';
 
 /**
  * Render one source root as a display path.
@@ -303,9 +304,8 @@ export function buildInputRows({
  * Gzipping is the expensive part of a per-file table — it is the whole of
  * Rolldown's `computing gzip size...` pause — so it is spent only where the
  * number means something. Fonts and raster images are already compressed and
- * their gzip figure is noise; sourcemaps compress well but are a diagnostic
- * artifact nobody ships to a browser, and they are among the largest files in a
- * typical `dist/`.
+ * their gzip figure is noise. Source maps are omitted from reporting entirely,
+ * so they never reach this list.
  *
  * @type {string[]}
  */
@@ -322,6 +322,20 @@ const COMPRESSIBLE_EXTENSIONS = [
 ];
 
 /**
+ * Decide whether a generated file belongs in developer-facing output reports.
+ *
+ * Source maps remain available in watch builds for devtools, but their size is
+ * dominated by debugging metadata and obscures the files a developer can act
+ * on. The production build disables their emission separately.
+ *
+ * @param {string} fileName - Output file name.
+ * @returns {boolean} TRUE when the file should appear in reporter output.
+ */
+export function isReportableOutput(fileName) {
+  return !isGeneratedSourceMap(fileName);
+}
+
+/**
  * Determine whether a file's compressed size is worth computing.
  *
  * @param {string} fileName - Output file name.
@@ -329,7 +343,7 @@ const COMPRESSIBLE_EXTENSIONS = [
  */
 function isCompressible(fileName) {
   const lower = String(fileName).toLowerCase();
-  if (lower.endsWith('.map')) return false;
+  if (!isReportableOutput(lower)) return false;
 
   return COMPRESSIBLE_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
@@ -413,7 +427,8 @@ function displayEntry(sourceFile, projectDir) {
 }
 
 /**
- * List every file a build wrote, with its size and, where useful, its gzip size.
+ * List every reportable file a build wrote, with its size and, where useful,
+ * its gzip size. Source maps stay on disk in watch mode but are omitted here.
  *
  * Ordered by size descending. Unlike the input listing, the question here is
  * "what is heavy" — the output row already reports the single largest file, and
@@ -426,21 +441,23 @@ function displayEntry(sourceFile, projectDir) {
 export function buildOutputFileRows(bundle, { gzip = true } = {}) {
   if (!bundle || typeof bundle !== 'object') return [];
 
-  const rows = Object.entries(bundle).map(([fileName, output]) => {
-    const content = outputBuffer(output);
-    const bytes = content ? content.byteLength : 0;
+  const rows = Object.entries(bundle)
+    .filter(([fileName]) => isReportableOutput(fileName))
+    .map(([fileName, output]) => {
+      const content = outputBuffer(output);
+      const bytes = content ? content.byteLength : 0;
 
-    let gzipBytes;
-    if (gzip && content && isCompressible(fileName)) {
-      try {
-        gzipBytes = gzipSync(content).byteLength;
-      } catch {
-        gzipBytes = undefined;
+      let gzipBytes;
+      if (gzip && content && isCompressible(fileName)) {
+        try {
+          gzipBytes = gzipSync(content).byteLength;
+        } catch {
+          gzipBytes = undefined;
+        }
       }
-    }
 
-    return { fileName, bytes, gzipBytes };
-  });
+      return { fileName, bytes, gzipBytes };
+    });
 
   return rows.sort(
     (a, b) => b.bytes - a.bytes || a.fileName.localeCompare(b.fileName, 'en'),
@@ -448,7 +465,7 @@ export function buildOutputFileRows(bundle, { gzip = true } = {}) {
 }
 
 /**
- * Fingerprint every file in a bundle by content.
+ * Fingerprint every reportable file in a bundle by content.
  *
  * Rollup regenerates the whole bundle on every watch cycle, so "which files were
  * written" is always "all of them" and says nothing. Comparing content hashes
@@ -464,6 +481,8 @@ export function fingerprintBundle(bundle) {
   if (!bundle || typeof bundle !== 'object') return fingerprints;
 
   for (const [fileName, output] of Object.entries(bundle)) {
+    if (!isReportableOutput(fileName)) continue;
+
     const content = outputBuffer(output);
     if (!content) continue;
 
@@ -507,7 +526,8 @@ export function diffFingerprints(previous = new Map(), current = new Map()) {
  * Raising `logLevel` to quiet the develop loop also discards Rolldown's per-file
  * asset report, which is around seventy lines on a real project. Three of its
  * facts are worth keeping — how many files landed, how much they weigh, and
- * which one is heaviest — and those fit on one line.
+ * which one is heaviest — and those fit on one line. Source maps are excluded
+ * from all three because they are watch-only debugging artifacts.
  *
  * Sizes are computed from the emitted content rather than by reading `dist/`
  * back off disk, so this adds no I/O to the cycle.
@@ -518,7 +538,9 @@ export function diffFingerprints(previous = new Map(), current = new Map()) {
 export function summarizeBundle(bundle) {
   if (!bundle || typeof bundle !== 'object') return undefined;
 
-  const files = Object.entries(bundle);
+  const files = Object.entries(bundle).filter(([fileName]) =>
+    isReportableOutput(fileName),
+  );
   if (files.length === 0) return undefined;
 
   let totalBytes = 0;
@@ -534,6 +556,64 @@ export function summarizeBundle(bundle) {
   }
 
   return { fileCount: files.length, totalBytes, largest };
+}
+
+/**
+ * Attribute bundle output to the directories that retain it after publishing.
+ *
+ * Rollup writes every file through `outDir`, but Drupal SDC projects then move
+ * `components/**` to the project-root component directory. Partitioning the
+ * in-memory bundle preserves the reporter's no-I/O tally while naming the
+ * directories developers actually inspect after the mirror completes.
+ *
+ * Largest component paths are made relative to `components/`; the directory
+ * row already supplies that prefix, so repeating it would obscure the useful
+ * part of long component paths.
+ *
+ * @param {{
+ *   bundle?: Record<string, {type?: string, code?: string, source?: string|Uint8Array}>,
+ *   outDir?: string,
+ *   mirrorComponentOutput?: boolean,
+ *   componentOutput?: string
+ * }} [options] - Output routing inputs.
+ * @returns {Array<{path: string, write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}}>} Destination rows.
+ */
+export function buildOutputSummaryRows({
+  bundle,
+  outDir = 'dist',
+  mirrorComponentOutput = false,
+  componentOutput = 'components',
+} = {}) {
+  if (!mirrorComponentOutput) {
+    return [{ path: outDir, write: summarizeBundle(bundle) }];
+  }
+
+  const componentPath = displayRoot(componentOutput);
+  const distBundle = {};
+  const componentBundle = {};
+
+  for (const [fileName, output] of Object.entries(bundle || {})) {
+    const normalizedFileName = fileName.split('\\').join('/');
+
+    if (normalizedFileName.startsWith(componentPath)) {
+      componentBundle[normalizedFileName.slice(componentPath.length)] = output;
+    } else {
+      distBundle[fileName] = output;
+    }
+  }
+
+  const emptyWrite =
+    bundle && typeof bundle === 'object'
+      ? { fileCount: 0, totalBytes: 0 }
+      : undefined;
+
+  return [
+    { path: outDir, write: summarizeBundle(distBundle) || emptyWrite },
+    {
+      path: componentPath,
+      write: summarizeBundle(componentBundle) || emptyWrite,
+    },
+  ];
 }
 
 /**

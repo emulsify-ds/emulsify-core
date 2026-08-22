@@ -11,11 +11,14 @@ import {
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
 import { DEFAULT_TWIG_THRESHOLD, runAudits } from './audit/index.js';
+import { applyAuditFixes, remainingFindings } from './audit/fix.js';
 import {
   formatAuditJsonErrorReport,
   formatAuditJsonReport,
   formatAuditReport,
+  summarizeFindings,
 } from './audit/report.js';
+import { displayPath } from './audit/lib/findings.js';
 
 export { auditProject, runAudits } from './audit/index.js';
 export {
@@ -27,6 +30,7 @@ export {
   formatAuditReport,
 } from './audit/report.js';
 export { collectProjectFiles } from './audit/lib/files.js';
+export { applyAuditFixes, remainingFindings } from './audit/fix.js';
 export { findCssUrlReferences } from './audit/lib/css.js';
 export {
   findTwigIncludeSourceReferences,
@@ -45,10 +49,12 @@ const cliFailureExitCode = 2;
  */
 function usage() {
   return createUsage(
-    'Usage: emulsify-audit [--root <dir>] [--json] [--fail-on <severity>] [--fail-on-found] [--twig-threshold <count>]',
+    'Usage: emulsify-audit [--root <dir>] [--json] [--fix] [--dry-run] [--fail-on <severity>] [--fail-on-found] [--twig-threshold <count>]',
     [
       '  --root <dir>              Project root to scan. Defaults to the current directory.',
       '  --json                    Print machine-readable JSON.',
+      '  --fix                     Rewrite unambiguous CSS asset URLs to the canonical /assets/... form.',
+      '  --dry-run                 With --fix, report the rewrites without touching files.',
       '  --fail-on <severity>       Exit with code 1 for error, warn, info, or any findings at that threshold.',
       '  --fail-on-found           Compatibility alias for --fail-on any.',
       `  --twig-threshold <count>  Warn when Storybook roots contain more than this many Twig files. Default: ${DEFAULT_TWIG_THRESHOLD}.`,
@@ -70,6 +76,8 @@ function parseArgs(argv) {
       failOn: null,
       json: false,
       help: false,
+      fix: false,
+      dryRun: false,
       twigThreshold: DEFAULT_TWIG_THRESHOLD,
     },
     flags: {
@@ -78,6 +86,8 @@ function parseArgs(argv) {
         value: 'any',
       },
       '--json': 'json',
+      '--fix': 'fix',
+      '--dry-run': 'dryRun',
     },
     options: {
       '--fail-on': {
@@ -167,6 +177,9 @@ export function runCli(argv = process.argv.slice(2)) {
     if (options.help && options.json) {
       throw new Error('--json cannot be combined with --help.');
     }
+    if (options.dryRun && !options.fix) {
+      throw new Error('--dry-run requires --fix.');
+    }
   } catch (error) {
     return reportArgumentFailure(error, jsonRequested);
   }
@@ -178,6 +191,28 @@ export function runCli(argv = process.argv.slice(2)) {
 
   try {
     const result = runAudits(options);
+    let findings = result.findings;
+
+    if (options.fix) {
+      try {
+        result.fixes = applyAuditFixes(findings, {
+          dryRun: options.dryRun,
+          projectDir: result.projectDir,
+          sourceRoots: result.sourceRoots,
+        });
+      } catch (error) {
+        return reportFixFailure(error, options);
+      }
+
+      // A dry run changes nothing on disk, so nothing is subtracted. A real
+      // run removed the findings it fixed from the source, so the threshold
+      // must be judged on what is left.
+      if (!options.dryRun) {
+        result.findings = remainingFindings(findings, result.fixes.applied);
+        result.summary = summarizeFindings(result.findings);
+        findings = result.findings;
+      }
+    }
 
     if (options.json) {
       console.log(formatAuditJsonReport(result));
@@ -185,7 +220,7 @@ export function runCli(argv = process.argv.slice(2)) {
       console.log(formatAuditReport(result));
     }
 
-    return shouldFailAudit(result.findings, options.failOn) ? 1 : 0;
+    return shouldFailAudit(findings, options.failOn) ? 1 : 0;
   } catch (error) {
     if (options.json) {
       console.log(
@@ -200,6 +235,56 @@ export function runCli(argv = process.argv.slice(2)) {
 
     return cliFailureExitCode;
   }
+}
+
+/**
+ * Print a failure that happened while writing fixes.
+ *
+ * @param {*} error - Write failure.
+ * @param {object} options - Parsed CLI options.
+ * @returns {number} Exit code.
+ */
+function reportFixFailure(error, options) {
+  const projectDir = resolve(options.projectDir);
+
+  if (options.json) {
+    console.log(
+      formatAuditJsonErrorReport(error, {
+        code: 'fix-failed',
+        projectDir,
+        fixes: error?.fixes,
+      }),
+    );
+  } else {
+    const lines = [`Audit fix failed: ${error.message || error}`];
+    const applied = error?.fixes?.applied || [];
+    const rewrittenFiles = Array.from(
+      new Set(applied.map(({ finding }) => finding.filePath)),
+    ).sort();
+
+    if (rewrittenFiles.length) {
+      const verb = error?.fixes?.dryRun ? 'Would apply' : 'Applied';
+      lines.push(
+        `${verb} ${applied.length} fix(es) across ${rewrittenFiles.length} file(s) before the failure:`,
+        ...rewrittenFiles.map(
+          (filePath) => `  ${displayPath(projectDir, filePath)}`,
+        ),
+      );
+    }
+
+    const skipped = error?.fixes?.skipped || [];
+    if (skipped.length) {
+      lines.push(`Skipped ${skipped.length} fixable finding(s):`);
+      for (const { finding, reason } of skipped) {
+        const where = `${displayPath(projectDir, finding.filePath)}:${finding.line}`;
+        lines.push(`  ${where}  ${reason}`);
+      }
+    }
+
+    console.error(lines.join('\n'));
+  }
+
+  return cliFailureExitCode;
 }
 
 if (isCliEntrypoint(['audit.js', 'emulsify-audit'])) {

@@ -4,10 +4,11 @@
 under `concurrently`. The develop reporter is what makes that read as one tool
 instead of three.
 
-The reporter is active only for `vite build --watch`. One-shot `npm run build`,
-`storybook build`, and every release fixture verification keep their default
-output byte for byte, so nothing a platform ships is affected by anything on this
-page.
+The full session report is active only for `vite build --watch`. One-shot builds
+keep their normal output and add a compact block only for actionable asset
+diagnostics or, in a standalone `storybook build`, Sass deprecations that its
+quiet logger collected. Clean builds and release fixture verification remain
+unchanged, so nothing a platform ships is affected by the presentation here.
 
 ## What It Prints
 
@@ -18,7 +19,7 @@ A watch session opens with the wordmark and the Core version:
   █▀▀ █ ▀ █ █ █ █   ▀▀█ █ █▀▀ ▀▄▀
   ▀▀▀ ▀   ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀    ▀
 
-  core 4.3.1
+  core 4.4.0
 ```
 
 Then, once the first build finishes, the project facts and the build result, each
@@ -32,7 +33,9 @@ under its own heading:
                   src/foundation/    5 entries
                   src/base/          3 entries
                   src/js/            2 entries
-      output      dist/  41 files · 2.3 MB · largest style.css 388 kB
+      output      dist/         9 files · 400 kB · largest global/style.css 388 kB
+                  components/  32 files · 1.9 MB · largest forms/inputs/select/select.js 77 kB
+                  total        41 files · 2.3 MB
 
   ── build ────────────────────────────────────────────
 
@@ -81,9 +84,13 @@ this — 39 entries looks healthy whether or not a root was found at all.
 
 ### Reading The Output Row
 
-The output directory, then the number of files written, their combined size, and
-the largest single file. Watching the largest file is the cheapest way to notice
-a stylesheet that has begun pulling in something it should not.
+Each final output destination gets its own row with the number of files in that
+part of the emitted bundle, their combined size, and the largest file relative
+to that directory. Drupal projects that mirror SDC output show separate `dist/`
+and `components/` rows followed by their combined total. Other projects show
+only their Vite output directory, without a redundant total row. Watching the
+largest file in each destination is the cheapest way to notice a stylesheet or
+component bundle that has begun pulling in something it should not.
 
 ### Reading The Build Line
 
@@ -140,10 +147,15 @@ itself. Every Twig template does, including ones whose names begin with an
 underscore — Twig resolves `{% include %}` at render time against the emitted tree,
 so those are files the site still has to find.
 
-Adding a _new_ file is different from editing one. The entry map and the source
-index are both resolved once at config time, and Rollup cannot take new inputs
-mid-watch, so a newly created component needs `develop` restarted before it is
-picked up.
+Adding a _new_ file is different from editing one. The copy plugins register
+individual files rather than component directories, while the entry map and the
+source index are resolved once at config time. Adding a file anywhere under a
+component source root — including inside an existing component — therefore does
+not start a Vite build cycle. Creating, renaming, or deleting a component
+directory likewise requires restarting `develop`; the restart refreshes both the
+watch set and compiled inputs. A single-file rename does produce a cycle because
+deleting its individually watched original emits an event, though its old output
+is retained until a restart or one-shot build cleans it.
 
 Deprecations are not repeated on rebuilds — restating 190 of them on every
 keystroke would recreate the noise the reporter exists to remove. Failures are
@@ -197,13 +209,66 @@ These are suppressed at the default level and restored in either verbose mode.
 The rebuild line already reports the same event more precisely, and under
 `concurrently` these interleave with it on the shared pipe.
 
-The volume has a cause worth knowing about: `build.emptyOutDir` clears the output
+There used to be many more of these. `build.emptyOutDir` clears the output
 directory on **every** watch cycle, not just the first, and Storybook imports its
-compiled CSS from `dist/`. So each save deletes and recreates every file
-Storybook is watching, and each one becomes an HMR event. Suppressing the notices
-hides the noise; it does not reduce the work. Leaving `dist/` intact between
-cycles would, at the cost of letting output from a deleted or renamed component
-linger until the next restart.
+compiled CSS from `dist/`, so each save deleted and recreated every file
+Storybook was watching. Deleting a file reached through an eager
+`import.meta.glob` is a full-reload invalidation rather than a style swap, and
+the copied Twig templates were rewritten on every cycle as well — so a one-line
+stylesheet edit reloaded the preview iframe instead of swapping the stylesheet.
+
+Emulsify now lets Vite empty the directory for the first cycle only, then writes
+incrementally: an emitted asset, a copied template, or a copied static file whose
+bytes already match what is on disk is left alone. One saved stylesheet updates
+one stylesheet and the preview no longer reloads. The tradeoff is that output
+from a component deleted or renamed mid-session is not pruned. Destinations
+inside `outDir` are removed when the watcher restarts or a one-shot build empties
+that directory. Drupal SDC component output mirrored outside `outDir` is not
+reconciled automatically and may require manual cleanup after a delete or rename.
+
+### Sass Deprecations From Storybook
+
+Storybook runs its own Vite process, and it compiles the same stylesheets the
+watcher does. It resolves the shared config with `command: 'serve'`, which used
+to miss the branch that installs the quiet Sass logger, so Dart Sass printed its
+full formatted block — message, recommendation, excerpt, caret, import chain —
+for every deprecation it met. On a project carrying a few hundred of them that
+is most of a screen at startup, and the same screen again after every save,
+restating a tally the reporter had already printed once from the other process.
+
+Storybook now takes the same logger. During `npm run develop`, the watcher
+compiles the same source tree, so its `pre-existing debt` block already covers
+everything Storybook dev would have reported. A standalone `storybook build`
+has no sibling watcher, so it prints the collected, deduplicated Sass tally when
+the build finishes.
+
+The debt is never invisible. `npm run develop` prints it once per session,
+`storybook build` prints it once at completion, and one-shot `npm run build`
+keeps Dart Sass's own output untouched. `EMULSIFY_VERBOSE=1` hands Storybook's
+raw output back.
+
+### Transform Failures
+
+A dev-server transform failure prints the error, then repeats it out of
+`err.stack`, then lists thirty-odd frames inside `sass.dart.js` — roughly fifty
+lines in which the only project path is in the first six. Everything from the
+`File:` line on is dropped at the default level, leaving the message, the source
+excerpt with its caret, the import chain, and the file:
+
+```text
+  [vite] Internal server error: [sass] expected ";".
+    ╷
+  5 │ @use '../../base/global/colors/color-vars' as *
+    │                                                ^
+    ╵
+    src/components/organisms/tab-refresh/tab-refresh.scss 5:48  root stylesheet
+    Plugin: vite:css
+    File: src/components/organisms/tab-refresh/tab-refresh.scss:5:48
+```
+
+An error that carries neither a `File:` line nor a recognizable stack frame is
+passed through whole rather than truncated on a guess, and either verbose mode
+restores the full dump.
 
 ## Verbose Mode
 
@@ -224,13 +289,13 @@ build reads with the size of its source, ordered by path, because a full input
 listing is read to check that the tree was picked up and a tree is scanned in path
 order. `output files` names every file the build wrote with its size and, where
 the number means anything, its gzip size — ordered by size descending, since it is
-the `output` row's `largest` expanded into the full ranking.
+the `output` row's `largest` expanded into the full ranking. Development source
+maps are omitted because their generated metadata obscures the actionable files.
 
 ```text
   ── output files ──────────────────────────────────────
 
       file                                    size      gzip
-      components/js/jquery-321.js.map     430.00 kB         —
       assets/images/nav-sprite.jpg        226.36 kB         —
       assets/icons.svg                     85.83 kB  31.73 kB
       global/layout/layout.css             12.11 kB   2.05 kB
@@ -256,17 +321,20 @@ This is deliberately not Rolldown's table. Rollup regenerates the whole bundle o
 every cycle, so "which files were written" is always "all of them" and answers
 nothing. The reporter fingerprints the bundle by content and reports only what
 came out different — including the useful negative, `no output changed`, when an
-edit compiled to byte-identical CSS. Files that stopped being written are grouped
-under `no longer written`.
+edit compiled to byte-identical CSS. Successful Twig, component metadata, and
+static-asset copies are merged into that diff because those files never enter
+Rollup's bundle. Files that stopped being written are grouped under
+`no longer written`; removals are named even outside verbose mode so a
+destructive cycle can never read as though nothing changed.
 
 ### What It Costs
 
 Gzip is the only real expense, and it is the whole of Rolldown's
 `computing gzip size...` pause. It is spent narrowly: only on compressible
-extensions, never on fonts, raster images, or sourcemaps, and on rebuilds only for
-the handful of files that changed. Source sizes come from one `stat` per entry at
-config resolution. The module count comes from a `transform` hook that is attached
-only in this mode.
+extensions, never on fonts or raster images, and on rebuilds only for the handful
+of files that changed. Sourcemaps are omitted before any reporting or gzip work.
+Source sizes come from one `stat` per entry at config resolution. The module count
+comes from a `transform` hook that is attached only in this mode.
 
 ### Why `--verbose` Needs Explaining
 
@@ -283,14 +351,18 @@ whose `.npmrc` raises `loglevel` permanently can still pin the reporter down wit
 
 ## Environment Variables
 
-| Variable                | Effect                                                                                                                                                                                         |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EMULSIFY_VERBOSE=1`    | Stand aside entirely. Restores Vite's and Rolldown's raw output, including the per-file asset table and every Sass deprecation block. Use when diagnosing something the summary has collapsed. |
-| `EMULSIFY_VERBOSE=2`    | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                          |
-| `EMULSIFY_VERBOSE=0`    | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                               |
-| `EMULSIFY_NO_UNICODE=1` | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                               |
-| `NO_COLOR=1`            | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                    |
-| `FORCE_COLOR=1`         | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                        |
+| Variable                           | Effect                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMULSIFY_VERBOSE=1`               | Restore Vite's and Rolldown's raw output, including the per-file asset table, Storybook's Sass deprecation blocks, and full dev-server stack traces. Reserved `@assets` resolution notices remain suppressed; unresolved aliases still appear in Core's final diagnostics. |
+| `EMULSIFY_VERBOSE=2`               | Detailed reporter. Keeps the reporter in charge and adds the per-file listings described above. Equivalent to `npm run develop --verbose`, without npm's own chatter.                                                                                                      |
+| `EMULSIFY_VERBOSE=0`               | Force quiet, overriding a raised npm `loglevel`.                                                                                                                                                                                                                           |
+| `EMULSIFY_NO_UNICODE=1`            | Drop the wordmark, the panel rules, and the section rules in favor of plain text. Applied automatically when the terminal's locale is not UTF-8.                                                                                                                           |
+| `EMULSIFY_STRICT_ASSETS=1`         | Fail a one-shot build when a CSS asset URL cannot be resolved. Off by default, because an unresolvable URL is occasionally an intentional runtime path.                                                                                                                    |
+| `EMULSIFY_STRICT_ASSETS=2`         | Also fail on legacy URLs the build had to repair. First-class `/assets/...` and `@assets/...` references are accepted at this level; `/assets/...` remains the audit autofix output for legacy forms.                                                                      |
+| `EMULSIFY_ASSET_REBASE=0`          | Turn the full CSS asset rebase pipeline off for one build, retaining Vite's `dist/assets/` copies and emitted URLs. The permanent switch is `assets.rebase` in `project.emulsify.json`.                                                                                    |
+| `EMULSIFY_SELF_CONTAINED_OUTPUT=0` | Opt into lean output for one build: resolved or repaired CSS points at project asset roots, and copies made redundant by those CSS rewrites are removed. Copies needed by JavaScript or other output remain. The permanent switch is `assets.selfContainedOutput`.         |
+| `NO_COLOR=1`                       | Disable color. Honors the [no-color.org](https://no-color.org/) convention.                                                                                                                                                                                                |
+| `FORCE_COLOR=1`                    | Enable color even when the stream is not a TTY. `develop` pipes through `concurrently`, so this is occasionally useful.                                                                                                                                                    |
 
 ## Why The Output Is Append-Only
 

@@ -142,7 +142,7 @@ export function runAuditChecks(context) {
  * Run the combined Emulsify audit.
  *
  * @param {{projectDir?: string, twigThreshold?: number}} [options={}] - Options.
- * @returns {{projectDir: string, summary: object, files: object, findings: object[]}} Audit result.
+ * @returns {{projectDir: string, sourceRoots: string[], summary: object, files: object, findings: object[]}} Audit result.
  */
 export function runAudits(options = {}) {
   resetFileReadCache();
@@ -161,7 +161,7 @@ export function runAudits(options = {}) {
     },
   );
 
-  return {
+  const result = {
     projectDir: context.projectDir,
     summary,
     files: {
@@ -172,6 +172,14 @@ export function runAudits(options = {}) {
     },
     findings,
   };
+
+  // The fix scope is CLI-internal plumbing. Keep raw audit serialization
+  // stable while still sharing the normalized roots with the fix phase.
+  Object.defineProperty(result, 'sourceRoots', {
+    value: context.sourceRoots,
+  });
+
+  return result;
 }
 
 export { runAudits as auditProject };

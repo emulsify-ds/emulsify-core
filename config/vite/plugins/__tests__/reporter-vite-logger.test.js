@@ -6,6 +6,7 @@
 
 import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import {
+  compactDevServerError,
   createDevServerLogger,
   createReporterLogger,
   parseUnresolvedAsset,
@@ -62,6 +63,14 @@ describe('unresolved asset parsing', () => {
     ).toEqual({ url: '../images/plus.png', importer: undefined });
   });
 
+  it('drops a fragment-stripped url masquerading as an importer', () => {
+    expect(
+      parseUnresolvedAsset(
+        notice('../images/plus.svg#icon', '../images/plus.svg'),
+      ),
+    ).toEqual({ url: '../images/plus.svg#icon', importer: undefined });
+  });
+
   it('tolerates ansi styling around the message', () => {
     const styled = `[33m${NOTICE.trim()}[39m`;
     expect(parseUnresolvedAsset(styled)?.url).toBe('../images/bg-lines.png');
@@ -91,6 +100,44 @@ describe('reporter logger', () => {
       },
     ]);
   });
+
+  it('captures unresolved notices without hiding raw verbose output', () => {
+    const collector = createDiagnosticsCollector();
+    const base = createBaseLogger();
+    const logger = createReporterLogger(collector, base, { verbose: true });
+
+    logger.warnOnce(NOTICE);
+
+    expect(base.warnOnce).toHaveBeenCalledWith(NOTICE, undefined);
+    expect(collector.snapshot().unresolvedAssets).toEqual([
+      {
+        url: '../images/bg-lines.png',
+        importer: 'src/components/base/base.scss',
+        count: 1,
+      },
+    ]);
+  });
+
+  it.each(['@assets/images/logo.svg', '../shared/@assets/images/logo.svg'])(
+    'suppresses the expected verbose Vite notice for %s',
+    (url) => {
+      const collector = createDiagnosticsCollector();
+      const base = createBaseLogger();
+      const logger = createReporterLogger(collector, base, { verbose: true });
+      const aliasNotice = notice(url, 'src/components/card/card.scss');
+
+      logger.warnOnce(aliasNotice);
+
+      expect(base.warnOnce).not.toHaveBeenCalled();
+      expect(collector.snapshot().unresolvedAssets).toEqual([
+        {
+          url,
+          importer: 'src/components/card/card.scss',
+          count: 1,
+        },
+      ]);
+    },
+  );
 
   it('passes every other message straight through', () => {
     const collector = createDiagnosticsCollector();
@@ -134,6 +181,24 @@ describe('reporter logger', () => {
     expect(asset.count).toBe(2);
   });
 
+  it('keeps the same url separate for every importing stylesheet', () => {
+    const collector = createDiagnosticsCollector();
+    const logger = createReporterLogger(collector, createBaseLogger());
+    const importers = ['a.scss', 'b.scss', 'c.scss'];
+
+    for (const importer of importers) {
+      logger.warnOnce(notice('../images/logo.png', importer));
+    }
+
+    expect(collector.snapshot().unresolvedAssets).toEqual(
+      importers.map((importer) => ({
+        url: '../images/logo.png',
+        importer,
+        count: 1,
+      })),
+    );
+  });
+
   it('keeps differently spelled urls apart', () => {
     const collector = createDiagnosticsCollector();
     const logger = createReporterLogger(collector, createBaseLogger());
@@ -143,6 +208,140 @@ describe('reporter logger', () => {
 
     // Each spelling is a separate edit for the author to make.
     expect(collector.snapshot().unresolvedAssets).toHaveLength(2);
+  });
+});
+
+// Shape Vite's dev server actually prints for a Sass syntax error: the
+// message, the excerpt, `Plugin:`/`File:`, then `err.stack` — which repeats the
+// message and excerpt before listing frames inside the compiler bundle.
+const QUOTE = String.fromCharCode(39);
+const EXCERPT = `@use ${QUOTE}../../base/global/colors/color-vars${QUOTE} as *`;
+const SASS_DEV_SERVER_ERROR = [
+  'Internal server error: [sass] expected ";".',
+  '  ╷',
+  `5 │ ${EXCERPT}`,
+  '  │                                                ^',
+  '  ╵',
+  '  src/tab-refresh.scss 5:48  root stylesheet',
+  '  Plugin: vite:css',
+  '  File: /project/src/tab-refresh.scss:5:48',
+  '  [sass] expected ";".',
+  '    ╷',
+  `  5 │ ${EXCERPT}`,
+  '    │                                                ^',
+  '    ╵',
+  '    src/tab-refresh.scss 5:48  root stylesheet',
+  '      at Object.wrapException (/project/node_modules/sass/sass.dart.js:2310:47)',
+  '      at SpanScanner.error$3$length$position (/project/node_modules/sass/sass.dart.js:87501:15)',
+  '      at async loadAndTransform (/project/node_modules/vite/dist/node/chunks/node.js:20619:26)',
+].join('\n');
+
+describe('compactDevServerError', () => {
+  it('drops the Sass frame when it duplicates the message', () => {
+    expect(compactDevServerError(SASS_DEV_SERVER_ERROR).split('\n')).toEqual(
+      SASS_DEV_SERVER_ERROR.split('\n').slice(0, 8),
+    );
+  });
+
+  it('recognizes a styled Sass duplicate without removing its styling', () => {
+    const escape = String.fromCharCode(27);
+    const styled = SASS_DEV_SERVER_ERROR.replace(
+      'Plugin: vite:css',
+      `Plugin: ${escape}[36mvite:css${escape}[39m`,
+    ).replace(
+      'File: /project/src/tab-refresh.scss:5:48',
+      `File: ${escape}[36m/project/src/tab-refresh.scss:5:48${escape}[39m`,
+    );
+
+    const compacted = compactDevServerError(styled);
+    expect(compacted.split('\n')).toHaveLength(8);
+    expect(compacted).toContain(`${escape}[36mvite:css${escape}[39m`);
+    expect(compacted).not.toContain('sass.dart.js');
+  });
+
+  it('uses the last File line when the error body contains one', () => {
+    const message = [
+      'Internal server error: Invalid configuration.',
+      '  File: must be supplied by the theme.',
+      '  The configured token was not found.',
+      '  Plugin: theme-config',
+      '  File: /project/src/configuration.js:3:1',
+      '  2 | export const configuration = {',
+      '  3 |   token: missingToken,',
+      '    |          ^',
+      '      at transform (/project/node_modules/theme-config/index.js:91:7)',
+    ].join('\n');
+
+    const compacted = compactDevServerError(message);
+    expect(compacted).toContain('The configured token was not found.');
+    expect(compacted).toContain('Plugin: theme-config');
+    expect(compacted).toContain('File: /project/src/configuration.js:3:1');
+    expect(compacted).toContain('|          ^');
+    expect(compacted).not.toContain('theme-config/index.js');
+  });
+
+  it('does not mistake Sass error text beginning with at for a stack frame', () => {
+    const message = [
+      'Internal server error: [sass] Validation failed.',
+      'at least one value is required for $spacing',
+      '    at Object.wrapException (/project/node_modules/sass/sass.dart.js:2310:47)',
+      '    at async loadAndTransform (/project/node_modules/vite/node.js:20619:26)',
+    ].join('\n');
+
+    expect(compactDevServerError(message)).toBe(
+      [
+        'Internal server error: [sass] Validation failed.',
+        'at least one value is required for $spacing',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps an esbuild code frame that appears after the File line', () => {
+    const message = [
+      'Internal server error: Transform failed with 1 error:',
+      '/project/src/card.stories.jsx:8:17: ERROR: Expected ">" but found "label"',
+      '  Plugin: vite:esbuild',
+      '  File: /project/src/card.stories.jsx:8:17',
+      '  6 | export const Card = () => (',
+      '  7 |   <article>',
+      '  8 |     <span label="Card"</span>',
+      '    |           ^',
+      '  9 |   </article>',
+      '      at failureErrorWithLog (/project/node_modules/esbuild/lib/main.js:1472:15)',
+      '      at responseCallbacks.<computed> (/project/node_modules/esbuild/lib/main.js:622:9)',
+    ].join('\n');
+
+    const compacted = compactDevServerError(message);
+    expect(compacted).toContain('8 |     <span label="Card"</span>');
+    expect(compacted).toContain('|           ^');
+    expect(compacted).not.toContain('esbuild/lib/main.js');
+  });
+
+  it('falls back to the first stack frame when there is no File line', () => {
+    const message = [
+      'Internal server error: boom',
+      '  something useful',
+      '    at Object.thing (/x/y.js:1:1)',
+      '    at other (/x/z.js:2:2)',
+    ].join('\n');
+
+    expect(compactDevServerError(message)).toBe(
+      'Internal server error: boom\n  something useful',
+    );
+  });
+
+  it('leaves a message with no stack alone', () => {
+    // Truncating on a guess would be worse than printing one extra line.
+    const message = 'Internal server error: something unfamiliar';
+
+    expect(compactDevServerError(message)).toBe(message);
+  });
+
+  it('leaves a message that is nothing but frames alone', () => {
+    // Cutting at index 0 would print nothing at all.
+    const message = '    at a (/x.js:1:1)\n    at b (/y.js:2:2)';
+
+    expect(compactDevServerError(message)).toBe(message);
   });
 });
 
@@ -199,6 +398,29 @@ describe('storybook dev server logger', () => {
 
     expect(base.warn).toHaveBeenCalled();
     expect(base.error).toHaveBeenCalled();
+  });
+
+  it('compacts a transform failure down to the part that names it', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: false });
+
+    logger.error(SASS_DEV_SERVER_ERROR);
+
+    const printed = base.error.mock.calls[0][0];
+    expect(printed).toContain('expected ";".');
+    expect(printed).toContain('tab-refresh.scss 5:48');
+    expect(printed).toContain('File: /project/src/tab-refresh.scss:5:48');
+    expect(printed).not.toContain('sass.dart.js');
+    expect(printed.split('\n')).toHaveLength(8);
+  });
+
+  it('keeps the whole dump when more output was requested', () => {
+    const base = createBaseLogger();
+    const logger = createDevServerLogger({ baseLogger: base, verbose: true });
+
+    logger.error(SASS_DEV_SERVER_ERROR);
+
+    expect(base.error).toHaveBeenCalledWith(SASS_DEV_SERVER_ERROR, undefined);
   });
 
   it('keeps a message that merely mentions hmr in prose', () => {

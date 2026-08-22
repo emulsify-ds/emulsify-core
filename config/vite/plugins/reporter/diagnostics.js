@@ -36,6 +36,18 @@ const entryKey = (entry) =>
   `${locationKey(entry.file, entry.line)}|${entry.message || ''}`;
 
 /**
+ * Build the identity of one CSS asset reference site.
+ *
+ * The same URL text in two stylesheets represents two separate edits, while
+ * repeat notices for the same stylesheet and URL are one problem to tally.
+ *
+ * @param {string|undefined} importer - Referencing stylesheet.
+ * @param {string|undefined} url - Referenced asset URL.
+ * @returns {string} Stable asset-reference key.
+ */
+const assetReferenceKey = (importer, url) => `${importer || ''}\0${url || ''}`;
+
+/**
  * Record one occurrence against a location map, incrementing when repeated.
  *
  * @param {Map<string, {file: string|undefined, line: number|undefined, count: number}>} locations - Location map.
@@ -138,8 +150,10 @@ const groupDeprecationsByFile = (deprecationList) => {
  * @returns {{
  *   recordDeprecation: (entry: {id?: string, file?: string, line?: number}) => void,
  *   recordWarning: (entry: {message?: string, file?: string, line?: number}) => void,
- *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
+ *   recordError: (entry: {message?: string, file?: string, line?: number, outputState?: 'incomplete'}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
+ *   recordAssetRebase: (entry: {status?: string, url?: string, rewritten?: string, importer?: string, resolvedAsset?: string, candidates?: string[]}) => void,
+ *   recordExternalizedModule: (entry: {module?: string, importer?: string}) => void,
  *   recordImportError: (entry: {file?: string, line?: number, specifier?: string}) => void,
  *   recordSyntaxError: (entry: {minifier?: string, message?: string, declaration?: string}) => void,
  *   hasCapturedBuildErrors: () => boolean,
@@ -147,10 +161,11 @@ const groupDeprecationsByFile = (deprecationList) => {
  *     deprecations: Array<{id: string, occurrences: number, locations: Array<{file: string|undefined, line: number|undefined, count: number}>}>,
  *     deprecationsByFile: Array<{file: string, occurrences: number, entries: Array<{id: string, count: number, lines: number[]}>}>,
  *     unresolvedAssets: Array<{url: string, importer: string|undefined, count: number}>,
+ *     assetRebases: Array<{status: string, url: string, rewritten: string|undefined, importer: string|undefined, resolvedAsset: string|undefined, candidates: string[]|undefined, count: number}>,
  *     importErrors: Array<{file: string|undefined, line: number|undefined, specifier: string, count: number}>,
  *     syntaxErrors: Array<{minifier: string|undefined, message: string, declaration: string|undefined, count: number}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
- *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
+ *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, outputState?: 'incomplete', count: number}>,
  *     deprecationTotal: number,
  *     deprecationFileCount: number,
  *     hasProblems: boolean
@@ -167,6 +182,10 @@ export function createDiagnosticsCollector() {
   let errors = new Map();
   /** @type {Map<string, {url: string, importer: string|undefined, count: number}>} */
   let unresolvedAssets = new Map();
+  /** @type {Map<string, object>} */
+  let assetRebases = new Map();
+  /** @type {Map<string, {module: string, importer: string|undefined, count: number}>} */
+  let externalizedModules = new Map();
   /** @type {Map<string, object>} */
   let importErrors = new Map();
   /** @type {Map<string, object>} */
@@ -266,8 +285,8 @@ export function createDiagnosticsCollector() {
     /**
      * Record one CSS `url()` that Vite could not resolve at build time.
      *
-     * Keyed by URL, because the same asset referenced from two stylesheets with
-     * different relative paths is two separate things for an author to fix.
+     * Keyed by importer and URL, because the same spelling in two stylesheets
+     * is two separate source sites for an author to fix.
      *
      * @param {{url?: string, importer?: string}} entry - Unresolved asset.
      * @returns {void}
@@ -275,14 +294,76 @@ export function createDiagnosticsCollector() {
     recordUnresolvedAsset({ url, importer } = {}) {
       if (!url) return;
 
-      const existing = unresolvedAssets.get(url);
+      const key = assetReferenceKey(importer, url);
+      const existing = unresolvedAssets.get(key);
       if (existing) {
         existing.count += 1;
-        existing.importer = existing.importer || importer;
         return;
       }
 
-      unresolvedAssets.set(url, { url, importer, count: 1 });
+      unresolvedAssets.set(key, { url, importer, count: 1 });
+    },
+
+    /**
+     * Record one CSS `url()` the build repaired, or could not choose for.
+     *
+     * A separate channel from `recordUnresolvedAsset` on purpose: Vite already
+     * warned about every one of these URLs, and folding them into that map
+     * would double the occurrence count it reports. `snapshot()` subtracts
+     * repaired URLs from the unresolved list instead.
+     *
+     * @param {{status?: string, url?: string, rewritten?: string, importer?: string, resolvedAsset?: string, candidates?: string[]}} entry - Rebase record.
+     * @returns {void}
+     */
+    recordAssetRebase({
+      status = 'rebased',
+      url,
+      rewritten,
+      importer,
+      resolvedAsset,
+      candidates,
+    } = {}) {
+      if (!url) return;
+
+      const key = assetReferenceKey(importer, url);
+      const existing = assetRebases.get(key);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+
+      assetRebases.set(key, {
+        status,
+        url,
+        rewritten,
+        importer,
+        resolvedAsset,
+        candidates,
+        count: 1,
+      });
+    },
+
+    /**
+     * Record one module Vite externalized for browser compatibility.
+     *
+     * Vite emits this once per importing file per cycle, so a single dependency
+     * that reaches for a Node builtin prints on every keystroke. The identity
+     * that matters is the module, not the importer, so occurrences are tallied
+     * against the module name.
+     *
+     * @param {{module?: string, importer?: string}} entry - Externalized module.
+     * @returns {void}
+     */
+    recordExternalizedModule({ module, importer } = {}) {
+      if (!module) return;
+
+      const existing = externalizedModules.get(module);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+
+      externalizedModules.set(module, { module, importer, count: 1 });
     },
 
     snapshot() {
@@ -306,7 +387,10 @@ export function createDiagnosticsCollector() {
       const errorList = [...errors.values()];
       const warningList = [...warnings.values()];
       const unresolvedAssetList = [...unresolvedAssets.values()].sort(
-        (a, b) => b.count - a.count || a.url.localeCompare(b.url),
+        (a, b) =>
+          b.count - a.count ||
+          a.url.localeCompare(b.url) ||
+          String(a.importer || '').localeCompare(String(b.importer || '')),
       );
 
       const importErrorList = [...importErrors.values()].sort(
@@ -315,10 +399,54 @@ export function createDiagnosticsCollector() {
           (a.line ?? 0) - (b.line ?? 0),
       );
 
+      const assetRebaseList = [...assetRebases.values()];
+      const handledReferences = new Set(
+        assetRebaseList
+          .filter(
+            (entry) => entry.status === 'aliased' || entry.status === 'rebased',
+          )
+          .map((entry) => assetReferenceKey(entry.importer, entry.url)),
+      );
+      const handledUrls = new Set(
+        assetRebaseList
+          .filter(
+            (entry) => entry.status === 'aliased' || entry.status === 'rebased',
+          )
+          .map((entry) => entry.url),
+      );
+      // Vite warns about a URL before the rebase plugin repairs it, so without
+      // this a repaired reference or accepted alias is reported as an
+      // outstanding problem. The importer remains part of the identity:
+      // handling one stylesheet must not hide the same URL spelling in another
+      // stylesheet. When Vite's notice lacks an importer, fall back to URL
+      // matching because it sometimes reports the URL itself in the importer
+      // position.
+      const outstandingAssets = unresolvedAssetList.filter((asset) => {
+        if (
+          handledReferences.has(assetReferenceKey(asset.importer, asset.url))
+        ) {
+          return false;
+        }
+
+        if (!asset.importer) return !handledUrls.has(asset.url);
+        return true;
+      });
+
+      // `@assets/...` is an accepted authoring form. It is tracked internally
+      // only to suppress Vite's pre-normalization unresolved notice and must
+      // not appear as a repair in summaries or strict-mode failures.
+      const reportedAssetRebases = assetRebaseList.filter(
+        (entry) => entry.status !== 'aliased',
+      );
+
       return {
         deprecations: deprecationList,
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
-        unresolvedAssets: unresolvedAssetList,
+        unresolvedAssets: outstandingAssets,
+        assetRebases: reportedAssetRebases,
+        externalizedModules: [...externalizedModules.values()].sort(
+          (a, b) => b.count - a.count || a.module.localeCompare(b.module),
+        ),
         importErrors: importErrorList,
         syntaxErrors: [...syntaxErrors.values()],
         warnings: warningList,
@@ -332,7 +460,7 @@ export function createDiagnosticsCollector() {
           errorList.length > 0 ||
           warningList.length > 0 ||
           deprecationList.length > 0 ||
-          unresolvedAssetList.length > 0 ||
+          outstandingAssets.length > 0 ||
           importErrorList.length > 0 ||
           syntaxErrors.size > 0,
       };
@@ -360,6 +488,8 @@ export function createDiagnosticsCollector() {
       warnings = new Map();
       errors = new Map();
       unresolvedAssets = new Map();
+      assetRebases = new Map();
+      externalizedModules = new Map();
       importErrors = new Map();
       syntaxErrors = new Map();
     },

@@ -4,6 +4,11 @@
 
 import { basename, dirname, resolve } from 'node:path';
 import {
+  assetTailFor,
+  isAssetAliasPath,
+} from '../../../config/vite/plugins/assets/asset-url-rebase.js';
+import { tokenizeStylesheetUrls } from '../../../config/vite/utils/css-urls.js';
+import {
   compiledAssetOutputPath,
   storybookStyleOutputPath,
 } from '../../../config/vite/project-structure.js';
@@ -44,39 +49,31 @@ function resolveSassUrlValue(value, variables) {
 }
 
 /**
- * Mask style comments while preserving line and character positions.
- *
- * @param {string} source - Stylesheet source.
- * @returns {string} Source with comments replaced by whitespace.
- */
-function maskStyleComments(source) {
-  const blank = (match) => match.replace(/[^\n]/g, ' ');
-
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/^[\t ]*\/\/.*$/gm, blank);
-}
-
-/**
  * Extract URL references from CSS or Sass source.
  *
+ * `start` and `end` bracket the specifier *without* its quotes, so an autofix
+ * can splice a replacement in without disturbing quote style. The shared
+ * tokenizer preserves original positions, so `source.slice(start, end) === raw`.
+ *
  * @param {string} source - Stylesheet source.
- * @returns {{value: string, raw: string, line: number}[]} URL references.
+ * @returns {{value: string, raw: string, quote: string, line: number, start: number, end: number}[]} URL references.
  */
 export function findCssUrlReferences(source) {
-  const scanSource = maskStyleComments(source);
-  const variables = findSassStringVariables(scanSource);
+  const { urls, sourceWithoutComments } = tokenizeStylesheetUrls(source);
+  const variables = findSassStringVariables(sourceWithoutComments);
   const references = [];
-  const pattern = /url\(\s*(?:(['"])(.*?)\1|([^'")][^)]*?))\s*\)/g;
 
-  for (const match of scanSource.matchAll(pattern)) {
-    const raw = (match[2] ?? match[3] ?? '').trim();
+  for (const token of urls) {
+    const raw = token.value;
     const value = resolveSassUrlValue(raw, variables).trim();
 
     references.push({
       value,
       raw,
-      line: lineNumberAt(source, match.index || 0),
+      quote: token.quote,
+      line: lineNumberAt(source, token.start),
+      start: token.valueStart,
+      end: token.valueEnd,
     });
   }
 
@@ -84,23 +81,32 @@ export function findCssUrlReferences(source) {
 }
 
 /**
- * Determine whether a CSS URL should be skipped by filesystem checks.
+ * Classify how a filesystem-ish CSS URL should be resolved.
+ *
+ * - `asset-root` — `/assets/...`, `@assets/...`, or legacy `assets/...`.
+ *   Resolved against the project asset roots, which is what Storybook serves
+ *   and what the build rebases to.
+ * - `runtime` — some other absolute URL (`/sites/default/files/...`). The
+ *   platform serves it; the audit has nothing to check.
+ * - `relative` — resolved from the stylesheet's own directory.
  *
  * @param {string} value - URL value.
- * @returns {boolean} TRUE when the URL is not a local relative asset path.
+ * @returns {'asset-root'|'runtime'|'relative'} Resolution strategy.
  */
-export function isNonFilesystemCssUrl(value) {
-  return (
-    !value ||
-    value.startsWith('#') ||
-    value.startsWith('/') ||
-    value.startsWith('//') ||
-    value.startsWith('$') ||
-    value.startsWith('#{') ||
-    /^[a-z][a-z0-9+.-]*:/i.test(value) ||
-    /^var\(/i.test(value) ||
-    /^env\(/i.test(value)
-  );
+export function classifyCssAssetUrl(value) {
+  if (assetTailFor(cssUrlPath(value))) return 'asset-root';
+
+  return value.startsWith('/') ? 'runtime' : 'relative';
+}
+
+/**
+ * Determine whether a CSS URL uses the exact namespaced asset alias.
+ *
+ * @param {string} value - URL path without query or hash.
+ * @returns {boolean} TRUE for `@assets/...` paths.
+ */
+export function isCssAssetAlias(value) {
+  return isAssetAliasPath(String(value));
 }
 
 /**

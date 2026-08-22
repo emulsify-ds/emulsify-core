@@ -83,6 +83,21 @@ describe('resolveProjectStructure', () => {
     ]);
   });
 
+  it('defaults build output self-containment on', () => {
+    const structure = resolveProjectStructure(makeEnv());
+
+    expect(structure.selfContainedOutput).toBe(true);
+  });
+
+  it('honors an explicit self-contained output opt-out', () => {
+    const env = makeEnv();
+    env.selfContainedOutput = false;
+
+    const structure = resolveProjectStructure(env);
+
+    expect(structure.selfContainedOutput).toBe(false);
+  });
+
   it('ignores unsafe asset roots in the project structure model', () => {
     const env = makeEnv();
     env.assetRoots = [

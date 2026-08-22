@@ -1,0 +1,10 @@
+{
+  "project": {
+    "platform": "none",
+    "name": "non-self-contained-src-assets",
+    "machineName": "non_self_contained_src_assets"
+  },
+  "assets": {
+    "selfContainedOutput": false
+  }
+}

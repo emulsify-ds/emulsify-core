@@ -22,3 +22,4 @@ These docs expand on the short project README and are organized by the task a pr
 | [Migration To 4.x](migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                             |
 | [4.3.0 Release Notes](releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.                |
 | [4.3.1 Release Notes](releases/4.3.1.md)             | Reviewing the 4.3.1 develop reporter changes, verbosity controls, and scope limits.                                   |
+| [4.4.0 Release Notes](releases/4.4.0.md)             | Reviewing asset resolution, safer audit fixes, incremental output, reporter changes, and release evidence.            |

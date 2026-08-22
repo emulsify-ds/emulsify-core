@@ -2,26 +2,29 @@
 
 Emulsify Core favors predictable output and simple project configuration. The defaults are suitable for small and medium component libraries, and the release fixtures cover the main supported structures. Larger libraries should keep source roots intentional and use the fixture commands below to compare changes.
 
-## Production Sourcemaps
+## Development Sourcemaps
 
-Vite production builds currently emit JavaScript and CSS sourcemaps:
+`vite build --watch` leaves JavaScript and CSS readable and emits external maps
+for JavaScript and direct stylesheet entries. One-shot production builds minify
+both and omit maps:
 
 ```js
 build: {
-  sourcemap: true,
+  sourcemap: watching,
+  minify: !watching,
+  cssMinify: !watching,
 }
 ```
 
-CSS dev sourcemaps are also enabled. Sourcemaps are useful during the release and migration window because they make compiled output easier to debug. They do increase `dist/` size. Projects that need a different production sourcemap policy can patch Vite config from `config/emulsify-core/vite/plugins.*`:
+Vite normally discards the Sass/PostCSS map when a build extracts CSS as a
+Rollup asset. Core retains the combined map for each direct stylesheet entry,
+attaches it to the finalized CSS, and rebases source paths when Drupal moves a
+component map from `dist/components/` to root `components/`. Final asset URL
+rewrites preserve line mappings; a length-changing URL can shift columns inside
+that value without changing the selector or declaration's source line.
 
-```js
-// config/emulsify-core/vite/plugins.mjs
-export const extendConfig = () => ({
-  build: {
-    sourcemap: false,
-  },
-});
-```
+Development maps remain on disk for devtools but are excluded from reporter
+counts, sizes, largest-file summaries, verbose listings, and rebuild details.
 
 ## Storybook Twig Imports
 

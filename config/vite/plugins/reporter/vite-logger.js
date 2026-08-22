@@ -18,6 +18,10 @@
  * message passes straight through to Vite's own logger untouched.
  */
 
+import {
+  isAssetAliasPath,
+  splitUrlSuffix,
+} from '../assets/asset-url-rebase.js';
 import { isQuiet, isVerbose } from './verbosity.js';
 
 // Re-exported because the Vite config and the reporter both branch on it, and
@@ -32,6 +36,18 @@ export { isVerbose };
  */
 const UNRESOLVED_ASSET_PATTERN =
   /^(.+?) referenced in (.+?) didn't resolve at build time/;
+
+/**
+ * Matches Vite's browser-compatibility externalization notice.
+ *
+ * One dependency reaching for a Node builtin emits this once per importing file
+ * on every cycle. It says nothing new after the first build, and in a Twig theme
+ * it is never actionable, so the reporter tallies it rather than reprinting it.
+ *
+ * @type {RegExp}
+ */
+const EXTERNALIZED_MODULE_PATTERN =
+  /Module "(.+?)" has been externalized for browser compatibility(?:, imported by "(.+?)")?/;
 
 /**
  * Remove ANSI escape sequences so pattern matching sees plain text.
@@ -92,6 +108,143 @@ function isBareStackTrace(message) {
 const HMR_UPDATE_PATTERN = /(^|\s)hmr update\s/;
 
 /**
+ * Matches the `File:` line Vite appends to a transform failure.
+ *
+ * `buildErrorMessage` composes a dev-server error as the message, `Plugin:` and
+ * `File:`, the source frame, then `err.stack`. Sass is a special case: its
+ * multiline message already contains the source frame, so the body after
+ * `File:` repeats what was printed before the metadata. Other transformers put
+ * their only caret excerpt after `File:`.
+ *
+ * @type {RegExp}
+ */
+const ERROR_FILE_LINE = /^\s*File:\s/;
+
+/**
+ * Matches a JavaScript stack frame with a source location.
+ *
+ * Requiring a `line:column` suffix keeps ordinary diagnostic prose such as
+ * "at least one value is required" from being mistaken for a stack frame.
+ *
+ * @type {RegExp}
+ */
+const STACK_FRAME =
+  /^\s*at\s+(?:(?:async|new)\s+)?(?:.+\s+\()?[^()\s]+:\d+:\d+\)?\s*$/;
+
+/**
+ * Find the last line matching a pattern.
+ *
+ * A diagnostic's own text can contain a `File:`-looking line. Vite's metadata
+ * follows the diagnostic body, so the final match is the useful anchor.
+ *
+ * @param {string[]} lines - Message lines.
+ * @param {RegExp} pattern - Pattern to match.
+ * @returns {number} Matching index, or -1.
+ */
+function findLastLine(lines, pattern) {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (pattern.test(stripAnsi(lines[index]))) return index;
+  }
+
+  return -1;
+}
+
+/**
+ * Normalize one copy of an error body for duplicate comparison.
+ *
+ * Vite prefixes the first copy with `Internal server error:` and Sass's stack
+ * can prefix the repeated copy with `Error:`. Sass also changes indentation
+ * between the two copies, so only leading/trailing whitespace is discarded.
+ *
+ * @param {string[]} lines - Error-body lines.
+ * @returns {string} Normalized body.
+ */
+function normalizeErrorBody(lines) {
+  const normalized = lines
+    .map((line) => stripAnsi(line).trim())
+    .filter(Boolean);
+
+  if (normalized.length > 0) {
+    normalized[0] = normalized[0]
+      .replace(/^Internal server error:\s*/, '')
+      .replace(/^Error:\s*/, '');
+  }
+
+  return normalized.join('\n');
+}
+
+/**
+ * Determine whether Sass's post-`File:` frame repeats its message.
+ *
+ * Vite assigns Sass's multiline message to `error.frame`. Its first rendered
+ * block therefore already contains the excerpt, while the text after `File:`
+ * repeats that same body from the stack. Other transformers put their only
+ * code frame after `File:`, so those frames must be retained.
+ *
+ * @param {string[]} lines - Complete dev-server error.
+ * @param {number} fileLine - Index of Vite's final `File:` metadata line.
+ * @param {number} firstStackFrame - Index of the first real stack frame.
+ * @returns {boolean} TRUE when the post-file body is a Sass duplicate.
+ */
+function hasDuplicateSassFrame(lines, fileLine, firstStackFrame) {
+  const pluginLine = findLastLine(
+    lines.slice(0, fileLine),
+    /^\s*Plugin:\s+vite:css\s*$/,
+  );
+  if (pluginLine === -1) return false;
+
+  const messageBody = normalizeErrorBody(lines.slice(0, pluginLine));
+  const repeatedBody = normalizeErrorBody(
+    lines.slice(
+      fileLine + 1,
+      firstStackFrame === -1 ? lines.length : firstStackFrame,
+    ),
+  );
+
+  return (
+    messageBody.startsWith('[sass]') &&
+    repeatedBody.startsWith('[sass]') &&
+    messageBody === repeatedBody
+  );
+}
+
+/**
+ * Reduce a dev-server error to the part that names the problem.
+ *
+ * One mistyped semicolon in a stylesheet prints around fifty lines: the Sass
+ * error, the same error again out of `err.stack`, and thirty-odd frames inside
+ * `sass.dart.js` that point at the compiler rather than at the stylesheet. The
+ * first block — message, excerpt, caret, import chain, and the file it came
+ * from — is the whole of what a themer can act on. Other transformers keep
+ * their unique source frame; only the JavaScript stack beneath it is removed.
+ *
+ * The stack is only dropped at a recognizable frame. Sass's post-`File:` body
+ * is dropped earlier only when it is demonstrably a duplicate of the message,
+ * so an error shaped differently than expected is not truncated on a guess.
+ *
+ * @param {string} message - Raw error text.
+ * @returns {string} Message without the repeated body and the stack.
+ */
+export function compactDevServerError(message) {
+  const lines = String(message).split('\n');
+  const fileLine = findLastLine(lines, ERROR_FILE_LINE);
+  const stackSearchStart = fileLine === -1 ? 0 : fileLine + 1;
+  const relativeStackFrame = lines
+    .slice(stackSearchStart)
+    .findIndex((line) => STACK_FRAME.test(stripAnsi(line)));
+  const firstFrame =
+    relativeStackFrame === -1 ? -1 : stackSearchStart + relativeStackFrame;
+
+  if (fileLine !== -1 && hasDuplicateSassFrame(lines, fileLine, firstFrame)) {
+    return lines.slice(0, fileLine + 1).join('\n');
+  }
+
+  if (firstFrame > 0) return lines.slice(0, firstFrame).join('\n').trimEnd();
+
+  return String(message);
+}
+
+/**
  * Wrap the Storybook dev server's logger to drop HMR notices.
  *
  * These come from Storybook's Vite dev server, not from the watch build, and
@@ -108,6 +261,11 @@ const HMR_UPDATE_PATTERN = /(^|\s)hmr update\s/;
  * line that says the same thing more precisely. Under `concurrently` both
  * processes share one pipe, so these interleave with the build's output and are
  * the last thing making one command look like two.
+ *
+ * Transform failures are compacted for the same reason. The dev server prints
+ * the error, then repeats it out of `err.stack`, then lists thirty frames
+ * inside `sass.dart.js`; only the first block names anything in the project.
+ * See {@link compactDevServerError}.
  *
  * The wrapper delegates to whatever logger is already configured rather than
  * replacing it, so Storybook keeps its own prefixes and styling for every other
@@ -141,7 +299,14 @@ export function createDevServerLogger({ baseLogger, verbose } = {}) {
 
     warn: (message, options) => baseLogger.warn(message, options),
     warnOnce: (message, options) => baseLogger.warnOnce(message, options),
-    error: (message, options) => baseLogger.error(message, options),
+
+    error(message, options) {
+      baseLogger.error(
+        passThrough ? message : compactDevServerError(message),
+        options,
+      );
+    },
+
     clearScreen: (type) => baseLogger.clearScreen(type),
     hasErrorLogged: (error) => baseLogger.hasErrorLogged(error),
   };
@@ -165,7 +330,10 @@ export function parseUnresolvedAsset(message) {
     url,
     // Vite reports the URL as its own importer when the referencing stylesheet
     // is not known. Recording that adds nothing, so it is dropped.
-    importer: importer === url ? undefined : importer,
+    // Vite shadows the stylesheet id while resolving CSS URLs. The value after
+    // `referenced in` is therefore usually the URL itself; for fragments it is
+    // the same URL with the fragment removed. Neither identifies an importer.
+    importer: importer === url.split('#')[0] ? undefined : importer,
   };
 }
 
@@ -179,8 +347,38 @@ export function parseUnresolvedAsset(message) {
  * @param {import('vite').Logger} baseLogger - Logger to delegate to.
  * @returns {import('vite').Logger} Wrapped logger.
  */
+/**
+ * Parse Vite's externalization notice into a module and its importer.
+ *
+ * @param {string} message - Raw log message.
+ * @returns {{module: string, importer: string|undefined}|null} Parsed notice.
+ */
+export function parseExternalizedModule(message) {
+  const match = EXTERNALIZED_MODULE_PATTERN.exec(stripAnsi(String(message)));
+  if (!match) return null;
+
+  return { module: match[1], importer: match[2] || undefined };
+}
+
 export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
   const passRawThrough = verbose === undefined ? isVerbose() : verbose;
+
+  /**
+   * Valid aliases deliberately reach Vite as unresolved literals so Core can
+   * apply configured-root resolution after Sass compilation. Their raw Vite
+   * notice is therefore implementation noise even in verbose mode. Missing or
+   * ambiguous aliases remain in the collector and are reported in Core's final
+   * diagnostic summary.
+   *
+   * @param {string} message - Raw log message.
+   * @returns {boolean} TRUE for an unresolved reserved-alias notice.
+   */
+  const isAssetAliasNotice = (message) => {
+    const unresolved = parseUnresolvedAsset(message);
+    if (!unresolved) return false;
+
+    return isAssetAliasPath(splitUrlSuffix(unresolved.url).path);
+  };
 
   /**
    * Record a message if it is one the reporter owns.
@@ -190,10 +388,18 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
    */
   const capture = (message) => {
     const unresolvedAsset = parseUnresolvedAsset(message);
-    if (!unresolvedAsset) return false;
+    if (unresolvedAsset) {
+      collector.recordUnresolvedAsset(unresolvedAsset);
+      return true;
+    }
 
-    collector.recordUnresolvedAsset(unresolvedAsset);
-    return true;
+    const externalized = parseExternalizedModule(message);
+    if (externalized) {
+      collector.recordExternalizedModule?.(externalized);
+      return true;
+    }
+
+    return false;
   };
 
   /**
@@ -230,11 +436,17 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
     info: (message, options) => baseLogger.info(message, options),
 
     warn(message, options) {
-      if (!capture(message)) baseLogger.warn(message, options);
+      const captured = capture(message);
+      if (!captured || (passRawThrough && !isAssetAliasNotice(message))) {
+        baseLogger.warn(message, options);
+      }
     },
 
     warnOnce(message, options) {
-      if (!capture(message)) baseLogger.warnOnce(message, options);
+      const captured = capture(message);
+      if (!captured || (passRawThrough && !isAssetAliasNotice(message))) {
+        baseLogger.warnOnce(message, options);
+      }
     },
 
     error(message, options) {

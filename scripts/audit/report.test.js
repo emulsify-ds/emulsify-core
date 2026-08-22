@@ -183,4 +183,42 @@ describe('audit JSON report contract', () => {
     });
     expect(JSON.stringify(report)).not.toContain(projectDir);
   });
+
+  it('includes completed fixes in a structured fix-failure document', () => {
+    const finding = {
+      filePath: join(projectDir, 'src', 'components', 'card', 'card.scss'),
+      line: 3,
+    };
+    const report = createAuditJsonErrorReport(new Error('Disk full'), {
+      code: 'fix-failed',
+      projectDir,
+      fixes: {
+        dryRun: false,
+        applied: [
+          {
+            finding,
+            from: 'assets/a.svg',
+            to: '/assets/a.svg',
+          },
+        ],
+        skipped: [],
+      },
+    });
+
+    expect(report).toMatchObject({
+      error: { code: 'fix-failed', message: 'Disk full' },
+      fixes: {
+        dryRun: false,
+        applied: [
+          {
+            path: 'src/components/card/card.scss',
+            line: 3,
+            from: 'assets/a.svg',
+            to: '/assets/a.svg',
+          },
+        ],
+        skipped: [],
+      },
+    });
+  });
 });

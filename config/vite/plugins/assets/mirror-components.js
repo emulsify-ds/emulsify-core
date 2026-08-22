@@ -7,16 +7,12 @@
 
 import {
   copyFileSync,
-  closeSync,
   lstatSync,
   mkdirSync,
-  openSync,
   readFileSync,
-  readSync,
   readdirSync,
   renameSync,
   rmdirSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'fs';
@@ -24,10 +20,14 @@ import { basename, dirname, join, resolve } from 'path';
 
 import { safeExists, safeReadJson } from '../../utils/fs-safe.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
+import {
+  isGeneratedSourceMap,
+  rebaseSourceMapForMove,
+} from '../../utils/source-maps.js';
+import { bytesAlreadyOnDisk, filesHaveSameBytes } from './output-freshness.js';
 import { walkFiles } from './source-file-index.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';
-const FILE_COMPARE_CHUNK_SIZE = 64 * 1024;
 
 /**
  * Remove empty parent directories from a start directory up to, but not including,
@@ -61,77 +61,6 @@ const pruneEmptyDirsUpTo = (startDir, stopAtDir) => {
     const parent = dirname(cursor);
     if (parent === cursor || parent === stopAbs) break;
     cursor = parent;
-  }
-};
-
-/**
- * Determine whether two files already contain the same bytes.
- * Small files are read directly; larger files are compared in fixed-size chunks
- * so the mirror phase does not transiently allocate both complete file bodies.
- *
- * @param {string} sourceFile - Source file path.
- * @param {string} destinationFile - Destination file path.
- * @returns {boolean} TRUE when both files have identical bytes.
- */
-export const filesHaveSameBytes = (sourceFile, destinationFile) => {
-  try {
-    const sourceStats = statSync(sourceFile);
-    const destinationStats = statSync(destinationFile);
-    if (!destinationStats.isFile()) return false;
-    if (sourceStats.size !== destinationStats.size) return false;
-    if (sourceStats.size === 0) return true;
-
-    if (sourceStats.size < FILE_COMPARE_CHUNK_SIZE) {
-      return readFileSync(sourceFile).equals(readFileSync(destinationFile));
-    }
-
-    const sourceBuffer = Buffer.allocUnsafe(FILE_COMPARE_CHUNK_SIZE);
-    const destinationBuffer = Buffer.allocUnsafe(FILE_COMPARE_CHUNK_SIZE);
-    const sourceHandle = openSync(sourceFile, 'r');
-    try {
-      const destinationHandle = openSync(destinationFile, 'r');
-      try {
-        let position = 0;
-        while (position < sourceStats.size) {
-          const bytesToRead = Math.min(
-            FILE_COMPARE_CHUNK_SIZE,
-            sourceStats.size - position,
-          );
-          const sourceBytesRead = readSync(
-            sourceHandle,
-            sourceBuffer,
-            0,
-            bytesToRead,
-            position,
-          );
-          const destinationBytesRead = readSync(
-            destinationHandle,
-            destinationBuffer,
-            0,
-            bytesToRead,
-            position,
-          );
-
-          if (sourceBytesRead !== destinationBytesRead) return false;
-          if (sourceBytesRead === 0) return false;
-          if (
-            !sourceBuffer
-              .subarray(0, sourceBytesRead)
-              .equals(destinationBuffer.subarray(0, destinationBytesRead))
-          ) {
-            return false;
-          }
-          position += sourceBytesRead;
-        }
-        return true;
-      } finally {
-        closeSync(destinationHandle);
-      }
-    } finally {
-      closeSync(sourceHandle);
-    }
-  } catch {
-    return false;
   }
 };
 
@@ -227,6 +156,40 @@ const moveFileIntoPlace = (sourceFile, destinationFile) => {
 };
 
 /**
+ * Write transformed output bytes atomically, then remove the transient source.
+ *
+ * Source maps need their relative paths changed before mirroring, so they
+ * cannot use the rename-only path above. The destination comparison still
+ * preserves stable mtimes when the rebased bytes match the previous cycle.
+ *
+ * @param {string} sourceFile - Built file under dist.
+ * @param {string} destinationFile - Mirrored project-root destination.
+ * @param {string} contents - Final destination contents.
+ */
+const writeContentsIntoPlace = (sourceFile, destinationFile, contents) => {
+  mkdirSync(dirname(destinationFile), { recursive: true });
+
+  if (bytesAlreadyOnDisk(destinationFile, contents)) {
+    removeSourceFile(sourceFile);
+    return;
+  }
+
+  const tempDestination = createTempDestination(destinationFile);
+  try {
+    writeFileSync(tempDestination, contents);
+    renameSync(tempDestination, destinationFile);
+    removeSourceFile(sourceFile);
+  } catch (error) {
+    try {
+      unlinkSync(tempDestination);
+    } catch {
+      /* noop */
+    }
+    throw error;
+  }
+};
+
+/**
  * Safely read the previous mirror state marker.
  *
  * @param {string} markerFile - Marker file path.
@@ -265,17 +228,24 @@ const warnOnInterruptedMirror = (markerFile) => {
 /**
  * Mirror built component files to the project root `./components/` directory.
  *
- * @param {{ enabled: boolean, projectDir: string }} opts - Plugin options.
+ * @param {{ enabled: boolean, projectDir: string, developmentBuild?: boolean, diagnostics?: object }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Drupal mirror plugin.
  */
-export function mirrorComponentsToRoot({ enabled, projectDir }) {
+export function mirrorComponentsToRoot({
+  enabled,
+  projectDir,
+  developmentBuild = false,
+  diagnostics,
+}) {
   let outDir = 'dist';
+  let watching = Boolean(developmentBuild);
   return {
     name: 'emulsify-mirror-components-to-root',
     apply: 'build',
     enforce: 'post',
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
+      watching = Boolean(developmentBuild || cfg.build?.watch);
     },
     writeBundle() {
       if (!enabled) return;
@@ -299,16 +269,62 @@ export function mirrorComponentsToRoot({ enabled, projectDir }) {
           const destFile = join(projectDir, relFromOutDir);
 
           try {
-            moveFileIntoPlace(srcFile, destFile);
+            if (isGeneratedSourceMap(srcFile)) {
+              const sourceMap = readFileSync(srcFile, 'utf8');
+              writeContentsIntoPlace(
+                srcFile,
+                destFile,
+                rebaseSourceMapForMove(sourceMap, srcFile, destFile),
+              );
+            } else {
+              moveFileIntoPlace(srcFile, destFile);
+            }
             pruneEmptyDirsUpTo(dirname(srcFile), distComponents);
           } catch (e) {
-            console.warn(
-              `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`,
-            );
+            const message = `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`;
+            diagnostics?.recordError?.({
+              message,
+              file: destFile,
+              outputState: 'incomplete',
+            });
+            // One-shot builds do not render the watch-cycle failure summary,
+            // so preserve their immediate warning through Rollup's logger.
+            if (typeof this.warn === 'function') this.warn(message);
+            else console.warn(message);
           }
         }
 
         pruneEmptyDirsUpTo(distComponents, outDir);
+      }
+
+      // Watch builds intentionally publish source maps for browser debugging.
+      // A later production build cleans dist/ but not the mirrored root, so
+      // remove maps left under components/ by an earlier watch session.
+      if (!watching) {
+        const rootComponents = join(projectDir, 'components');
+        for (const sourceMap of walkFiles(rootComponents).filter(
+          isGeneratedSourceMap,
+        )) {
+          try {
+            unlinkSync(sourceMap);
+            const parentDir = dirname(sourceMap);
+            if (resolve(parentDir) !== resolve(rootComponents)) {
+              pruneEmptyDirsUpTo(parentDir, rootComponents);
+            }
+          } catch (e) {
+            const relativeSourceMap = sourceMap.slice(
+              join(projectDir, '').length,
+            );
+            const message = `Production source-map cleanup failed for ${relativeSourceMap}: ${e?.message || e}`;
+            diagnostics?.recordError?.({
+              message,
+              file: sourceMap,
+              outputState: 'incomplete',
+            });
+            if (typeof this.warn === 'function') this.warn(message);
+            else console.warn(message);
+          }
+        }
       }
 
       writeMirrorState(markerFile, {

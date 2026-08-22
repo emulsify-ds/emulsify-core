@@ -40,6 +40,16 @@ const jsxExclusionEntryPaths = [
   'src/components/card/Card.test.jsx',
 ];
 
+const jsxDocumentationEntryPaths = [
+  'src/components/card/Card.doc.jsx',
+  'src/components/card/Card.docs.jsx',
+];
+
+const jsDocumentationEntryPaths = [
+  'src/components/card/card.doc.js',
+  'src/components/card/card.docs.js',
+];
+
 const buildContext = (
   projectDir,
   {
@@ -166,6 +176,15 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
+  it('excludes singular and plural JS documentation files', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: jsDocumentationEntryPaths,
+    });
+
+    expect(buildRelativeInputs(ctx)).toEqual({});
+  });
+
   it('builds JSX component entries with JS output keys for none projects', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
@@ -205,6 +224,15 @@ describe('buildInputs structure outputs', () => {
   "components/card/js/Card": "src/components/card/Card.jsx",
 }
 `);
+  });
+
+  it('excludes singular and plural JSX documentation files', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: jsxDocumentationEntryPaths,
+    });
+
+    expect(buildRelativeInputs(ctx)).toEqual({});
   });
 
   it('supports canonical root components-only projects', () => {

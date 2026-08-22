@@ -65,11 +65,33 @@ Keys that are not safe JavaScript export names, such as `$schema` or
 `display-name`, are not emitted as named exports. They remain available from the
 default metadata object.
 
+## Authoring-Only JavaScript Files
+
+Colocated JavaScript that supports authoring rather than the browser bundle is
+skipped by the Vite build. These suffixes never become build entries and never
+appear in `dist/` or in the mirrored `components/` output:
+
+```text
+*.stories.js   *.stories.jsx    Storybook stories
+*.doc.js       *.doc.jsx        Storybook documentation modules
+*.docs.js      *.docs.jsx       Storybook documentation modules
+*.component.js *.component.jsx  Component metadata modules
+*.min.js       *.min.jsx        Pre-minified bundles
+*.test.js      *.test.jsx       Unit tests
+```
+
+Everything else matching `*.js` or `*.jsx` under a component or global source
+root is compiled as an entry, so a helper module that should ship to the browser
+must not use one of the suffixes above. `*.doc.js`, `*.docs.js`, and their JSX
+equivalents stay available to Storybook when imported by a story, but are not
+compiled as standalone browser entries. This supports projects using
+`@storybook/addon-docs` without making Core depend on that addon.
+
 ## React Component Libraries
 
 React components render through Storybook's React/Vite support. Storybook discovers React stories from the same normalized story roots as Twig stories. The shared Storybook globs include `*.stories.js`, `*.stories.jsx`, `*.stories.ts`, and `*.stories.tsx`; fixture coverage validates JavaScript/JSX stories.
 
-Production Vite builds also discover eligible `.jsx` files in supported source roots. They follow the same entry rules as `.js` files: stories, component metadata helpers, minified files, and test files are excluded, and the emitted browser bundle uses a `.js` filename. TypeScript entries and `.js` files containing JSX are outside this production entry support.
+Production Vite builds also discover eligible `.jsx` files in supported source roots. They follow the same entry rules as `.js` files: stories, documentation modules, component metadata helpers, minified files, and test files are excluded, and the emitted browser bundle uses a `.js` filename. TypeScript entries and `.js` files containing JSX are outside this production entry support.
 
 ```jsx
 import { Button } from './Button';

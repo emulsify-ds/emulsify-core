@@ -12,6 +12,12 @@ permissions:
 jobs:
   release-readiness:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - '24.13.0'
+          - '24.18.0'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -20,7 +26,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version-file: '.nvmrc'
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - name: Install
         # npm ci keeps release-readiness checks locked to package-lock.json.
@@ -67,6 +73,10 @@ jobs:
         fixture:
           - drupal-sdc-src-components
           - no-platform-src-components
+          - drupal-sdc-non-self-contained-output
+          - non-self-contained-src-assets
+          - non-self-contained-custom-asset-root
+          - asset-rebase-disabled
           - wordpress-src-components
           - legacy-components
           - structure-implementations

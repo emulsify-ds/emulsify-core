@@ -1,3 +1,23 @@
+@use '../shared/asset-alias';
+
 .card {
   color: #4f5f9f;
+}
+
+.asset-canonical {
+  background-image: url('/assets/images/canonical.svg');
+}
+
+.asset-bare {
+  background-image: url('assets/images/bare.svg');
+}
+
+.asset-dollar {
+  background-image: url('/assets/images/logo$2x.svg');
+}
+
+/* Deliberately the wrong depth: this is the shape that silently works on
+   mirrored Drupal SDC output and breaks in every other project shape. */
+.asset-relative {
+  background-image: url('../assets/images/relative.svg');
 }

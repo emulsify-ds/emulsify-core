@@ -1,13 +1,14 @@
 # Release Verification
 
-Emulsify Core 4.3.0 supports consumers on Node.js 24.13.0 or later. The
-strictest published toolchain dependency, `stylelint-selector-bem-pattern` 5,
-requires that patch.
+The supported consumer Node.js range comes from `package.json#engines.node`.
+The current floor is Node.js 24.13.0 because the strictest published toolchain
+dependency, `stylelint-selector-bem-pattern` 5, requires that patch.
 
 Repository development recommends the exact Node.js 24.18.0 version pinned in
-`.nvmrc`. Every CI and release workflow reads `.nvmrc`, so automation uses that
-same exact version. Maintained scripts derive the supported consumer floor from
-`package.json#engines.node`.
+`.nvmrc`. Most CI jobs and the publish workflow read `.nvmrc`; the
+`release-readiness` job runs on both the supported 24.13.0 floor and the
+recommended 24.18.0 version. Maintained scripts derive the supported consumer
+floor from `package.json#engines.node`.
 
 Do not publish from a local checkout unless maintainers have explicitly
 approved the release. Use these steps to verify release readiness before
@@ -95,13 +96,29 @@ rule is assumed.
 ### Release Fixtures
 
 The release fixture suite validates the 4.x checklist items that are easy to
-automate:
+automate. Its asset cases treat `/assets/...` and `@assets/...` as equivalent
+first-class Sass/CSS aliases while separately exercising repairs for legacy
+bare and wrong-depth forms:
 
 - `drupal-sdc-src-components` builds Drupal SDC component sources and verifies mirrored root `components/` output while rejecting stale `dist/components/` component files.
 - `no-platform-src-components` verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
-- `wordpress-src-components` verifies the WordPress adapter keeps global assets under `dist/global`, component output under `dist/components`, avoids root `components/` mirroring, and rejects Drupal globals in emitted JavaScript.
+- `drupal-sdc-non-self-contained-output` verifies that
+  `assets.selfContainedOutput: false` removes project-asset copies and keeps
+  query, fragment, and spaced CSS URLs pointed at the source asset tree.
+- `non-self-contained-src-assets` verifies that a URL Vite resolves directly
+  from `src/assets/` is rewritten to the source tree before its output copy is
+  removed.
+- `non-self-contained-custom-asset-root` applies the same invariant to a
+  project-defined `assets.roots` directory.
+- `asset-rebase-disabled` verifies that `assets.rebase: false` keeps Vite's
+  emitted asset copies and leaves repairable CSS URLs unchanged.
+- `wordpress-src-components` verifies the WordPress adapter keeps global assets
+  under `dist/global`, component output under `dist/components`, avoids root
+  `components/` mirroring, rejects Drupal globals in emitted JavaScript, and
+  emits self-contained asset copies with repaired CSS URL depth.
 - `legacy-components` verifies that projects using the legacy `components/`
-  source layout continue to build into `dist/components/`.
+  source layout continue to build into `dist/components/`, including
+  self-contained asset copies and repaired bare and wrong-depth CSS URLs.
 - `structure-implementations` verifies custom structure mappings for component
   JavaScript, CSS, Twig, Storybook CSS, foundation assets, and design tokens.
 - `mixed-storybook` first verifies that Twig stories using `renderTwig()`,
@@ -249,7 +266,10 @@ The validation job has only `contents: read` permission and receives no npm or
 GitHub publishing credentials. The release job grants `id-token: write` for npm
 trusted publishing, provides `GITHUB_TOKEN` so semantic-release can push tags
 and create GitHub releases, and provides `NPM_TOKEN` as the fallback
-token-based npm authentication path.
+token-based npm authentication path. `package.json#publishConfig.provenance`
+requires npm to attach provenance regardless of which authentication path is
+available, so publication fails instead of silently falling back to an
+unattested package.
 
 When configuring npm trusted publishing for `@emulsify/core`, use `publish.yml` as the GitHub Actions workflow filename.
 
@@ -286,4 +306,5 @@ the failed publish workflow only while its SHA is still the current
 Before rerunning a failure after the real publish step began, check npm, the Git
 tag, and the GitHub release first; semantic-release is designed to resume from
 published release state, but maintainers should verify which side effects
-already completed.
+already completed. After a successful publish, also confirm that npm displays
+the provenance badge for the new version.

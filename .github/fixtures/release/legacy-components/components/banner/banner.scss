@@ -1,3 +1,17 @@
 .banner {
   color: #7f3f1d;
 }
+
+.asset-canonical {
+  background-image: url('/assets/images/canonical.svg');
+}
+
+.asset-bare {
+  background-image: url('assets/images/bare.svg');
+}
+
+/* Deliberately the wrong depth so the fixture proves repair is independent
+   of the legacy source layout. */
+.asset-relative {
+  background-image: url('../assets/images/relative.svg');
+}

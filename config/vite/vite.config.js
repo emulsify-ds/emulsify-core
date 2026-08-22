@@ -13,18 +13,13 @@
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *
  * Notes:
- * - JS sourcemaps come from `build.sourcemap`. Extracted CSS gets no map from
- *   `vite build`: `vite:css-post` emits CSS through
- *   `this.emitFile({ type: 'asset' })`, Rollup/Rolldown assets carry no map,
- *   and `finalizeCss()` -> `minifyCSS()` returns code only. To trace a rule
- *   back to its `.scss` partial, let Vite compile the SCSS in Storybook: set
- *   `parameters.emulsify.loadAllCSS = false` in
- *   `config/emulsify-core/storybook/preview.js` and import the SCSS entry
- *   there, so `css.devSourcemap` can chain the map to source. Loading the
- *   compiled CSS instead yields an identity map whose only source is the
- *   compiled `.css` file.
- * - CSS is left unminified during `vite build --watch` so the develop loop
- *   stays readable; one-shot builds keep minification.
+ * - `vite build --watch` emits external JS and CSS maps while one-shot
+ *   production builds ship neither. Vite discards maps when it extracts CSS as
+ *   an asset, so Core captures the Sass/PostCSS map before URL rewriting and
+ *   attaches it to the finalized stylesheet. URL rewrites preserve source
+ *   lines, though a changed URL length can shift columns inside that value.
+ * - JS and CSS stay unminified during `vite build --watch` so generated output
+ *   remains readable. One-shot builds keep Vite's production minification.
  * - CSS assets keep their path and drop the internal `__style` suffix if present.
  */
 
@@ -36,7 +31,10 @@ import { makePlugins } from './plugins.js';
 import { buildInputs } from './entries.js';
 import { createSourceFileIndex } from './plugins/assets/source-file-index.js';
 import { createDiagnosticsCollector } from './plugins/reporter/diagnostics.js';
-import { createSassOptions } from './plugins/reporter/sass-logger.js';
+import {
+  createSassOptions,
+  shouldQuietSass,
+} from './plugins/reporter/sass-logger.js';
 import {
   createReporterLogger,
   isVerbose,
@@ -45,7 +43,7 @@ import { isWatchInvocation } from './plugins/reporter/watch-mode.js';
 import { loadProjectExtensions } from './project-extensions.js';
 import { mergeReactSingletonResolve } from './utils/react-singleton.js';
 
-export default defineConfig(async () => {
+async function createViteConfig({ command, isStorybookBuild = false } = {}) {
   /**
    * Environment details for this build (project paths, platform, flags).
    * @typedef {Object} EmulsifyEnv
@@ -56,20 +54,42 @@ export default defineConfig(async () => {
    * @property {boolean} [SDC] - Single Directory Components toggle, if available.
    * @property {boolean} [structureOverrides] - Whether component structure overrides are enabled.
    * @property {string[]} [structureRoots] - Override roots, if provided.
+   * @property {boolean} [assetRebase] - Whether unresolved CSS asset URLs are repaired.
+   * @property {boolean} [selfContainedOutput] - Whether project assets remain in the output.
    * @property {object} [platformAdapter] - Active platform behavior adapter.
+   * @property {boolean} [developmentBuild] - Whether this is the long-running develop build.
    */
 
   /** @type {EmulsifyEnv} */
   const env = resolveEnvironment();
   const sourceFileIndex = createSourceFileIndex(env.projectStructure);
 
-  // The develop reporter takes over output only for `vite build --watch`, the
-  // watcher `npm run develop` runs. One-shot builds, Storybook, and the release
-  // fixture verifications keep their existing output untouched, so no warning
-  // is ever collected without also being reported.
+  // The full develop summary runs only for `vite build --watch`, the watcher
+  // `npm run develop` starts. One-shot builds keep their normal output and add
+  // a compact diagnostic block only when the collector has something to say.
   const watching = isWatchInvocation();
-  const diagnostics = watching ? createDiagnosticsCollector() : undefined;
-  const envWithSourceFileIndex = { ...env, sourceFileIndex, diagnostics };
+
+  // The collector itself is a handful of Maps, and one-shot builds need one
+  // too: an unresolved CSS asset URL used to print a single raw Vite line and
+  // exit 0, so a broken asset path shipped through CI unnoticed. The reporter
+  // plugin decides whether to speak, and for a one-shot build it stays silent
+  // unless there is an asset problem or a collected Sass deprecation tally —
+  // a clean project's output is unchanged.
+  const diagnostics = createDiagnosticsCollector();
+  const envWithSourceFileIndex = {
+    ...env,
+    sourceFileIndex,
+    diagnostics,
+    developmentBuild: watching,
+  };
+
+  // `vite build` and `vite build --watch` both resolve `command: 'build'`.
+  // Storybook pins `serve` for both of its commands, so its Vite adapter
+  // supplies the separate static-build signal. Raw verbose output still needs
+  // the wrapper: it passes the notice through while retaining a copy for
+  // strict asset mode.
+  const captureViteNotices =
+    !watching && (command === 'build' || isStorybookBuild);
 
   // Build the Rollup/Vite entry map: keys encode output paths, values source files.
   /** @type {Record<string, string>} */
@@ -93,7 +113,9 @@ export default defineConfig(async () => {
    *   extendConfig?: (base: import('vite').UserConfig, ctx: { env: EmulsifyEnv }) => import('vite').UserConfig
    * }}
    */
-  const { projectPlugins, extendConfig } = await loadProjectExtensions({ env });
+  const { projectPlugins, extendConfig } = await loadProjectExtensions({
+    env,
+  });
 
   // Assemble the base config before applying project extensions.
   /** @type {import('vite').UserConfig} */
@@ -137,7 +159,15 @@ export default defineConfig(async () => {
     // build reporter consults the level and never consults the logger.
     // `build.reportCompressedSize` is deliberately left alone; it suppresses
     // only the gzip column, and the table it belongs to is already gone.
-    ...(diagnostics
+    //
+    // A one-shot build takes only the second switch. `logLevel: 'warn'` is what
+    // stops Rolldown instrumenting transforms, so setting it there would delete
+    // the module count and the per-file asset table from `npm run build` — the
+    // one command whose output people actually read. The comment above already
+    // establishes the two are independent, and this relies on that: the logger
+    // captures the unresolved-URL notices, the reporter prints them back as one
+    // block, and Rolldown's report is untouched.
+    ...(watching
       ? {
           logLevel: isVerbose() ? 'info' : 'warn',
           customLogger: createReporterLogger(
@@ -145,42 +175,52 @@ export default defineConfig(async () => {
             createLogger(isVerbose() ? 'info' : 'warn'),
           ),
         }
-      : {}),
+      : captureViteNotices
+        ? { customLogger: createReporterLogger(diagnostics, createLogger()) }
+        : {}),
 
     // Keep React-based story helpers on the consumer project's React singleton.
     resolve: mergeReactSingletonResolve(),
 
-    // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
-    // These map only what Vite itself compiles. A preview that imports
-    // already-compiled CSS gets an identity map pointing at that `.css` file,
-    // so import SCSS entries when styles need to resolve to their partials.
+    // Ask Sass/PostCSS for maps. Vite uses them directly in its dev server;
+    // Core's development map plugins retain them for extracted watch-build CSS.
+    // JS sourcemaps are controlled by `build.sourcemap` below.
     css: {
       devSourcemap: true,
 
-      // During a watch build, route Sass warnings into the diagnostics
-      // collector instead of letting Dart Sass print a formatted block per
-      // occurrence. The reporter prints one deduplicated tally per cycle, so
-      // the deprecation debt stays visible without the repetition.
-      ...(diagnostics
+      // Route Sass warnings into the diagnostics collector instead of letting
+      // Dart Sass print a formatted block per occurrence. The reporter prints
+      // one deduplicated tally per develop session or standalone Storybook
+      // build, so the debt stays visible without the repetition.
+      // `shouldQuietSass` owns which invocations get this.
+      ...(shouldQuietSass({ watching, command, verbose: isVerbose() })
         ? { preprocessorOptions: { scss: createSassOptions(diagnostics) } }
         : {}),
     },
 
     build: {
-      // Clean the output directory before building.
+      // Clean the output directory before building. Vite re-empties it on every
+      // watch rebuild, not just the first, which rewrites stylesheets no edit
+      // touched; `stableWatchOutputPlugin` turns that off once the develop
+      // loop's first cycle has produced a clean tree.
       emptyOutDir: true,
 
       // All outputs are written into ./dist/
       outDir: 'dist/',
 
-      // Emit JS sourcemaps. Extracted CSS is not covered; see the file header.
-      sourcemap: true,
+      // Keep source maps available to the develop watcher without shipping
+      // them in one-shot production builds. Core bridges the extracted-CSS gap
+      // left by Vite; see the file header.
+      sourcemap: watching,
 
-      // Vite cannot map extracted CSS, so during `vite build --watch` the
-      // readable stylesheet is the debugging aid: keep it unminified so
-      // devtools shows one declaration per line instead of a single long line.
-      // One-shot `vite build`, `storybook build`, and the release fixture
-      // verifications still minify, so nothing a platform ships changes.
+      // Readable generated JavaScript plus its source map makes the watch
+      // output useful on both sides of devtools. Production retains Vite's
+      // default minification behavior through the explicit TRUE value.
+      minify: !watching,
+
+      // Keep development styles readable as well as mapped. One-shot
+      // `vite build`, `storybook build`, and release fixtures still minify, so
+      // nothing a platform ships changes.
       cssMinify: !watching,
 
       rollupOptions: {
@@ -238,10 +278,34 @@ export default defineConfig(async () => {
 
   // Let project extensions patch the final Vite config.
   /** @type {import('vite').UserConfig} */
+  const extensionPatch =
+    typeof extendConfig === 'function' ? extendConfig(base, { env }) || {} : {};
   const patched =
     typeof extendConfig === 'function'
-      ? mergeConfig(base, extendConfig(base, { env }) || {})
+      ? mergeConfig(base, extensionPatch)
       : base;
 
+  // A project extension can enable watch mode without a CLI flag. Apply the
+  // same development defaults in that case while preserving any explicit
+  // sourcemap or minification choices in the extension itself.
+  if (!watching && patched.build?.watch) {
+    const extensionBuild = extensionPatch.build || {};
+    return {
+      ...patched,
+      build: {
+        ...patched.build,
+        ...(!Object.hasOwn(extensionBuild, 'sourcemap')
+          ? { sourcemap: true }
+          : {}),
+        ...(!Object.hasOwn(extensionBuild, 'minify') ? { minify: false } : {}),
+        ...(!Object.hasOwn(extensionBuild, 'cssMinify')
+          ? { cssMinify: false }
+          : {}),
+      },
+    };
+  }
+
   return patched;
-});
+}
+
+export default defineConfig(createViteConfig);

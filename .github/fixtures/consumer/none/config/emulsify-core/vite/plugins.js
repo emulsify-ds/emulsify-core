@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 export default [
   {
     name: 'consumer-none-vite-extension',
@@ -10,3 +12,13 @@ export default [
     },
   },
 ];
+
+// The consumer overlay replaces the release fixture's extension file, so keep
+// its conflicting JavaScript alias while adding the packed-consumer marker.
+export const extendConfig = () => ({
+  resolve: {
+    alias: {
+      '@assets': resolve(import.meta.dirname, '../../../asset-shadow'),
+    },
+  },
+});

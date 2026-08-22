@@ -239,7 +239,10 @@ describe('syntax error rendering', () => {
    */
   const render = (syntaxErrors) =>
     renderSummary({
-      snapshot: createDiagnosticsCollector().snapshot(),
+      snapshot: {
+        ...createDiagnosticsCollector().snapshot(),
+        syntaxErrors,
+      },
       durationMs: 2400,
       projectDir: '/p',
       syntaxErrors,

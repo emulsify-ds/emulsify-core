@@ -235,3 +235,33 @@ export function createSassOptions(collector, options = {}) {
     verbose: true,
   };
 }
+
+/**
+ * Decide whether Emulsify should replace Dart Sass's own console output.
+ *
+ * Three callers resolve the shared Vite config and each needs a different
+ * answer, so the rule lives here rather than as a condition inside the config:
+ *
+ *  - **The develop watcher** (`vite build --watch`) always takes the logger. It
+ *    prints the deduplicated tally, once per session rather than once per
+ *    rebuild, which is the whole point. Raw mode does not turn this off: the
+ *    reporter is still what prints the summary, and the firehose would bury it.
+ *  - **Storybook** resolves with `command: 'serve'` for both `storybook dev`
+ *    and `storybook build`. During development it compiles the same source tree
+ *    the watcher already tallied; a standalone static build prints the
+ *    collector's deduplicated tally at completion. Without this it printed Dart
+ *    Sass's full formatted block per occurrence, at startup and after saves.
+ *  - **A one-shot `vite build`** keeps Dart Sass's output. Nothing else is
+ *    running to report the debt, so that output is the only report there is.
+ *
+ * Raw verbose mode hands Storybook's firehose back, which is what asking for
+ * raw output means.
+ *
+ * @param {{watching?: boolean, command?: string, verbose?: boolean}} options - Invocation.
+ * @returns {boolean} TRUE when the quiet logger should be installed.
+ */
+export function shouldQuietSass({ watching, command, verbose } = {}) {
+  if (watching) return true;
+
+  return command === 'serve' && !verbose;
+}

@@ -28,6 +28,7 @@ import {
 import { isWatchInvocation } from '../reporter/watch-mode.js';
 
 const plain = createStyler(false);
+const writeBundle = (plugin, ...args) => plugin.writeBundle.handler(...args);
 
 // Built rather than written literally so the fixture keeps the apostrophe that
 // real Sass output contains without tripping the single-quote lint rule.
@@ -107,13 +108,23 @@ describe('develop reporter plugin gating', () => {
     expect(plugin.apply).toBe('build');
   });
 
+  it('reports after output producers and waits for their hooks to finish', () => {
+    const { plugin } = createHarness();
+
+    expect(plugin.writeBundle).toMatchObject({
+      order: 'post',
+      sequential: true,
+      handler: expect.any(Function),
+    });
+  });
+
   it('stays completely silent for one-shot builds', () => {
     const { plugin, lines } = createHarness();
 
     plugin.configResolved(resolvedConfig({ watch: null }));
     plugin.buildStart();
     plugin.buildEnd();
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     expect(lines).toEqual([]);
@@ -149,7 +160,7 @@ describe('develop reporter plugin gating', () => {
     lines.length = 0;
 
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     const built = lines.filter((line) => line.includes('built in'));
@@ -165,11 +176,50 @@ describe('develop reporter output', () => {
     lines.length = 0;
     plugin.buildStart();
     advance(1420);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     // `dist/` is written, not watched. The label names the directory the source
     // roots share, which is what Rollup's module graph is rooted in.
     expect(lines.join('\n')).toContain('✓ built in 1.42s · watching src/');
+  });
+
+  it('names both final destinations when component output is mirrored', () => {
+    const { plugin, lines } = createHarness({
+      projectStructure: {
+        mirrorComponentOutput: true,
+        output: { components: 'components' },
+        sourceRootRecords: [
+          { name: 'components', directory: '/project/src/components' },
+          { name: 'global', directory: '/project/src' },
+        ],
+      },
+    });
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'global/style.css': { type: 'asset', source: 'a'.repeat(4) },
+        'storybook/preview.js': { type: 'chunk', code: 'b'.repeat(2) },
+        'components/card/card.js': { type: 'chunk', code: 'c'.repeat(10) },
+        'components/card/card.css': { type: 'asset', source: 'd'.repeat(5) },
+      },
+    );
+
+    const outputIndex = lines.findIndex((line) => line.includes('output'));
+    const outputLines = lines.slice(outputIndex, outputIndex + 3);
+
+    expect(outputLines[0]).toContain(
+      'dist/        2 files · 6 B · largest global/style.css 4 B',
+    );
+    expect(outputLines[1]).toContain(
+      'components/  2 files · 15 B · largest card/card.js 10 B',
+    );
+    expect(outputLines[2]).toContain('total        4 files · 21 B');
+    expect(outputLines[2]).not.toContain('largest');
   });
 
   it('names the watched sources, not the output directory', () => {
@@ -187,7 +237,7 @@ describe('develop reporter output', () => {
     lines.length = 0;
     plugin.buildStart();
     advance(1000);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     expect(output).toContain('watching components/');
@@ -208,7 +258,7 @@ describe('develop reporter output', () => {
     lines.length = 0;
     plugin.buildStart();
     advance(1000);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     // Naming either root would be a lie about the other, and naming the project
     // root would suggest the whole tree is watched.
@@ -238,6 +288,27 @@ describe('develop reporter output', () => {
     expect(output).toContain(MISSING_STYLESHEET);
   });
 
+  it('keeps a failed verdict when an aggregate contains only falsy errors', () => {
+    const { plugin, lines, collector, advance } = createHarness();
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+    advance(900);
+    plugin.buildEnd(
+      Object.assign(new Error('Build failed with 1 error:'), {
+        errors: [null],
+      }),
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('✗ build failed after 900ms');
+    expect(output).not.toContain('✓ built in 900ms');
+    expect(collector.snapshot().errors).toEqual([
+      expect.objectContaining({ message: 'Build failed with 1 error:' }),
+    ]);
+  });
+
   it('replaces repeated sass output with a single deduplicated tally', () => {
     const { plugin, lines, collector, advance } = createHarness();
 
@@ -261,7 +332,7 @@ describe('develop reporter output', () => {
     }
 
     advance(1420);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     expect(output).toContain('! 25 sass deprecations · 2 files');
@@ -301,7 +372,7 @@ describe('develop reporter output', () => {
       }
     }
 
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const rows = lines.filter((line) => line.includes('slash-div'));
     expect(rows).toHaveLength(1);
@@ -329,7 +400,7 @@ describe('develop reporter output', () => {
       line: 2,
     });
 
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     // sass-migrator runs exactly one migration per invocation, so a combined
@@ -354,7 +425,7 @@ describe('develop reporter output', () => {
       file: '/project/src/a.scss',
       line: 4,
     });
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     expect(output).toContain('move declarations above nested rules');
@@ -366,13 +437,13 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
     plugin.watchChange('/project/src/components/card/card.scss');
     advance(84);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     expect(lines).toEqual([
       '  14:31:22 ~ src/components/card/card.scss · rebuilt in 84ms',
@@ -384,7 +455,7 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
@@ -394,7 +465,7 @@ describe('develop reporter output', () => {
       line: 3,
     });
     advance(50);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     expect(lines.join('\n')).not.toContain('sass deprecations');
   });
@@ -404,14 +475,14 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
     plugin.watchChange('/project/src/a.scss');
     plugin.watchChange('/project/src/b.scss');
     plugin.watchChange('/project/src/c.scss');
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     expect(lines[0]).toContain('src/a.scss +2');
   });
@@ -421,7 +492,7 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
@@ -480,7 +551,40 @@ describe('rendering helpers', () => {
 
     expect(output).toContain('✗ 8 errors');
     expect(output).toContain('+3 more');
+    expect(output).not.toContain('mores');
     expect(output).not.toContain('boom 7');
+  });
+
+  it('reports a locationless deprecation without an empty file table', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordDeprecation({ id: 'legacy-js-api' });
+
+    const output = renderSummary({
+      snapshot: collector.snapshot(),
+      durationMs: 10,
+      projectDir: '/project',
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('! 1 sass deprecation');
+    expect(output).not.toContain('0 files');
+    expect(output).not.toMatch(/lines\s+count\s+deprecation\s+fix/);
+    expect(output).not.toContain('render() → compile()');
+  });
+
+  it('reports a failed summary from the snapshot when enriched import rows are absent', () => {
+    const output = renderSummary({
+      snapshot: {
+        ...emptySnapshot,
+        importErrors: [{ message: MISSING_STYLESHEET }],
+      },
+      durationMs: 1200,
+      importErrors: {},
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('✗ build failed after 1.20s');
+    expect(output).not.toContain('✓ built in 1.20s');
   });
 
   it('caps the deprecation kinds listed under one file', () => {
@@ -728,6 +832,12 @@ describe('watch invocation detection', () => {
     expect(isWatchInvocation(['node', 'vite', 'build', '-w'])).toBe(true);
     expect(isWatchInvocation(['node', 'vite', 'build', '--watch=true'])).toBe(
       true,
+    );
+    expect(isWatchInvocation(['node', 'vite', 'build', '--watch=false'])).toBe(
+      false,
+    );
+    expect(isWatchInvocation(['node', 'vite', 'build', '-w=false'])).toBe(
+      false,
     );
   });
 

@@ -1,0 +1,10 @@
+{
+  "project": {
+    "platform": "none",
+    "name": "asset-rebase-disabled",
+    "machineName": "asset_rebase_disabled"
+  },
+  "assets": {
+    "rebase": false
+  }
+}

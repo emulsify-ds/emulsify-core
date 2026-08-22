@@ -12,9 +12,12 @@ import { resolveProjectStructure } from '../project-structure.js';
 import { toPosixPath } from '../utils/paths.js';
 import { copyAllSrcAssetsPlugin } from './assets/copy-src-assets.js';
 import { copyTwigFilesPlugin } from './assets/copy-twig-files.js';
+import { cssAssetRebasePlugin } from './assets/css-asset-rebase.js';
 import { cssAssetUrlRelativizer } from './assets/css-asset-relativizer.js';
+import { developmentCssSourceMapPlugins } from './assets/development-source-maps.js';
 import { mirrorComponentsToRoot } from './assets/mirror-components.js';
 import { createSourceFileIndex } from './assets/source-file-index.js';
+import { stableWatchOutputPlugin } from './assets/stable-watch-output.js';
 import { svgSpriteFilePlugin } from './assets/svg-sprite.js';
 import { developReporterPlugin } from './reporter/index.js';
 import { requireContextCompatPlugin } from './require-context.js';
@@ -37,9 +40,10 @@ import { yamlModulePlugin } from './yaml-module.js';
  *   srcDir: string,
  *   srcExists: boolean,
  *   structureOverrides?: boolean,
+ *   developmentBuild?: boolean,
  *   diagnostics?: object
- * }} env - Project environment. When `diagnostics` is present the develop
- *   reporter is appended; it is supplied only for watch builds.
+ * }} env - Project environment. When `diagnostics` is present the reporter is
+ *   appended for watch summaries and actionable one-shot diagnostics.
  * @returns {import('vite').PluginOption[]} Emulsify Vite plugins.
  */
 export function makePlugins(env) {
@@ -55,6 +59,35 @@ export function makePlugins(env) {
   const twigOptions = makeTwigPluginOptions(env);
   const sourceFileIndex =
     env.sourceFileIndex || createSourceFileIndex(structure);
+
+  // In lean-output mode, filled by the rebase plugin and read by the
+  // relativizer: published asset path -> where that file actually lives,
+  // relative to the project root. It stays empty for self-contained output.
+  /** @type {Map<string, string>} */
+  const publishedAssetSources = new Map();
+  // The subset above that came from Vite copies. An actual CSS rewrite plus
+  // membership here authorizes the relativizer to remove a redundant copy.
+  /** @type {Set<string>} */
+  const removablePublishedAssets = new Set();
+
+  // Filled by the stable-output plugin, read by the reporter: emitted files it
+  // dropped this cycle because the bytes on disk already match. The reporter
+  // diffs one cycle's bundle against the last, so without this a skipped file
+  // would be listed as a deleted one.
+  /** @type {Set<string>} */
+  const unchangedOutputs = new Set();
+
+  // Filled by the source copy plugins, read and reset by the reporter: copied
+  // files never enter Rollup's bundle, so its fingerprint diff cannot see
+  // them. A Map deduplicates paths when more than one producer touches the
+  // same destination and leaves room for safe pruning to report removals if it
+  // is reintroduced later.
+  /** @type {Map<string, {kind: 'written'|'removed', bytes?: number}>|undefined} */
+  const copiedOutputChanges = env.diagnostics ? new Map() : undefined;
+  const developmentCssMaps = developmentCssSourceMapPlugins({
+    projectDir,
+    developmentBuild: env.developmentBuild,
+  });
 
   const basePlugins = [
     virtualTwigExtensionInstallersPlugin(envWithStructure),
@@ -86,29 +119,82 @@ export function makePlugins(env) {
     // Legacy Storybook stories may still enumerate assets with require.context.
     requireContextCompatPlugin(),
 
-    // Keep CSS asset URLs relative to the emitted CSS location.
-    cssAssetUrlRelativizer({ assetsRoot: 'assets' }),
+    // Capture Vite's combined Sass/PostCSS map before Core changes asset URLs.
+    // Vite's extracted-CSS build path discards this map unless Core retains it.
+    developmentCssMaps.capture,
+
+    // Repair CSS asset URLs Vite could not resolve. Ordering against the
+    // relativizer below is load-bearing: this normalizes URLs to `/assets/...`
+    // and either emits an output asset or records its source-tree location;
+    // only then can the relativizer select and calculate the final target.
+    cssAssetRebasePlugin({
+      env: envWithStructure,
+      diagnostics: env.diagnostics,
+      publishedAssetSources,
+      removablePublishedAssets,
+    }),
+
+    // Point CSS asset URLs at the file each one names, relative to the
+    // stylesheet's own location on disk.
+    cssAssetUrlRelativizer({
+      assetsRoot: 'assets',
+      env: envWithStructure,
+      publishedAssetSources,
+      removablePublishedAssets,
+    }),
+
+    // Pair each direct stylesheet entry with its finalized watch-build asset.
+    // This must run after URL rewriting and before stable-output comparison.
+    developmentCssMaps.emit,
+
+    // Last of the CSS chain: once the text is final, an unchanged stylesheet is
+    // dropped rather than rewritten, so a watch rebuild does not send HMR
+    // updates for stylesheets the edit never touched.
+    stableWatchOutputPlugin({
+      projectDir,
+      mirrorComponentOutput: structure.mirrorComponentOutput,
+      unchangedOutputs,
+    }),
   ];
 
   return [
     ...basePlugins,
 
     // Copy Twig templates and component metadata beside compiled assets.
-    copyTwigFilesPlugin({ structure, sourceFileIndex }),
+    copyTwigFilesPlugin({
+      structure,
+      sourceFileIndex,
+      diagnostics: env.diagnostics,
+      outputChanges: copiedOutputChanges,
+    }),
 
     // Copy every non-code asset under src with the same routing.
-    copyAllSrcAssetsPlugin({ structure, sourceFileIndex }),
+    copyAllSrcAssetsPlugin({
+      structure,
+      sourceFileIndex,
+      diagnostics: env.diagnostics,
+      outputChanges: copiedOutputChanges,
+    }),
 
     // Drupal projects with src mirror dist/components back to ./components.
     mirrorComponentsToRoot({
       enabled: structure.mirrorComponentOutput,
       projectDir,
+      developmentBuild: env.developmentBuild,
+      diagnostics: env.diagnostics,
     }),
 
-    // Summarize the build for `npm run develop`. Present only when the Vite
-    // config supplied a diagnostics collector, which it does for watch builds.
+    // Summarize `npm run develop`, and report actionable diagnostics collected
+    // during one-shot Vite or Storybook builds.
     ...(env.diagnostics
-      ? [developReporterPlugin({ env, diagnostics: env.diagnostics })]
+      ? [
+          developReporterPlugin({
+            env,
+            diagnostics: env.diagnostics,
+            unchangedOutputs,
+            copiedOutputChanges,
+          }),
+        ]
       : []),
   ];
 }

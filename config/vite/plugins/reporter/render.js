@@ -152,6 +152,7 @@ const FACT_LABELS = {
  *   platform?: string,
  *   inputRows?: Array<{name: string, path: string, count: number}>,
  *   outDir?: string,
+ *   outputRows?: Array<{path: string, write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}}>,
  *   write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}},
  *   styler: (format: string|string[], text: string) => string
  * }} options - Facts inputs.
@@ -161,6 +162,7 @@ export function renderFacts({
   platform,
   inputRows = [],
   outDir = 'dist',
+  outputRows = [],
   write,
   styler,
 }) {
@@ -211,24 +213,59 @@ export function renderFacts({
     });
   }
 
-  const outputFacts = [];
-  if (write) {
-    outputFacts.push(pluralize(write.fileCount, 'file'));
-    outputFacts.push(formatBytes(write.totalBytes));
+  /**
+   * Render the numeric facts following one output path.
+   *
+   * @param {{fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}|undefined} summary - Bundle tally.
+   * @param {boolean} includeLargest - Whether to name the largest file.
+   * @returns {string} Styled facts with their leading column gap.
+   */
+  const outputSuffix = (summary, includeLargest = true) => {
+    if (!summary) return '';
 
-    if (write.largest) {
-      outputFacts.push(
-        `largest ${write.largest.fileName} ${formatBytes(write.largest.bytes)}`,
+    const facts = [
+      pluralize(summary.fileCount, 'file'),
+      formatBytes(summary.totalBytes),
+    ];
+
+    if (includeLargest && summary.largest) {
+      facts.push(
+        `largest ${summary.largest.fileName} ${formatBytes(summary.largest.bytes)}`,
       );
     }
+
+    return styler('gray', `  ${facts.join(SEPARATOR)}`);
+  };
+
+  const destinations =
+    outputRows.length > 0 ? outputRows : [{ path: outDir, write }];
+  const hasTotal = destinations.length > 1 && Boolean(write);
+  const pathWidth = Math.max(
+    ...destinations.map((entry) => entry.path.length),
+    hasTotal ? 'total'.length : 0,
+  );
+
+  destinations.forEach((entry, index) => {
+    const destinationWrite =
+      destinations.length === 1 && !entry.write ? write : entry.write;
+    const path = styler('cyan', entry.path.padEnd(pathWidth));
+
+    lines.push(
+      row(
+        index === 0 ? FACT_LABELS.output : '',
+        `${path}${outputSuffix(destinationWrite)}`,
+      ),
+    );
+  });
+
+  if (hasTotal) {
+    lines.push(
+      row(
+        '',
+        `${styler('gray', 'total'.padEnd(pathWidth))}${outputSuffix(write, false)}`,
+      ),
+    );
   }
-
-  const outputSuffix =
-    outputFacts.length > 0
-      ? styler('gray', `  ${outputFacts.join(SEPARATOR)}`)
-      : '';
-
-  lines.push(row(FACT_LABELS.output, `${outDir}${outputSuffix}`));
 
   return lines;
 }
@@ -405,7 +442,7 @@ function renderDetailRows(entries, projectDir, styler) {
   const hidden = entries.length - MAX_DETAIL_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -432,15 +469,26 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
   const { deprecations, deprecationsByFile, deprecationTotal } = snapshot;
   if (deprecations.length === 0) return [];
 
-  const headline = [
-    pluralize(deprecationTotal, 'sass deprecation'),
-    pluralize(deprecationsByFile.length || 1, 'file'),
-  ].join(SEPARATOR);
+  const total = pluralize(deprecationTotal, 'sass deprecation');
+  const headline = deprecationsByFile.length
+    ? [total, pluralize(deprecationsByFile.length, 'file')].join(SEPARATOR)
+    : total;
 
   const lines = [
     `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler('yellow', headline)}`,
-    '',
   ];
+
+  // Sass can report a deprecation without a span. It still belongs in the
+  // total, but there is no file to open and therefore no worklist to render.
+  // Omitting the empty table also avoids presenting "0 files" as actionable
+  // detail when the collector simply had no location to group.
+  if (deprecationsByFile.length === 0) {
+    const command = renderMigratorCommand(deprecations, sourceGlob, styler);
+    if (command) lines.push('', command);
+    return lines;
+  }
+
+  lines.push('');
 
   const shownFiles = deprecationsByFile.slice(0, MAX_DEPRECATION_FILES);
 
@@ -510,6 +558,27 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
   }
 
   return lines;
+}
+
+/**
+ * Render the Sass deprecation worklist for a one-shot build.
+ *
+ * The watch summary supplies its own section spacing. A standalone build has
+ * no surrounding report, so this wrapper adds the leading blank line that
+ * keeps the tally separate from Vite's output.
+ *
+ * @param {{snapshot: object, projectDir?: string, sourceGlob?: string, styler: Function}} options - Render inputs.
+ * @returns {string[]} Report lines.
+ */
+export function renderDeprecationSummary({
+  snapshot,
+  projectDir = '',
+  sourceGlob = 'src/**/*.scss',
+  styler,
+}) {
+  const lines = renderDeprecations(snapshot, projectDir, styler, sourceGlob);
+
+  return lines.length > 0 ? ['', ...lines] : [];
 }
 
 /**
@@ -664,7 +733,7 @@ function renderSyntaxErrors(errors, styler) {
       const hidden = matches.length - MAX_SOURCE_LEADS;
       if (hidden > 0) {
         lines.push(
-          `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+          `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
         );
       }
     }
@@ -734,7 +803,7 @@ function renderImportErrors(rows, sharedDirectory, directoryExists, styler) {
   const hidden = rows.length - MAX_ASSET_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -800,7 +869,7 @@ function renderUnresolvedAssets(rows, styler) {
   const hidden = rows.length - MAX_ASSET_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -813,6 +882,61 @@ function renderUnresolvedAssets(rows, styler) {
   );
 
   return lines;
+}
+
+/**
+ * Render the tally of modules Vite externalized for browser compatibility.
+ *
+ * A dependency reaching for a Node builtin is a property of that dependency,
+ * not of the edit just made, so this belongs with the inherited debt rather
+ * than in "needs attention". Vite repeats the notice once per importing file on
+ * every cycle; one line per module, with its occurrence count, says the same
+ * thing without the repetition.
+ *
+ * @param {Array<{module: string, importer?: string, count: number}>} modules - Externalized modules.
+ * @param {(format: string|string[], text: string) => string} styler - Styling function.
+ * @returns {string[]} Report lines.
+ */
+function renderExternalizedModules(modules = [], styler) {
+  if (modules.length === 0) return [];
+
+  const lines = [
+    `${INDENT}${styler('gray', `${pluralize(modules.length, 'module')} externalized for the browser`)}`,
+    '',
+  ];
+
+  for (const entry of modules.slice(0, MAX_ASSET_ROWS)) {
+    const times = entry.count > 1 ? ` (${entry.count}\u00d7)` : '';
+    lines.push(`${DETAIL_INDENT}${styler('gray', `${entry.module}${times}`)}`);
+  }
+
+  const hidden = modules.length - MAX_ASSET_ROWS;
+  if (hidden > 0) {
+    lines.push(
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
+    );
+  }
+
+  return lines;
+}
+
+/**
+ * Determine whether a build cycle failed.
+ *
+ * Import and syntax errors live in their own buckets rather than in
+ * `snapshot.errors`, so a check against errors alone reads a stylesheet that
+ * never compiled as a success. That is precisely how a mistyped `@use` used to
+ * report "rebuilt in 1.69s" while dist/ kept the previous CSS.
+ *
+ * @param {{errors?: object[], importErrors?: object[], syntaxErrors?: object[]}} snapshot - Diagnostics snapshot.
+ * @returns {boolean} TRUE when the cycle produced no usable output.
+ */
+export function hasCycleFailure(snapshot = {}) {
+  return (
+    (snapshot.errors?.length || 0) > 0 ||
+    (snapshot.importErrors?.length || 0) > 0 ||
+    (snapshot.syntaxErrors?.length || 0) > 0
+  );
 }
 
 /**
@@ -834,6 +958,7 @@ function renderProblems(
   importErrors,
   syntaxErrors,
   unicode = true,
+  includeDebt = true,
 ) {
   const attention = [];
 
@@ -876,7 +1001,22 @@ function renderProblems(
     attention.push(...assetLines);
   }
 
-  const debt = renderDeprecations(snapshot, projectDir, styler, sourceGlob);
+  // Rebuilds pass includeDebt: false. Restating 190 inherited deprecations on
+  // every keystroke is the noise this reporter exists to remove.
+  const debt = includeDebt
+    ? renderDeprecations(snapshot, projectDir, styler, sourceGlob)
+    : [];
+
+  if (includeDebt) {
+    const externalized = renderExternalizedModules(
+      snapshot.externalizedModules,
+      styler,
+    );
+    if (externalized.length > 0) {
+      if (debt.length > 0) debt.push('');
+      debt.push(...externalized);
+    }
+  }
 
   const lines = [];
 
@@ -1106,6 +1246,69 @@ function renderSizeTable(rows, styler) {
 }
 
 /**
+ * Render the standalone CSS asset block a one-shot build prints.
+ *
+ * One-shot builds are silent unless something is wrong, so this omits the
+ * banner and project facts. The caller may compose it with a collected Sass
+ * deprecation tally; a clean project keeps its output byte for byte.
+ *
+ * @param {{assetRows?: Array<object>, rebases?: Array<object>, styler: Function}} options - Render inputs.
+ * @returns {string[]} Report lines.
+ */
+export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
+  const repaired = rebases.filter((entry) => entry.status === 'rebased');
+  const ambiguous = rebases.filter((entry) => entry.status === 'ambiguous');
+
+  if (!assetRows.length && !repaired.length && !ambiguous.length) return [];
+
+  const lines = [''];
+
+  if (repaired.length) {
+    lines.push(
+      `${INDENT}${styler(
+        'gray',
+        `${pluralize(repaired.length, 'css asset url')} rebased to /assets/`,
+      )}`,
+      '',
+    );
+
+    for (const entry of repaired.slice(0, MAX_ASSET_ROWS)) {
+      lines.push(
+        `${DETAIL_INDENT}${styler('gray', `${entry.url} -> ${entry.rewritten}`)}`,
+      );
+    }
+
+    const hidden = repaired.length - MAX_ASSET_ROWS;
+    if (hidden > 0) {
+      lines.push(
+        `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
+      );
+    }
+
+    lines.push(
+      '',
+      `${DETAIL_INDENT}${styler(
+        'gray',
+        'run `emulsify-audit --fix` to write these canonically in source',
+      )}`,
+    );
+  }
+
+  for (const entry of ambiguous) {
+    lines.push(
+      `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler(
+        'yellow',
+        `${entry.url} matches more than one asset root`,
+      )}`,
+    );
+  }
+
+  lines.push(...renderUnresolvedAssets(assetRows, styler));
+
+  return lines;
+}
+
+/**
  * Render the summary printed after the first successful watch build.
  *
  * Emitted as four labelled sections — project, build, and whichever problem
@@ -1116,6 +1319,7 @@ function renderSizeTable(rows, styler) {
  *   snapshot: object,
  *   durationMs: number,
  *   outDir?: string,
+ *   outputRows?: Array<{path: string, write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}}>,
  *   projectDir?: string,
  *   sourceGlob?: string,
  *   assetRows?: Array<object>,
@@ -1135,6 +1339,7 @@ export function renderSummary({
   snapshot,
   durationMs,
   outDir = 'dist',
+  outputRows = [],
   projectDir = '',
   sourceGlob = 'src/**/*.scss',
   assetRows = [],
@@ -1149,10 +1354,7 @@ export function renderSummary({
   unicode = true,
   styler,
 }) {
-  const failed =
-    snapshot.errors.length > 0 ||
-    (importErrors.rows || []).length > 0 ||
-    syntaxErrors.length > 0;
+  const failed = hasCycleFailure(snapshot);
   const symbol = failed
     ? styler('red', SYMBOLS.error)
     : styler('green', SYMBOLS.ok);
@@ -1181,7 +1383,7 @@ export function renderSummary({
     '',
     renderDivider('project', unicode, styler),
     '',
-    ...renderFacts({ platform, inputRows, outDir, write, styler }),
+    ...renderFacts({ platform, inputRows, outDir, outputRows, write, styler }),
     // The verbose listings expand the two rows above them, so they sit directly
     // under the totals they itemize rather than after the build result.
     ...renderInputFiles(inputFiles, unicode, styler),
@@ -1220,7 +1422,7 @@ export function renderSummary({
  *   changedFiles?: string[],
  *   projectDir?: string,
  *   moduleCount?: number,
- *   changedOutputs?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   changedOutputs?: Array<{fileName: string, bytes?: number, gzipBytes?: number}>,
  *   removedOutputs?: string[],
  *   detailed?: boolean,
  *   styler: (format: string|string[], text: string) => string,
@@ -1233,14 +1435,21 @@ export function renderRebuild({
   durationMs,
   changedFiles = [],
   projectDir = '',
+  outDir = 'dist',
+  sourceGlob,
+  assetRows = [],
+  importErrors = {},
+  syntaxErrors = [],
+  recovered = false,
   moduleCount,
   changedOutputs = [],
   removedOutputs = [],
   detailed = false,
+  unicode = true,
   styler,
   now = new Date(),
 }) {
-  const failed = snapshot.errors.length > 0;
+  const failed = hasCycleFailure(snapshot);
   const [firstChange] = changedFiles;
   const changeLabel =
     changedFiles.length > 1
@@ -1251,27 +1460,71 @@ export function renderRebuild({
 
   const outcome = failed
     ? styler('red', `rebuild failed after ${formatDuration(durationMs)}`)
-    : styler('gray', `rebuilt in ${formatDuration(durationMs)}`);
+    : recovered
+      ? styler(
+          'green',
+          `recovered${SEPARATOR}rebuilt in ${formatDuration(durationMs)}`,
+        )
+      : styler('gray', `rebuilt in ${formatDuration(durationMs)}`);
 
+  // A recovered rebuild gets the success tick rather than the change caret, so
+  // the save that fixed a broken build is distinguishable from an ordinary one.
   const symbol = failed
     ? styler('red', SYMBOLS.error)
-    : styler('gray', SYMBOLS.change);
+    : recovered
+      ? styler('green', SYMBOLS.ok)
+      : styler('gray', SYMBOLS.change);
 
   const lines = [
     `${INDENT}${styler('gray', formatClockTime(now))} ${symbol} ${changeLabel}${styler('gray', SEPARATOR)}${outcome}`,
   ];
 
-  // Repeating the deprecation tally on every keystroke would recreate the noise
-  // this reporter exists to remove, so rebuilds only surface hard failures.
   if (failed) {
-    lines.push(...renderDetailRows(snapshot.errors, projectDir, styler));
+    // Compile failures occur before output is written, but copy and mirror
+    // failures happen after Rollup has already published some files. Preserve
+    // that distinction so a partially updated theme is never described as the
+    // last wholly successful build.
+    const outputIncomplete = snapshot.errors?.some(
+      (error) => error.outputState === 'incomplete',
+    );
+    const outputStatus = outputIncomplete
+      ? `output may be incomplete${SEPARATOR}some output may already have changed`
+      : `output not updated${SEPARATOR}${outDir} still holds the last successful build`;
+    lines.push(`${DETAIL_INDENT}${styler('yellow', outputStatus)}`);
+
+    // The same blocks the first build renders, minus the inherited deprecation
+    // debt, so a rebuild failure names its cause instead of only its verdict.
+    lines.push(
+      ...renderProblems(
+        snapshot,
+        projectDir,
+        styler,
+        sourceGlob,
+        assetRows,
+        importErrors,
+        syntaxErrors,
+        unicode,
+        false,
+      ),
+    );
+
+    if (removedOutputs.length > 0) {
+      lines.push(...renderRebuildDetail({ removedOutputs }, styler));
+    }
+
     return lines;
   }
 
-  if (detailed)
+  // Writes follow the existing detailed-mode contract. Removals are always
+  // named: a destructive cycle must never collapse to a green one-line result.
+  if (detailed || removedOutputs.length > 0)
     lines.push(
       ...renderRebuildDetail(
-        { moduleCount, changedOutputs, removedOutputs },
+        {
+          moduleCount: detailed ? moduleCount : undefined,
+          changedOutputs: detailed ? changedOutputs : [],
+          removedOutputs,
+        },
         styler,
       ),
     );
@@ -1284,7 +1537,7 @@ export function renderRebuild({
  *
  * @param {{
  *   moduleCount?: number,
- *   changedOutputs?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   changedOutputs?: Array<{fileName: string, bytes?: number, gzipBytes?: number}>,
  *   removedOutputs?: string[]
  * }} cycle - What the rebuild produced.
  * @param {(format: string|string[], text: string) => string} styler - Styling function.
@@ -1299,11 +1552,11 @@ function renderRebuildDetail(
     facts.push(`${pluralize(moduleCount, 'module')} transformed`);
   }
 
-  facts.push(
-    changedOutputs.length === 0
-      ? 'no output changed'
-      : `${pluralize(changedOutputs.length, 'output')} changed`,
-  );
+  if (changedOutputs.length > 0) {
+    facts.push(`${pluralize(changedOutputs.length, 'output')} changed`);
+  } else if (removedOutputs.length === 0) {
+    facts.push('no output changed');
+  }
 
   if (removedOutputs.length > 0) {
     facts.push(`${pluralize(removedOutputs.length, 'output')} removed`);

@@ -97,7 +97,7 @@ const lineAt = (source, index) => source.slice(0, index).split('\n').length;
  * @param {{projectDir?: string}} env - Project environment.
  * @returns {{
  *   locate: (url: string) => {status: string, label: string},
- *   references: (url: string) => Array<{file: string, line: number}>
+ *   references: (url: string) => Array<{file: string, sourceFile: string, line: number}>
  * }} Resolver.
  */
 export function createAssetResolver({ projectDir = '' } = {}) {
@@ -246,7 +246,7 @@ export function createAssetResolver({ projectDir = '' } = {}) {
      * Find the stylesheets that write this URL, with line numbers.
      *
      * @param {string} url - Unresolved asset URL.
-     * @returns {Array<{file: string, line: number}>} References, in file order.
+     * @returns {Array<{file: string, sourceFile: string, line: number}>} References, in file order.
      */
     references(url) {
       const files = allFiles();
@@ -257,7 +257,7 @@ export function createAssetResolver({ projectDir = '' } = {}) {
        *
        * @param {string[]} stylesheets - Files to search.
        * @param {(source: string) => Array<number>} findOffsets - Offset finder.
-       * @returns {Array<{file: string, line: number}>} Matches.
+       * @returns {Array<{file: string, sourceFile: string, line: number}>} Matches.
        */
       const scan = (stylesheets, findOffsets) => {
         const found = [];
@@ -265,17 +265,19 @@ export function createAssetResolver({ projectDir = '' } = {}) {
         for (const absPath of stylesheets) {
           const source = read(absPath);
           if (!source) continue;
+          const sourceFile = toProjectPath(absPath, projectDir);
 
           for (const offset of findOffsets(source)) {
             found.push({
-              file: tailSegments(toProjectPath(absPath, projectDir)),
+              file: tailSegments(sourceFile),
+              sourceFile,
               line: lineAt(source, offset),
             });
           }
         }
 
         return found.sort(
-          (a, b) => a.file.localeCompare(b.file) || a.line - b.line,
+          (a, b) => a.sourceFile.localeCompare(b.sourceFile) || a.line - b.line,
         );
       };
 
@@ -514,7 +516,7 @@ export function sharedMissingDirectory(rows, projectDir = '') {
  * every row has to be somewhere to go. A URL written in three stylesheets
  * becomes three rows rather than one row with a repeat count.
  *
- * @param {Array<{url: string}>} assets - Unresolved assets from the collector.
+ * @param {Array<{url: string, importer?: string}>} assets - Unresolved assets from the collector.
  * @param {ReturnType<createAssetResolver>} resolver - Asset resolver.
  * @returns {Array<{where: string, url: string, status: string, label: string}>} Table rows.
  */
@@ -522,6 +524,32 @@ export function buildAssetRows(assets, resolver) {
   const rows = assets.flatMap((asset) => {
     const location = resolver.locate(asset.url);
     const references = resolver.references(asset.url);
+
+    if (asset.importer) {
+      const importer = cleanUrl(asset.importer).replaceAll('\\', '/');
+      const matchingReference = references.find((reference) => {
+        const sourceFile = reference.sourceFile || reference.file;
+        return sourceFile === importer || importer.endsWith(`/${sourceFile}`);
+      });
+
+      if (!matchingReference) {
+        return [
+          {
+            where: tailSegments(importer),
+            url: asset.url,
+            ...location,
+          },
+        ];
+      }
+
+      return [
+        {
+          where: `${matchingReference.file}:${matchingReference.line}`,
+          url: asset.url,
+          ...location,
+        },
+      ];
+    }
 
     if (references.length === 0) {
       return [{ where: '—', url: asset.url, ...location }];

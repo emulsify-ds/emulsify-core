@@ -6,6 +6,7 @@ import {
   mergeReactSingletonResolve,
 } from '../config/vite/utils/react-singleton.js';
 import { createDevServerLogger } from '../config/vite/plugins/reporter/vite-logger.js';
+import { STORYBOOK_VITE_ASSETS_DIR } from '../config/vite/plugins/assets/storybook-output.js';
 import { makeGeneratedDistFilesPlugin } from './main-static-assets.js';
 
 // Twig glob maps are provided by config/vite/plugins/twig/virtual-twig-globs.js.
@@ -29,9 +30,13 @@ const twigRuntimeOptimizeDepsExclude = [
  * keeping generated chunks in a separate folder avoids concurrent writers in
  * `.out/assets`.
  *
+ * Imported rather than repeated: Core plugins read this value back off the
+ * resolved config to tell a Storybook build from a theme build, so the two
+ * must never drift.
+ *
  * @type {string}
  */
-const storybookViteAssetsDir = 'storybook-assets';
+const storybookViteAssetsDir = STORYBOOK_VITE_ASSETS_DIR;
 
 /**
  * Merge Storybook and project optimizeDeps excludes with Core Twig runtime IDs.
@@ -123,7 +128,7 @@ function makeTwigVirtualModuleOptimizerPlugin() {
  * @returns {Function} Storybook `viteFinal` callback.
  */
 export function createViteFinal(resolvedStorybookEnv) {
-  return async function viteFinal(config) {
+  return async function viteFinal(config, { configType } = {}) {
     const { createLogger, mergeConfig } = await import('vite');
     const env = resolvedStorybookEnv;
     const storybookBuildConfig = config?.build || {};
@@ -132,9 +137,12 @@ export function createViteFinal(resolvedStorybookEnv) {
     // has historically consumed that branch, while `mode` still reflects
     // whether Storybook is running in development or production.
     const mode = config?.mode || 'development';
+    const isStorybookBuild = configType
+      ? configType === 'PRODUCTION'
+      : mode === 'production';
     const baseViteConfig =
       typeof viteConfig === 'function'
-        ? await viteConfig({ command: 'serve', mode })
+        ? await viteConfig({ command: 'serve', mode, isStorybookBuild })
         : viteConfig;
     const existingDefine = (config && config.define) || {};
     const viteDefine = (baseViteConfig && baseViteConfig.define) || {};

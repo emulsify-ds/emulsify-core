@@ -158,7 +158,7 @@ describe('Twig source() Storybook helper', () => {
     );
     expect(xhr.open).toHaveBeenCalledWith(
       'GET',
-      '/assets/icons/legacy-xhr.svg',
+      './assets/icons/legacy-xhr.svg',
       false,
     );
     expect(consoleWarn).not.toHaveBeenCalled();
@@ -166,12 +166,45 @@ describe('Twig source() Storybook helper', () => {
 
   it('resolves raster assets to public Storybook image markup', () => {
     expect(resolveAssetSource('@assets/icons/arrow.png')).toBe(
-      '<img src="/assets/icons/arrow.png" alt="" role="img">',
+      '<img src="./assets/icons/arrow.png" alt="" role="img">',
     );
   });
 
   it('returns a public URL for non-inline, non-image assets', () => {
     expect(resolveAssetSource('@assets/fonts/icon.woff2')).toBe(
+      './assets/fonts/icon.woff2',
+    );
+  });
+
+  it('resolves public asset URLs against the Storybook preview document', () => {
+    // Storybook copies staticDirs beside iframe.html, so a document-relative
+    // asset URL follows the preview wherever the static build is hosted.
+    expect(
+      new URL(
+        './assets/icons/arrow.svg',
+        'https://example.test/project/iframe.html',
+      ).pathname,
+    ).toBe('/project/assets/icons/arrow.svg');
+    expect(
+      new URL('./assets/icons/arrow.svg', 'https://example.test/iframe.html')
+        .pathname,
+    ).toBe('/assets/icons/arrow.svg');
+  });
+
+  it('keeps resolved asset URLs usable under a nested deployment path', () => {
+    const previewUrl = 'https://example.test/project/iframe.html';
+    const imageSource = resolveAssetSource('@assets/icons/arrow.png').match(
+      /src="([^"]+)"/,
+    )[1];
+    const fontUrl = resolveAssetSource('@assets/fonts/icon.woff2');
+
+    expect(new URL(imageSource, previewUrl).pathname).toBe(
+      '/project/assets/icons/arrow.png',
+    );
+    expect(new URL(fontUrl, previewUrl).pathname).toBe(
+      '/project/assets/fonts/icon.woff2',
+    );
+    expect(new URL(fontUrl, 'https://example.test/iframe.html').pathname).toBe(
       '/assets/fonts/icon.woff2',
     );
   });

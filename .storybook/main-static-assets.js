@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { resolveAssetRoots } from '../config/vite/utils/asset-roots.js';
+
 const projectRoot = process.cwd();
 
 /**
@@ -39,14 +41,9 @@ function existingStaticDirs(staticDirs) {
  * @returns {Array<string|{from: string, to: string}>} Static directory entries.
  */
 export function buildAssetStaticDirs(env) {
-  const configuredAssetRoots = Array.isArray(env.projectStructure?.assetRoots)
-    ? env.projectStructure.assetRoots
-    : [];
-  const assetRoots = [
-    ...configuredAssetRoots,
-    path.resolve(projectRoot, 'assets'),
-    path.resolve(projectRoot, 'src/assets'),
-  ];
+  // One shared list keeps what Storybook serves at /assets identical to what
+  // the Vite build and the audit resolve `/assets/...` against.
+  const assetRoots = resolveAssetRoots(env, { existingOnly: false });
 
   return existingStaticDirs([
     ...assetRoots.map((root) => ({

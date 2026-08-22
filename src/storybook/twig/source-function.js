@@ -22,14 +22,15 @@ function getRuntimeEnv() {
   return globalThis.__EMULSIFY_ENV__ || DEFAULT_ENV;
 }
 
-// GitHub Pages serves static assets from a repository-prefixed base path.
-const PUBLIC_ASSET_BASE =
-  typeof window !== 'undefined' &&
-  window.location &&
-  window.location.hostname &&
-  window.location.hostname.endsWith('github.io')
-    ? `/${getRuntimeEnv().machineName || ''}/assets/`
-    : '/assets/';
+// Storybook copies staticDirs beside the preview document, so `iframe.html`
+// and the public `assets/` directory are always siblings in a static build. A
+// document-relative base is resolved against the preview document's own URL:
+// `/iframe.html` at a domain root resolves to `/assets/...`, and
+// `/project/iframe.html` under a deployment subpath resolves to
+// `/project/assets/...`. That covers root deployments, project Pages URLs on
+// any host, custom domains, and arbitrary nested paths without hostname
+// detection or a configured base path.
+const PUBLIC_ASSET_BASE = './assets/';
 
 const pendingSourceLoads = new Set();
 const warnedAssetSources = new Set();
@@ -54,7 +55,10 @@ function normalizeAssetPath(assetPath) {
 /**
  * Read a text asset from Storybook's static server.
  *
- * @param {string} relPath - Public asset path below `/assets`.
+ * The request URL stays relative to the preview document, so the fallback
+ * resolves the same way at a domain root and under a deployment subpath.
+ *
+ * @param {string} relPath - Public asset path below the public asset base.
  * @returns {string|undefined} Fetched text when available.
  */
 function fetchTextAsset(relPath) {
@@ -77,7 +81,7 @@ function fetchTextAsset(relPath) {
 /**
  * Warn once when a text asset cannot use the lazy virtual source map.
  *
- * @param {string} relPath - Public asset path below `/assets`.
+ * @param {string} relPath - Public asset path below the public asset base.
  * @param {string} reason - Short explanation of the missing source.
  */
 function warnTextAssetSource(relPath, reason) {

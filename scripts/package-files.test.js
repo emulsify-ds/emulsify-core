@@ -15,12 +15,21 @@
  * do it, so it lives in `release:verify` and does not run on a commit. By then the
  * omission has usually been published.
  *
- * This is the same check reduced to static analysis: walk the relative imports
- * reachable from every published entry point and confirm each resolved file is
- * covered by the allowlist. No packing, no install, no network — it runs with the
+ * This is the same check reduced to the reachability question: walk the relative
+ * imports reachable from every published entry point and confirm each resolved
+ * file actually lands in the tarball. No install and no network — it runs with the
  * unit tests, which is early enough to matter.
+ *
+ * The one thing it does shell out for is `npm pack --dry-run`, and that is
+ * deliberate. An earlier revision modelled the allowlist itself, treating `files`
+ * as include-then-exclude. npm evaluates `files` last-match-wins, so when the
+ * array was sorted alphabetically and the `!` entries floated above the positive
+ * pattern that re-included them, this test kept passing while npm published 15
+ * test modules whose own imports were excluded. Asking npm what it would pack is
+ * the only model of `files` that cannot drift from npm.
  */
 
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,64 +67,49 @@ const DIRECT_ENTRY_POINTS = [
 const IMPORT_PATTERN =
   /(?:^|\n)\s*(?:import|export)\s+(?:[\s\S]*?\sfrom\s+)?['"]([^'"]+)['"]/g;
 
-/**
- * Convert one `files` entry into a predicate over repository-relative paths.
- *
- * npm's allowlist syntax is broader than this, but the package only uses literal
- * paths, directory prefixes, and `**` globs, so those are what is interpreted.
- *
- * @param {string} entry - A `files` entry, without any leading `!`.
- * @returns {(path: string) => boolean} Matcher.
- */
-function entryMatcher(entry) {
-  const normalized = entry.replace(/^\.\//, '');
-
-  if (!normalized.includes('*')) {
-    // A bare directory name publishes everything beneath it.
-    return (path) => path === normalized || path.startsWith(`${normalized}/`);
-  }
-
-  const pattern = normalized
-    .split('/')
-    .map((segment) => {
-      if (segment === '**') return '.*';
-      return segment.split('*').map(escapeRegExp).join('[^/]*');
-    })
-    .join('/')
-    .replace(/\.\*\//g, '(?:.*/)?');
-
-  const expression = new RegExp(`^${pattern}$`);
-
-  return (path) => expression.test(path);
-}
+/** @type {Set<string>|undefined} */
+let packedPathCache;
 
 /**
- * Escape regular expression metacharacters in a literal path segment.
+ * Ask npm which files it would publish, as repository-relative POSIX paths.
  *
- * @param {string} value - Literal text.
- * @returns {string} Escaped text.
+ * Memoized: the pack costs a few seconds and every assertion in this file wants
+ * the same answer. `--ignore-scripts` keeps `prepare` (husky) out of it.
+ *
+ * @returns {Set<string>} Paths npm would include in the tarball.
  */
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function packedPaths() {
+  if (packedPathCache) return packedPathCache;
+
+  const output = execFileSync(
+    'npm',
+    ['pack', '--dry-run', '--ignore-scripts', '--json'],
+    { cwd: packageRoot, encoding: 'utf8' },
+  );
+  const [pack] = JSON.parse(output);
+
+  packedPathCache = new Set(
+    pack.files.map(({ path: filePath }) =>
+      filePath.replace(/\\/g, '/').replace(/^\.\//, ''),
+    ),
+  );
+
+  return packedPathCache;
 }
 
 /**
  * Build a predicate that reports whether a path would be published.
  *
- * @param {string[]} files - The `files` allowlist.
+ * Backed by the real pack manifest rather than an interpretation of `files`, so
+ * it answers the question npm answers, including ordering effects this file
+ * previously got wrong.
+ *
  * @returns {(path: string) => boolean} Predicate.
  */
-function createPublishedCheck(files) {
-  const included = files
-    .filter((entry) => !entry.startsWith('!'))
-    .map(entryMatcher);
-  const excluded = files
-    .filter((entry) => entry.startsWith('!'))
-    .map((entry) => entryMatcher(entry.slice(1)));
+function createPublishedCheck() {
+  const packed = packedPaths();
 
-  return (path) =>
-    included.some((matches) => matches(path)) &&
-    !excluded.some((matches) => matches(path));
+  return (path) => packed.has(path.replace(/^\.\//, ''));
 }
 
 /**
@@ -192,7 +186,7 @@ const entryPoints = [
 ];
 
 describe('published files allowlist', () => {
-  const isPublished = createPublishedCheck(packageJson.files || []);
+  const isPublished = createPublishedCheck();
 
   it('resolves the entry points it claims to export', () => {
     // A guard that silently walked nothing would pass forever.
@@ -230,18 +224,59 @@ describe('published files allowlist', () => {
   });
 
   it('does not publish tests or fixtures', () => {
-    // The allowlist exists to keep these out; a matcher bug that made everything
-    // look published would hide real omissions.
-    expect(
-      isPublished('config/vite/plugins/__tests__/reporter-facts.test.js'),
-    ).toBe(false);
-    expect(isPublished('scripts/audit/checks/__tests__/a.test.js')).toBe(false);
-    expect(isPublished('scripts/package-files.test.js')).toBe(false);
+    // Every path here is a real file. The previous revision asserted against
+    // invented paths like `scripts/audit/checks/thing.test.js`, which a manifest
+    // lookup answers `false` for whether or not the allowlist works — the
+    // assertion passes because the file does not exist. Asserting existence
+    // first keeps a rename from quietly turning these into no-ops.
+    const excluded = [
+      'config/vite/plugins/__tests__/reporter-facts.test.js',
+      'scripts/audit/checks/__tests__/core-imports.test.js',
+      'scripts/audit/fix.test.js',
+      'scripts/audit/index.test.js',
+      'scripts/audit/test-utils.js',
+      'scripts/package-files.test.js',
+    ];
+
+    for (const path of excluded) {
+      expect(existsSync(join(packageRoot, path))).toBe(true);
+      expect(isPublished(path)).toBe(false);
+    }
   });
 
-  it('interprets the globs the allowlist actually uses', () => {
-    expect(isPublished('assets/images/logo.svg')).toBe(true);
-    expect(isPublished('scripts/audit/checks/thing.js')).toBe(true);
-    expect(isPublished('scripts/audit/checks/thing.test.js')).toBe(false);
+  it('publishes the shipped siblings of those excluded files', () => {
+    // The counterweight: an allowlist that excluded the whole `scripts/audit`
+    // tree would satisfy the test above and break the `emulsify-audit` binary.
+    const included = [
+      'scripts/audit/index.js',
+      'scripts/audit/fix.js',
+      'scripts/audit/checks/css-asset-references.js',
+      'config/vite/plugins/reporter/verbosity.js',
+    ];
+
+    for (const path of included) {
+      expect(existsSync(join(packageRoot, path))).toBe(true);
+      expect(isPublished(path)).toBe(true);
+    }
+  });
+
+  it('keeps every negation below the patterns it narrows', () => {
+    // npm evaluates `files` last-match-wins. Sorting the array alphabetically
+    // floats `!` entries to the top, where a later positive pattern silently
+    // re-includes what they exclude. That is exactly how 15 test modules
+    // reached the tarball; nothing about the array's appearance reveals it.
+    const files = packageJson.files || [];
+    const lastPositive = files.reduce(
+      (last, entry, index) => (entry.startsWith('!') ? last : index),
+      -1,
+    );
+    const misordered = files
+      .map((entry, index) => ({ entry, index }))
+      .filter(
+        ({ entry, index }) => entry.startsWith('!') && index < lastPositive,
+      )
+      .map(({ entry }) => entry);
+
+    expect(misordered).toEqual([]);
   });
 });

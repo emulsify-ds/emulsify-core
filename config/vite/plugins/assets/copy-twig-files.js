@@ -5,13 +5,18 @@
  * structure using the same routing rules as compiled JS and CSS entries.
  */
 
-import { copyFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { copyFileSync, mkdirSync, statSync } from 'fs';
+import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
   copiedComponentOutputPath,
   copiedGlobalOutputPath,
 } from '../../project-structure.js';
+import {
+  filesHaveSameBytes,
+  removeDestinationSymlink,
+  resolveFinalPath,
+} from './output-freshness.js';
 import {
   createSourceFileIndex,
   isComponentMetadataFile,
@@ -20,14 +25,17 @@ import {
 /**
  * Copy Twig templates and component metadata to `dist/`.
  *
- * @param {{ structure: object, sourceFileIndex?: object }} opts - Plugin options.
+ * @param {{ structure: object, sourceFileIndex?: object, diagnostics?: object, outputChanges?: Map<string, {kind: 'written'|'removed', bytes?: number}> }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Copy plugin.
  */
 export function copyTwigFilesPlugin({
   structure,
   sourceFileIndex = createSourceFileIndex(structure),
+  diagnostics,
+  outputChanges,
 }) {
   let outDir = 'dist';
+  let projectDir = process.cwd();
   let watching = false;
   /** @type {Array<{absPath: string, relDest: string}>|undefined} */
   let plan;
@@ -35,10 +43,12 @@ export function copyTwigFilesPlugin({
   /**
    * Resolve every file this plugin copies, paired with where it lands.
    *
-   * Built once and reused, because the source index is resolved at config time
-   * and does not change across watch cycles. Both hooks below read this same
-   * list, which is what keeps "gets copied to dist" and "a save triggers the
-   * copy" from drifting apart — a file cannot be added to one without the other.
+   * Shared by both hooks, which keeps "gets copied to dist" and "a save
+   * triggers the copy" from drifting apart. Structural events for an
+   * individually watched file reset the plan, so a single-file rename can be
+   * copied on the next cycle. New files and component-directory changes sit
+   * outside that watch set and require a watcher restart. Previous destinations
+   * are not pruned; content-only edits keep the cached filesystem walk.
    *
    * @returns {Array<{absPath: string, relDest: string}>} Copy plan.
    */
@@ -86,7 +96,14 @@ export function copyTwigFilesPlugin({
     /** Capture the final outDir. */
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
+      projectDir = cfg.root || process.cwd();
       watching = Boolean(cfg.build?.watch);
+    },
+
+    watchChange(_id, { event } = {}) {
+      if (!watching || (event !== 'create' && event !== 'delete')) return;
+      sourceFileIndex.refresh?.();
+      plan = undefined;
     },
 
     // Twig is copied rather than compiled, so none of it reaches Rollup's module
@@ -103,30 +120,82 @@ export function copyTwigFilesPlugin({
     /** Copy before the mirror plugin moves dist/components to the project root. */
     writeBundle() {
       for (const { absPath, relDest } of copyPlan()) {
-        copyToOutDir(absPath, relDest);
+        const copyResult = copyToOutDir(absPath, relDest);
+        if (watching && copyResult.status === 'written') {
+          outputChanges?.set(relDest, {
+            kind: 'written',
+            bytes: copyResult.bytes,
+          });
+        }
+        if (copyResult.status === 'failed' && copyResult.error) {
+          const errno = copyResult.error.code ?? 'unknown error';
+          const message = `Unable to copy ${absPath} to ${join(outDir, relDest)} (${errno}): ${copyResult.error.message}`;
+          diagnostics?.recordError?.({
+            message,
+            file: absPath,
+            outputState: 'incomplete',
+          });
+          this.warn?.(message);
+        }
       }
     },
   };
+
+  /**
+   * Resolve the output directory to an absolute path.
+   *
+   * @returns {string} Absolute output directory.
+   */
+  function absoluteOutDir() {
+    return isAbsolute(outDir) ? outDir : resolve(projectDir, outDir);
+  }
 
   /**
    * Copy one file into the output directory.
    *
    * @param {string} absPath - Absolute source path.
    * @param {string} relDest - Destination relative to `outDir`.
-   * @returns {void}
+   * @returns {{status: 'written'|'skipped'|'failed', bytes?: number, error?: Error}} Copy result.
    */
   function copyToOutDir(absPath, relDest) {
-    if (!relDest) return;
+    if (!relDest) return { status: 'failed' };
 
-    // Copied unconditionally, because `build.emptyOutDir` clears the output
-    // directory on every watch cycle and not just the first — a freshness check
-    // against the destination can never find anything to skip.
     const destPath = join(outDir, relDest);
-    mkdirSync(dirname(destPath), { recursive: true });
     try {
+      // A rewritten template in the output tree is a full preview reload rather
+      // than a style swap, so byte-identical templates are skipped during watch.
+      // One-shot builds continue to copy unconditionally as before.
+      if (
+        watching &&
+        filesHaveSameBytes(
+          absPath,
+          resolveFinalPath(relDest, {
+            outDir: absoluteOutDir(),
+            projectDir,
+            mirrored: structure?.mirrorComponentOutput,
+          }),
+        )
+      ) {
+        return { status: 'skipped' };
+      }
+
+      mkdirSync(dirname(destPath), { recursive: true });
+      removeDestinationSymlink(destPath);
       copyFileSync(absPath, destPath);
-    } catch {
-      /* noop */
+      let bytes;
+      if (watching && outputChanges) {
+        try {
+          bytes = statSync(destPath).size;
+        } catch {
+          // The write still succeeded; size is optional reporting metadata.
+        }
+      }
+      return { status: 'written', bytes };
+    } catch (error) {
+      return {
+        status: 'failed',
+        error,
+      };
     }
   }
 }

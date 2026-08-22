@@ -2,25 +2,23 @@
  * @file Tests for Drupal component mirror plugin behavior.
  */
 
-import fs, {
+import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'fs';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
 
-import {
-  filesHaveSameBytes,
-  mirrorComponentsToRoot,
-} from './mirror-components.js';
+import { mirrorComponentsToRoot } from './mirror-components.js';
 import { makeTempProject } from '../../test-utils/plugins.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';
-const LARGE_COMPARE_SIZE = 128 * 1024 + 7;
 
 const readMirrorState = (outDir) =>
   JSON.parse(readFileSync(join(outDir, MIRROR_STATE_FILE), 'utf8'));
@@ -33,54 +31,6 @@ describe('component mirror plugin', () => {
       rmSync(projectDir, { recursive: true, force: true });
     }
     jest.restoreAllMocks();
-  });
-
-  it('compares equal small files by bytes', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    writeFileSync(sourceFile, '<article>{{ title }}</article>');
-    writeFileSync(destinationFile, '<article>{{ title }}</article>');
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(true);
-  });
-
-  it('compares equal large files by bytes', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    const largeContents = Buffer.alloc(LARGE_COMPARE_SIZE, 'a');
-    writeFileSync(sourceFile, largeContents);
-    writeFileSync(destinationFile, largeContents);
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(true);
-  });
-
-  it('detects large files that differ only in the last byte', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    const sourceContents = Buffer.alloc(LARGE_COMPARE_SIZE, 'a');
-    const destinationContents = Buffer.from(sourceContents);
-    destinationContents.write('b', destinationContents.length - 1);
-    writeFileSync(sourceFile, sourceContents);
-    writeFileSync(destinationFile, destinationContents);
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(false);
-  });
-
-  it('short-circuits different-size files without reading file bodies', () => {
-    projectDir = makeTempProject();
-    const sourceFile = join(projectDir, 'source.twig');
-    const destinationFile = join(projectDir, 'destination.twig');
-    writeFileSync(sourceFile, 'larger');
-    writeFileSync(destinationFile, 'small');
-    const readFileSpy = jest.spyOn(fs, 'readFileSync');
-    const openSpy = jest.spyOn(fs, 'openSync');
-
-    expect(filesHaveSameBytes(sourceFile, destinationFile)).toBe(false);
-    expect(readFileSpy).not.toHaveBeenCalled();
-    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it('mirrors built components when enabled and skips mirroring when disabled', () => {
@@ -136,6 +86,38 @@ describe('component mirror plugin', () => {
     expect(statSync(rootComponentFile).mtimeMs).toBe(rootMtimeBefore);
   });
 
+  it('replaces an identical destination symlink without touching its target', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    const distComponentFile = join(outDir, 'components/card/card.twig');
+    const rootComponentFile = join(projectDir, 'components/card/card.twig');
+    const sharedFile = join(projectDir, 'shared/card.twig');
+    const contents = '<article>{{ title }}</article>';
+    const mirror = mirrorComponentsToRoot({ enabled: true, projectDir });
+
+    mkdirSync(join(distComponentFile, '..'), { recursive: true });
+    mkdirSync(join(rootComponentFile, '..'), { recursive: true });
+    mkdirSync(join(sharedFile, '..'), { recursive: true });
+    writeFileSync(distComponentFile, contents);
+    writeFileSync(sharedFile, contents);
+    utimesSync(
+      sharedFile,
+      new Date('2000-01-01T00:00:00Z'),
+      new Date('2000-01-01T00:00:00Z'),
+    );
+    const sharedMtimeBefore = statSync(sharedFile).mtimeMs;
+    symlinkSync(sharedFile, rootComponentFile);
+
+    mirror.configResolved({ build: { outDir } });
+    expect(mirror.writeBundle()).toBeUndefined();
+
+    expect(existsSync(distComponentFile)).toBe(false);
+    expect(lstatSync(rootComponentFile).isSymbolicLink()).toBe(false);
+    expect(readFileSync(rootComponentFile, 'utf8')).toBe(contents);
+    expect(readFileSync(sharedFile, 'utf8')).toBe(contents);
+    expect(statSync(sharedFile).mtimeMs).toBe(sharedMtimeBefore);
+  });
+
   it('keeps interleaved build observations free of partial dist component files', () => {
     projectDir = makeTempProject();
     const outDir = join(projectDir, 'dist');
@@ -179,6 +161,114 @@ describe('component mirror plugin', () => {
     expect(secondMirror.writeBundle()).toBeUndefined();
     expectMirroredFixture('second build');
     expect(readMirrorState(outDir).completedAt).toEqual(expect.any(String));
+  });
+
+  it('rebases source paths when development maps move out of dist', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    const distComponentDir = join(outDir, 'components/card');
+    const rootComponentDir = join(projectDir, 'components/card');
+    const sourceDir = join(projectDir, 'src/components/card');
+    const sourceFiles = {
+      js: join(sourceDir, 'card.js'),
+      scss: join(sourceDir, 'card.scss'),
+      partial: join(projectDir, 'src/components/shared/_tokens.scss'),
+    };
+    const distMaps = {
+      js: join(distComponentDir, 'card.js.map'),
+      css: join(distComponentDir, 'card.css.map'),
+    };
+    const rootMaps = {
+      js: join(rootComponentDir, 'card.js.map'),
+      css: join(rootComponentDir, 'card.css.map'),
+    };
+    const mirror = mirrorComponentsToRoot({ enabled: true, projectDir });
+
+    mkdirSync(distComponentDir, { recursive: true });
+    mkdirSync(sourceDir, { recursive: true });
+    mkdirSync(join(sourceFiles.partial, '..'), { recursive: true });
+    writeFileSync(sourceFiles.js, 'export const card = true;\n');
+    writeFileSync(sourceFiles.scss, '.card { color: $ink; }\n');
+    writeFileSync(sourceFiles.partial, '$ink: rebeccapurple;\n');
+    writeFileSync(
+      distMaps.js,
+      JSON.stringify({
+        version: 3,
+        sources: ['../../../src/components/card/card.js'],
+        sourcesContent: ['export const card = true;\n'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+    );
+    writeFileSync(
+      distMaps.css,
+      JSON.stringify({
+        version: 3,
+        sources: [
+          '../../../src/components/card/card.scss',
+          '../../../src/components/shared/_tokens.scss',
+        ],
+        sourcesContent: ['.card { color: $ink; }\n', '$ink: rebeccapurple;\n'],
+        names: [],
+        mappings: 'AAAA;ACAA',
+      }),
+    );
+
+    mirror.configResolved({ build: { outDir, watch: {} } });
+    expect(mirror.writeBundle()).toBeUndefined();
+
+    expect(existsSync(distMaps.js)).toBe(false);
+    expect(existsSync(distMaps.css)).toBe(false);
+    const jsMap = JSON.parse(readFileSync(rootMaps.js, 'utf8'));
+    const cssMap = JSON.parse(readFileSync(rootMaps.css, 'utf8'));
+    expect(jsMap.sources).toEqual(['../../src/components/card/card.js']);
+    expect(cssMap.sources).toEqual([
+      '../../src/components/card/card.scss',
+      '../../src/components/shared/_tokens.scss',
+    ]);
+    expect(resolve(dirname(rootMaps.js), jsMap.sources[0])).toBe(
+      sourceFiles.js,
+    );
+    expect(
+      cssMap.sources.map((source) => resolve(dirname(rootMaps.css), source)),
+    ).toEqual([sourceFiles.scss, sourceFiles.partial]);
+    expect(cssMap.sourcesContent).toEqual([
+      '.card { color: $ink; }\n',
+      '$ink: rebeccapurple;\n',
+    ]);
+  });
+
+  it('keeps watch maps but removes stale mirrored maps for production', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    const rootComponentDir = join(projectDir, 'components/card');
+    const sourceMap = join(rootComponentDir, 'card.js.map');
+    const upperCaseSourceMap = join(rootComponentDir, 'card.css.MAP');
+    const componentFile = join(rootComponentDir, 'card.js');
+    const mapAsset = join(rootComponentDir, 'regions.map');
+    const watchMirror = mirrorComponentsToRoot({ enabled: true, projectDir });
+    const productionMirror = mirrorComponentsToRoot({
+      enabled: true,
+      projectDir,
+    });
+
+    mkdirSync(rootComponentDir, { recursive: true });
+    writeFileSync(sourceMap, '{}');
+    writeFileSync(upperCaseSourceMap, '{}');
+    writeFileSync(componentFile, 'export default {};');
+    writeFileSync(mapAsset, 'legitimate map asset');
+
+    watchMirror.configResolved({ build: { outDir, watch: {} } });
+    expect(watchMirror.writeBundle()).toBeUndefined();
+    expect(existsSync(sourceMap)).toBe(true);
+    expect(existsSync(upperCaseSourceMap)).toBe(true);
+
+    productionMirror.configResolved({ build: { outDir } });
+    expect(productionMirror.writeBundle()).toBeUndefined();
+    expect(existsSync(sourceMap)).toBe(false);
+    expect(existsSync(upperCaseSourceMap)).toBe(false);
+    expect(readFileSync(componentFile, 'utf8')).toBe('export default {};');
+    expect(readFileSync(mapAsset, 'utf8')).toBe('legitimate map asset');
   });
 
   it('warns when a previous mirror build marker was interrupted', () => {
