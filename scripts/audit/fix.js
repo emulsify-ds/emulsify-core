@@ -10,6 +10,10 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import {
+  clearImmediate as cancelImmediate,
+  setImmediate as scheduleImmediate,
+} from 'node:timers';
+import {
   basename,
   dirname,
   isAbsolute,
@@ -26,6 +30,15 @@ import {
   normalizeAuditRoots,
   resetFileReadCache,
 } from './lib/files.js';
+
+const maximumTemporaryNameBytes = 255;
+const temporaryFileGlob = '**/.*.*.*.tmp';
+const temporaryFilePattern =
+  /^\..+\.(\d+)\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/i;
+const ignoredCleanupErrors = new Set(['ENOENT', 'ENAMETOOLONG']);
+const activeTemporaryFiles = new Map();
+let temporaryCleanupHandlersInstalled = false;
+let temporaryCleanupTurn;
 
 /**
  * Determine whether a canonical path is inside the canonical scanned root.
@@ -162,16 +175,6 @@ function auditFixTargetStatus(filePath, scope) {
       writable: false,
       realTarget,
       reason: `real target is excluded by audit ignore rules: ${realTarget}`,
-    };
-  }
-
-  try {
-    fs.accessSync(realTarget, fs.constants.W_OK);
-  } catch {
-    return {
-      writable: false,
-      realTarget,
-      reason: `real target is not writable: ${realTarget}`,
     };
   }
 
@@ -329,6 +332,225 @@ function attachCleanupError(error, cleanupError, detail) {
 }
 
 /**
+ * Truncate text without splitting a UTF-8 code point.
+ *
+ * @param {string} value - Filename portion to truncate.
+ * @param {number} byteLimit - Maximum UTF-8 byte length.
+ * @returns {string} Byte-bounded value.
+ */
+function truncateUtf8(value, byteLimit) {
+  let result = '';
+  let bytes = 0;
+
+  for (const character of value) {
+    const characterBytes = Buffer.byteLength(character);
+    if (bytes + characterBytes > byteLimit) break;
+    result += character;
+    bytes += characterBytes;
+  }
+
+  return result;
+}
+
+/**
+ * Create an exclusive temp path whose filename fits the common NAME_MAX.
+ *
+ * @param {string} filePath - Canonical target path.
+ * @returns {string} Same-directory temporary path.
+ */
+function createTemporaryPath(filePath) {
+  const suffix = `.${process.pid}.${randomUUID()}.tmp`;
+  const basenameBudget =
+    maximumTemporaryNameBytes - Buffer.byteLength(`.${suffix}`);
+  const boundedBasename = truncateUtf8(basename(filePath), basenameBudget);
+
+  return join(dirname(filePath), `.${boundedBasename}${suffix}`);
+}
+
+/**
+ * Remove every active audit-fix temporary file synchronously.
+ *
+ * @returns {void}
+ */
+function cleanupActiveTemporaryFiles() {
+  for (const [temporaryPath, descriptor] of activeTemporaryFiles) {
+    if (descriptor !== undefined) {
+      activeTemporaryFiles.set(temporaryPath, undefined);
+      try {
+        fs.closeSync(descriptor);
+      } catch {
+        // Process-exit cleanup is best effort; still try to remove the path.
+      }
+    }
+
+    try {
+      fs.unlinkSync(temporaryPath);
+      activeTemporaryFiles.delete(temporaryPath);
+    } catch (error) {
+      if (ignoredCleanupErrors.has(error?.code)) {
+        activeTemporaryFiles.delete(temporaryPath);
+      }
+    }
+  }
+}
+
+/**
+ * Remove this module's process handlers before re-raising a signal.
+ *
+ * @returns {void}
+ */
+function removeTemporaryCleanupHandlers() {
+  if (!temporaryCleanupHandlersInstalled) return;
+  process.removeListener('exit', onTemporaryCleanupExit);
+  process.removeListener('SIGINT', onTemporaryCleanupSigint);
+  process.removeListener('SIGTERM', onTemporaryCleanupSigterm);
+  temporaryCleanupHandlersInstalled = false;
+}
+
+/**
+ * Cancel the event-loop turn that keeps queued signals deliverable.
+ *
+ * @returns {void}
+ */
+function clearTemporaryCleanupTurn() {
+  if (temporaryCleanupTurn === undefined) return;
+  cancelImmediate(temporaryCleanupTurn);
+  temporaryCleanupTurn = undefined;
+}
+
+/**
+ * Clean active files and preserve the operating system's signal semantics.
+ *
+ * @param {'SIGINT'|'SIGTERM'} signal - Signal to re-raise.
+ * @returns {void}
+ */
+function forwardTemporaryCleanupSignal(signal, ownHandler) {
+  const hasOtherSignalHandler = process
+    .listeners(signal)
+    .some((listener) => listener !== ownHandler);
+  clearTemporaryCleanupTurn();
+  cleanupActiveTemporaryFiles();
+  removeTemporaryCleanupHandlers();
+  if (!hasOtherSignalHandler) process.kill(process.pid, signal);
+}
+
+function onTemporaryCleanupExit() {
+  clearTemporaryCleanupTurn();
+  cleanupActiveTemporaryFiles();
+  removeTemporaryCleanupHandlers();
+}
+
+function onTemporaryCleanupSigint() {
+  forwardTemporaryCleanupSignal('SIGINT', onTemporaryCleanupSigint);
+}
+
+function onTemporaryCleanupSigterm() {
+  forwardTemporaryCleanupSignal('SIGTERM', onTemporaryCleanupSigterm);
+}
+
+/**
+ * Install one handler set through the next event-loop turn.
+ *
+ * Handlers must survive the synchronous applyAuditFixes() call. Node queues a
+ * signal received during synchronous I/O until JavaScript yields; removing the
+ * listener at function return would swallow that queued signal. A referenced
+ * immediate also prevents a short-lived CLI from exiting before delivery.
+ *
+ * @returns {void}
+ */
+function installTemporaryCleanupHandlers() {
+  if (!temporaryCleanupHandlersInstalled) {
+    process.once('exit', onTemporaryCleanupExit);
+    process.once('SIGINT', onTemporaryCleanupSigint);
+    process.once('SIGTERM', onTemporaryCleanupSigterm);
+    temporaryCleanupHandlersInstalled = true;
+  }
+
+  if (temporaryCleanupTurn === undefined) {
+    temporaryCleanupTurn = scheduleImmediate(() => {
+      temporaryCleanupTurn = undefined;
+      cleanupActiveTemporaryFiles();
+      if (!activeTemporaryFiles.size) removeTemporaryCleanupHandlers();
+    });
+  }
+}
+
+/**
+ * Determine whether a PID from a temp filename can still own that file.
+ *
+ * @param {number} pid - Process identifier.
+ * @returns {boolean} TRUE unless the operating system confirms it is gone.
+ */
+function isProcessAlive(pid) {
+  if (pid === process.pid) return true;
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== 'ESRCH';
+  }
+}
+
+/**
+ * Remove abandoned audit-fix temp files from canonical source roots.
+ *
+ * Only regular files with the exact generated UUID/PID shape are eligible.
+ * Live or indeterminate PIDs are retained so concurrent fix runs cannot delete
+ * one another's in-progress writes.
+ *
+ * @param {object} scope - Canonical source-write scope.
+ * @returns {void}
+ */
+function sweepStaleTemporaryFiles(scope) {
+  for (const root of scope.realRoots) {
+    let candidates;
+    try {
+      candidates = globSync(temporaryFileGlob, {
+        cwd: root,
+        absolute: true,
+        dot: true,
+        follow: false,
+        nodir: true,
+        ignore: DEFAULT_IGNORES,
+      });
+    } catch {
+      continue;
+    }
+
+    for (const candidate of candidates) {
+      const match = basename(candidate).match(temporaryFilePattern);
+      if (!match || isIgnored(candidate, scope.realProject)) continue;
+
+      const ownerPid = Number(match[1]);
+      if (!Number.isSafeInteger(ownerPid) || isProcessAlive(ownerPid)) {
+        continue;
+      }
+
+      try {
+        const candidateStat = fs.lstatSync(candidate);
+        const realCandidate = fs.realpathSync(candidate);
+        const realCandidateStat = fs.lstatSync(realCandidate);
+
+        if (
+          !candidateStat.isFile() ||
+          !isContained(realCandidate, root) ||
+          isIgnored(realCandidate, scope.realProject) ||
+          candidateStat.dev !== realCandidateStat.dev ||
+          candidateStat.ino !== realCandidateStat.ino
+        ) {
+          continue;
+        }
+
+        fs.unlinkSync(realCandidate);
+      } catch {
+        // Cleanup is best effort. A later --fix run can retry a stale file.
+      }
+    }
+  }
+}
+
+/**
  * Replace a file atomically through an exclusive temp file beside it.
  *
  * @param {string} filePath - Canonical target path.
@@ -338,47 +560,58 @@ function attachCleanupError(error, cleanupError, detail) {
  */
 function atomicReplace(filePath, contents, validate) {
   validate();
-  const temporaryPath = join(
-    dirname(filePath),
-    `.${basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
-  );
+  const temporaryPath = createTemporaryPath(filePath);
   const targetStat = fs.statSync(filePath);
   const mode = targetStat.mode & 0o7777;
   let descriptor;
   let temporaryCreated = false;
 
   try {
+    installTemporaryCleanupHandlers();
     descriptor = fs.openSync(temporaryPath, 'wx', mode);
     temporaryCreated = true;
+    activeTemporaryFiles.set(temporaryPath, descriptor);
     fs.writeFileSync(descriptor, contents);
     preserveOwnership(descriptor, targetStat);
     // chown may clear setuid/setgid bits, so mode restoration must come last.
     fs.fchmodSync(descriptor, mode);
-    fs.closeSync(descriptor);
+    const descriptorToClose = descriptor;
     descriptor = undefined;
+    activeTemporaryFiles.set(temporaryPath, undefined);
+    fs.closeSync(descriptorToClose);
     validate(targetStat);
     fs.renameSync(temporaryPath, filePath);
+    activeTemporaryFiles.delete(temporaryPath);
   } catch (error) {
     if (descriptor !== undefined) {
-      try {
-        fs.closeSync(descriptor);
-      } catch (cleanupError) {
-        attachCleanupError(
-          error,
-          cleanupError,
-          'unable to close temporary file',
-        );
-      }
+      const descriptorToClose = descriptor;
       descriptor = undefined;
+
+      if (activeTemporaryFiles.has(temporaryPath)) {
+        activeTemporaryFiles.set(temporaryPath, undefined);
+        try {
+          fs.closeSync(descriptorToClose);
+        } catch (cleanupError) {
+          attachCleanupError(
+            error,
+            cleanupError,
+            'unable to close temporary file',
+          );
+        }
+      }
     }
 
     if (temporaryCreated) {
       try {
         fs.unlinkSync(temporaryPath);
+        activeTemporaryFiles.delete(temporaryPath);
       } catch (cleanupError) {
         // Preserve the failure that prevented the replacement. A missing temp
-        // file simply means a watcher removed it before cleanup.
-        if (cleanupError?.code !== 'ENOENT') {
+        // file simply means a watcher removed it before cleanup. An overlong
+        // path was never materialized, so it is not a cleanup failure either.
+        if (ignoredCleanupErrors.has(cleanupError?.code)) {
+          activeTemporaryFiles.delete(temporaryPath);
+        } else {
           attachCleanupError(
             error,
             cleanupError,
@@ -402,6 +635,21 @@ function atomicReplace(filePath, contents, validate) {
 function skipFile(skipped, findings, reason) {
   for (const finding of findings) {
     skipped.push({ finding, reason });
+  }
+}
+
+/**
+ * Skip only findings not already rejected while preparing the same file.
+ *
+ * @param {object[]} skipped - Accumulated skipped records.
+ * @param {object[]} findings - Findings targeting the failed file.
+ * @param {string} reason - Human-readable reason.
+ * @param {Set<object>} recorded - Findings already rejected for this file.
+ * @returns {void}
+ */
+function skipUnrecordedFile(skipped, findings, reason, recorded) {
+  for (const finding of findings) {
+    if (!recorded.has(finding)) skipped.push({ finding, reason });
   }
 }
 
@@ -468,25 +716,38 @@ export function applyAuditFixes(
   const skipped = [];
   const fixes = { applied, skipped, dryRun };
   const fixesByFile = groupFixesByFile(findings);
-  if (!fixesByFile.size) return fixes;
+  if (!fixesByFile.size && dryRun) return fixes;
 
   let wrote = false;
-  let activeFilePath = resolve(projectDir);
+  let scope;
 
   try {
-    const scope = createFixScope(projectDir, sourceRoots);
+    scope = createFixScope(projectDir, sourceRoots);
+  } catch (error) {
+    throw createFixError(error, resolve(projectDir), fixes);
+  }
+
+  try {
+    if (!dryRun) sweepStaleTemporaryFiles(scope);
 
     for (const [filePath, fileFindings] of fixesByFile) {
-      activeFilePath = filePath;
-      const target = auditFixTargetStatus(filePath, scope);
+      let target;
+      let bytes;
+
+      try {
+        target = auditFixTargetStatus(filePath, scope);
+        if (target.writable) bytes = fs.readFileSync(target.realTarget);
+      } catch (error) {
+        const detail = error?.message || error?.code || error;
+        skipFile(skipped, fileFindings, `unable to rewrite file: ${detail}`);
+        continue;
+      }
 
       if (!target.writable) {
         skipFile(skipped, fileFindings, target.reason);
         continue;
       }
       const { realTarget } = target;
-
-      const bytes = fs.readFileSync(realTarget);
       const source = bytes.toString('utf8');
       if (!Buffer.from(source, 'utf8').equals(bytes)) {
         skipFile(
@@ -501,6 +762,7 @@ export function applyAuditFixes(
         (a, b) => b.fix.start - a.fix.start,
       );
       const pendingApplied = [];
+      const rejected = new Set();
       let next = source;
       let lastStart = Number.POSITIVE_INFINITY;
 
@@ -509,10 +771,12 @@ export function applyAuditFixes(
 
         if (end > lastStart) {
           skipped.push({ finding, reason: 'overlaps another fix' });
+          rejected.add(finding);
           continue;
         }
         if (next.slice(start, end) !== original) {
           skipped.push({ finding, reason: 'source no longer matches' });
+          rejected.add(finding);
           continue;
         }
 
@@ -530,13 +794,26 @@ export function applyAuditFixes(
 
       const validate = (expectedStat) =>
         validateTarget(filePath, realTarget, scope, bytes, expectedStat);
-      atomicReplace(realTarget, Buffer.from(next, 'utf8'), validate);
+      const replacementBytes = Buffer.from(next, 'utf8');
+
+      try {
+        atomicReplace(realTarget, replacementBytes, validate);
+      } catch (error) {
+        const detail = error?.message || error?.code || error;
+        skipUnrecordedFile(
+          skipped,
+          fileFindings,
+          `unable to rewrite file: ${detail}`,
+          rejected,
+        );
+        continue;
+      }
+
       wrote = true;
       applied.push(...pendingApplied);
     }
-  } catch (error) {
-    throw createFixError(error, activeFilePath, fixes);
   } finally {
+    cleanupActiveTemporaryFiles();
     // The audit reads through a process-local cache. This must run even when a
     // later file fails, or a follow-up scan will hide the writes that landed.
     if (wrote) resetFileReadCache();

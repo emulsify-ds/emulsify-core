@@ -20,6 +20,7 @@ import {
 // The lint rule bans double-quoted strings, and these fixtures need a literal
 // single quote to exercise CSS quote handling.
 const QUOTE = String.fromCharCode(39);
+const posixIt = process.platform === 'win32' ? it.skip : it;
 
 describe('auditCssAssetReferences', () => {
   let projectDir;
@@ -420,28 +421,20 @@ describe('auditCssAssetReferences', () => {
     );
   });
 
-  it.each([
-    [
-      'stylesheet is not writable',
-      (styleFile) => fs.realpathSync(styleFile),
-      fs.constants.W_OK,
-    ],
-    [
-      'stylesheet directory is not writable',
-      (styleFile) => fs.realpathSync(dirname(styleFile)),
-      fs.constants.W_OK | fs.constants.X_OK,
-    ],
-  ])('does not offer --fix when the %s', (_label, blockedPath, blockedMode) => {
+  it('does not offer --fix when the stylesheet directory is not writable', () => {
     writeFile(projectDir, 'assets/spinner.gif', 'ROOT');
     const styleFile = writeFile(
       projectDir,
       'src/components/card/card.scss',
       '.card { background-image: url("assets/spinner.gif"); }',
     );
-    const deniedPath = blockedPath(styleFile);
+    const deniedPath = fs.realpathSync(dirname(styleFile));
     const originalAccess = fs.accessSync;
     jest.spyOn(fs, 'accessSync').mockImplementation((filePath, mode) => {
-      if (filePath === deniedPath && mode === blockedMode) {
+      if (
+        filePath === deniedPath &&
+        mode === (fs.constants.W_OK | fs.constants.X_OK)
+      ) {
         throw Object.assign(new Error('simulated EACCES'), {
           code: 'EACCES',
         });
@@ -461,6 +454,26 @@ describe('auditCssAssetReferences', () => {
     expect(finding.fix).toBeUndefined();
     expect(finding.details.join('\n')).not.toContain('emulsify-audit --fix');
   });
+
+  posixIt(
+    'offers --fix for a read-only stylesheet in a writable directory',
+    () => {
+      writeFile(projectDir, 'assets/spinner.gif', 'ROOT');
+      const styleFile = writeFile(
+        projectDir,
+        'src/components/card/card.scss',
+        '.card { background-image: url("assets/spinner.gif"); }',
+      );
+      fs.chmodSync(styleFile, 0o444);
+
+      const [finding] = audit(styleFile);
+
+      expect(finding.fix).toEqual(
+        expect.objectContaining({ replacement: '/assets/spinner.gif' }),
+      );
+      expect(finding.details.join('\n')).toContain('emulsify-audit --fix');
+    },
+  );
 
   it('offers the canonical rewrite for a wrong-depth relative URL', () => {
     // The reported bug: this depth is correct from mirrored Drupal SDC output
