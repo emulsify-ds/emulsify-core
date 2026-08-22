@@ -4,19 +4,27 @@ Emulsify Core favors predictable output and simple project configuration. The de
 
 ## Development Sourcemaps
 
-`vite build --watch` emits JavaScript sourcemaps for browser debugging. One-shot
-production builds omit them:
+`vite build --watch` leaves JavaScript and CSS readable and emits external maps
+for JavaScript and direct stylesheet entries. One-shot production builds minify
+both and omit maps:
 
 ```js
 build: {
   sourcemap: watching,
+  minify: !watching,
+  cssMinify: !watching,
 }
 ```
 
-CSS dev sourcemaps are also enabled where Vite itself compiles the stylesheet.
-Extracted CSS from `vite build` has no source map in this pipeline. Development
-maps remain on disk for devtools but are excluded from reporter counts, sizes,
-largest-file summaries, verbose listings, and rebuild details.
+Vite normally discards the Sass/PostCSS map when a build extracts CSS as a
+Rollup asset. Core retains the combined map for each direct stylesheet entry,
+attaches it to the finalized CSS, and rebases source paths when Drupal moves a
+component map from `dist/components/` to root `components/`. Final asset URL
+rewrites preserve line mappings; a length-changing URL can shift columns inside
+that value without changing the selector or declaration's source line.
+
+Development maps remain on disk for devtools but are excluded from reporter
+counts, sizes, largest-file summaries, verbose listings, and rebuild details.
 
 ## Storybook Twig Imports
 

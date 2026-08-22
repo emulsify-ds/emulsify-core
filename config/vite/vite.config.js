@@ -13,19 +13,13 @@
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *
  * Notes:
- * - JS sourcemaps are emitted only by `vite build --watch`; one-shot production
- *   builds do not ship them. Extracted CSS gets no map from `vite build`:
- *   `vite:css-post` emits CSS through
- *   `this.emitFile({ type: 'asset' })`, Rollup/Rolldown assets carry no map,
- *   and `finalizeCss()` -> `minifyCSS()` returns code only. To trace a rule
- *   back to its `.scss` partial, let Vite compile the SCSS in Storybook: set
- *   `parameters.emulsify.loadAllCSS = false` in
- *   `config/emulsify-core/storybook/preview.js` and import the SCSS entry
- *   there, so `css.devSourcemap` can chain the map to source. Loading the
- *   compiled CSS instead yields an identity map whose only source is the
- *   compiled `.css` file.
- * - CSS is left unminified during `vite build --watch` so the develop loop
- *   stays readable; one-shot builds keep minification.
+ * - `vite build --watch` emits external JS and CSS maps while one-shot
+ *   production builds ship neither. Vite discards maps when it extracts CSS as
+ *   an asset, so Core captures the Sass/PostCSS map before URL rewriting and
+ *   attaches it to the finalized stylesheet. URL rewrites preserve source
+ *   lines, though a changed URL length can shift columns inside that value.
+ * - JS and CSS stay unminified during `vite build --watch` so generated output
+ *   remains readable. One-shot builds keep Vite's production minification.
  * - CSS assets keep their path and drop the internal `__style` suffix if present.
  */
 
@@ -63,6 +57,7 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
    * @property {boolean} [assetRebase] - Whether unresolved CSS asset URLs are repaired.
    * @property {boolean} [selfContainedOutput] - Whether project assets remain in the output.
    * @property {object} [platformAdapter] - Active platform behavior adapter.
+   * @property {boolean} [developmentBuild] - Whether this is the long-running develop build.
    */
 
   /** @type {EmulsifyEnv} */
@@ -81,7 +76,12 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
   // unless there is an asset problem or a collected Sass deprecation tally —
   // a clean project's output is unchanged.
   const diagnostics = createDiagnosticsCollector();
-  const envWithSourceFileIndex = { ...env, sourceFileIndex, diagnostics };
+  const envWithSourceFileIndex = {
+    ...env,
+    sourceFileIndex,
+    diagnostics,
+    developmentBuild: watching,
+  };
 
   // `vite build` and `vite build --watch` both resolve `command: 'build'`.
   // Storybook pins `serve` for both of its commands, so its Vite adapter
@@ -182,10 +182,9 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
     // Keep React-based story helpers on the consumer project's React singleton.
     resolve: mergeReactSingletonResolve(),
 
-    // Generate CSS sourcemaps in dev; JS sourcemaps are set in `build.sourcemap`.
-    // These map only what Vite itself compiles. A preview that imports
-    // already-compiled CSS gets an identity map pointing at that `.css` file,
-    // so import SCSS entries when styles need to resolve to their partials.
+    // Ask Sass/PostCSS for maps. Vite uses them directly in its dev server;
+    // Core's development map plugins retain them for extracted watch-build CSS.
+    // JS sourcemaps are controlled by `build.sourcemap` below.
     css: {
       devSourcemap: true,
 
@@ -209,16 +208,19 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
       // All outputs are written into ./dist/
       outDir: 'dist/',
 
-      // Keep JS sourcemaps available to the develop watcher without shipping
-      // them in one-shot production builds. Extracted CSS is not covered; see
-      // the file header.
+      // Keep source maps available to the develop watcher without shipping
+      // them in one-shot production builds. Core bridges the extracted-CSS gap
+      // left by Vite; see the file header.
       sourcemap: watching,
 
-      // Vite cannot map extracted CSS, so during `vite build --watch` the
-      // readable stylesheet is the debugging aid: keep it unminified so
-      // devtools shows one declaration per line instead of a single long line.
-      // One-shot `vite build`, `storybook build`, and the release fixture
-      // verifications still minify, so nothing a platform ships changes.
+      // Readable generated JavaScript plus its source map makes the watch
+      // output useful on both sides of devtools. Production retains Vite's
+      // default minification behavior through the explicit TRUE value.
+      minify: !watching,
+
+      // Keep development styles readable as well as mapped. One-shot
+      // `vite build`, `storybook build`, and release fixtures still minify, so
+      // nothing a platform ships changes.
       cssMinify: !watching,
 
       rollupOptions: {
@@ -276,10 +278,32 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
 
   // Let project extensions patch the final Vite config.
   /** @type {import('vite').UserConfig} */
+  const extensionPatch =
+    typeof extendConfig === 'function' ? extendConfig(base, { env }) || {} : {};
   const patched =
     typeof extendConfig === 'function'
-      ? mergeConfig(base, extendConfig(base, { env }) || {})
+      ? mergeConfig(base, extensionPatch)
       : base;
+
+  // A project extension can enable watch mode without a CLI flag. Apply the
+  // same development defaults in that case while preserving any explicit
+  // sourcemap or minification choices in the extension itself.
+  if (!watching && patched.build?.watch) {
+    const extensionBuild = extensionPatch.build || {};
+    return {
+      ...patched,
+      build: {
+        ...patched.build,
+        ...(!Object.hasOwn(extensionBuild, 'sourcemap')
+          ? { sourcemap: true }
+          : {}),
+        ...(!Object.hasOwn(extensionBuild, 'minify') ? { minify: false } : {}),
+        ...(!Object.hasOwn(extensionBuild, 'cssMinify')
+          ? { cssMinify: false }
+          : {}),
+      },
+    };
+  }
 
   return patched;
 }

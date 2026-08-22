@@ -262,9 +262,9 @@ export function cssAssetRebasePlugin({
 
       if (!changed) return null;
 
-      // Extracted CSS carries no sourcemap in this pipeline (see the header of
-      // css-asset-relativizer.js), and this is the map Vite itself returns when
-      // CSS sourcemaps are off. Returning it keeps Rollup from warning.
+      // Core has already captured Vite's combined Sass/PostCSS map for its
+      // development emitter. This empty transform map is what Vite itself uses
+      // when CSS maps are off and keeps Rollup from warning about this rewrite.
       return { code: next, map: { mappings: '' } };
     },
 

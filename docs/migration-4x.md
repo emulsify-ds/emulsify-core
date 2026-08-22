@@ -27,7 +27,7 @@ compatibility impact.
 
 ## Known Limitations
 
-Review the [Known Limitations](../README.md#known-limitations) before upgrading. The key points are that `none`, `wordpress`, and `drupal` adapters are implemented today, the WordPress adapter is intentionally neutral and does not emulate WordPress or Timber PHP runtime behavior, large Twig libraries should account for eager Storybook Twig imports, Webpack customizations need manual Vite migration, and Drupal SDC mirroring applies only when the Drupal adapter and SDC settings are enabled. Development watch builds retain JavaScript sourcemaps, while production builds omit them.
+Review the [Known Limitations](../README.md#known-limitations) before upgrading. The key points are that `none`, `wordpress`, and `drupal` adapters are implemented today, the WordPress adapter is intentionally neutral and does not emulate WordPress or Timber PHP runtime behavior, large Twig libraries should account for eager Storybook Twig imports, Webpack customizations need manual Vite migration, and Drupal SDC mirroring applies only when the Drupal adapter and SDC settings are enabled. Development watch builds retain readable JavaScript and direct-entry CSS with source maps, while production builds minify both and omit maps.
 
 ## What Changed
 

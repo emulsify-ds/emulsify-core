@@ -13,7 +13,7 @@ import {
   utimesSync,
   writeFileSync,
 } from 'fs';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import { mirrorComponentsToRoot } from './mirror-components.js';
 import { makeTempProject } from '../../test-utils/plugins.js';
@@ -161,6 +161,81 @@ describe('component mirror plugin', () => {
     expect(secondMirror.writeBundle()).toBeUndefined();
     expectMirroredFixture('second build');
     expect(readMirrorState(outDir).completedAt).toEqual(expect.any(String));
+  });
+
+  it('rebases source paths when development maps move out of dist', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    const distComponentDir = join(outDir, 'components/card');
+    const rootComponentDir = join(projectDir, 'components/card');
+    const sourceDir = join(projectDir, 'src/components/card');
+    const sourceFiles = {
+      js: join(sourceDir, 'card.js'),
+      scss: join(sourceDir, 'card.scss'),
+      partial: join(projectDir, 'src/components/shared/_tokens.scss'),
+    };
+    const distMaps = {
+      js: join(distComponentDir, 'card.js.map'),
+      css: join(distComponentDir, 'card.css.map'),
+    };
+    const rootMaps = {
+      js: join(rootComponentDir, 'card.js.map'),
+      css: join(rootComponentDir, 'card.css.map'),
+    };
+    const mirror = mirrorComponentsToRoot({ enabled: true, projectDir });
+
+    mkdirSync(distComponentDir, { recursive: true });
+    mkdirSync(sourceDir, { recursive: true });
+    mkdirSync(join(sourceFiles.partial, '..'), { recursive: true });
+    writeFileSync(sourceFiles.js, 'export const card = true;\n');
+    writeFileSync(sourceFiles.scss, '.card { color: $ink; }\n');
+    writeFileSync(sourceFiles.partial, '$ink: rebeccapurple;\n');
+    writeFileSync(
+      distMaps.js,
+      JSON.stringify({
+        version: 3,
+        sources: ['../../../src/components/card/card.js'],
+        sourcesContent: ['export const card = true;\n'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+    );
+    writeFileSync(
+      distMaps.css,
+      JSON.stringify({
+        version: 3,
+        sources: [
+          '../../../src/components/card/card.scss',
+          '../../../src/components/shared/_tokens.scss',
+        ],
+        sourcesContent: ['.card { color: $ink; }\n', '$ink: rebeccapurple;\n'],
+        names: [],
+        mappings: 'AAAA;ACAA',
+      }),
+    );
+
+    mirror.configResolved({ build: { outDir, watch: {} } });
+    expect(mirror.writeBundle()).toBeUndefined();
+
+    expect(existsSync(distMaps.js)).toBe(false);
+    expect(existsSync(distMaps.css)).toBe(false);
+    const jsMap = JSON.parse(readFileSync(rootMaps.js, 'utf8'));
+    const cssMap = JSON.parse(readFileSync(rootMaps.css, 'utf8'));
+    expect(jsMap.sources).toEqual(['../../src/components/card/card.js']);
+    expect(cssMap.sources).toEqual([
+      '../../src/components/card/card.scss',
+      '../../src/components/shared/_tokens.scss',
+    ]);
+    expect(resolve(dirname(rootMaps.js), jsMap.sources[0])).toBe(
+      sourceFiles.js,
+    );
+    expect(
+      cssMap.sources.map((source) => resolve(dirname(rootMaps.css), source)),
+    ).toEqual([sourceFiles.scss, sourceFiles.partial]);
+    expect(cssMap.sourcesContent).toEqual([
+      '.card { color: $ink; }\n',
+      '$ink: rebeccapurple;\n',
+    ]);
   });
 
   it('keeps watch maps but removes stale mirrored maps for production', () => {

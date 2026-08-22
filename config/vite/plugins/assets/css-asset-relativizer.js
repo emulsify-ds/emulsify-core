@@ -24,12 +24,11 @@
  * only after this plugin actually rewrites a CSS URL to its source location;
  * copies referenced by JavaScript or other emitted files remain available.
  *
- * Sourcemap warning: this rewrites emitted CSS in `generateBundle` without
- * adjusting positions, and every replacement changes the length of the line it
- * sits on. Vite does not emit sourcemaps for extracted CSS today, so there is
- * nothing to invalidate. If CSS sourcemaps are ever added, this plugin has to
- * shift mappings as it rewrites (for example via MagicString) or each mapping
- * after the first rewritten `url()` will silently resolve to the wrong column.
+ * Development-map caveat: Core captures the Sass/PostCSS map before this
+ * plugin rewrites finalized asset URLs. Replacements preserve line structure,
+ * so selectors and declarations still resolve to their authored source lines.
+ * A length-changing replacement can shift later mapping columns on that same
+ * generated line, including positions inside the rewritten `url()` value.
  */
 
 import { isAbsolute, posix as pathPosix, relative, resolve } from 'path';
@@ -255,8 +254,8 @@ export function cssAssetUrlRelativizer({
 
         const fromDir = stylesheetDirectory(fileName);
 
-        // Length-changing rewrite: read the sourcemap warning in the file
-        // header before pairing this plugin with CSS sourcemaps.
+        // Length-changing rewrite: read the development-map caveat in the file
+        // header before changing how or where this transform runs.
         chunk.source = replaceStylesheetUrlTokens(
           chunk.source,
           ({ match, quote, value }) => {

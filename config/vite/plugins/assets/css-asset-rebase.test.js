@@ -566,8 +566,8 @@ describe('cssAssetRebasePlugin', () => {
     );
 
     expect(result.code).toBe('.a{background:url(/assets/images/x.svg)}');
-    // Extracted CSS gets no sourcemap in this pipeline; the empty map is what
-    // Vite itself returns and keeps Rollup from warning.
+    // The development map bridge captures Vite's Sass map before this rewrite;
+    // the transform itself returns Vite's empty map to avoid a Rollup warning.
     expect(result.map).toEqual({ mappings: '' });
     // The relativizer needs the source location, not the published one, so a
     // configured assets.roots directory can be reached where it actually is.

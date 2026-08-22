@@ -833,6 +833,12 @@ describe('watch invocation detection', () => {
     expect(isWatchInvocation(['node', 'vite', 'build', '--watch=true'])).toBe(
       true,
     );
+    expect(isWatchInvocation(['node', 'vite', 'build', '--watch=false'])).toBe(
+      false,
+    );
+    expect(isWatchInvocation(['node', 'vite', 'build', '-w=false'])).toBe(
+      false,
+    );
   });
 
   it('rejects one-shot builds and malformed argv', () => {

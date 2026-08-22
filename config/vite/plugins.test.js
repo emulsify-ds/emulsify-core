@@ -60,7 +60,9 @@ describe('Vite plugin public barrel', () => {
         'sass-glob-import',
         'emulsify-yaml',
         'emulsify-require-context-compat',
+        'emulsify-development-css-map-capture',
         'emulsify-css-asset-url-relativizer',
+        'emulsify-development-css-map-emit',
         'emulsify-stable-watch-output',
         'emulsify-copy-twig-files',
         'emulsify-copy-all-src-assets',
@@ -68,6 +70,15 @@ describe('Vite plugin public barrel', () => {
       ]),
     );
     expect(names).not.toContain('@vituum/vite-plugin-core:bundle');
+    expect(names.indexOf('emulsify-development-css-map-capture')).toBeLessThan(
+      names.indexOf('emulsify-css-asset-rebase'),
+    );
+    expect(names.indexOf('emulsify-css-asset-url-relativizer')).toBeLessThan(
+      names.indexOf('emulsify-development-css-map-emit'),
+    );
+    expect(names.indexOf('emulsify-development-css-map-emit')).toBeLessThan(
+      names.indexOf('emulsify-stable-watch-output'),
+    );
   });
 
   it('omits the develop reporter unless a diagnostics collector is supplied', () => {

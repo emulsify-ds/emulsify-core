@@ -102,6 +102,7 @@ const releaseFixtures = [
     reject: [
       'components/card/carddoc.js',
       'components/card/carddocs.js',
+      'components/card/card.css.map',
       'components/card/card.js.map',
       'dist/components/card/card.js',
       'dist/components/card/card.css',
@@ -130,7 +131,7 @@ const releaseFixtures = [
       rejectWrongAssetUrls('components/card/card.css'),
       {
         pattern: 'components/card/card.css',
-        strings: ['../../assets/images/'],
+        strings: ['../../assets/images/', 'sourceMappingURL='],
       },
     ],
   },
@@ -154,6 +155,7 @@ const releaseFixtures = [
     ],
     reject: [
       'components/card/card.js',
+      'dist/components/card/css/card.css.map',
       'dist/components/card/js/card.js.map',
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
@@ -511,9 +513,10 @@ function copyFixture(fixture) {
 }
 
 function setupStaleProductionSourceMapFixture(projectDir) {
-  const staleSourceMap = join(projectDir, 'components/card/card.js.map');
-  mkdirSync(dirname(staleSourceMap), { recursive: true });
-  writeFileSync(staleSourceMap, '{"version":3}\n');
+  const componentDir = join(projectDir, 'components/card');
+  mkdirSync(componentDir, { recursive: true });
+  writeFileSync(join(componentDir, 'card.js.map'), '{"version":3}\n');
+  writeFileSync(join(componentDir, 'card.css.map'), '{"version":3}\n');
 }
 
 function setupLargeTwigStorybookFixture(projectDir) {

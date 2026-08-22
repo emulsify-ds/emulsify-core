@@ -14,6 +14,7 @@ import { copyAllSrcAssetsPlugin } from './assets/copy-src-assets.js';
 import { copyTwigFilesPlugin } from './assets/copy-twig-files.js';
 import { cssAssetRebasePlugin } from './assets/css-asset-rebase.js';
 import { cssAssetUrlRelativizer } from './assets/css-asset-relativizer.js';
+import { developmentCssSourceMapPlugins } from './assets/development-source-maps.js';
 import { mirrorComponentsToRoot } from './assets/mirror-components.js';
 import { createSourceFileIndex } from './assets/source-file-index.js';
 import { stableWatchOutputPlugin } from './assets/stable-watch-output.js';
@@ -39,6 +40,7 @@ import { yamlModulePlugin } from './yaml-module.js';
  *   srcDir: string,
  *   srcExists: boolean,
  *   structureOverrides?: boolean,
+ *   developmentBuild?: boolean,
  *   diagnostics?: object
  * }} env - Project environment. When `diagnostics` is present the reporter is
  *   appended for watch summaries and actionable one-shot diagnostics.
@@ -82,6 +84,10 @@ export function makePlugins(env) {
   // is reintroduced later.
   /** @type {Map<string, {kind: 'written'|'removed', bytes?: number}>|undefined} */
   const copiedOutputChanges = env.diagnostics ? new Map() : undefined;
+  const developmentCssMaps = developmentCssSourceMapPlugins({
+    projectDir,
+    developmentBuild: env.developmentBuild,
+  });
 
   const basePlugins = [
     virtualTwigExtensionInstallersPlugin(envWithStructure),
@@ -113,6 +119,10 @@ export function makePlugins(env) {
     // Legacy Storybook stories may still enumerate assets with require.context.
     requireContextCompatPlugin(),
 
+    // Capture Vite's combined Sass/PostCSS map before Core changes asset URLs.
+    // Vite's extracted-CSS build path discards this map unless Core retains it.
+    developmentCssMaps.capture,
+
     // Repair CSS asset URLs Vite could not resolve. Ordering against the
     // relativizer below is load-bearing: this normalizes URLs to `/assets/...`
     // and either emits an output asset or records its source-tree location;
@@ -132,6 +142,10 @@ export function makePlugins(env) {
       publishedAssetSources,
       removablePublishedAssets,
     }),
+
+    // Pair each direct stylesheet entry with its finalized watch-build asset.
+    // This must run after URL rewriting and before stable-output comparison.
+    developmentCssMaps.emit,
 
     // Last of the CSS chain: once the text is final, an unchanged stylesheet is
     // dropped rather than rewritten, so a watch rebuild does not send HMR
@@ -166,6 +180,7 @@ export function makePlugins(env) {
     mirrorComponentsToRoot({
       enabled: structure.mirrorComponentOutput,
       projectDir,
+      developmentBuild: env.developmentBuild,
       diagnostics: env.diagnostics,
     }),
 

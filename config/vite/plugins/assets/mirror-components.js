@@ -9,6 +9,7 @@ import {
   copyFileSync,
   lstatSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmdirSync,
@@ -19,8 +20,11 @@ import { basename, dirname, join, resolve } from 'path';
 
 import { safeExists, safeReadJson } from '../../utils/fs-safe.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
-import { isGeneratedSourceMap } from '../../utils/source-maps.js';
-import { filesHaveSameBytes } from './output-freshness.js';
+import {
+  isGeneratedSourceMap,
+  rebaseSourceMapForMove,
+} from '../../utils/source-maps.js';
+import { bytesAlreadyOnDisk, filesHaveSameBytes } from './output-freshness.js';
 import { walkFiles } from './source-file-index.js';
 
 const MIRROR_STATE_FILE = '.emulsify-mirror-state.json';
@@ -152,6 +156,40 @@ const moveFileIntoPlace = (sourceFile, destinationFile) => {
 };
 
 /**
+ * Write transformed output bytes atomically, then remove the transient source.
+ *
+ * Source maps need their relative paths changed before mirroring, so they
+ * cannot use the rename-only path above. The destination comparison still
+ * preserves stable mtimes when the rebased bytes match the previous cycle.
+ *
+ * @param {string} sourceFile - Built file under dist.
+ * @param {string} destinationFile - Mirrored project-root destination.
+ * @param {string} contents - Final destination contents.
+ */
+const writeContentsIntoPlace = (sourceFile, destinationFile, contents) => {
+  mkdirSync(dirname(destinationFile), { recursive: true });
+
+  if (bytesAlreadyOnDisk(destinationFile, contents)) {
+    removeSourceFile(sourceFile);
+    return;
+  }
+
+  const tempDestination = createTempDestination(destinationFile);
+  try {
+    writeFileSync(tempDestination, contents);
+    renameSync(tempDestination, destinationFile);
+    removeSourceFile(sourceFile);
+  } catch (error) {
+    try {
+      unlinkSync(tempDestination);
+    } catch {
+      /* noop */
+    }
+    throw error;
+  }
+};
+
+/**
  * Safely read the previous mirror state marker.
  *
  * @param {string} markerFile - Marker file path.
@@ -190,19 +228,24 @@ const warnOnInterruptedMirror = (markerFile) => {
 /**
  * Mirror built component files to the project root `./components/` directory.
  *
- * @param {{ enabled: boolean, projectDir: string, diagnostics?: object }} opts - Plugin options.
+ * @param {{ enabled: boolean, projectDir: string, developmentBuild?: boolean, diagnostics?: object }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Drupal mirror plugin.
  */
-export function mirrorComponentsToRoot({ enabled, projectDir, diagnostics }) {
+export function mirrorComponentsToRoot({
+  enabled,
+  projectDir,
+  developmentBuild = false,
+  diagnostics,
+}) {
   let outDir = 'dist';
-  let watching = false;
+  let watching = Boolean(developmentBuild);
   return {
     name: 'emulsify-mirror-components-to-root',
     apply: 'build',
     enforce: 'post',
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
-      watching = Boolean(cfg.build?.watch);
+      watching = Boolean(developmentBuild || cfg.build?.watch);
     },
     writeBundle() {
       if (!enabled) return;
@@ -226,7 +269,16 @@ export function mirrorComponentsToRoot({ enabled, projectDir, diagnostics }) {
           const destFile = join(projectDir, relFromOutDir);
 
           try {
-            moveFileIntoPlace(srcFile, destFile);
+            if (isGeneratedSourceMap(srcFile)) {
+              const sourceMap = readFileSync(srcFile, 'utf8');
+              writeContentsIntoPlace(
+                srcFile,
+                destFile,
+                rebaseSourceMapForMove(sourceMap, srcFile, destFile),
+              );
+            } else {
+              moveFileIntoPlace(srcFile, destFile);
+            }
             pruneEmptyDirsUpTo(dirname(srcFile), distComponents);
           } catch (e) {
             const message = `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`;

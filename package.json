@@ -65,6 +65,7 @@
     "config/vite/plugins/assets/copy-twig-files.js",
     "config/vite/plugins/assets/css-asset-rebase.js",
     "config/vite/plugins/assets/css-asset-relativizer.js",
+    "config/vite/plugins/assets/development-source-maps.js",
     "config/vite/plugins/assets/mirror-components.js",
     "config/vite/plugins/assets/output-freshness.js",
     "config/vite/plugins/assets/source-file-index.js",
