@@ -150,25 +150,25 @@ export function copyAllSrcAssetsPlugin({
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return { status: 'failed' };
 
-    // Skip assets whose bytes already match during watch. One-shot builds
-    // continue to copy unconditionally as before.
-    if (
-      watching &&
-      filesHaveSameBytes(
-        absPath,
-        resolveFinalPath(relDest, {
-          outDir: absoluteOutDir(),
-          projectDir,
-          mirrored: structure?.mirrorComponentOutput,
-        }),
-      )
-    ) {
-      return { status: 'skipped' };
-    }
-
     const destPath = join(outDir, relDest);
-    mkdirSync(dirname(destPath), { recursive: true });
     try {
+      // Skip assets whose bytes already match during watch. One-shot builds
+      // continue to copy unconditionally as before.
+      if (
+        watching &&
+        filesHaveSameBytes(
+          absPath,
+          resolveFinalPath(relDest, {
+            outDir: absoluteOutDir(),
+            projectDir,
+            mirrored: structure?.mirrorComponentOutput,
+          }),
+        )
+      ) {
+        return { status: 'skipped' };
+      }
+
+      mkdirSync(dirname(destPath), { recursive: true });
       removeDestinationSymlink(destPath);
       copyFileSync(absPath, destPath);
       let bytes;

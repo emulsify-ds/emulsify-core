@@ -516,9 +516,9 @@ describe('rendering helpers', () => {
     expect(output).not.toContain('boom 7');
   });
 
-  it('reports zero affected files for a locationless deprecation', () => {
+  it('reports a locationless deprecation without an empty file table', () => {
     const collector = createDiagnosticsCollector();
-    collector.recordDeprecation({ id: 'slash-div' });
+    collector.recordDeprecation({ id: 'legacy-js-api' });
 
     const output = renderSummary({
       snapshot: collector.snapshot(),
@@ -527,7 +527,10 @@ describe('rendering helpers', () => {
       styler: plain,
     }).join('\n');
 
-    expect(output).toContain('! 1 sass deprecation · 0 files');
+    expect(output).toContain('! 1 sass deprecation');
+    expect(output).not.toContain('0 files');
+    expect(output).not.toMatch(/lines\s+count\s+deprecation\s+fix/);
+    expect(output).not.toContain('render() → compile()');
   });
 
   it('reports a failed summary from the snapshot when enriched import rows are absent', () => {

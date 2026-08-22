@@ -203,6 +203,34 @@ describe('one-shot reporting', () => {
     expect(output).toContain('slash-div');
     expect(output).toMatch(/npx sass-migrator division 'src\/\*\*\/\*\.scss'/);
   });
+
+  it('reports a locationless Sass total without an empty file table', () => {
+    const lines = [];
+    const collector = createDiagnosticsCollector();
+    const plugin = developReporterPlugin({
+      env: { projectDir: '/project', srcDir: '/project/src' },
+      diagnostics: collector,
+      write: (line) => lines.push(line),
+      colorEnabled: false,
+      unicodeEnabled: true,
+      strictness: STRICTNESS.off,
+    });
+
+    plugin.configResolved({
+      command: 'serve',
+      mode: 'production',
+      build: { watch: null, outDir: 'storybook-static/' },
+    });
+    collector.recordDeprecation({ id: 'legacy-js-api' });
+
+    plugin.closeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 sass deprecation');
+    expect(output).not.toContain('0 files');
+    expect(output).not.toMatch(/lines\s+count\s+deprecation\s+fix/);
+    expect(output).not.toContain('render() → compile()');
+  });
 });
 
 describe('strict asset mode', () => {

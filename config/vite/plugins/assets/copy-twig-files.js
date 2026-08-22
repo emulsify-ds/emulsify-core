@@ -160,26 +160,26 @@ export function copyTwigFilesPlugin({
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return { status: 'failed' };
 
-    // A rewritten template in the output tree is a full preview reload rather
-    // than a style swap, so byte-identical templates are skipped during watch.
-    // One-shot builds continue to copy unconditionally as before.
-    if (
-      watching &&
-      filesHaveSameBytes(
-        absPath,
-        resolveFinalPath(relDest, {
-          outDir: absoluteOutDir(),
-          projectDir,
-          mirrored: structure?.mirrorComponentOutput,
-        }),
-      )
-    ) {
-      return { status: 'skipped' };
-    }
-
     const destPath = join(outDir, relDest);
-    mkdirSync(dirname(destPath), { recursive: true });
     try {
+      // A rewritten template in the output tree is a full preview reload rather
+      // than a style swap, so byte-identical templates are skipped during watch.
+      // One-shot builds continue to copy unconditionally as before.
+      if (
+        watching &&
+        filesHaveSameBytes(
+          absPath,
+          resolveFinalPath(relDest, {
+            outDir: absoluteOutDir(),
+            projectDir,
+            mirrored: structure?.mirrorComponentOutput,
+          }),
+        )
+      ) {
+        return { status: 'skipped' };
+      }
+
+      mkdirSync(dirname(destPath), { recursive: true });
       removeDestinationSymlink(destPath);
       copyFileSync(absPath, destPath);
       let bytes;

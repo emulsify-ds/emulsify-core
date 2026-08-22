@@ -448,6 +448,53 @@ describe('resolveProjectConfig', () => {
     },
   );
 
+  it.each([
+    { label: 'NUL', name: 'foo\u0000bar' },
+    { label: 'newline', name: 'foo\nbar' },
+    { label: 'trailing tab', name: 'foobar\t' },
+    { label: 'DEL', name: 'foo\u007fbar' },
+    { label: 'C1 control', name: 'foo\u0085bar' },
+  ])('rejects $label in a structure implementation name', ({ name }) => {
+    projectDir = makeTempProject();
+    mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
+    writeProjectConfig(projectDir, {
+      project: {
+        platform: 'none',
+      },
+      variant: {
+        structureImplementations: [{ name, directory: './src/foundation' }],
+      },
+    });
+
+    expect(() => resolveProjectConfig(projectDir, {})).toThrow(
+      /Invalid variant\.structureImplementations\[0\]\.name .*without control characters/,
+    );
+  });
+
+  it.each(['card', 'CARD', '\uFEFFcard'])(
+    'rejects structure name %p when it collides after identifier normalization',
+    (name) => {
+      projectDir = makeTempProject();
+      mkdirSync(join(projectDir, 'src/card'), { recursive: true });
+      mkdirSync(join(projectDir, 'src/alternate-card'), { recursive: true });
+      writeProjectConfig(projectDir, {
+        project: {
+          platform: 'none',
+        },
+        variant: {
+          structureImplementations: [
+            { name: 'Card', directory: './src/card' },
+            { name, directory: './src/alternate-card' },
+          ],
+        },
+      });
+
+      expect(() => resolveProjectConfig(projectDir, {})).toThrow(
+        /structureImplementations\[1\]\.name .*normalized name "card" duplicates variant\.structureImplementations\[0\]\.name/,
+      );
+    },
+  );
+
   it('normalizes documented assets.roots into project structure asset roots', () => {
     projectDir = makeTempProject();
     mkdirSync(join(projectDir, 'design-system/assets'), {

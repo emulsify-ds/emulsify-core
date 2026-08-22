@@ -97,6 +97,85 @@ describe('source copy failure reporting', () => {
     ['Twig template', copyTwigFilesPlugin, 'card.twig'],
     ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
   ])(
+    'reports a destination directory failure and continues copying later %s files',
+    (_label, factory, fileName) => {
+      projectDir = makeTempProject();
+      const componentRoot = join(projectDir, 'src/components');
+      const blockedSource = join(componentRoot, 'z-blocked', fileName);
+      const goodSource = join(componentRoot, 'a-good', fileName);
+      const outDir = join(projectDir, 'dist');
+      const blockedDestinationDir = join(outDir, 'components/z-blocked');
+      const blockedDestination = join(blockedDestinationDir, fileName);
+      const goodDestination = join(outDir, 'components/a-good', fileName);
+      const diagnostics = createDiagnosticsCollector();
+      const outputChanges = new Map();
+      const warn = jest.fn();
+
+      mkdirSync(dirname(blockedSource), { recursive: true });
+      mkdirSync(dirname(goodSource), { recursive: true });
+      mkdirSync(dirname(blockedDestinationDir), { recursive: true });
+      writeFileSync(blockedSource, `blocked ${fileName}`);
+      writeFileSync(goodSource, `good ${fileName}`);
+
+      // A regular file where the destination directory must be makes recursive
+      // mkdir fail consistently across platforms, without relying on chmod
+      // behavior that differs for privileged test processes.
+      writeFileSync(blockedDestinationDir, 'not a directory');
+
+      const structure = resolveProjectStructure(makeEnv(projectDir));
+      const sourceFileIndex = {
+        componentFiles: () => [
+          { absPath: blockedSource },
+          { absPath: goodSource },
+        ],
+        globalFiles: () => [],
+      };
+      const plugin = factory({
+        structure,
+        sourceFileIndex,
+        diagnostics,
+        outputChanges,
+      });
+      plugin.configResolved({
+        root: projectDir,
+        build: { outDir, watch: {} },
+      });
+
+      expect(() => plugin.writeBundle.call({ warn })).not.toThrow();
+
+      expect(readFileSync(blockedDestinationDir, 'utf8')).toBe(
+        'not a directory',
+      );
+      expect(readFileSync(goodDestination, 'utf8')).toBe(`good ${fileName}`);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(blockedDestination),
+      );
+      expect(diagnostics.snapshot().errors).toEqual([
+        expect.objectContaining({
+          file: blockedSource,
+          message: expect.stringContaining(blockedDestination),
+          outputState: 'incomplete',
+        }),
+      ]);
+      expect(outputChanges).toEqual(
+        new Map([
+          [
+            `components/a-good/${fileName}`,
+            {
+              kind: 'written',
+              bytes: Buffer.byteLength(`good ${fileName}`),
+            },
+          ],
+        ]),
+      );
+    },
+  );
+
+  it.each([
+    ['Twig template', copyTwigFilesPlugin, 'card.twig'],
+    ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
+  ])(
     'replaces a one-shot %s destination symlink without touching its target',
     (_label, factory, fileName) => {
       projectDir = makeTempProject();

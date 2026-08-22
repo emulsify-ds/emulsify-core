@@ -47,6 +47,9 @@ function normalizeIdentifier(value) {
   return (value || '').toString().toLowerCase().trim();
 }
 
+/** Match Unicode characters in the General_Category=Control class. */
+const CONTROL_CHARACTER_RE = /\p{Cc}/u;
+
 /**
  * Normalize a structure implementation name without allowing path semantics.
  *
@@ -57,10 +60,20 @@ function normalizeIdentifier(value) {
  * @param {*} value - Candidate implementation name.
  * @param {number} index - Implementation index for fallback and diagnostics.
  * @returns {string} Safe normalized name.
- * @throws {Error} When an explicit name is not a single path segment.
+ * @throws {Error} When an explicit name is not a control-free path segment.
  */
 function normalizeStructureImplementationName(value, index) {
-  if (typeof value !== 'string' || !value.trim()) {
+  if (typeof value !== 'string') {
+    return `structure-${index + 1}`;
+  }
+
+  if (CONTROL_CHARACTER_RE.test(value)) {
+    throw new Error(
+      `Invalid variant.structureImplementations[${index}].name ${JSON.stringify(value)}: expected a single path segment without control characters.`,
+    );
+  }
+
+  if (!value.trim()) {
     return `structure-${index + 1}`;
   }
 
@@ -142,26 +155,38 @@ function resolveSelfContainedOutput(rawConfig = {}, env = {}) {
  * @param {string} projectDir - Absolute project root.
  * @param {Array} implementations - Raw implementation entries.
  * @returns {{name: string, directory: string}[]} Safe implementation entries.
+ * @throws {Error} When valid entries normalize to the same name.
  */
 function normalizeStructureImplementations(projectDir, implementations = []) {
   if (!Array.isArray(implementations)) return [];
 
-  return implementations
-    .map((item, index) => {
-      const name = normalizeStructureImplementationName(item?.name, index);
-      const rawDirectory =
-        typeof item?.directory === 'string' ? item.directory : null;
-      const directory = rawDirectory
-        ? coerceToProjectPath(projectDir, rawDirectory)
-        : null;
-      if (!directory) return null;
+  const normalized = [];
+  const nameIndexes = new Map();
 
-      return {
-        name,
-        directory: normalize(directory),
-      };
-    })
-    .filter(Boolean);
+  for (const [index, item] of implementations.entries()) {
+    const name = normalizeStructureImplementationName(item?.name, index);
+    const rawDirectory =
+      typeof item?.directory === 'string' ? item.directory : null;
+    const directory = rawDirectory
+      ? coerceToProjectPath(projectDir, rawDirectory)
+      : null;
+    if (!directory) continue;
+
+    const previousIndex = nameIndexes.get(name);
+    if (previousIndex !== undefined) {
+      throw new Error(
+        `Invalid variant.structureImplementations[${index}].name ${JSON.stringify(item?.name)}: normalized name ${JSON.stringify(name)} duplicates variant.structureImplementations[${previousIndex}].name.`,
+      );
+    }
+
+    nameIndexes.set(name, index);
+    normalized.push({
+      name,
+      directory: normalize(directory),
+    });
+  }
+
+  return normalized;
 }
 
 /**

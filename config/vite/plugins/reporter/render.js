@@ -432,15 +432,26 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
   const { deprecations, deprecationsByFile, deprecationTotal } = snapshot;
   if (deprecations.length === 0) return [];
 
-  const headline = [
-    pluralize(deprecationTotal, 'sass deprecation'),
-    pluralize(deprecationsByFile.length, 'file'),
-  ].join(SEPARATOR);
+  const total = pluralize(deprecationTotal, 'sass deprecation');
+  const headline = deprecationsByFile.length
+    ? [total, pluralize(deprecationsByFile.length, 'file')].join(SEPARATOR)
+    : total;
 
   const lines = [
     `${INDENT}${styler('yellow', SYMBOLS.warning)} ${styler('yellow', headline)}`,
-    '',
   ];
+
+  // Sass can report a deprecation without a span. It still belongs in the
+  // total, but there is no file to open and therefore no worklist to render.
+  // Omitting the empty table also avoids presenting "0 files" as actionable
+  // detail when the collector simply had no location to group.
+  if (deprecationsByFile.length === 0) {
+    const command = renderMigratorCommand(deprecations, sourceGlob, styler);
+    if (command) lines.push('', command);
+    return lines;
+  }
+
+  lines.push('');
 
   const shownFiles = deprecationsByFile.slice(0, MAX_DEPRECATION_FILES);
 
