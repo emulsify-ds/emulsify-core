@@ -83,6 +83,7 @@ const releaseFixtures = [
   {
     name: 'drupal-sdc-src-components',
     type: 'vite',
+    setup: setupStaleProductionSourceMapFixture,
     assert: [
       'components/card/card.js',
       'components/card/card.css',
@@ -94,6 +95,7 @@ const releaseFixtures = [
       'dist/assets/images/relative.svg',
     ],
     reject: [
+      'components/card/card.js.map',
       'dist/components/card/card.js',
       'dist/components/card/card.css',
       'dist/components/card/card.twig',
@@ -143,6 +145,7 @@ const releaseFixtures = [
     ],
     reject: [
       'components/card/card.js',
+      'dist/components/card/js/card.js.map',
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
       'dist/components/card/js/card2.js',
@@ -486,6 +489,12 @@ function copyFixture(fixture) {
   }
   linkFixturePackages(target);
   return target;
+}
+
+function setupStaleProductionSourceMapFixture(projectDir) {
+  const staleSourceMap = join(projectDir, 'components/card/card.js.map');
+  mkdirSync(dirname(staleSourceMap), { recursive: true });
+  writeFileSync(staleSourceMap, '{"version":3}\n');
 }
 
 function setupLargeTwigStorybookFixture(projectDir) {

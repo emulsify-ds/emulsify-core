@@ -13,8 +13,9 @@
  *     parts of it by returning a patch object from `extendConfig(...)`.
  *
  * Notes:
- * - JS sourcemaps come from `build.sourcemap`. Extracted CSS gets no map from
- *   `vite build`: `vite:css-post` emits CSS through
+ * - JS sourcemaps are emitted only by `vite build --watch`; one-shot production
+ *   builds do not ship them. Extracted CSS gets no map from `vite build`:
+ *   `vite:css-post` emits CSS through
  *   `this.emitFile({ type: 'asset' })`, Rollup/Rolldown assets carry no map,
  *   and `finalizeCss()` -> `minifyCSS()` returns code only. To trace a rule
  *   back to its `.scss` partial, let Vite compile the SCSS in Storybook: set
@@ -208,8 +209,10 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
       // All outputs are written into ./dist/
       outDir: 'dist/',
 
-      // Emit JS sourcemaps. Extracted CSS is not covered; see the file header.
-      sourcemap: true,
+      // Keep JS sourcemaps available to the develop watcher without shipping
+      // them in one-shot production builds. Extracted CSS is not covered; see
+      // the file header.
+      sourcemap: watching,
 
       // Vite cannot map extracted CSS, so during `vite build --watch` the
       // readable stylesheet is the debugging aid: keep it unminified so

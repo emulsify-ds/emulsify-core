@@ -289,13 +289,13 @@ build reads with the size of its source, ordered by path, because a full input
 listing is read to check that the tree was picked up and a tree is scanned in path
 order. `output files` names every file the build wrote with its size and, where
 the number means anything, its gzip size — ordered by size descending, since it is
-the `output` row's `largest` expanded into the full ranking.
+the `output` row's `largest` expanded into the full ranking. Development source
+maps are omitted because their generated metadata obscures the actionable files.
 
 ```text
   ── output files ──────────────────────────────────────
 
       file                                    size      gzip
-      components/js/jquery-321.js.map     430.00 kB         —
       assets/images/nav-sprite.jpg        226.36 kB         —
       assets/icons.svg                     85.83 kB  31.73 kB
       global/layout/layout.css             12.11 kB   2.05 kB
@@ -331,10 +331,10 @@ destructive cycle can never read as though nothing changed.
 
 Gzip is the only real expense, and it is the whole of Rolldown's
 `computing gzip size...` pause. It is spent narrowly: only on compressible
-extensions, never on fonts, raster images, or sourcemaps, and on rebuilds only for
-the handful of files that changed. Source sizes come from one `stat` per entry at
-config resolution. The module count comes from a `transform` hook that is attached
-only in this mode.
+extensions, never on fonts or raster images, and on rebuilds only for the handful
+of files that changed. Sourcemaps are omitted before any reporting or gzip work.
+Source sizes come from one `stat` per entry at config resolution. The module count
+comes from a `transform` hook that is attached only in this mode.
 
 ### Why `--verbose` Needs Explaining
 

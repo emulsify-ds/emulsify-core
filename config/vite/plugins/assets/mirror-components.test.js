@@ -163,6 +163,39 @@ describe('component mirror plugin', () => {
     expect(readMirrorState(outDir).completedAt).toEqual(expect.any(String));
   });
 
+  it('keeps watch maps but removes stale mirrored maps for production', () => {
+    projectDir = makeTempProject();
+    const outDir = join(projectDir, 'dist');
+    const rootComponentDir = join(projectDir, 'components/card');
+    const sourceMap = join(rootComponentDir, 'card.js.map');
+    const upperCaseSourceMap = join(rootComponentDir, 'card.css.MAP');
+    const componentFile = join(rootComponentDir, 'card.js');
+    const mapAsset = join(rootComponentDir, 'regions.map');
+    const watchMirror = mirrorComponentsToRoot({ enabled: true, projectDir });
+    const productionMirror = mirrorComponentsToRoot({
+      enabled: true,
+      projectDir,
+    });
+
+    mkdirSync(rootComponentDir, { recursive: true });
+    writeFileSync(sourceMap, '{}');
+    writeFileSync(upperCaseSourceMap, '{}');
+    writeFileSync(componentFile, 'export default {};');
+    writeFileSync(mapAsset, 'legitimate map asset');
+
+    watchMirror.configResolved({ build: { outDir, watch: {} } });
+    expect(watchMirror.writeBundle()).toBeUndefined();
+    expect(existsSync(sourceMap)).toBe(true);
+    expect(existsSync(upperCaseSourceMap)).toBe(true);
+
+    productionMirror.configResolved({ build: { outDir } });
+    expect(productionMirror.writeBundle()).toBeUndefined();
+    expect(existsSync(sourceMap)).toBe(false);
+    expect(existsSync(upperCaseSourceMap)).toBe(false);
+    expect(readFileSync(componentFile, 'utf8')).toBe('export default {};');
+    expect(readFileSync(mapAsset, 'utf8')).toBe('legitimate map asset');
+  });
+
   it('warns when a previous mirror build marker was interrupted', () => {
     projectDir = makeTempProject();
     const outDir = join(projectDir, 'dist');

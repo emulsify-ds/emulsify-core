@@ -186,9 +186,6 @@ package using it.
   while raw Twig and text asset sources load lazily when `source()` requests
   them. Large Twig libraries should still keep Storybook source roots
   intentional. See [Performance](docs/performance.md).
-- Production sourcemaps are enabled by default unless a project overrides Vite
-  config through `config/emulsify-core/vite/plugins.*`. See
-  [Performance](docs/performance.md).
 - Project extensions use the public `config/emulsify-core` directory:
   `config/emulsify-core/vite/plugins.*` for Vite,
   `config/emulsify-core/storybook/...` for Storybook, and

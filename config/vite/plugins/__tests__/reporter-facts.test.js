@@ -365,13 +365,15 @@ describe('write tally', () => {
   it('reduces a bundle to file count, total bytes, and the largest file', () => {
     const tally = summarizeBundle({
       'style.css': { type: 'asset', source: 'a'.repeat(4096) },
+      'style.css.map': { type: 'asset', source: 'm'.repeat(16384) },
       'main.js': { type: 'chunk', code: 'x'.repeat(1024) },
       'logo.svg': { type: 'asset', source: new Uint8Array(512) },
+      'regions.map': { type: 'asset', source: 'r'.repeat(256) },
     });
 
     expect(tally).toEqual({
-      fileCount: 3,
-      totalBytes: 4096 + 1024 + 512,
+      fileCount: 4,
+      totalBytes: 4096 + 1024 + 512 + 256,
       largest: { fileName: 'style.css', bytes: 4096 },
     });
   });
@@ -387,14 +389,22 @@ describe('write tally', () => {
   it('returns nothing for an absent or empty bundle', () => {
     expect(summarizeBundle()).toBeUndefined();
     expect(summarizeBundle({})).toBeUndefined();
+    expect(
+      summarizeBundle({ 'only.js.MAP': { source: 'debug metadata' } }),
+    ).toBeUndefined();
   });
 
   it('attributes mirrored bundle files to their final output directories', () => {
     const rows = buildOutputSummaryRows({
       bundle: {
         'global/style.css': { type: 'asset', source: 'a'.repeat(100) },
+        'global/style.css.map': { type: 'asset', source: 'm'.repeat(1000) },
         'components-old/keep.js': { type: 'chunk', code: 'd'.repeat(50) },
         'components/card/card.js': { type: 'chunk', code: 'b'.repeat(300) },
+        'components/card/card.js.map': {
+          type: 'asset',
+          source: 'm'.repeat(2000),
+        },
         'components/button/button.css': {
           type: 'asset',
           source: 'c'.repeat(200),

@@ -19,6 +19,7 @@ import { basename, dirname, join, resolve } from 'path';
 
 import { safeExists, safeReadJson } from '../../utils/fs-safe.js';
 import { resolvePackageVersion } from '../../utils/package-version.js';
+import { isGeneratedSourceMap } from '../../utils/source-maps.js';
 import { filesHaveSameBytes } from './output-freshness.js';
 import { walkFiles } from './source-file-index.js';
 
@@ -194,12 +195,14 @@ const warnOnInterruptedMirror = (markerFile) => {
  */
 export function mirrorComponentsToRoot({ enabled, projectDir, diagnostics }) {
   let outDir = 'dist';
+  let watching = false;
   return {
     name: 'emulsify-mirror-components-to-root',
     apply: 'build',
     enforce: 'post',
     configResolved(cfg) {
       outDir = cfg.build?.outDir || 'dist';
+      watching = Boolean(cfg.build?.watch);
     },
     writeBundle() {
       if (!enabled) return;
@@ -240,6 +243,36 @@ export function mirrorComponentsToRoot({ enabled, projectDir, diagnostics }) {
         }
 
         pruneEmptyDirsUpTo(distComponents, outDir);
+      }
+
+      // Watch builds intentionally publish source maps for browser debugging.
+      // A later production build cleans dist/ but not the mirrored root, so
+      // remove maps left under components/ by an earlier watch session.
+      if (!watching) {
+        const rootComponents = join(projectDir, 'components');
+        for (const sourceMap of walkFiles(rootComponents).filter(
+          isGeneratedSourceMap,
+        )) {
+          try {
+            unlinkSync(sourceMap);
+            const parentDir = dirname(sourceMap);
+            if (resolve(parentDir) !== resolve(rootComponents)) {
+              pruneEmptyDirsUpTo(parentDir, rootComponents);
+            }
+          } catch (e) {
+            const relativeSourceMap = sourceMap.slice(
+              join(projectDir, '').length,
+            );
+            const message = `Production source-map cleanup failed for ${relativeSourceMap}: ${e?.message || e}`;
+            diagnostics?.recordError?.({
+              message,
+              file: sourceMap,
+              outputState: 'incomplete',
+            });
+            if (typeof this.warn === 'function') this.warn(message);
+            else console.warn(message);
+          }
+        }
       }
 
       writeMirrorState(markerFile, {

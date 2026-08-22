@@ -58,6 +58,7 @@ import {
   buildOutputSummaryRows,
   diffFingerprints,
   fingerprintBundle,
+  isReportableOutput,
   summarizeBundle,
   watchedRootLabel,
 } from './source-roots.js';
@@ -202,6 +203,8 @@ const mergeCopiedOutputChanges = (changed, removed, copyChanges) => {
   const removedNames = new Set(removed);
 
   for (const [fileName, change] of copyChanges) {
+    if (!isReportableOutput(fileName)) continue;
+
     if (change?.kind === 'removed') {
       changedByName.delete(fileName);
       removedNames.add(fileName);
@@ -625,8 +628,11 @@ export function developReporterPlugin({
           // path set needed to identify removals. Carry stable skipped outputs
           // forward just as the detailed fingerprint diff does below.
           if (!verbose) {
-            const currentOutputNames = new Set(Object.keys(bundle || {}));
+            const currentOutputNames = new Set(
+              Object.keys(bundle || {}).filter(isReportableOutput),
+            );
             for (const fileName of unchangedOutputs) {
+              if (!isReportableOutput(fileName)) continue;
               if (outputNames.has(fileName)) currentOutputNames.add(fileName);
             }
 
@@ -651,6 +657,7 @@ export function developReporterPlugin({
             // same bytes, so carry its fingerprint forward. Without this the
             // diff below sees it missing from the bundle and calls it removed.
             for (const fileName of unchangedOutputs) {
+              if (!isReportableOutput(fileName)) continue;
               const previous = fingerprints.get(fileName);
               if (previous !== undefined) current.set(fileName, previous);
             }

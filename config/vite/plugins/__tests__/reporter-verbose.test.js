@@ -150,6 +150,7 @@ describe('output file listing', () => {
     'small.css': { type: 'asset', source: 'a'.repeat(1024) },
     'big.css': { type: 'asset', source: 'b'.repeat(8192) },
     'font.woff2': { type: 'asset', source: new Uint8Array(4096) },
+    'regions.map': { type: 'asset', source: 'r'.repeat(2048) },
     'bundle.js.map': { type: 'asset', source: 'c'.repeat(65536) },
   };
 
@@ -157,9 +158,9 @@ describe('output file listing', () => {
     const rows = buildOutputFileRows(bundle);
 
     expect(rows.map((row) => row.fileName)).toEqual([
-      'bundle.js.map',
       'big.css',
       'font.woff2',
+      'regions.map',
       'small.css',
     ]);
   });
@@ -171,9 +172,10 @@ describe('output file listing', () => {
     );
 
     expect(typeof byName['big.css']).toBe('number');
-    // Fonts are already compressed, and a sourcemap is a diagnostic artifact
-    // nobody ships — gzipping either buys a misleading number for real time.
+    // Fonts are already compressed, so gzipping one buys a misleading number
+    // for real transfer time. Source maps are omitted from the rows entirely.
     expect(byName['font.woff2']).toBeUndefined();
+    expect(byName['regions.map']).toBeUndefined();
     expect(byName['bundle.js.map']).toBeUndefined();
   });
 
@@ -233,6 +235,22 @@ describe('output change detection', () => {
     expect(
       diffFingerprints(fingerprintBundle(bundle), fingerprintBundle(bundle)),
     ).toEqual({ changed: [], removed: [] });
+  });
+
+  it('does not fingerprint source maps for rebuild reporting', () => {
+    const before = fingerprintBundle({
+      'a.js': { code: 'same' },
+      'a.js.map': { source: 'old map' },
+    });
+    const after = fingerprintBundle({
+      'a.js': { code: 'same' },
+      'a.js.map': { source: 'changed map' },
+    });
+
+    expect(diffFingerprints(before, after)).toEqual({
+      changed: [],
+      removed: [],
+    });
   });
 });
 
@@ -535,6 +553,65 @@ describe('detailed mode through the plugin lifecycle', () => {
     expect(output).toContain('1 output changed');
     expect(output).toContain('b.css');
     expect(output).not.toContain('a.css');
+  });
+
+  it('omits source maps from detailed rebuild and copied-output reports', () => {
+    const copiedOutputChanges = new Map();
+    const { plugin, lines } = harness(true, new Set(), copiedOutputChanges);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.js': { type: 'chunk', code: 'same' },
+        'a.js.map': { type: 'asset', source: 'old map' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    copiedOutputChanges.set('components/card/copied.js.map', {
+      kind: 'written',
+      bytes: 4096,
+    });
+    copiedOutputChanges.set('components/card/removed.js.map', {
+      kind: 'removed',
+    });
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.js': { type: 'chunk', code: 'same' },
+        'a.js.map': { type: 'asset', source: 'changed map' },
+      },
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('no output changed');
+    expect(output).not.toContain('.map');
+  });
+
+  it('does not report source-map removals outside detailed mode', () => {
+    const { plugin, lines } = harness(false);
+
+    plugin.buildStart();
+    writeBundle(
+      plugin,
+      {},
+      {
+        'a.js': { type: 'chunk', code: 'same' },
+        'a.js.map': { type: 'asset', source: 'map' },
+      },
+    );
+    lines.length = 0;
+
+    plugin.buildStart();
+    writeBundle(plugin, {}, { 'a.js': { type: 'chunk', code: 'same' } });
+
+    const output = lines.join('\n');
+    expect(output).not.toContain('removed');
+    expect(output).not.toContain('.map');
   });
 
   it('includes successful copied-file writes in a detailed rebuild', () => {
