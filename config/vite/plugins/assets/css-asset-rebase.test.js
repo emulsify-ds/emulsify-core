@@ -236,6 +236,25 @@ describe('asset URL rebase rules', () => {
       );
     });
 
+    it.each([
+      ['an unterminated string', '.bad { content: "unfinished'],
+      [
+        'an apostrophe in an unquoted URL',
+        `.bad { background: url(assets/rock${QUOTE}n.svg); }`,
+      ],
+    ])('rewrites a URL on the line after %s', (_label, damagedLine) => {
+      const realLine = '.real { background: url(assets/images/x.svg); }';
+      const css = [damagedLine, realLine].join('\n');
+
+      expect(rewriteStylesheetUrls(css, stylesheet, roots)).toEqual({
+        code: css.replace(
+          realLine,
+          '.real { background: url(/assets/images/x.svg); }',
+        ),
+        changed: true,
+      });
+    });
+
     it('rewrites only what it repairs and reports the rest', () => {
       const seen = [];
       const record = (plan) => seen.push(plan.status);
@@ -393,6 +412,22 @@ describe('cssAssetRebasePlugin', () => {
     expect(publishedAssetSources.get('assets/images/x.svg')).toBe(
       'assets/images/x.svg',
     );
+  });
+
+  it('rewrites an uppercase URL function through the Vite transform', () => {
+    const env = setup();
+    const plugin = make(env);
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+
+    const result = transform(
+      plugin,
+      '.a{background:URL(assets/images/x.svg)}',
+      join(projectDir, 'src/components/card/card.scss'),
+    );
+
+    expect(result.code).toBe('.a{background:url(/assets/images/x.svg)}');
   });
 
   it('emits each repaired asset once per self-contained build cycle', () => {

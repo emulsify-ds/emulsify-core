@@ -57,7 +57,7 @@ export const PUBLIC_ASSET_PREFIX = 'assets';
  * @type {RegExp}
  */
 export const CSS_URL_RE =
-  /(?<=^|[^\w\-\u0080-\uffff])url\((\s*('[^']*'|"[^"]*")\s*|[^'")]+)\)/g;
+  /(?<=^|[^\w\-\u0080-\uffff])url\((\s*('[^']*'|"[^"]*")\s*|[^'")]+)\)/gi;
 
 /** Leading `./` and `../` segments — "the tail" is what remains after these. */
 const LEADING_RELATIVE_RE = /^(?:\.{1,2}\/)+/;

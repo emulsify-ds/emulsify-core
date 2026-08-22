@@ -50,6 +50,9 @@ const STYLE_REQUEST_RE = /\.(css|p?css|sss|styl|stylus|less|sass|scss)(?:$|\?)/;
 /** Query suffixes that are not stylesheet content. */
 const NON_STYLE_QUERY_RE = /[?&](raw|url)(?:&|$)/;
 
+/** Case-insensitive CSS URL function marker. */
+const URL_FUNCTION_RE = /url\(/i;
+
 /**
  * Strip the Vite request query from a module id.
  *
@@ -135,7 +138,7 @@ export function cssAssetRebasePlugin({
       if (!STYLE_REQUEST_RE.test(id) || NON_STYLE_QUERY_RE.test(id)) {
         return null;
       }
-      if (!code.includes('url(')) return null;
+      if (!URL_FUNCTION_RE.test(code)) return null;
 
       const importer = stripRequestQuery(id);
 

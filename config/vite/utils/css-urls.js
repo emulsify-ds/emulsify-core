@@ -27,6 +27,63 @@ const isQuote = (character) =>
   character === SINGLE_QUOTE || character === DOUBLE_QUOTE;
 
 /**
+ * Determine whether a character ends an unterminated CSS string.
+ *
+ * CSS preprocessing treats carriage return, form feed, and line feed as
+ * newlines. Handling all three here keeps recovery correct before preprocessing.
+ *
+ * @param {string|undefined} character - Candidate character.
+ * @returns {boolean} TRUE for a CSS newline.
+ */
+const isCssNewline = (character) =>
+  character === '\n' || character === '\r' || character === '\f';
+
+/**
+ * Determine whether a case-insensitive CSS `url(` function starts at an offset.
+ *
+ * Comparing individual characters avoids allocating and lowercasing a slice at
+ * every source position.
+ *
+ * @param {string} source - Full stylesheet source.
+ * @param {number} start - Candidate `u` offset.
+ * @returns {boolean} TRUE when `url(` begins at the offset.
+ */
+const isUrlFunctionAt = (source, start) =>
+  (source[start] === 'u' || source[start] === 'U') &&
+  (source[start + 1] === 'r' || source[start + 1] === 'R') &&
+  (source[start + 2] === 'l' || source[start + 2] === 'L') &&
+  source[start + 3] === '(';
+
+/**
+ * Scan a CSS string through its closing quote or an unescaped newline.
+ *
+ * A backslash-newline is a continuation, including the raw CRLF form that CSS
+ * preprocessing normally collapses before tokenization.
+ *
+ * @param {string} source - Full stylesheet source.
+ * @param {number} cursor - First character after the opening quote.
+ * @param {string} quote - Opening quote character.
+ * @returns {number} Closing quote, newline, or EOF offset.
+ */
+function scanCssString(source, cursor, quote) {
+  while (
+    cursor < source.length &&
+    source[cursor] !== quote &&
+    !isCssNewline(source[cursor])
+  ) {
+    if (source[cursor] !== '\\' || cursor + 1 >= source.length) {
+      cursor += 1;
+      continue;
+    }
+
+    cursor +=
+      source[cursor + 1] === '\r' && source[cursor + 2] === '\n' ? 3 : 2;
+  }
+
+  return cursor;
+}
+
+/**
  * Trim a token value while keeping its offsets in the original source.
  *
  * @param {string} source - Full stylesheet source.
@@ -55,10 +112,11 @@ function trimValue(source, start, end) {
  *
  * @param {string} source - Full stylesheet source.
  * @param {number} start - Candidate `u` offset.
+ * @param {{invalidUnquotedUntil: number, noClosingParenthesisAfter: number}} scanState - Per-stylesheet failure memo.
  * @returns {{start: number, end: number, valueStart: number, valueEnd: number, value: string, quote: string, match: string}|undefined} Parsed token.
  */
-function urlTokenAt(source, start) {
-  if (!source.startsWith('url(', start)) return undefined;
+function urlTokenAt(source, start, scanState) {
+  if (!isUrlFunctionAt(source, start)) return undefined;
   if (start > 0 && IDENT_CHAR_RE.test(source[start - 1])) return undefined;
 
   const innerStart = start + 4;
@@ -75,11 +133,7 @@ function urlTokenAt(source, start) {
 
   if (quote) {
     const quotedValueStart = cursor + 1;
-    cursor = quotedValueStart;
-
-    while (cursor < source.length && source[cursor] !== quote) {
-      cursor += source[cursor] === '\\' && cursor + 1 < source.length ? 2 : 1;
-    }
+    cursor = scanCssString(source, quotedValueStart, quote);
 
     if (source[cursor] !== quote) return undefined;
 
@@ -96,9 +150,33 @@ function urlTokenAt(source, start) {
   } else {
     cursor = innerStart;
 
+    // A prior unquoted candidate reached a quote without encountering `)`.
+    // Every later unquoted candidate inside that interval must hit the same
+    // quote first, so rescanning it cannot produce a token.
+    if (innerStart <= scanState.invalidUnquotedUntil) return undefined;
+
+    // A prior candidate already scanned this suffix to EOF without finding an
+    // unescaped `)`. Failing immediately keeps repeated malformed `url(` input
+    // linear instead of rescanning the same tail for every character.
+    if (innerStart >= scanState.noClosingParenthesisAfter) return undefined;
+
     while (cursor < source.length && source[cursor] !== ')') {
-      if (isQuote(source[cursor])) return undefined;
+      if (isQuote(source[cursor])) {
+        scanState.invalidUnquotedUntil = Math.max(
+          scanState.invalidUnquotedUntil,
+          cursor,
+        );
+        return undefined;
+      }
       cursor += source[cursor] === '\\' && cursor + 1 < source.length ? 2 : 1;
+    }
+
+    if (cursor >= source.length) {
+      scanState.noClosingParenthesisAfter = Math.min(
+        scanState.noClosingParenthesisAfter,
+        innerStart,
+      );
+      return undefined;
     }
 
     if (cursor === innerStart) return undefined;
@@ -150,11 +228,16 @@ function maskComments(source, comments) {
  * consumed by that token instead of being mistaken for standalone strings.
  *
  * @param {string} source - Stylesheet source.
- * @returns {{urls: Array<{start: number, end: number, valueStart: number, valueEnd: number, value: string, quote: string, match: string}>, sourceWithoutComments: string}} URL tokens and an offset-preserving comment mask.
+ * @returns {{urls: Array<{start: number, end: number, valueStart: number, valueEnd: number, value: string, quote: string, match: string}>, readonly sourceWithoutComments: string}} URL tokens and a lazily computed, offset-preserving comment mask.
  */
 export function tokenizeStylesheetUrls(source) {
   const urls = [];
   const comments = [];
+  const scanState = {
+    invalidUnquotedUntil: -1,
+    noClosingParenthesisAfter: Number.POSITIVE_INFINITY,
+  };
+  let maskedSource;
   let cursor = 0;
 
   while (cursor < source.length) {
@@ -164,6 +247,8 @@ export function tokenizeStylesheetUrls(source) {
       const start = cursor;
       cursor += 2;
 
+      // CSS consumes an unterminated block comment through EOF. Unlike a bad
+      // string, it deliberately does not recover at the next newline.
       while (
         cursor < source.length &&
         !(source[cursor] === '*' && source[cursor + 1] === '/')
@@ -186,17 +271,13 @@ export function tokenizeStylesheetUrls(source) {
 
     if (isQuote(source[cursor])) {
       const quote = source[cursor];
-      cursor += 1;
-
-      while (cursor < source.length && source[cursor] !== quote) {
-        cursor += source[cursor] === '\\' && cursor + 1 < source.length ? 2 : 1;
-      }
+      cursor = scanCssString(source, cursor + 1, quote);
 
       if (source[cursor] === quote) cursor += 1;
       continue;
     }
 
-    const url = urlTokenAt(source, cursor);
+    const url = urlTokenAt(source, cursor, scanState);
     if (url) {
       urls.push(url);
       cursor = url.end;
@@ -208,7 +289,10 @@ export function tokenizeStylesheetUrls(source) {
 
   return {
     urls,
-    sourceWithoutComments: maskComments(source, comments),
+    get sourceWithoutComments() {
+      maskedSource ??= maskComments(source, comments);
+      return maskedSource;
+    },
   };
 }
 

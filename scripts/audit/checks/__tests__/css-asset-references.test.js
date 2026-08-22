@@ -147,6 +147,35 @@ describe('auditCssAssetReferences', () => {
     },
   );
 
+  it.each([
+    ['an unterminated string', '.bad { content: "unfinished'],
+    [
+      'an apostrophe in an unquoted URL',
+      `.bad { background: url(assets/rock${QUOTE}n.svg); }`,
+    ],
+  ])('audits a URL on the line after %s', (_label, damagedLine) => {
+    writeFile(projectDir, 'assets/images/real.svg', '<svg />');
+    const realLine = '.real { background: Url("assets/images/real.svg"); }';
+    const source = [damagedLine, realLine].join('\n');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      source,
+    );
+
+    expect(findCssUrlReferences(source).map(({ value }) => value)).toEqual([
+      'assets/images/real.svg',
+    ]);
+    expect(audit(styleFile)).toEqual([
+      expect.objectContaining({
+        fix: expect.objectContaining({
+          original: 'assets/images/real.svg',
+          replacement: '/assets/images/real.svg',
+        }),
+      }),
+    ]);
+  });
+
   it('validates the canonical /assets/ form', () => {
     // The headline gap: every absolute URL used to be skipped outright, so a
     // typo in the documented convention was caught by nothing at all.
