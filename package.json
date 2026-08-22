@@ -165,7 +165,8 @@
     "./package.json": "./package.json"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "config": {
     "scripts-prepend-node-path": "auto"

@@ -34,7 +34,7 @@ A schema-version 1 report has this shape:
   "schemaVersion": 1,
   "tool": {
     "name": "@emulsify/core",
-    "version": "4.3.0"
+    "version": "4.4.0"
   },
   "root": ".",
   "summary": {
@@ -191,7 +191,7 @@ status of 2 produces a distinct error document instead of a findings report:
   "schemaVersion": 1,
   "tool": {
     "name": "@emulsify/core",
-    "version": "4.3.0"
+    "version": "4.4.0"
   },
   "error": {
     "code": "invalid-arguments",

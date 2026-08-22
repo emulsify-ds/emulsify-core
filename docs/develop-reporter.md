@@ -19,7 +19,7 @@ A watch session opens with the wordmark and the Core version:
   █▀▀ █ ▀ █ █ █ █   ▀▀█ █ █▀▀ ▀▄▀
   ▀▀▀ ▀   ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀    ▀
 
-  core 4.3.1
+  core 4.4.0
 ```
 
 Then, once the first build finishes, the project facts and the build result, each

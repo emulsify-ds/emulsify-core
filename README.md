@@ -35,8 +35,9 @@ implementation details where they belong.
 - Consumers are supported on Node.js 24.13.0 or later. The strictest published
   toolchain dependency, `stylelint-selector-bem-pattern` 5, requires that patch.
 - Contributors should use Node.js 24.18.0, the exact version pinned in `.nvmrc`.
-- CI also uses Node.js 24.18.0 by reading `.nvmrc`, so local development and
-  automated checks share the same recommended runtime.
+- Release-readiness CI runs on both the public 24.13.0 floor and the recommended
+  24.18.0 version. Other CI and release jobs read the exact version from
+  `.nvmrc`.
 
 ## Project Evolution
 
@@ -167,6 +168,7 @@ The documentation is split by task:
 | [Migration To 4.x](docs/migration-4x.md)                  | Upgrading a pre-4.x/Webpack project while preserving existing structures.                                         |
 | [4.3.0 Release Notes](docs/releases/4.3.0.md)             | Reviewing the 4.3.0 scope, compatibility changes, public APIs, limitations, and verification evidence.            |
 | [4.3.1 Release Notes](docs/releases/4.3.1.md)             | Reviewing the 4.3.1 develop reporter changes, verbosity controls, and scope limits.                               |
+| [4.4.0 Release Notes](docs/releases/4.4.0.md)             | Reviewing asset resolution, safer audit fixes, incremental output, reporter changes, and release evidence.        |
 
 ## Known Limitations
 

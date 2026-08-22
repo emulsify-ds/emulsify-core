@@ -227,7 +227,10 @@ const releaseFixtures = [
     rejectContent: [
       {
         pattern: 'dist/components/card/css/card.css',
-        strings: ['url(/design-system/assets/images/hero.svg)'],
+        strings: [
+          'url(/assets/images/hero.svg)',
+          'url(/design-system/assets/images/hero.svg)',
+        ],
       },
     ],
   },
@@ -261,6 +264,9 @@ const releaseFixtures = [
       'dist/global/base/js/base.js',
       'dist/global/base/css/base.css',
       'dist/extension-marker.txt',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: [
       'components/card/card.js',
@@ -272,10 +278,25 @@ const releaseFixtures = [
       'dist/components/card/ReactCard.jsx',
       'dist/components/card/mount.jsx',
     ],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: [
+          '../../../assets/images/canonical.svg',
+          '../../../assets/images/bare.svg',
+          '../../../assets/images/relative.svg',
+        ],
+      },
+    ],
     rejectContent: [
       {
         pattern: 'dist/**/*.js',
         strings: ['window.Drupal', 'Drupal.behaviors', 'attachBehaviors'],
+      },
+      rejectWrongAssetUrls('dist/components/card/css/card.css'),
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['../../../../assets/images/'],
       },
     ],
   },
@@ -287,8 +308,28 @@ const releaseFixtures = [
       'dist/components/banner/css/banner.css',
       'dist/components/banner/banner.twig',
       'dist/components/banner/banner.asset.txt',
+      'dist/assets/images/canonical.svg',
+      'dist/assets/images/bare.svg',
+      'dist/assets/images/relative.svg',
     ],
     reject: ['components/banner/js/banner.js'],
+    assertContent: [
+      {
+        pattern: 'dist/components/banner/css/banner.css',
+        strings: [
+          '../../../assets/images/canonical.svg',
+          '../../../assets/images/bare.svg',
+          '../../../assets/images/relative.svg',
+        ],
+      },
+    ],
+    rejectContent: [
+      rejectWrongAssetUrls('dist/components/banner/css/banner.css'),
+      {
+        pattern: 'dist/components/banner/css/banner.css',
+        strings: ['../../../../assets/images/'],
+      },
+    ],
   },
   {
     name: 'structure-implementations',
