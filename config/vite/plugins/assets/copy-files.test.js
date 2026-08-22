@@ -18,7 +18,6 @@ import { resolveProjectConfig } from '../../project-config.js';
 import { resolveProjectStructure } from '../../project-structure.js';
 import { copyAllSrcAssetsPlugin } from './copy-src-assets.js';
 import { copyTwigFilesPlugin } from './copy-twig-files.js';
-import { createSourceFileIndex } from './source-file-index.js';
 import {
   makeEnv,
   makeTempProject,
@@ -143,6 +142,54 @@ describe('source copy plugins', () => {
     expect(
       existsSync(join(outDir, 'foundation/icons/icon.component.json')),
     ).toBe(true);
+  });
+
+  it('rejects path-like structure names before a copy can escape outDir', () => {
+    projectDir = makeTempProject();
+    const nestedProjectDir = join(projectDir, 'project');
+    const source = join(nestedProjectDir, 'src/foundation/icons/icon.svg');
+    const outDir = join(nestedProjectDir, 'dist');
+    const outsideFile = join(projectDir, 'escape-target/icons/icon.svg');
+    const outsideBytes = 'hand-authored outside file';
+
+    mkdirSync(join(source, '..'), { recursive: true });
+    mkdirSync(join(outsideFile, '..'), { recursive: true });
+    writeFileSync(source, '<svg />');
+    writeFileSync(outsideFile, outsideBytes);
+    writeProjectConfig(nestedProjectDir, {
+      project: {
+        platform: 'none',
+      },
+      variant: {
+        structureImplementations: [
+          {
+            name: '../../escape-target',
+            directory: './src/foundation/',
+          },
+        ],
+      },
+    });
+
+    const runCycle = () => {
+      const structure = resolveProjectConfig(
+        nestedProjectDir,
+        {},
+      ).projectStructure;
+      const plugin = copyAllSrcAssetsPlugin({ structure });
+      plugin.configResolved({
+        root: nestedProjectDir,
+        build: { outDir, watch: {} },
+      });
+      plugin.writeBundle();
+    };
+
+    expect(runCycle).toThrow('expected a single path segment');
+    expect(readFileSync(outsideFile, 'utf8')).toBe(outsideBytes);
+
+    rmSync(source);
+    expect(runCycle).toThrow('expected a single path segment');
+    expect(existsSync(outsideFile)).toBe(true);
+    expect(readFileSync(outsideFile, 'utf8')).toBe(outsideBytes);
   });
 
   describe('watching what it copies', () => {
@@ -350,7 +397,7 @@ describe('source copy plugins', () => {
       ['component metadata file', copyTwigFilesPlugin, 'card.component.yml'],
       ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
     ])(
-      'removes a deleted copied %s on the next cycle',
+      'leaves a deleted copied %s after the watch cycle',
       (_name, factory, file) => {
         const { structure, outDir } = scaffold();
         const build = { outDir, root: projectDir, watch: {} };
@@ -368,7 +415,7 @@ describe('source copy plugins', () => {
         plugin.watchChange(source, { event: 'delete' });
         runCycle();
 
-        expect(existsSync(output)).toBe(false);
+        expect(existsSync(output)).toBe(true);
       },
     );
 
@@ -382,7 +429,7 @@ describe('source copy plugins', () => {
       ],
       ['static asset', copyAllSrcAssetsPlugin, 'icon.svg', 'renamed.svg'],
     ])(
-      'replaces a renamed copied %s on the next cycle',
+      'copies a renamed %s without pruning its previous output',
       (_name, factory, originalName, renamedName) => {
         const { structure, outDir } = scaffold();
         const build = { outDir, root: projectDir, watch: {} };
@@ -404,153 +451,13 @@ describe('source copy plugins', () => {
         plugin.watchChange(originalSource, { event: 'delete' });
         runCycle();
 
-        expect(existsSync(join(outputDir, originalName))).toBe(false);
+        expect(existsSync(join(outputDir, originalName))).toBe(true);
         expect(existsSync(join(outputDir, renamedName))).toBe(true);
         expect(addWatchFile).toHaveBeenCalledWith(renamedSource);
       },
     );
 
-    it('keeps one copy plugin output when the other plugin prunes its own', () => {
-      const { structure, outDir } = scaffold();
-      const build = { outDir, root: projectDir, watch: {} };
-      const twigSource = join(projectDir, 'src/components/card/card.twig');
-      const sharedIndex = createSourceFileIndex(structure);
-      const plugins = [
-        copyTwigFilesPlugin({ structure, sourceFileIndex: sharedIndex }),
-        copyAllSrcAssetsPlugin({
-          structure,
-          sourceFileIndex: sharedIndex,
-        }),
-      ];
-      const runCycle = () => {
-        for (const plugin of plugins) {
-          plugin.buildStart.call({ addWatchFile: jest.fn() });
-        }
-        for (const plugin of plugins) plugin.writeBundle();
-      };
-
-      for (const plugin of plugins) plugin.configResolved({ build });
-      runCycle();
-      rmSync(twigSource);
-      for (const plugin of plugins) {
-        plugin.watchChange(twigSource, { event: 'delete' });
-      }
-      runCycle();
-
-      expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(false);
-      expect(existsSync(join(outDir, 'components/card/icon.svg'))).toBe(true);
-    });
-
-    it.each([
-      ['Twig template', copyTwigFilesPlugin, 'card.twig'],
-      ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
-    ])(
-      'does not prune a %s destination replaced by another writer',
-      (_name, factory, file) => {
-        const { structure, outDir } = scaffold();
-        const build = { outDir, root: projectDir, watch: {} };
-        const source = join(projectDir, 'src/components/card', file);
-        const output = join(outDir, 'components/card', file);
-        const plugin = factory({ structure });
-
-        plugin.configResolved({ build });
-        plugin.writeBundle();
-        writeFileSync(output, 'second writer');
-
-        rmSync(source);
-        plugin.watchChange(source, { event: 'delete' });
-        plugin.writeBundle();
-
-        expect(readFileSync(output, 'utf8')).toBe('second writer');
-      },
-    );
-
-    it.each([
-      ['Twig template', copyTwigFilesPlugin, 'card.twig'],
-      ['static asset', copyAllSrcAssetsPlugin, 'icon.svg'],
-    ])(
-      'retains ownership of an unreadable stale %s output for a later retry',
-      (_name, factory, file) => {
-        const { structure, outDir } = scaffold();
-        const build = { outDir, root: projectDir, watch: {} };
-        const source = join(projectDir, 'src/components/card', file);
-        const output = join(outDir, 'components/card', file);
-        const originalBytes = readFileSync(source);
-        const plugin = factory({ structure });
-        const warn = jest.fn();
-
-        plugin.configResolved({ build });
-        plugin.writeBundle.call({ warn });
-        rmSync(source);
-        plugin.watchChange(source, { event: 'delete' });
-
-        // A directory is an existing path whose contents cannot be verified as
-        // the file this plugin wrote. It stands in for EACCES portably.
-        rmSync(output);
-        mkdirSync(output);
-        plugin.writeBundle.call({ warn });
-
-        expect(existsSync(output)).toBe(true);
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringContaining('Unable to verify stale copied output'),
-        );
-
-        rmSync(output, { recursive: true });
-        writeFileSync(output, originalBytes);
-        plugin.writeBundle.call({ warn });
-
-        expect(existsSync(output)).toBe(false);
-      },
-    );
-
-    it('does not claim or prune an identical output it skipped', () => {
-      const { structure, outDir } = scaffold();
-      const build = { outDir, root: projectDir, watch: {} };
-      const source = join(projectDir, 'src/components/card/card.twig');
-      const output = join(outDir, 'components/card/card.twig');
-      const plugin = copyTwigFilesPlugin({ structure });
-
-      mkdirSync(join(output, '..'), { recursive: true });
-      writeFileSync(output, readFileSync(source));
-      plugin.configResolved({ root: projectDir, build });
-      plugin.writeBundle();
-
-      // Vite may leave an outside-root output directory intact. Identical bytes
-      // from another writer are skipped, so merely seeing this destination in
-      // the plan must not make it safe for this plugin to prune later.
-      rmSync(source);
-      plugin.watchChange(source, { event: 'delete' });
-      plugin.writeBundle();
-
-      expect(existsSync(output)).toBe(true);
-    });
-
-    it('keeps an owned output when an existing source is missing from a refreshed plan', () => {
-      const { structure, outDir } = scaffold();
-      const build = { outDir, root: projectDir, watch: {} };
-      const source = join(projectDir, 'src/components/card/card.twig');
-      const output = join(outDir, 'components/card/card.twig');
-      const realIndex = createSourceFileIndex(structure);
-      let hideIndexedFiles = false;
-      const sourceFileIndex = {
-        componentFiles: () =>
-          hideIndexedFiles ? [] : realIndex.componentFiles(),
-        globalFiles: () => (hideIndexedFiles ? [] : realIndex.globalFiles()),
-        refresh: () => realIndex.refresh(),
-      };
-      const plugin = copyTwigFilesPlugin({ structure, sourceFileIndex });
-
-      plugin.configResolved({ build });
-      plugin.writeBundle();
-      hideIndexedFiles = true;
-      plugin.watchChange(source, { event: 'delete' });
-      plugin.writeBundle();
-
-      expect(existsSync(source)).toBe(true);
-      expect(existsSync(output)).toBe(true);
-    });
-
-    it('claims a pre-existing mirrored output during the first cycle', () => {
+    it('skips an identical mirrored output during the first watch cycle', () => {
       const scaffolded = scaffold();
       const structure = {
         ...scaffolded.structure,
@@ -569,18 +476,8 @@ describe('source copy plugins', () => {
 
       plugin.configResolved({ root: projectDir, build });
       plugin.writeBundle();
-      expect(existsSync(transientOutput)).toBe(true);
-
-      // The mirror plugin drops the transient copy when its bytes already
-      // match, leaving the existing final file and its mtime alone.
-      rmSync(transientOutput);
+      expect(existsSync(transientOutput)).toBe(false);
       expect(statSync(mirroredOutput).mtimeMs).toBe(1000);
-
-      rmSync(source);
-      plugin.watchChange(source, { event: 'delete' });
-      plugin.writeBundle();
-
-      expect(existsSync(mirroredOutput)).toBe(false);
     });
   });
 

@@ -7,7 +7,7 @@
  * per project directory and relevant environment signature for one process.
  */
 
-import { normalize, resolve, sep } from 'path';
+import { normalize, posix, resolve, sep, win32 } from 'path';
 import { getPlatformAdapter, normalizePlatformName } from './platforms.js';
 import { resolveProjectStructure } from './project-structure.js';
 import { safeExists, safeReadJson } from './utils/fs-safe.js';
@@ -45,6 +45,38 @@ export function coerceToProjectPath(projectDir, candidate) {
  */
 function normalizeIdentifier(value) {
   return (value || '').toString().toLowerCase().trim();
+}
+
+/**
+ * Normalize a structure implementation name without allowing path semantics.
+ *
+ * Names become output-directory segments and Twig namespace keys. Rejecting
+ * path-like values is safer than stripping them: two distinct configured
+ * names must never silently collapse onto the same output directory.
+ *
+ * @param {*} value - Candidate implementation name.
+ * @param {number} index - Implementation index for fallback and diagnostics.
+ * @returns {string} Safe normalized name.
+ * @throws {Error} When an explicit name is not a single path segment.
+ */
+function normalizeStructureImplementationName(value, index) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return `structure-${index + 1}`;
+  }
+
+  const name = normalizeIdentifier(value);
+  if (
+    name === '.' ||
+    name === '..' ||
+    posix.basename(name) !== name ||
+    win32.basename(name) !== name
+  ) {
+    throw new Error(
+      `Invalid variant.structureImplementations[${index}].name ${JSON.stringify(value)}: expected a single path segment.`,
+    );
+  }
+
+  return name;
 }
 
 /**
@@ -116,17 +148,13 @@ function normalizeStructureImplementations(projectDir, implementations = []) {
 
   return implementations
     .map((item, index) => {
+      const name = normalizeStructureImplementationName(item?.name, index);
       const rawDirectory =
         typeof item?.directory === 'string' ? item.directory : null;
       const directory = rawDirectory
         ? coerceToProjectPath(projectDir, rawDirectory)
         : null;
       if (!directory) return null;
-
-      const name =
-        typeof item?.name === 'string' && item.name.trim()
-          ? normalizeIdentifier(item.name)
-          : `structure-${index + 1}`;
 
       return {
         name,

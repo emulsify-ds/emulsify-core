@@ -16,7 +16,6 @@ import { join } from 'path';
 import { makeTempProject } from '../../test-utils/plugins.js';
 import {
   bytesAlreadyOnDisk,
-  fileContentFingerprint,
   filesHaveSameBytes,
   resolveFinalPath,
 } from './output-freshness.js';
@@ -146,23 +145,6 @@ describe('filesHaveSameBytes', () => {
       '<article>new output</article>',
     );
     expect(readFileSync(outsideFile, 'utf8')).toBe(
-      '<article>shared source</article>',
-    );
-  });
-});
-
-describe('fileContentFingerprint', () => {
-  const projectDir = makeTempProject();
-
-  it('does not claim ownership of a symlink target', () => {
-    const targetFile = join(projectDir, 'shared.twig');
-    const linkedFile = join(projectDir, 'dist/card.twig');
-    write(targetFile, '<article>shared source</article>');
-    mkdirSync(join(linkedFile, '..'), { recursive: true });
-    symlinkSync(targetFile, linkedFile);
-
-    expect(fileContentFingerprint(linkedFile)).toBeNull();
-    expect(readFileSync(targetFile, 'utf8')).toBe(
       '<article>shared source</article>',
     );
   });

@@ -301,7 +301,7 @@ describe('resolveProjectConfig', () => {
         platform: 'drupal',
         structureImplementations: [
           { name: 'components', directory: './src/components/' },
-          { name: 'foundation', directory: './src/foundation/' },
+          { name: ' Foundation ', directory: './src/foundation/' },
           { name: 'layout', directory: './src/layout/' },
           { name: 'tokens', directory: './src/tokens/' },
         ],
@@ -427,6 +427,26 @@ describe('resolveProjectConfig', () => {
       components: join(projectDir, 'src/components'),
     });
   });
+
+  it.each(['.', '..', '../escape', 'foo/bar', 'foo\\bar', 'C:escape'])(
+    'rejects path-like structure implementation name %s',
+    (name) => {
+      projectDir = makeTempProject();
+      mkdirSync(join(projectDir, 'src/foundation'), { recursive: true });
+      writeProjectConfig(projectDir, {
+        project: {
+          platform: 'none',
+        },
+        variant: {
+          structureImplementations: [{ name, directory: './src/foundation' }],
+        },
+      });
+
+      expect(() => resolveProjectConfig(projectDir, {})).toThrow(
+        /Invalid variant\.structureImplementations\[0\]\.name .*expected a single path segment/,
+      );
+    },
+  );
 
   it('normalizes documented assets.roots into project structure asset roots', () => {
     projectDir = makeTempProject();
