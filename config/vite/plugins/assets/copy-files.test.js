@@ -354,6 +354,87 @@ describe('source copy plugins', () => {
       );
     });
 
+    it('requires a watcher restart to discover new files and component directories', () => {
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir, watch: {} };
+      const existingSource = join(projectDir, 'src/components/card/extra.twig');
+      const newComponentSource = join(
+        projectDir,
+        'src/components/badge/badge.twig',
+      );
+      const existingOutput = join(outDir, 'components/card/extra.twig');
+      const newComponentOutput = join(outDir, 'components/badge/badge.twig');
+      const plugin = copyTwigFilesPlugin({ structure });
+      const addWatchFile = jest.fn();
+      const runCycle = (currentPlugin) => {
+        currentPlugin.buildStart.call({ addWatchFile });
+        currentPlugin.writeBundle();
+      };
+
+      plugin.configResolved({ root: projectDir, build });
+      runCycle(plugin);
+
+      writeFileSync(existingSource, '<aside>extra</aside>');
+      mkdirSync(join(newComponentSource, '..'), { recursive: true });
+      writeFileSync(newComponentSource, '<strong>badge</strong>');
+
+      // Neither new path is registered, so the real watcher emits no
+      // watchChange event. Even an unrelated cycle keeps using the cached plan.
+      addWatchFile.mockClear();
+      runCycle(plugin);
+
+      expect(addWatchFile).not.toHaveBeenCalledWith(existingSource);
+      expect(addWatchFile).not.toHaveBeenCalledWith(newComponentSource);
+      expect(existsSync(existingOutput)).toBe(false);
+      expect(existsSync(newComponentOutput)).toBe(false);
+
+      const restartedPlugin = copyTwigFilesPlugin({ structure });
+      addWatchFile.mockClear();
+      restartedPlugin.configResolved({ root: projectDir, build });
+      runCycle(restartedPlugin);
+
+      expect(addWatchFile).toHaveBeenCalledWith(existingSource);
+      expect(addWatchFile).toHaveBeenCalledWith(newComponentSource);
+      expect(existsSync(existingOutput)).toBe(true);
+      expect(existsSync(newComponentOutput)).toBe(true);
+    });
+
+    it('requires a watcher restart to discover a renamed component directory', () => {
+      const { structure, outDir } = scaffold();
+      const build = { outDir, root: projectDir, watch: {} };
+      const originalDir = join(projectDir, 'src/components/card');
+      const renamedDir = join(projectDir, 'src/components/kard');
+      const renamedSource = join(renamedDir, 'card.twig');
+      const renamedOutput = join(outDir, 'components/kard/card.twig');
+      const plugin = copyTwigFilesPlugin({ structure });
+      const addWatchFile = jest.fn();
+      const runCycle = (currentPlugin) => {
+        currentPlugin.buildStart.call({ addWatchFile });
+        currentPlugin.writeBundle();
+      };
+
+      plugin.configResolved({ root: projectDir, build });
+      runCycle(plugin);
+      renameSync(originalDir, renamedDir);
+
+      // A directory rename does not emit a structural event for the individual
+      // paths in the cached plan. An unrelated cycle therefore keeps the old
+      // paths and cannot discover the renamed tree.
+      addWatchFile.mockClear();
+      runCycle(plugin);
+
+      expect(addWatchFile).not.toHaveBeenCalledWith(renamedSource);
+      expect(existsSync(renamedOutput)).toBe(false);
+
+      const restartedPlugin = copyTwigFilesPlugin({ structure });
+      addWatchFile.mockClear();
+      restartedPlugin.configResolved({ root: projectDir, build });
+      runCycle(restartedPlugin);
+
+      expect(addWatchFile).toHaveBeenCalledWith(renamedSource);
+      expect(existsSync(renamedOutput)).toBe(true);
+    });
+
     it('picks up an edit on the next cycle', () => {
       const { structure, outDir } = scaffold();
       const build = { outDir, watch: {} };

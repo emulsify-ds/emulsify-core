@@ -44,10 +44,11 @@ export function copyTwigFilesPlugin({
    * Resolve every file this plugin copies, paired with where it lands.
    *
    * Shared by both hooks, which keeps "gets copied to dist" and "a save
-   * triggers the copy" from drifting apart. File create and delete events reset
-   * the plan so newly created sources can be copied without restarting the
-   * watcher. Previous destinations are not pruned; content-only edits keep the
-   * cached filesystem walk.
+   * triggers the copy" from drifting apart. Structural events for an
+   * individually watched file reset the plan, so a single-file rename can be
+   * copied on the next cycle. New files and component-directory changes sit
+   * outside that watch set and require a watcher restart. Previous destinations
+   * are not pruned; content-only edits keep the cached filesystem walk.
    *
    * @returns {Array<{absPath: string, relDest: string}>} Copy plan.
    */

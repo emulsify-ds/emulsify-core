@@ -141,10 +141,15 @@ itself. Every Twig template does, including ones whose names begin with an
 underscore — Twig resolves `{% include %}` at render time against the emitted tree,
 so those are files the site still has to find.
 
-Adding a _new_ file is different from editing one. The entry map and the source
-index are both resolved once at config time, and Rollup cannot take new inputs
-mid-watch, so a newly created component needs `develop` restarted before it is
-picked up.
+Adding a _new_ file is different from editing one. The copy plugins register
+individual files rather than component directories, while the entry map and the
+source index are resolved once at config time. Adding a file anywhere under a
+component source root — including inside an existing component — therefore does
+not start a Vite build cycle. Creating, renaming, or deleting a component
+directory likewise requires restarting `develop`; the restart refreshes both the
+watch set and compiled inputs. A single-file rename does produce a cycle because
+deleting its individually watched original emits an event, though its old output
+is retained until a restart or one-shot build cleans it.
 
 Deprecations are not repeated on rebuilds — restating 190 of them on every
 keystroke would recreate the noise the reporter exists to remove. Failures are

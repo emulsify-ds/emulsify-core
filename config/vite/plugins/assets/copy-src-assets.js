@@ -46,8 +46,10 @@ export function copyAllSrcAssetsPlugin({
    *
    * Shared by both hooks for the same reason as the Twig copier: watching and
    * copying have to be driven by one list, or a file can end up copied on a full
-   * build and ignored on a save. File create and delete events refresh the plan
-   * so newly created sources are copied. Previous destinations are not pruned.
+   * build and ignored on a save. Structural events for an individually watched
+   * file refresh the plan, but new files and component-directory changes sit
+   * outside that watch set and require a watcher restart. Previous destinations
+   * are not pruned.
    *
    * @returns {Array<{absPath: string, relDest: string}>} Copy plan.
    */
