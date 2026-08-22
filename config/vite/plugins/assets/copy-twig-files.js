@@ -5,7 +5,7 @@
  * structure using the same routing rules as compiled JS and CSS entries.
  */
 
-import { copyFileSync, mkdirSync } from 'fs';
+import { copyFileSync, mkdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve } from 'path';
 
 import {
@@ -25,13 +25,14 @@ import {
 /**
  * Copy Twig templates and component metadata to `dist/`.
  *
- * @param {{ structure: object, sourceFileIndex?: object, diagnostics?: object }} opts - Plugin options.
+ * @param {{ structure: object, sourceFileIndex?: object, diagnostics?: object, outputChanges?: Map<string, {kind: 'written'|'removed', bytes?: number}> }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Copy plugin.
  */
 export function copyTwigFilesPlugin({
   structure,
   sourceFileIndex = createSourceFileIndex(structure),
   diagnostics,
+  outputChanges,
 }) {
   let outDir = 'dist';
   let projectDir = process.cwd();
@@ -119,10 +120,20 @@ export function copyTwigFilesPlugin({
     writeBundle() {
       for (const { absPath, relDest } of copyPlan()) {
         const copyResult = copyToOutDir(absPath, relDest);
+        if (watching && copyResult.status === 'written') {
+          outputChanges?.set(relDest, {
+            kind: 'written',
+            bytes: copyResult.bytes,
+          });
+        }
         if (copyResult.status === 'failed' && copyResult.error) {
           const errno = copyResult.error.code ?? 'unknown error';
           const message = `Unable to copy ${absPath} to ${join(outDir, relDest)} (${errno}): ${copyResult.error.message}`;
-          diagnostics?.recordError?.({ message, file: absPath });
+          diagnostics?.recordError?.({
+            message,
+            file: absPath,
+            outputState: 'incomplete',
+          });
           this.warn?.(message);
         }
       }
@@ -143,7 +154,7 @@ export function copyTwigFilesPlugin({
    *
    * @param {string} absPath - Absolute source path.
    * @param {string} relDest - Destination relative to `outDir`.
-   * @returns {{status: 'written'|'skipped'|'failed', error?: Error}} Copy result.
+   * @returns {{status: 'written'|'skipped'|'failed', bytes?: number, error?: Error}} Copy result.
    */
   function copyToOutDir(absPath, relDest) {
     if (!relDest) return { status: 'failed' };
@@ -170,7 +181,15 @@ export function copyTwigFilesPlugin({
     try {
       removeDestinationSymlink(destPath);
       copyFileSync(absPath, destPath);
-      return { status: 'written' };
+      let bytes;
+      if (watching && outputChanges) {
+        try {
+          bytes = statSync(destPath).size;
+        } catch {
+          // The write still succeeded; size is optional reporting metadata.
+        }
+      }
+      return { status: 'written', bytes };
     } catch (error) {
       return {
         status: 'failed',

@@ -181,6 +181,52 @@ const strictAssetFailureMessage = (
 };
 
 /**
+ * Merge filesystem copy events into Rollup's bundle-derived output diff.
+ *
+ * Twig, component metadata, and static source assets are written by plugins
+ * after Rollup has produced its bundle, so they can never appear in that
+ * bundle's fingerprints. The event map is last-write-wins per path: a future
+ * safe prune can mark a path removed, while a later write in the same cycle
+ * can restore it.
+ *
+ * @param {Array<{fileName: string, bytes?: number, gzipBytes?: number}>} changed - Bundle outputs whose bytes changed.
+ * @param {string[]} removed - Bundle outputs no longer present.
+ * @param {Map<string, {kind: 'written'|'removed', bytes?: number}>} copyChanges - Successful copied-output mutations.
+ * @returns {{changedOutputs: Array<{fileName: string, bytes?: number, gzipBytes?: number}>, removedOutputs: string[]}} Combined output diff.
+ */
+const mergeCopiedOutputChanges = (changed, removed, copyChanges) => {
+  const changedByName = new Map(
+    changed.map((entry) => [entry.fileName, entry]),
+  );
+  const removedNames = new Set(removed);
+
+  for (const [fileName, change] of copyChanges) {
+    if (change?.kind === 'removed') {
+      changedByName.delete(fileName);
+      removedNames.add(fileName);
+      continue;
+    }
+
+    if (change?.kind !== 'written') continue;
+
+    removedNames.delete(fileName);
+    changedByName.set(fileName, {
+      fileName,
+      bytes: Number.isFinite(change.bytes) ? change.bytes : undefined,
+    });
+  }
+
+  return {
+    changedOutputs: [...changedByName.values()].sort((a, b) => {
+      const aBytes = Number.isFinite(a.bytes) ? a.bytes : -1;
+      const bBytes = Number.isFinite(b.bytes) ? b.bytes : -1;
+      return bBytes - aBytes || a.fileName.localeCompare(b.fileName, 'en');
+    }),
+    removedOutputs: [...removedNames].sort((a, b) => a.localeCompare(b, 'en')),
+  };
+};
+
+/**
  * Create the Emulsify develop reporter plugin.
  *
  * @param {{
@@ -192,10 +238,12 @@ const strictAssetFailureMessage = (
  *   colorEnabled?: boolean,
  *   detailed?: boolean,
  *   unchangedOutputs?: Set<string>,
+ *   copiedOutputChanges?: Map<string, {kind: 'written'|'removed', bytes?: number}>,
  *   version?: string
- * }} options - Plugin options. `unchangedOutputs` carries the files
- *   `stableWatchOutputPlugin` dropped from this cycle's bundle because the
- *   bytes on disk already matched.
+ * }} options - Plugin options. `unchangedOutputs` carries the files the stable
+ *   output plugin dropped from this cycle's bundle because the bytes on disk
+ *   already matched. `copiedOutputChanges` carries successful writes and
+ *   removals that never enter Rollup's bundle.
  * @returns {import('vite').PluginOption} Develop reporter plugin.
  */
 export function developReporterPlugin({
@@ -209,6 +257,7 @@ export function developReporterPlugin({
   detailed,
   strictness,
   unchangedOutputs = new Set(),
+  copiedOutputChanges = new Map(),
   version,
 } = {}) {
   const styler = createStyler(
@@ -238,6 +287,7 @@ export function developReporterPlugin({
   let changedOutputs = [];
   let removedOutputs = [];
   let fingerprints = new Map();
+  let outputNames = new Set();
   let transformedModules = new Set();
 
   /**
@@ -501,6 +551,7 @@ export function developReporterPlugin({
       transformedModules = new Set();
       changedOutputs = [];
       removedOutputs = [];
+      copiedOutputChanges.clear();
     },
 
     // Rolldown's own `N modules transformed.` count is unavailable here by
@@ -545,47 +596,79 @@ export function developReporterPlugin({
     // only hook that receives it. Raising `logLevel` to quiet the develop loop
     // discards Rolldown's per-file asset table, and this recovers the three
     // facts from it worth keeping.
-    writeBundle(_options, bundle) {
-      if (watching) {
-        writeTally = summarizeBundle(bundle);
+    writeBundle: {
+      // Copy and mirror hooks publish outside Rollup's bundle. Waiting for all
+      // normal-order hooks makes their filesystem events and diagnostics a
+      // hard input to this cycle's verdict, even if a producer later becomes
+      // asynchronous.
+      order: 'post',
+      sequential: true,
+      handler(_options, bundle) {
+        if (watching) {
+          writeTally = summarizeBundle(bundle);
 
-        if (verbose) {
-          // Rollup regenerates the whole bundle every cycle, so the first build
-          // lists everything and later cycles list only what came out different.
-          // Gzip is computed for the full listing once, then only for the files
-          // a rebuild changed — which is what keeps the watch loop from paying
-          // Rolldown's `computing gzip size...` pause on every keystroke.
-          const current = fingerprintBundle(bundle);
+          // Quiet mode does not hash output contents, but it still keeps the
+          // path set needed to identify removals. Carry stable skipped outputs
+          // forward just as the detailed fingerprint diff does below.
+          if (!verbose) {
+            const currentOutputNames = new Set(Object.keys(bundle || {}));
+            for (const fileName of unchangedOutputs) {
+              if (outputNames.has(fileName)) currentOutputNames.add(fileName);
+            }
 
-          // A file the stable-output plugin dropped is still on disk with the
-          // same bytes, so carry its fingerprint forward. Without this the
-          // diff below sees it missing from the bundle and calls it removed.
-          for (const fileName of unchangedOutputs) {
-            const previous = fingerprints.get(fileName);
-            if (previous !== undefined) current.set(fileName, previous);
+            if (firstCycleComplete) {
+              removedOutputs = [...outputNames].filter(
+                (fileName) => !currentOutputNames.has(fileName),
+              );
+            }
+            outputNames = currentOutputNames;
           }
 
-          if (firstCycleComplete) {
-            const diff = diffFingerprints(fingerprints, current);
-            const changed = new Set(diff.changed);
+          if (verbose) {
+            // Rollup regenerates the whole bundle every cycle, so the first
+            // build lists everything and later cycles list only what came out
+            // different. Gzip is computed for the full listing once, then only
+            // for the files a rebuild changed — which is what keeps the watch
+            // loop from paying Rolldown's `computing gzip size...` pause on
+            // every keystroke.
+            const current = fingerprintBundle(bundle);
 
-            changedOutputs = buildOutputFileRows(
-              Object.fromEntries(
-                Object.entries(bundle).filter(([fileName]) =>
-                  changed.has(fileName),
+            // A file the stable-output plugin dropped is still on disk with the
+            // same bytes, so carry its fingerprint forward. Without this the
+            // diff below sees it missing from the bundle and calls it removed.
+            for (const fileName of unchangedOutputs) {
+              const previous = fingerprints.get(fileName);
+              if (previous !== undefined) current.set(fileName, previous);
+            }
+
+            if (firstCycleComplete) {
+              const diff = diffFingerprints(fingerprints, current);
+              const changed = new Set(diff.changed);
+
+              changedOutputs = buildOutputFileRows(
+                Object.fromEntries(
+                  Object.entries(bundle).filter(([fileName]) =>
+                    changed.has(fileName),
+                  ),
                 ),
-              ),
-            );
-            removedOutputs = diff.removed;
-          } else {
-            outputFiles = buildOutputFileRows(bundle);
+              );
+              removedOutputs = diff.removed;
+            } else {
+              outputFiles = buildOutputFileRows(bundle);
+            }
+
+            fingerprints = current;
           }
 
-          fingerprints = current;
+          ({ changedOutputs, removedOutputs } = mergeCopiedOutputChanges(
+            changedOutputs,
+            removedOutputs,
+            copiedOutputChanges,
+          ));
         }
-      }
 
-      reportCycle();
+        reportCycle();
+      },
     },
 
     closeBundle() {

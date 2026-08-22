@@ -42,6 +42,7 @@ describe('source copy failure reporting', () => {
       const destinationPath = join(outDir, 'components/card', fileName);
       const original = `original ${fileName}`;
       const diagnostics = createDiagnosticsCollector();
+      const outputChanges = new Map();
       const warn = jest.fn();
 
       mkdirSync(sourceDir, { recursive: true });
@@ -50,6 +51,7 @@ describe('source copy failure reporting', () => {
       const plugin = factory({
         structure: resolveProjectStructure(makeEnv(projectDir)),
         diagnostics,
+        outputChanges,
       });
       plugin.configResolved({
         root: projectDir,
@@ -60,6 +62,7 @@ describe('source copy failure reporting', () => {
       // Keep the cached plan but remove its source. The copy now fails with a
       // deterministic ENOENT while the previous cycle's output stays on disk,
       // which is precisely the stale success the diagnostic must expose.
+      outputChanges.clear();
       rmSync(sourcePath);
       plugin.writeBundle.call({ warn });
 
@@ -73,18 +76,20 @@ describe('source copy failure reporting', () => {
         expect.objectContaining({
           file: sourcePath,
           message: expect.stringContaining(destinationPath),
+          outputState: 'incomplete',
         }),
       ]);
       expect(hasCycleFailure(snapshot)).toBe(true);
-      expect(
-        renderRebuild({
-          snapshot,
-          durationMs: 10,
-          changedFiles: [sourcePath],
-          projectDir,
-          styler: createStyler(false),
-        }).join('\n'),
-      ).toContain('rebuild failed');
+      expect(outputChanges.size).toBe(0);
+      const rebuildOutput = renderRebuild({
+        snapshot,
+        durationMs: 10,
+        changedFiles: [sourcePath],
+        projectDir,
+        styler: createStyler(false),
+      }).join('\n');
+      expect(rebuildOutput).toContain('rebuild failed');
+      expect(rebuildOutput).toContain('output may be incomplete');
     },
   );
 

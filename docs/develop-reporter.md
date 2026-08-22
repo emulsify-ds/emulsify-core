@@ -310,8 +310,11 @@ This is deliberately not Rolldown's table. Rollup regenerates the whole bundle o
 every cycle, so "which files were written" is always "all of them" and answers
 nothing. The reporter fingerprints the bundle by content and reports only what
 came out different — including the useful negative, `no output changed`, when an
-edit compiled to byte-identical CSS. Files that stopped being written are grouped
-under `no longer written`.
+edit compiled to byte-identical CSS. Successful Twig, component metadata, and
+static-asset copies are merged into that diff because those files never enter
+Rollup's bundle. Files that stopped being written are grouped under
+`no longer written`; removals are named even outside verbose mode so a
+destructive cycle can never read as though nothing changed.
 
 ### What It Costs
 

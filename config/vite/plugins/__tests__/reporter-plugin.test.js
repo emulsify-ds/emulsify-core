@@ -28,6 +28,7 @@ import {
 import { isWatchInvocation } from '../reporter/watch-mode.js';
 
 const plain = createStyler(false);
+const writeBundle = (plugin, ...args) => plugin.writeBundle.handler(...args);
 
 // Built rather than written literally so the fixture keeps the apostrophe that
 // real Sass output contains without tripping the single-quote lint rule.
@@ -107,13 +108,23 @@ describe('develop reporter plugin gating', () => {
     expect(plugin.apply).toBe('build');
   });
 
+  it('reports after output producers and waits for their hooks to finish', () => {
+    const { plugin } = createHarness();
+
+    expect(plugin.writeBundle).toMatchObject({
+      order: 'post',
+      sequential: true,
+      handler: expect.any(Function),
+    });
+  });
+
   it('stays completely silent for one-shot builds', () => {
     const { plugin, lines } = createHarness();
 
     plugin.configResolved(resolvedConfig({ watch: null }));
     plugin.buildStart();
     plugin.buildEnd();
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     expect(lines).toEqual([]);
@@ -149,7 +160,7 @@ describe('develop reporter plugin gating', () => {
     lines.length = 0;
 
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     const built = lines.filter((line) => line.includes('built in'));
@@ -165,7 +176,7 @@ describe('develop reporter output', () => {
     lines.length = 0;
     plugin.buildStart();
     advance(1420);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     // `dist/` is written, not watched. The label names the directory the source
     // roots share, which is what Rollup's module graph is rooted in.
@@ -187,7 +198,7 @@ describe('develop reporter output', () => {
     lines.length = 0;
     plugin.buildStart();
     advance(1000);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     expect(output).toContain('watching components/');
@@ -208,7 +219,7 @@ describe('develop reporter output', () => {
     lines.length = 0;
     plugin.buildStart();
     advance(1000);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     // Naming either root would be a lie about the other, and naming the project
     // root would suggest the whole tree is watched.
@@ -282,7 +293,7 @@ describe('develop reporter output', () => {
     }
 
     advance(1420);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     expect(output).toContain('! 25 sass deprecations · 2 files');
@@ -322,7 +333,7 @@ describe('develop reporter output', () => {
       }
     }
 
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const rows = lines.filter((line) => line.includes('slash-div'));
     expect(rows).toHaveLength(1);
@@ -350,7 +361,7 @@ describe('develop reporter output', () => {
       line: 2,
     });
 
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     // sass-migrator runs exactly one migration per invocation, so a combined
@@ -375,7 +386,7 @@ describe('develop reporter output', () => {
       file: '/project/src/a.scss',
       line: 4,
     });
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     const output = lines.join('\n');
     expect(output).toContain('move declarations above nested rules');
@@ -387,13 +398,13 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
     plugin.watchChange('/project/src/components/card/card.scss');
     advance(84);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     expect(lines).toEqual([
       '  14:31:22 ~ src/components/card/card.scss · rebuilt in 84ms',
@@ -405,7 +416,7 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
@@ -415,7 +426,7 @@ describe('develop reporter output', () => {
       line: 3,
     });
     advance(50);
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     expect(lines.join('\n')).not.toContain('sass deprecations');
   });
@@ -425,14 +436,14 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
     plugin.watchChange('/project/src/a.scss');
     plugin.watchChange('/project/src/b.scss');
     plugin.watchChange('/project/src/c.scss');
-    plugin.writeBundle();
+    writeBundle(plugin);
 
     expect(lines[0]).toContain('src/a.scss +2');
   });
@@ -442,7 +453,7 @@ describe('develop reporter output', () => {
 
     plugin.configResolved(resolvedConfig());
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     lines.length = 0;
 
     plugin.buildStart();
@@ -501,7 +512,22 @@ describe('rendering helpers', () => {
 
     expect(output).toContain('✗ 8 errors');
     expect(output).toContain('+3 more');
+    expect(output).not.toContain('mores');
     expect(output).not.toContain('boom 7');
+  });
+
+  it('reports zero affected files for a locationless deprecation', () => {
+    const collector = createDiagnosticsCollector();
+    collector.recordDeprecation({ id: 'slash-div' });
+
+    const output = renderSummary({
+      snapshot: collector.snapshot(),
+      durationMs: 10,
+      projectDir: '/project',
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('! 1 sass deprecation · 0 files');
   });
 
   it('reports a failed summary from the snapshot when enriched import rows are absent', () => {

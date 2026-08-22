@@ -75,6 +75,14 @@ export function makePlugins(env) {
   /** @type {Set<string>} */
   const unchangedOutputs = new Set();
 
+  // Filled by the source copy plugins, read and reset by the reporter: copied
+  // files never enter Rollup's bundle, so its fingerprint diff cannot see
+  // them. A Map deduplicates paths when more than one producer touches the
+  // same destination and leaves room for safe pruning to report removals if it
+  // is reintroduced later.
+  /** @type {Map<string, {kind: 'written'|'removed', bytes?: number}>|undefined} */
+  const copiedOutputChanges = env.diagnostics ? new Map() : undefined;
+
   const basePlugins = [
     virtualTwigExtensionInstallersPlugin(envWithStructure),
     virtualTwigGlobsPlugin(envWithStructure),
@@ -143,6 +151,7 @@ export function makePlugins(env) {
       structure,
       sourceFileIndex,
       diagnostics: env.diagnostics,
+      outputChanges: copiedOutputChanges,
     }),
 
     // Copy every non-code asset under src with the same routing.
@@ -150,12 +159,14 @@ export function makePlugins(env) {
       structure,
       sourceFileIndex,
       diagnostics: env.diagnostics,
+      outputChanges: copiedOutputChanges,
     }),
 
     // Drupal projects with src mirror dist/components back to ./components.
     mirrorComponentsToRoot({
       enabled: structure.mirrorComponentOutput,
       projectDir,
+      diagnostics: env.diagnostics,
     }),
 
     // Summarize `npm run develop`, and report actionable diagnostics collected
@@ -166,6 +177,7 @@ export function makePlugins(env) {
             env,
             diagnostics: env.diagnostics,
             unchangedOutputs,
+            copiedOutputChanges,
           }),
         ]
       : []),

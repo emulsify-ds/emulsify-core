@@ -150,7 +150,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  * @returns {{
  *   recordDeprecation: (entry: {id?: string, file?: string, line?: number}) => void,
  *   recordWarning: (entry: {message?: string, file?: string, line?: number}) => void,
- *   recordError: (entry: {message?: string, file?: string, line?: number}) => void,
+ *   recordError: (entry: {message?: string, file?: string, line?: number, outputState?: 'incomplete'}) => void,
  *   recordUnresolvedAsset: (entry: {url?: string, importer?: string}) => void,
  *   recordAssetRebase: (entry: {status?: string, url?: string, rewritten?: string, importer?: string, resolvedAsset?: string, candidates?: string[]}) => void,
  *   recordExternalizedModule: (entry: {module?: string, importer?: string}) => void,
@@ -165,7 +165,7 @@ const groupDeprecationsByFile = (deprecationList) => {
  *     importErrors: Array<{file: string|undefined, line: number|undefined, specifier: string, count: number}>,
  *     syntaxErrors: Array<{minifier: string|undefined, message: string, declaration: string|undefined, count: number}>,
  *     warnings: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
- *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, count: number}>,
+ *     errors: Array<{message: string|undefined, file: string|undefined, line: number|undefined, outputState?: 'incomplete', count: number}>,
  *     deprecationTotal: number,
  *     deprecationFileCount: number,
  *     hasProblems: boolean

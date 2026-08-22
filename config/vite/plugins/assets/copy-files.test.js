@@ -82,6 +82,55 @@ describe('source copy plugins', () => {
     expect(existsSync(join(outDir, 'components/card/card.scss'))).toBe(false);
   });
 
+  it('records only copied files whose bytes were written this cycle', () => {
+    projectDir = makeTempProject();
+    const componentDir = join(projectDir, 'src/components/card');
+    const outDir = join(projectDir, 'dist');
+    const outputChanges = new Map();
+    mkdirSync(componentDir, { recursive: true });
+    writeFileSync(join(componentDir, 'card.twig'), '<article></article>');
+    writeFileSync(join(componentDir, 'card.component.yml'), 'name: Card');
+    writeFileSync(join(componentDir, 'icon.svg'), '<svg />');
+
+    const structure = resolveProjectStructure(makeEnv(projectDir));
+    const plugins = [
+      copyTwigFilesPlugin({ structure, outputChanges }),
+      copyAllSrcAssetsPlugin({ structure, outputChanges }),
+    ];
+    for (const plugin of plugins) {
+      plugin.configResolved({ root: projectDir, build: { outDir, watch: {} } });
+      plugin.writeBundle();
+    }
+
+    expect(Object.fromEntries(outputChanges)).toEqual({
+      'components/card/card.component.yml': {
+        kind: 'written',
+        bytes: Buffer.byteLength('name: Card'),
+      },
+      'components/card/card.twig': {
+        kind: 'written',
+        bytes: Buffer.byteLength('<article></article>'),
+      },
+      'components/card/icon.svg': {
+        kind: 'written',
+        bytes: Buffer.byteLength('<svg />'),
+      },
+    });
+
+    outputChanges.clear();
+    for (const plugin of plugins) plugin.writeBundle();
+
+    expect(outputChanges.size).toBe(0);
+
+    // One-shot builds do not render cycle diffs, so they should not pay to
+    // collect reporting metadata even though they rewrite every copied file.
+    for (const plugin of plugins) {
+      plugin.configResolved({ root: projectDir, build: { outDir } });
+      plugin.writeBundle();
+    }
+    expect(outputChanges.size).toBe(0);
+  });
+
   it('copies assets from named structure roots to matching dist folders', () => {
     projectDir = makeTempProject();
     const outDir = join(projectDir, 'dist');

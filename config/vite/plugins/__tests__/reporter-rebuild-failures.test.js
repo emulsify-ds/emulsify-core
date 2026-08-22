@@ -14,6 +14,7 @@ import { hasCycleFailure, renderRebuild } from '../reporter/render.js';
 import { parseExternalizedModule } from '../reporter/vite-logger.js';
 
 const plain = createStyler(false);
+const writeBundle = (plugin, ...args) => plugin.writeBundle.handler(...args);
 
 const rebuild = ({ snapshot, ...overrides } = {}) =>
   renderRebuild({
@@ -85,6 +86,25 @@ describe('renderRebuild', () => {
     expect(output).toContain(
       'output not updated · dist still holds the last successful build',
     );
+  });
+
+  it('names removals even when a post-write step also fails', () => {
+    const output = rebuild({
+      snapshot: {
+        errors: [
+          {
+            message: 'mirror failed',
+            outputState: 'incomplete',
+          },
+        ],
+      },
+      removedOutputs: ['components/card/old.twig'],
+    });
+
+    expect(output).toContain('output may be incomplete');
+    expect(output).toContain('1 output removed');
+    expect(output).toContain('components/card/old.twig');
+    expect(output).not.toContain('no output changed');
   });
 
   it('names the cause rather than only the verdict', () => {
@@ -188,7 +208,7 @@ describe('reporter recovery state', () => {
     const start = lines.length;
     plugin.buildStart();
     seed();
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     return lines.slice(start).join('\n');

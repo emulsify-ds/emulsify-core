@@ -189,10 +189,10 @@ const warnOnInterruptedMirror = (markerFile) => {
 /**
  * Mirror built component files to the project root `./components/` directory.
  *
- * @param {{ enabled: boolean, projectDir: string }} opts - Plugin options.
+ * @param {{ enabled: boolean, projectDir: string, diagnostics?: object }} opts - Plugin options.
  * @returns {import('vite').PluginOption} Drupal mirror plugin.
  */
-export function mirrorComponentsToRoot({ enabled, projectDir }) {
+export function mirrorComponentsToRoot({ enabled, projectDir, diagnostics }) {
   let outDir = 'dist';
   return {
     name: 'emulsify-mirror-components-to-root',
@@ -226,9 +226,16 @@ export function mirrorComponentsToRoot({ enabled, projectDir }) {
             moveFileIntoPlace(srcFile, destFile);
             pruneEmptyDirsUpTo(dirname(srcFile), distComponents);
           } catch (e) {
-            console.warn(
-              `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`,
-            );
+            const message = `Mirror copy failed for ${relFromOutDir}: ${e?.message || e}`;
+            diagnostics?.recordError?.({
+              message,
+              file: destFile,
+              outputState: 'incomplete',
+            });
+            // One-shot builds do not render the watch-cycle failure summary,
+            // so preserve their immediate warning through Rollup's logger.
+            if (typeof this.warn === 'function') this.warn(message);
+            else console.warn(message);
           }
         }
 

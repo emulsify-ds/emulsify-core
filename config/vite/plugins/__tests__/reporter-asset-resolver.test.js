@@ -608,6 +608,7 @@ describe('asset table rendering', () => {
 
     const output = render(many);
     expect(output).toContain('+4 more');
+    expect(output).not.toContain('mores');
   });
 
   it('says nothing when every url resolved', () => {

@@ -405,7 +405,7 @@ function renderDetailRows(entries, projectDir, styler) {
   const hidden = entries.length - MAX_DETAIL_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -434,7 +434,7 @@ function renderDeprecations(snapshot, projectDir, styler, sourceGlob) {
 
   const headline = [
     pluralize(deprecationTotal, 'sass deprecation'),
-    pluralize(deprecationsByFile.length || 1, 'file'),
+    pluralize(deprecationsByFile.length, 'file'),
   ].join(SEPARATOR);
 
   const lines = [
@@ -685,7 +685,7 @@ function renderSyntaxErrors(errors, styler) {
       const hidden = matches.length - MAX_SOURCE_LEADS;
       if (hidden > 0) {
         lines.push(
-          `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+          `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
         );
       }
     }
@@ -755,7 +755,7 @@ function renderImportErrors(rows, sharedDirectory, directoryExists, styler) {
   const hidden = rows.length - MAX_ASSET_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -821,7 +821,7 @@ function renderUnresolvedAssets(rows, styler) {
   const hidden = rows.length - MAX_ASSET_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -865,7 +865,7 @@ function renderExternalizedModules(modules = [], styler) {
   const hidden = modules.length - MAX_ASSET_ROWS;
   if (hidden > 0) {
     lines.push(
-      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+      `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
     );
   }
 
@@ -1233,7 +1233,7 @@ export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
     const hidden = repaired.length - MAX_ASSET_ROWS;
     if (hidden > 0) {
       lines.push(
-        `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more')}`)}`,
+        `${DETAIL_INDENT}${styler('gray', `+${pluralize(hidden, 'more', 'more')}`)}`,
       );
     }
 
@@ -1372,7 +1372,7 @@ export function renderSummary({
  *   changedFiles?: string[],
  *   projectDir?: string,
  *   moduleCount?: number,
- *   changedOutputs?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   changedOutputs?: Array<{fileName: string, bytes?: number, gzipBytes?: number}>,
  *   removedOutputs?: string[],
  *   detailed?: boolean,
  *   styler: (format: string|string[], text: string) => string,
@@ -1430,15 +1430,17 @@ export function renderRebuild({
   ];
 
   if (failed) {
-    // Nothing is written when a cycle fails, so the previous build is still on
-    // disk and whatever is serving it shows no change. Saying so is the whole
-    // difference between "my edit did nothing" and "my edit did not compile".
-    lines.push(
-      `${DETAIL_INDENT}${styler(
-        'yellow',
-        `output not updated${SEPARATOR}${outDir} still holds the last successful build`,
-      )}`,
+    // Compile failures occur before output is written, but copy and mirror
+    // failures happen after Rollup has already published some files. Preserve
+    // that distinction so a partially updated theme is never described as the
+    // last wholly successful build.
+    const outputIncomplete = snapshot.errors?.some(
+      (error) => error.outputState === 'incomplete',
     );
+    const outputStatus = outputIncomplete
+      ? `output may be incomplete${SEPARATOR}some output may already have changed`
+      : `output not updated${SEPARATOR}${outDir} still holds the last successful build`;
+    lines.push(`${DETAIL_INDENT}${styler('yellow', outputStatus)}`);
 
     // The same blocks the first build renders, minus the inherited deprecation
     // debt, so a rebuild failure names its cause instead of only its verdict.
@@ -1456,13 +1458,23 @@ export function renderRebuild({
       ),
     );
 
+    if (removedOutputs.length > 0) {
+      lines.push(...renderRebuildDetail({ removedOutputs }, styler));
+    }
+
     return lines;
   }
 
-  if (detailed)
+  // Writes follow the existing detailed-mode contract. Removals are always
+  // named: a destructive cycle must never collapse to a green one-line result.
+  if (detailed || removedOutputs.length > 0)
     lines.push(
       ...renderRebuildDetail(
-        { moduleCount, changedOutputs, removedOutputs },
+        {
+          moduleCount: detailed ? moduleCount : undefined,
+          changedOutputs: detailed ? changedOutputs : [],
+          removedOutputs,
+        },
         styler,
       ),
     );
@@ -1475,7 +1487,7 @@ export function renderRebuild({
  *
  * @param {{
  *   moduleCount?: number,
- *   changedOutputs?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
+ *   changedOutputs?: Array<{fileName: string, bytes?: number, gzipBytes?: number}>,
  *   removedOutputs?: string[]
  * }} cycle - What the rebuild produced.
  * @param {(format: string|string[], text: string) => string} styler - Styling function.
@@ -1490,11 +1502,11 @@ function renderRebuildDetail(
     facts.push(`${pluralize(moduleCount, 'module')} transformed`);
   }
 
-  facts.push(
-    changedOutputs.length === 0
-      ? 'no output changed'
-      : `${pluralize(changedOutputs.length, 'output')} changed`,
-  );
+  if (changedOutputs.length > 0) {
+    facts.push(`${pluralize(changedOutputs.length, 'output')} changed`);
+  } else if (removedOutputs.length === 0) {
+    facts.push('no output changed');
+  }
 
   if (removedOutputs.length > 0) {
     facts.push(`${pluralize(removedOutputs.length, 'output')} removed`);

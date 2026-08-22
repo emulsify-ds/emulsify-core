@@ -14,6 +14,8 @@ import {
   resolveAssetStrictness,
 } from '../reporter/strict-mode.js';
 
+const writeBundle = (plugin, ...args) => plugin.writeBundle.handler(...args);
+
 /**
  * Build a one-shot reporter harness with captured output.
  *
@@ -46,7 +48,7 @@ describe('one-shot reporting', () => {
     const { plugin, lines } = createOneShotHarness();
 
     plugin.buildStart();
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     expect(lines).toEqual([]);
@@ -61,7 +63,7 @@ describe('one-shot reporting', () => {
       importer: '/project/src/components/card/card.scss',
       resolvedAsset: '/project/assets/images/x.svg',
     });
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
 
     const output = lines.join('\n');
@@ -159,7 +161,7 @@ describe('one-shot reporting', () => {
       url: 'assets/x.svg',
       rewritten: '/assets/x.svg',
     });
-    plugin.writeBundle();
+    writeBundle(plugin);
     plugin.closeBundle();
     plugin.closeBundle();
 
