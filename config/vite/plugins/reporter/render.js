@@ -152,7 +152,7 @@ const FACT_LABELS = {
  *   platform?: string,
  *   inputRows?: Array<{name: string, path: string, count: number}>,
  *   outDir?: string,
- *   outputPaths?: string[],
+ *   outputRows?: Array<{path: string, write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}}>,
  *   write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}},
  *   styler: (format: string|string[], text: string) => string
  * }} options - Facts inputs.
@@ -162,7 +162,7 @@ export function renderFacts({
   platform,
   inputRows = [],
   outDir = 'dist',
-  outputPaths = [],
+  outputRows = [],
   write,
   styler,
 }) {
@@ -213,26 +213,59 @@ export function renderFacts({
     });
   }
 
-  const outputFacts = [];
-  if (write) {
-    outputFacts.push(pluralize(write.fileCount, 'file'));
-    outputFacts.push(formatBytes(write.totalBytes));
+  /**
+   * Render the numeric facts following one output path.
+   *
+   * @param {{fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}|undefined} summary - Bundle tally.
+   * @param {boolean} includeLargest - Whether to name the largest file.
+   * @returns {string} Styled facts with their leading column gap.
+   */
+  const outputSuffix = (summary, includeLargest = true) => {
+    if (!summary) return '';
 
-    if (write.largest) {
-      outputFacts.push(
-        `largest ${write.largest.fileName} ${formatBytes(write.largest.bytes)}`,
+    const facts = [
+      pluralize(summary.fileCount, 'file'),
+      formatBytes(summary.totalBytes),
+    ];
+
+    if (includeLargest && summary.largest) {
+      facts.push(
+        `largest ${summary.largest.fileName} ${formatBytes(summary.largest.bytes)}`,
       );
     }
+
+    return styler('gray', `  ${facts.join(SEPARATOR)}`);
+  };
+
+  const destinations =
+    outputRows.length > 0 ? outputRows : [{ path: outDir, write }];
+  const hasTotal = destinations.length > 1 && Boolean(write);
+  const pathWidth = Math.max(
+    ...destinations.map((entry) => entry.path.length),
+    hasTotal ? 'total'.length : 0,
+  );
+
+  destinations.forEach((entry, index) => {
+    const destinationWrite =
+      destinations.length === 1 && !entry.write ? write : entry.write;
+    const path = styler('cyan', entry.path.padEnd(pathWidth));
+
+    lines.push(
+      row(
+        index === 0 ? FACT_LABELS.output : '',
+        `${path}${outputSuffix(destinationWrite)}`,
+      ),
+    );
+  });
+
+  if (hasTotal) {
+    lines.push(
+      row(
+        '',
+        `${styler('gray', 'total'.padEnd(pathWidth))}${outputSuffix(write, false)}`,
+      ),
+    );
   }
-
-  const outputSuffix =
-    outputFacts.length > 0
-      ? styler('gray', `  ${outputFacts.join(SEPARATOR)}`)
-      : '';
-
-  const outputLabel = outputPaths.length > 0 ? outputPaths.join(' + ') : outDir;
-
-  lines.push(row(FACT_LABELS.output, `${outputLabel}${outputSuffix}`));
 
   return lines;
 }
@@ -1286,7 +1319,7 @@ export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
  *   snapshot: object,
  *   durationMs: number,
  *   outDir?: string,
- *   outputPaths?: string[],
+ *   outputRows?: Array<{path: string, write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}}>,
  *   projectDir?: string,
  *   sourceGlob?: string,
  *   assetRows?: Array<object>,
@@ -1306,7 +1339,7 @@ export function renderSummary({
   snapshot,
   durationMs,
   outDir = 'dist',
-  outputPaths = [],
+  outputRows = [],
   projectDir = '',
   sourceGlob = 'src/**/*.scss',
   assetRows = [],
@@ -1350,7 +1383,7 @@ export function renderSummary({
     '',
     renderDivider('project', unicode, styler),
     '',
-    ...renderFacts({ platform, inputRows, outDir, outputPaths, write, styler }),
+    ...renderFacts({ platform, inputRows, outDir, outputRows, write, styler }),
     // The verbose listings expand the two rows above them, so they sit directly
     // under the totals they itemize rather than after the build result.
     ...renderInputFiles(inputFiles, unicode, styler),

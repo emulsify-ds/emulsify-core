@@ -537,6 +537,64 @@ export function summarizeBundle(bundle) {
 }
 
 /**
+ * Attribute bundle output to the directories that retain it after publishing.
+ *
+ * Rollup writes every file through `outDir`, but Drupal SDC projects then move
+ * `components/**` to the project-root component directory. Partitioning the
+ * in-memory bundle preserves the reporter's no-I/O tally while naming the
+ * directories developers actually inspect after the mirror completes.
+ *
+ * Largest component paths are made relative to `components/`; the directory
+ * row already supplies that prefix, so repeating it would obscure the useful
+ * part of long component paths.
+ *
+ * @param {{
+ *   bundle?: Record<string, {type?: string, code?: string, source?: string|Uint8Array}>,
+ *   outDir?: string,
+ *   mirrorComponentOutput?: boolean,
+ *   componentOutput?: string
+ * }} [options] - Output routing inputs.
+ * @returns {Array<{path: string, write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}}}>} Destination rows.
+ */
+export function buildOutputSummaryRows({
+  bundle,
+  outDir = 'dist',
+  mirrorComponentOutput = false,
+  componentOutput = 'components',
+} = {}) {
+  if (!mirrorComponentOutput) {
+    return [{ path: outDir, write: summarizeBundle(bundle) }];
+  }
+
+  const componentPath = displayRoot(componentOutput);
+  const distBundle = {};
+  const componentBundle = {};
+
+  for (const [fileName, output] of Object.entries(bundle || {})) {
+    const normalizedFileName = fileName.split('\\').join('/');
+
+    if (normalizedFileName.startsWith(componentPath)) {
+      componentBundle[normalizedFileName.slice(componentPath.length)] = output;
+    } else {
+      distBundle[fileName] = output;
+    }
+  }
+
+  const emptyWrite =
+    bundle && typeof bundle === 'object'
+      ? { fileCount: 0, totalBytes: 0 }
+      : undefined;
+
+  return [
+    { path: outDir, write: summarizeBundle(distBundle) || emptyWrite },
+    {
+      path: componentPath,
+      write: summarizeBundle(componentBundle) || emptyWrite,
+    },
+  ];
+}
+
+/**
  * Measure one bundle output in bytes.
  *
  * Chunks carry `code`, assets carry `source`, and an asset source may already be

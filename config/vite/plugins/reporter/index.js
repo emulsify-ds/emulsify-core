@@ -55,7 +55,7 @@ import {
   buildInputFileRows,
   buildInputRows,
   buildOutputFileRows,
-  displayRoot,
+  buildOutputSummaryRows,
   diffFingerprints,
   fingerprintBundle,
   summarizeBundle,
@@ -275,7 +275,7 @@ export function developReporterPlugin({
   let oneShotPrinted = false;
   let oneShotAssetRows = [];
   let outDir = 'dist';
-  let outputPaths = [];
+  let outputRows = [];
   let inputRows = [];
   let inputFiles = [];
   let watchLabel;
@@ -421,7 +421,7 @@ export function developReporterPlugin({
           snapshot,
           durationMs,
           outDir,
-          outputPaths,
+          outputRows,
           projectDir: env.projectDir,
           sourceGlob: resolveSourceGlob(env),
           assetRows,
@@ -510,12 +510,11 @@ export function developReporterPlugin({
       if (!watching) return;
 
       outDir = config.build?.outDir || 'dist';
-      outputPaths = [outDir];
-      if (env.projectStructure?.mirrorComponentOutput) {
-        outputPaths.push(
-          displayRoot(env.projectStructure.output?.components || 'components'),
-        );
-      }
+      outputRows = buildOutputSummaryRows({
+        outDir,
+        mirrorComponentOutput: env.projectStructure?.mirrorComponentOutput,
+        componentOutput: env.projectStructure?.output?.components,
+      });
 
       // Attribution is resolved here, from the entry map the config already
       // carries, so the summary can name each source root and what it
@@ -615,6 +614,12 @@ export function developReporterPlugin({
       handler(_options, bundle) {
         if (watching) {
           writeTally = summarizeBundle(bundle);
+          outputRows = buildOutputSummaryRows({
+            bundle,
+            outDir,
+            mirrorComponentOutput: env.projectStructure?.mirrorComponentOutput,
+            componentOutput: env.projectStructure?.output?.components,
+          });
 
           // Quiet mode does not hash output contents, but it still keeps the
           // path set needed to identify removals. Carry stable skipped outputs

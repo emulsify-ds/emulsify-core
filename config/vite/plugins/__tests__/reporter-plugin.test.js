@@ -198,10 +198,28 @@ describe('develop reporter output', () => {
     plugin.configResolved(resolvedConfig());
     lines.length = 0;
     plugin.buildStart();
-    writeBundle(plugin);
+    writeBundle(
+      plugin,
+      {},
+      {
+        'global/style.css': { type: 'asset', source: 'a'.repeat(4) },
+        'storybook/preview.js': { type: 'chunk', code: 'b'.repeat(2) },
+        'components/card/card.js': { type: 'chunk', code: 'c'.repeat(10) },
+        'components/card/card.css': { type: 'asset', source: 'd'.repeat(5) },
+      },
+    );
 
-    const outputLine = lines.find((line) => line.includes('output'));
-    expect(outputLine).toContain('dist/ + components/');
+    const outputIndex = lines.findIndex((line) => line.includes('output'));
+    const outputLines = lines.slice(outputIndex, outputIndex + 3);
+
+    expect(outputLines[0]).toContain(
+      'dist/        2 files · 6 B · largest global/style.css 4 B',
+    );
+    expect(outputLines[1]).toContain(
+      'components/  2 files · 15 B · largest card/card.js 10 B',
+    );
+    expect(outputLines[2]).toContain('total        4 files · 21 B');
+    expect(outputLines[2]).not.toContain('largest');
   });
 
   it('names the watched sources, not the output directory', () => {
