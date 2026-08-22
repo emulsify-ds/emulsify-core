@@ -462,6 +462,24 @@ describe('facts block', () => {
     expect(output).toContain('largest style.css 388 kB');
   });
 
+  it('names every final output destination for mirrored components', () => {
+    const output = renderFacts({
+      platform: 'drupal',
+      inputRows,
+      outDir: 'dist/',
+      outputPaths: ['dist/', 'components/'],
+      write: {
+        fileCount: 41,
+        totalBytes: 1024 * 1024,
+        largest: { fileName: 'components/card/card.js', bytes: 397312 },
+      },
+      styler: plain,
+    }).join('\n');
+
+    expect(output).toContain('dist/ + components/');
+    expect(output).toContain('41 files');
+  });
+
   it('states the output directory before the first build has written', () => {
     const output = renderFacts({
       platform: 'none',

@@ -152,6 +152,7 @@ const FACT_LABELS = {
  *   platform?: string,
  *   inputRows?: Array<{name: string, path: string, count: number}>,
  *   outDir?: string,
+ *   outputPaths?: string[],
  *   write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}},
  *   styler: (format: string|string[], text: string) => string
  * }} options - Facts inputs.
@@ -161,6 +162,7 @@ export function renderFacts({
   platform,
   inputRows = [],
   outDir = 'dist',
+  outputPaths = [],
   write,
   styler,
 }) {
@@ -228,7 +230,9 @@ export function renderFacts({
       ? styler('gray', `  ${outputFacts.join(SEPARATOR)}`)
       : '';
 
-  lines.push(row(FACT_LABELS.output, `${outDir}${outputSuffix}`));
+  const outputLabel = outputPaths.length > 0 ? outputPaths.join(' + ') : outDir;
+
+  lines.push(row(FACT_LABELS.output, `${outputLabel}${outputSuffix}`));
 
   return lines;
 }
@@ -1282,6 +1286,7 @@ export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
  *   snapshot: object,
  *   durationMs: number,
  *   outDir?: string,
+ *   outputPaths?: string[],
  *   projectDir?: string,
  *   sourceGlob?: string,
  *   assetRows?: Array<object>,
@@ -1301,6 +1306,7 @@ export function renderSummary({
   snapshot,
   durationMs,
   outDir = 'dist',
+  outputPaths = [],
   projectDir = '',
   sourceGlob = 'src/**/*.scss',
   assetRows = [],
@@ -1344,7 +1350,7 @@ export function renderSummary({
     '',
     renderDivider('project', unicode, styler),
     '',
-    ...renderFacts({ platform, inputRows, outDir, write, styler }),
+    ...renderFacts({ platform, inputRows, outDir, outputPaths, write, styler }),
     // The verbose listings expand the two rows above them, so they sit directly
     // under the totals they itemize rather than after the build result.
     ...renderInputFiles(inputFiles, unicode, styler),

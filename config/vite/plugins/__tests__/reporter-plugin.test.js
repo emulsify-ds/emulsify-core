@@ -183,6 +183,27 @@ describe('develop reporter output', () => {
     expect(lines.join('\n')).toContain('✓ built in 1.42s · watching src/');
   });
 
+  it('names both final destinations when component output is mirrored', () => {
+    const { plugin, lines } = createHarness({
+      projectStructure: {
+        mirrorComponentOutput: true,
+        output: { components: 'components' },
+        sourceRootRecords: [
+          { name: 'components', directory: '/project/src/components' },
+          { name: 'global', directory: '/project/src' },
+        ],
+      },
+    });
+
+    plugin.configResolved(resolvedConfig());
+    lines.length = 0;
+    plugin.buildStart();
+    writeBundle(plugin);
+
+    const outputLine = lines.find((line) => line.includes('output'));
+    expect(outputLine).toContain('dist/ + components/');
+  });
+
   it('names the watched sources, not the output directory', () => {
     const { plugin, lines, advance } = createHarness({
       projectStructure: {

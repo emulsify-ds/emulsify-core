@@ -33,7 +33,7 @@ under its own heading:
                   src/foundation/    5 entries
                   src/base/          3 entries
                   src/js/            2 entries
-      output      dist/  41 files · 2.3 MB · largest style.css 388 kB
+      output      dist/ + components/  41 files · 2.3 MB · largest style.css 388 kB
 
   ── build ────────────────────────────────────────────
 
@@ -82,9 +82,11 @@ this — 39 entries looks healthy whether or not a root was found at all.
 
 ### Reading The Output Row
 
-The output directory, then the number of files written, their combined size, and
-the largest single file. Watching the largest file is the cheapest way to notice
-a stylesheet that has begun pulling in something it should not.
+The final output destinations, then the number of files in the emitted bundle,
+their combined size, and the largest single file. Drupal projects that mirror
+SDC output name both destinations as `dist/ + components/`; other projects name
+only their Vite output directory. Watching the largest file is the cheapest way
+to notice a stylesheet that has begun pulling in something it should not.
 
 ### Reading The Build Line
 
