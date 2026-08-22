@@ -14,6 +14,7 @@ import { dirname, resolve } from 'node:path';
 import { assetTailFor } from '../../../config/vite/plugins/assets/asset-url-rebase.js';
 import { resolveAssetTail } from '../../../config/vite/utils/asset-roots.js';
 import { firstExistingPath } from '../../../config/vite/utils/fs-safe.js';
+import { createAuditFixTargetChecker } from '../fix.js';
 import { displayPath, makeFinding } from '../lib/findings.js';
 import {
   cachedReadFile,
@@ -43,10 +44,13 @@ const ASSET_DOCS =
  * @param {string} filePath - Absolute stylesheet path.
  * @param {{raw: string, start: number, end: number}} ref - URL reference.
  * @param {string} replacement - Canonical URL.
+ * @param {boolean} fixWritable - Whether audit policy permits a rewrite.
  * @returns {object|undefined} Fix payload, when safe to apply.
  */
-function makeUrlFix(filePath, ref, replacement) {
-  if (ref.raw.includes('#{') || ref.raw === replacement) return undefined;
+function makeUrlFix(filePath, ref, replacement, fixWritable) {
+  if (!fixWritable || ref.raw.includes('#{') || ref.raw === replacement) {
+    return undefined;
+  }
 
   return {
     filePath,
@@ -100,6 +104,7 @@ function unresolvedFinding({ filePath, projectDir = '', ref, resolution }) {
  * @param {string} params.assetPath - URL path without query or hash.
  * @param {string[]} params.assetRoots - Absolute project asset roots.
  * @param {string} params.filePath - Absolute stylesheet path.
+ * @param {Function} params.canFix - Lazily check whether policy permits a rewrite.
  * @param {string} params.projectDir - Absolute project root.
  * @param {object} params.ref - URL reference.
  * @returns {object[]} Findings.
@@ -107,6 +112,7 @@ function unresolvedFinding({ filePath, projectDir = '', ref, resolution }) {
 function auditAssetRootReference({
   assetPath,
   assetRoots,
+  canFix,
   filePath,
   projectDir,
   ref,
@@ -130,7 +136,9 @@ function auditAssetRootReference({
   // Already canonical: nothing to say.
   if (ref.raw === canonical) return [];
 
-  const fix = canonical ? makeUrlFix(filePath, ref, canonical) : undefined;
+  const fix = canonical
+    ? makeUrlFix(filePath, ref, canonical, canFix())
+    : undefined;
   const details = [
     `Resolved asset: ${displayPath(projectDir, resolution.file)}.`,
   ];
@@ -171,7 +179,14 @@ export function auditCssAssetReferences(context) {
   const { env, projectDir, styleFiles } = context;
   const findings = [];
   const assetRoots = auditAssetRoots(env).filter(safeIsDirectory);
-  const styleSourceRoots = env.projectStructure?.sourceRoots || [];
+  const sourceRoots = Array.isArray(context.sourceRoots)
+    ? context.sourceRoots
+    : env.projectStructure?.sourceRoots;
+  const styleSourceRoots = sourceRoots || [];
+  const isFixTargetWritable = createAuditFixTargetChecker({
+    projectDir,
+    sourceRoots,
+  });
 
   for (const filePath of styleFiles) {
     if (
@@ -181,6 +196,11 @@ export function auditCssAssetReferences(context) {
       continue;
     }
 
+    let fixWritable;
+    const canFix = () => {
+      fixWritable ??= isFixTargetWritable(filePath);
+      return fixWritable;
+    };
     const source = cachedReadFile(filePath);
     const runtimeDirs = styleRuntimeDirectories(filePath, env, projectDir);
 
@@ -214,6 +234,7 @@ export function auditCssAssetReferences(context) {
           ...auditAssetRootReference({
             assetPath,
             assetRoots,
+            canFix,
             filePath,
             projectDir,
             ref,

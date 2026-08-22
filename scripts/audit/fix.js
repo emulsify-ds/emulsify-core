@@ -18,8 +18,14 @@ import {
   resolve,
   sep,
 } from 'node:path';
+import { escape, globSync } from 'glob';
 
-import { resetFileReadCache } from './lib/files.js';
+import { resolveProjectConfig } from '../../config/vite/project-config.js';
+import {
+  DEFAULT_IGNORES,
+  normalizeAuditRoots,
+  resetFileReadCache,
+} from './lib/files.js';
 
 /**
  * Determine whether a canonical path is inside the canonical scanned root.
@@ -36,23 +42,290 @@ function isContained(filePath, root) {
 }
 
 /**
+ * Determine whether a path is excluded by the audit's scan rules.
+ *
+ * Ignore patterns are evaluated relative to the project, just as consumers
+ * understand directories such as node_modules/ and dist/. An absolute path is
+ * never matched: a project may itself live beneath a pnpm node_modules tree.
+ *
+ * @param {string} filePath - Candidate path.
+ * @param {string} root - Root against which ignore patterns are evaluated.
+ * @returns {boolean} TRUE when the candidate is ignored.
+ */
+function isIgnored(filePath, root) {
+  if (!isContained(filePath, root)) return false;
+
+  const rel = relative(root, filePath);
+  if (!rel) return false;
+
+  // Probe the literal existing path through the same glob implementation and
+  // options used to collect audit files. This preserves its platform-aware
+  // case behavior and keeps the scan and write deny-lists identical.
+  const literalPath = escape(rel.split(sep).join('/'), {
+    magicalBraces: true,
+  });
+  return (
+    globSync(literalPath, {
+      cwd: root,
+      nodir: true,
+      ignore: DEFAULT_IGNORES,
+    }).length === 0
+  );
+}
+
+/**
+ * Resolve the lexical and canonical boundaries that authorize source writes.
+ *
+ * @param {string} projectDir - Project root supplied to the audit.
+ * @param {string[]|undefined} sourceRoots - Normalized source roots.
+ * @returns {object} Canonical fix scope.
+ */
+function createFixScope(projectDir, sourceRoots) {
+  const projectPath = resolve(projectDir);
+  const realProject = fs.realpathSync(projectPath);
+  let requestedRoots = Array.isArray(sourceRoots) ? sourceRoots : [];
+
+  if (sourceRoots === undefined) {
+    try {
+      const env = resolveProjectConfig(projectPath, process.env);
+      requestedRoots = normalizeAuditRoots(
+        projectPath,
+        env.projectStructure?.sourceRoots || [],
+      );
+    } catch {
+      // Direct API callers may omit sourceRoots for compatibility. Derive the
+      // same project scope as the audit when possible, and fail closed when
+      // invalid configuration prevents that derivation.
+      requestedRoots = [];
+    }
+  }
+  const lexicalRoots = [];
+  const realRoots = [];
+
+  for (const root of requestedRoots) {
+    if (!root) continue;
+
+    const lexicalRoot = resolve(projectPath, root);
+    if (!isContained(lexicalRoot, projectPath)) continue;
+
+    let realRoot;
+    try {
+      realRoot = fs.realpathSync(lexicalRoot);
+    } catch {
+      continue;
+    }
+    if (!isContained(realRoot, realProject)) continue;
+
+    if (!lexicalRoots.includes(lexicalRoot)) lexicalRoots.push(lexicalRoot);
+    if (!realRoots.includes(realRoot)) realRoots.push(realRoot);
+  }
+
+  return {
+    projectPath,
+    realProject,
+    lexicalRoots,
+    realRoots,
+  };
+}
+
+/**
+ * Resolve one candidate against a prepared source-write scope.
+ *
+ * @param {string} filePath - Authored source path carried by a finding.
+ * @param {object} scope - Canonical fix scope.
+ * @returns {{writable: boolean, realTarget?: string, reason?: string}} Status.
+ */
+function auditFixTargetStatus(filePath, scope) {
+  const sourcePath = resolve(filePath);
+
+  if (!scope.lexicalRoots.some((root) => isContained(sourcePath, root))) {
+    return {
+      writable: false,
+      reason: `source path is outside scanned roots: ${sourcePath}`,
+    };
+  }
+
+  const realTarget = fs.realpathSync(sourcePath);
+  if (!scope.realRoots.some((root) => isContained(realTarget, root))) {
+    return {
+      writable: false,
+      realTarget,
+      reason: `real target is outside scanned root: ${realTarget}`,
+    };
+  }
+
+  if (
+    isIgnored(sourcePath, scope.projectPath) ||
+    isIgnored(realTarget, scope.realProject)
+  ) {
+    return {
+      writable: false,
+      realTarget,
+      reason: `real target is excluded by audit ignore rules: ${realTarget}`,
+    };
+  }
+
+  try {
+    fs.accessSync(realTarget, fs.constants.W_OK);
+  } catch {
+    return {
+      writable: false,
+      realTarget,
+      reason: `real target is not writable: ${realTarget}`,
+    };
+  }
+
+  const targetDirectory = dirname(realTarget);
+  try {
+    fs.accessSync(targetDirectory, fs.constants.W_OK | fs.constants.X_OK);
+  } catch {
+    return {
+      writable: false,
+      realTarget,
+      reason: `real target directory is not writable: ${targetDirectory}`,
+    };
+  }
+
+  return { writable: true, realTarget };
+}
+
+/**
+ * Determine whether the target metadata captured before a rewrite is stable.
+ *
+ * @param {import('node:fs').Stats} current - Current target metadata.
+ * @param {import('node:fs').Stats} expected - Previously captured metadata.
+ * @returns {boolean} TRUE when no inode or portable metadata changed.
+ */
+function sameTargetMetadata(current, expected) {
+  return [
+    'dev',
+    'ino',
+    'mode',
+    'uid',
+    'gid',
+    'size',
+    'mtimeMs',
+    'ctimeMs',
+  ].every((key) => current[key] === expected[key]);
+}
+
+/**
+ * Create a reusable predicate for automatic source rewrites.
+ *
+ * This is shared with checks that advertise --fix, so their advice cannot
+ * promise a write that applyAuditFixes() will refuse. Scope resolution is lazy
+ * and cached; per-file realpath, ignore, and access checks remain current.
+ *
+ * @param {{projectDir?: string, sourceRoots?: string[]}} [options={}] - Scope.
+ * @returns {(filePath: string) => boolean} Source eligibility predicate.
+ */
+export function createAuditFixTargetChecker({
+  projectDir = process.cwd(),
+  sourceRoots,
+} = {}) {
+  let scope;
+  let scopeFailed = false;
+
+  return (filePath) => {
+    if (!scope && !scopeFailed) {
+      try {
+        scope = createFixScope(projectDir, sourceRoots);
+      } catch {
+        scopeFailed = true;
+      }
+    }
+    if (!scope) return false;
+
+    try {
+      return auditFixTargetStatus(filePath, scope).writable;
+    } catch {
+      return false;
+    }
+  };
+}
+
+/**
+ * Decide whether the audit may safely offer one automatic source rewrite.
+ *
+ * @param {string} filePath - Authored source path.
+ * @param {{projectDir?: string, sourceRoots?: string[]}} [options={}] - Scope.
+ * @returns {boolean} TRUE when the source is inside the writable audit scope.
+ */
+export function isAuditFixTargetWritable(filePath, options = {}) {
+  return createAuditFixTargetChecker(options)(filePath);
+}
+
+/**
  * Reject a source path or file that changed after it was inspected.
  *
  * @param {string} filePath - Original path carried by the finding.
  * @param {string} realTarget - Canonical target resolved before editing.
- * @param {string} realRoot - Canonical scanned root.
+ * @param {object} scope - Canonical source-write scope.
  * @param {Buffer} expectedBytes - Bytes used to prepare the replacement.
+ * @param {import('node:fs').Stats} [expectedStat] - Captured target metadata.
  * @returns {void}
  */
-function validateTarget(filePath, realTarget, realRoot, expectedBytes) {
-  const currentTarget = fs.realpathSync(resolve(filePath));
+function validateTarget(
+  filePath,
+  realTarget,
+  scope,
+  expectedBytes,
+  expectedStat,
+) {
+  const current = auditFixTargetStatus(filePath, scope);
 
-  if (currentTarget !== realTarget || !isContained(currentTarget, realRoot)) {
+  if (!current.writable || current.realTarget !== realTarget) {
     throw new Error('source path changed while applying audit fixes');
   }
-  if (!fs.readFileSync(currentTarget).equals(expectedBytes)) {
+  if (!fs.readFileSync(current.realTarget).equals(expectedBytes)) {
     throw new Error('source changed while applying audit fixes');
   }
+  if (
+    expectedStat &&
+    !sameTargetMetadata(fs.statSync(current.realTarget), expectedStat)
+  ) {
+    throw new Error('source metadata changed while applying audit fixes');
+  }
+}
+
+/**
+ * Preserve target ownership on an atomic replacement inode.
+ *
+ * @param {number} descriptor - Open temporary-file descriptor.
+ * @param {{uid: number, gid: number}} targetStat - Original target metadata.
+ * @returns {void}
+ */
+function preserveOwnership(descriptor, targetStat) {
+  if (process.platform === 'win32') return;
+
+  try {
+    fs.fchownSync(descriptor, targetStat.uid, targetStat.gid);
+  } catch (error) {
+    if (error?.code !== 'EPERM') throw error;
+
+    // An unprivileged owner cannot chown even to the ownership the newly
+    // created inode already has. Only suppress EPERM when nothing would change.
+    const temporaryStat = fs.fstatSync(descriptor);
+    if (
+      temporaryStat.uid !== targetStat.uid ||
+      temporaryStat.gid !== targetStat.gid
+    ) {
+      throw error;
+    }
+  }
+}
+
+/**
+ * Attach a cleanup failure without obscuring the write failure that caused it.
+ *
+ * @param {Error} error - Primary failure.
+ * @param {*} cleanupError - Secondary cleanup failure.
+ * @param {string} detail - Human-readable cleanup action.
+ * @returns {void}
+ */
+function attachCleanupError(error, cleanupError, detail) {
+  error.cleanupError ??= cleanupError;
+  error.message = `${error.message}; ${detail}: ${cleanupError?.message || cleanupError}`;
 }
 
 /**
@@ -69,22 +342,49 @@ function atomicReplace(filePath, contents, validate) {
     dirname(filePath),
     `.${basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
   );
-  const mode = fs.statSync(filePath).mode & 0o7777;
+  const targetStat = fs.statSync(filePath);
+  const mode = targetStat.mode & 0o7777;
+  let descriptor;
+  let temporaryCreated = false;
 
   try {
-    fs.writeFileSync(temporaryPath, contents, { flag: 'wx', mode });
-    fs.chmodSync(temporaryPath, mode);
-    validate();
+    descriptor = fs.openSync(temporaryPath, 'wx', mode);
+    temporaryCreated = true;
+    fs.writeFileSync(descriptor, contents);
+    preserveOwnership(descriptor, targetStat);
+    // chown may clear setuid/setgid bits, so mode restoration must come last.
+    fs.fchmodSync(descriptor, mode);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    validate(targetStat);
     fs.renameSync(temporaryPath, filePath);
   } catch (error) {
-    try {
-      fs.unlinkSync(temporaryPath);
-    } catch (cleanupError) {
-      // Preserve the failure that prevented the replacement. A missing temp
-      // file simply means the exclusive create failed before it existed.
-      if (cleanupError?.code !== 'ENOENT') {
-        error.cleanupError = cleanupError;
-        error.message = `${error.message}; unable to remove temporary file ${temporaryPath}: ${cleanupError.message || cleanupError}`;
+    if (descriptor !== undefined) {
+      try {
+        fs.closeSync(descriptor);
+      } catch (cleanupError) {
+        attachCleanupError(
+          error,
+          cleanupError,
+          'unable to close temporary file',
+        );
+      }
+      descriptor = undefined;
+    }
+
+    if (temporaryCreated) {
+      try {
+        fs.unlinkSync(temporaryPath);
+      } catch (cleanupError) {
+        // Preserve the failure that prevented the replacement. A missing temp
+        // file simply means a watcher removed it before cleanup.
+        if (cleanupError?.code !== 'ENOENT') {
+          attachCleanupError(
+            error,
+            cleanupError,
+            `unable to remove temporary file ${temporaryPath}`,
+          );
+        }
       }
     }
     throw error;
@@ -157,12 +457,12 @@ function groupFixesByFile(findings) {
  * offset skips one fix rather than corrupting the file.
  *
  * @param {object[]} [findings=[]] - Audit findings.
- * @param {{dryRun?: boolean, projectDir?: string}} [options={}] - Fix options.
+ * @param {{dryRun?: boolean, projectDir?: string, sourceRoots?: string[]}} [options={}] - Fix options.
  * @returns {{applied: object[], skipped: object[], dryRun: boolean}} Fix result.
  */
 export function applyAuditFixes(
   findings = [],
-  { dryRun = false, projectDir = process.cwd() } = {},
+  { dryRun = false, projectDir = process.cwd(), sourceRoots } = {},
 ) {
   const applied = [];
   const skipped = [];
@@ -174,20 +474,17 @@ export function applyAuditFixes(
   let activeFilePath = resolve(projectDir);
 
   try {
-    const realRoot = fs.realpathSync(resolve(projectDir));
+    const scope = createFixScope(projectDir, sourceRoots);
 
     for (const [filePath, fileFindings] of fixesByFile) {
       activeFilePath = filePath;
-      const realTarget = fs.realpathSync(resolve(filePath));
+      const target = auditFixTargetStatus(filePath, scope);
 
-      if (!isContained(realTarget, realRoot)) {
-        skipFile(
-          skipped,
-          fileFindings,
-          `real target is outside scanned root: ${realTarget}`,
-        );
+      if (!target.writable) {
+        skipFile(skipped, fileFindings, target.reason);
         continue;
       }
+      const { realTarget } = target;
 
       const bytes = fs.readFileSync(realTarget);
       const source = bytes.toString('utf8');
@@ -231,8 +528,8 @@ export function applyAuditFixes(
         continue;
       }
 
-      const validate = () =>
-        validateTarget(filePath, realTarget, realRoot, bytes);
+      const validate = (expectedStat) =>
+        validateTarget(filePath, realTarget, scope, bytes, expectedStat);
       atomicReplace(realTarget, Buffer.from(next, 'utf8'), validate);
       wrote = true;
       applied.push(...pendingApplied);

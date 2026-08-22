@@ -198,6 +198,7 @@ export function runCli(argv = process.argv.slice(2)) {
         result.fixes = applyAuditFixes(findings, {
           dryRun: options.dryRun,
           projectDir: result.projectDir,
+          sourceRoots: result.sourceRoots,
         });
       } catch (error) {
         return reportFixFailure(error, options);

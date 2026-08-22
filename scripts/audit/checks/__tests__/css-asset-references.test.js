@@ -2,7 +2,8 @@
  * @file Tests for the CSS asset reference audit check.
  */
 
-import { readFileSync } from 'node:fs';
+import fs, { readFileSync, symlinkSync, unlinkSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import { auditCssAssetReferences } from '../css-asset-references.js';
 import { applyAuditFixes } from '../../fix.js';
@@ -20,22 +21,35 @@ const QUOTE = String.fromCharCode(39);
 
 describe('auditCssAssetReferences', () => {
   let projectDir;
+  let externalDir;
 
   beforeEach(() => {
     projectDir = makeTempProject();
+    externalDir = undefined;
     resetFileReadCache();
   });
 
   afterEach(() => {
     removeTempProject(projectDir);
+    if (externalDir) removeTempProject(externalDir);
+    jest.restoreAllMocks();
   });
 
-  const audit = (styleFile, projectStructure = {}) =>
-    auditCssAssetReferences({
-      env: { projectDir, projectStructure },
+  const audit = (styleFile, projectStructure = {}) => {
+    const sourceRoots = projectStructure.sourceRoots || [
+      join(projectDir, 'src'),
+    ];
+
+    return auditCssAssetReferences({
+      env: {
+        projectDir,
+        projectStructure: { ...projectStructure, sourceRoots },
+      },
       projectDir,
+      sourceRoots,
       styleFiles: [styleFile],
     });
+  };
 
   const expectLocalReferenceUntouched = (styleFile) => {
     const before = readFileSync(styleFile, 'utf8');
@@ -202,6 +216,18 @@ describe('auditCssAssetReferences', () => {
     expect(audit(styleFile)).toEqual([]);
   });
 
+  it('does not probe fix permissions when no URL needs a rewrite', () => {
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { color: rebeccapurple; }',
+    );
+    const accessSpy = jest.spyOn(fs, 'accessSync');
+
+    expect(audit(styleFile)).toEqual([]);
+    expect(accessSpy).not.toHaveBeenCalled();
+  });
+
   it('leaves platform-served absolute URLs alone', () => {
     const styleFile = writeFile(
       projectDir,
@@ -292,6 +318,80 @@ describe('auditCssAssetReferences', () => {
     expect(readFileSync(styleFile, 'utf8')).toBe(
       '.card { background-image: url("/assets/spinner.gif"); }',
     );
+  });
+
+  it('does not offer --fix when a stylesheet resolves outside source roots', () => {
+    writeFile(projectDir, 'assets/spinner.gif', 'ROOT');
+    externalDir = makeTempProject();
+    const externalStyle = writeFile(
+      externalDir,
+      'shared.scss',
+      '.card { background-image: url("assets/spinner.gif"); }',
+    );
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '',
+    );
+    unlinkSync(styleFile);
+    symlinkSync(externalStyle, styleFile);
+
+    const [finding] = audit(styleFile);
+
+    expect(finding).toMatchObject({
+      id: 'css-runtime-asset-reference',
+      severity: 'info',
+    });
+    expect(finding.details).toContain(
+      'Rewrite it as url(/assets/spinner.gif).',
+    );
+    expect(finding.fix).toBeUndefined();
+    expect(finding.details.join('\n')).not.toContain('emulsify-audit --fix');
+    expect(readFileSync(externalStyle, 'utf8')).toContain(
+      'url("assets/spinner.gif")',
+    );
+  });
+
+  it.each([
+    [
+      'stylesheet is not writable',
+      (styleFile) => fs.realpathSync(styleFile),
+      fs.constants.W_OK,
+    ],
+    [
+      'stylesheet directory is not writable',
+      (styleFile) => fs.realpathSync(dirname(styleFile)),
+      fs.constants.W_OK | fs.constants.X_OK,
+    ],
+  ])('does not offer --fix when the %s', (_label, blockedPath, blockedMode) => {
+    writeFile(projectDir, 'assets/spinner.gif', 'ROOT');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("assets/spinner.gif"); }',
+    );
+    const deniedPath = blockedPath(styleFile);
+    const originalAccess = fs.accessSync;
+    jest.spyOn(fs, 'accessSync').mockImplementation((filePath, mode) => {
+      if (filePath === deniedPath && mode === blockedMode) {
+        throw Object.assign(new Error('simulated EACCES'), {
+          code: 'EACCES',
+        });
+      }
+      return originalAccess(filePath, mode);
+    });
+
+    const [finding] = audit(styleFile);
+
+    expect(finding).toMatchObject({
+      id: 'css-runtime-asset-reference',
+      severity: 'info',
+    });
+    expect(finding.details).toContain(
+      'Rewrite it as url(/assets/spinner.gif).',
+    );
+    expect(finding.fix).toBeUndefined();
+    expect(finding.details.join('\n')).not.toContain('emulsify-audit --fix');
   });
 
   it('offers the canonical rewrite for a wrong-depth relative URL', () => {

@@ -14,6 +14,7 @@ import { runCli as runAuditCli } from '../audit.js';
 // The lint rule bans double-quoted strings, and these fixtures need a literal
 // single quote to exercise CSS quote handling.
 const QUOTE = String.fromCharCode(39);
+const posixIt = process.platform === 'win32' ? it.skip : it;
 
 describe('applyAuditFixes', () => {
   let projectDir;
@@ -64,16 +65,25 @@ describe('applyAuditFixes', () => {
       'src/components/card/card.scss',
       '.card { background: url("assets/a.svg"); mask: url("../assets/b.svg"); }',
     );
-    const spy = jest.spyOn(fs, 'writeFileSync');
+    const findings = auditStyles(styleFile);
+    const openSpy = jest.spyOn(fs, 'openSync');
+    const writeSpy = jest.spyOn(fs, 'writeFileSync');
 
-    const result = apply(auditStyles(styleFile));
+    const result = apply(findings);
+    const temporaryOpenIndex = openSpy.mock.calls.findIndex(
+      ([, flags]) => flags === 'wx',
+    );
+
+    expect(temporaryOpenIndex).toBeGreaterThanOrEqual(0);
+
+    const temporaryPath = openSpy.mock.calls[temporaryOpenIndex][0];
+    const temporaryHandle = openSpy.mock.results[temporaryOpenIndex].value;
 
     expect(result.applied).toHaveLength(2);
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).not.toBe(styleFile);
-    expect(dirname(spy.mock.calls[0][0])).toBe(
-      fs.realpathSync(dirname(styleFile)),
-    );
+    expect(temporaryPath).not.toBe(styleFile);
+    expect(dirname(temporaryPath)).toBe(fs.realpathSync(dirname(styleFile)));
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledWith(temporaryHandle, expect.any(Buffer));
     expect(readFileSync(styleFile, 'utf8')).toBe(
       '.card { background: url("/assets/a.svg"); mask: url("/assets/b.svg"); }',
     );
@@ -172,11 +182,8 @@ describe('applyAuditFixes', () => {
   it('skips a symlink whose real target escapes the scanned root', () => {
     writeFile(projectDir, 'assets/a.svg', '<svg />');
     externalDir = makeTempProject();
-    const externalStyle = writeFile(
-      externalDir,
-      'shared.scss',
-      '.card { background: url("../assets/a.svg"); }',
-    );
+    const externalSource = '.card { background: url("../assets/a.svg"); }';
+    const externalStyle = writeFile(externalDir, 'shared.scss', externalSource);
     const styleFile = writeFile(
       projectDir,
       'src/components/card/card.scss',
@@ -188,9 +195,22 @@ describe('applyAuditFixes', () => {
     const findings = auditStyles(styleFile);
     const realTarget = fs.realpathSync(externalStyle);
 
+    expect(findings).toHaveLength(1);
+
+    // Advice is suppressed for non-writable sources, so synthesize the stale
+    // payload an API caller could still pass to cover apply-time containment.
+    const originalSpecifier = '../assets/a.svg';
+    const start = externalSource.indexOf(originalSpecifier);
+    findings[0].fix = {
+      filePath: styleFile,
+      start,
+      end: start + originalSpecifier.length,
+      original: originalSpecifier,
+      replacement: '/assets/a.svg',
+    };
+
     const result = apply(findings);
 
-    expect(findings).toHaveLength(1);
     expect(result.applied).toEqual([]);
     expect(result.skipped).toEqual([
       {
@@ -282,6 +302,266 @@ describe('applyAuditFixes', () => {
     expect(readFileSync(styleFile, 'utf8')).toContain('url("../assets/a.svg")');
   });
 
+  it('does not remove a temp path it failed to create exclusively', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const original = '.card { background: url("../assets/a.svg"); }';
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      original,
+    );
+    const findings = auditStyles(styleFile);
+    const originalOpen = fs.openSync;
+    const originalWrite = fs.writeFileSync;
+    let foreignTempPath;
+
+    jest.spyOn(fs, 'openSync').mockImplementation((filePath, flags, mode) => {
+      if (flags === 'wx') {
+        foreignTempPath = filePath;
+        originalWrite(filePath, 'created by another process');
+        throw Object.assign(new Error('simulated EEXIST'), {
+          code: 'EEXIST',
+        });
+      }
+      return originalOpen(filePath, flags, mode);
+    });
+
+    expect(() => apply(findings)).toThrow('simulated EEXIST');
+    expect(readFileSync(foreignTempPath, 'utf8')).toBe(
+      'created by another process',
+    );
+    expect(readFileSync(styleFile, 'utf8')).toBe(original);
+    fs.unlinkSync(foreignTempPath);
+  });
+
+  posixIt('preserves file ownership through an atomic replacement', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background: url("../assets/a.svg"); }',
+    );
+    // Reproduce the container failure when the suite itself runs as root: the
+    // bind-mounted source belongs to the host user, not to the fixer process.
+    if (process.platform !== 'win32' && process.getuid?.() === 0) {
+      fs.chownSync(styleFile, 1000, 1000);
+    }
+    const ownershipBefore = statSync(styleFile);
+    const fchownSpy = jest.spyOn(fs, 'fchownSync');
+    const fchmodSpy = jest.spyOn(fs, 'fchmodSync');
+
+    const result = apply(auditStyles(styleFile));
+    const ownershipAfter = statSync(styleFile);
+
+    expect(result.applied).toHaveLength(1);
+    expect(fchownSpy).toHaveBeenCalledWith(
+      expect.any(Number),
+      ownershipBefore.uid,
+      ownershipBefore.gid,
+    );
+    expect(fchownSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      fchmodSpy.mock.invocationCallOrder[0],
+    );
+    expect({ uid: ownershipAfter.uid, gid: ownershipAfter.gid }).toEqual({
+      uid: ownershipBefore.uid,
+      gid: ownershipBefore.gid,
+    });
+  });
+
+  posixIt('preserves target mode after changing temp-file ownership', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background: url("../assets/a.svg"); }',
+    );
+    fs.chmodSync(styleFile, 0o640);
+
+    const result = apply(auditStyles(styleFile));
+
+    expect(result.applied).toHaveLength(1);
+    expect(statSync(styleFile).mode & 0o7777).toBe(0o640);
+  });
+
+  posixIt(
+    'tolerates EPERM when the temporary file already has the right owner',
+    () => {
+      writeFile(projectDir, 'assets/a.svg', '<svg />');
+      const styleFile = writeFile(
+        projectDir,
+        'src/components/card/card.scss',
+        '.card { background: url("../assets/a.svg"); }',
+      );
+      const permissionError = Object.assign(new Error('simulated EPERM'), {
+        code: 'EPERM',
+      });
+      jest.spyOn(fs, 'fchownSync').mockImplementation(() => {
+        throw permissionError;
+      });
+      const fstatSpy = jest.spyOn(fs, 'fstatSync');
+
+      const result = apply(auditStyles(styleFile));
+
+      expect(result.applied).toHaveLength(1);
+      expect(fstatSpy).toHaveBeenCalled();
+      expect(readFileSync(styleFile, 'utf8')).toContain('url("/assets/a.svg")');
+      expect(
+        fs
+          .readdirSync(dirname(styleFile))
+          .filter((name) => name.endsWith('.tmp')),
+      ).toEqual([]);
+    },
+  );
+
+  posixIt('does not ignore EPERM when the temporary file owner differs', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const original = '.card { background: url("../assets/a.svg"); }';
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      original,
+    );
+    const targetOwnership = statSync(styleFile);
+    const permissionError = Object.assign(new Error('simulated EPERM'), {
+      code: 'EPERM',
+    });
+    jest.spyOn(fs, 'fchownSync').mockImplementation(() => {
+      throw permissionError;
+    });
+    jest.spyOn(fs, 'fstatSync').mockReturnValue({
+      uid: targetOwnership.uid + 1,
+      gid: targetOwnership.gid,
+    });
+
+    let failure;
+    try {
+      apply(auditStyles(styleFile));
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeDefined();
+    expect(failure.code).toBe('EPERM');
+    expect(failure.fixes.applied).toEqual([]);
+    expect(readFileSync(styleFile, 'utf8')).toBe(original);
+    expect(
+      fs
+        .readdirSync(dirname(styleFile))
+        .filter((name) => name.endsWith('.tmp')),
+    ).toEqual([]);
+  });
+
+  posixIt(
+    'fails atomically and removes its temp file on other chown errors',
+    () => {
+      writeFile(projectDir, 'assets/a.svg', '<svg />');
+      const original = '.card { background: url("../assets/a.svg"); }';
+      const styleFile = writeFile(
+        projectDir,
+        'src/components/card/card.scss',
+        original,
+      );
+      const ownershipError = Object.assign(new Error('simulated EIO'), {
+        code: 'EIO',
+      });
+      jest.spyOn(fs, 'fchownSync').mockImplementation(() => {
+        throw ownershipError;
+      });
+      const closeSpy = jest.spyOn(fs, 'closeSync');
+
+      let failure;
+      try {
+        apply(auditStyles(styleFile));
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toBeDefined();
+      expect(failure.code).toBe('EIO');
+      expect(failure.fixes.applied).toEqual([]);
+      expect(closeSpy).toHaveBeenCalled();
+      expect(readFileSync(styleFile, 'utf8')).toBe(original);
+      expect(
+        fs
+          .readdirSync(dirname(styleFile))
+          .filter((name) => name.endsWith('.tmp')),
+      ).toEqual([]);
+    },
+  );
+
+  it('refuses to replace a target without write access', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const original = '.card { background: url("../assets/a.svg"); }';
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      original,
+    );
+    const findings = auditStyles(styleFile);
+    const realTarget = fs.realpathSync(styleFile);
+    const accessError = Object.assign(new Error('simulated EACCES'), {
+      code: 'EACCES',
+    });
+    const originalAccess = fs.accessSync;
+    jest.spyOn(fs, 'accessSync').mockImplementation((filePath, mode) => {
+      if (filePath === realTarget && mode === fs.constants.W_OK) {
+        throw accessError;
+      }
+      return originalAccess(filePath, mode);
+    });
+    const openSpy = jest.spyOn(fs, 'openSync');
+
+    const result = apply(findings);
+
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([
+      {
+        finding: findings[0],
+        reason: `real target is not writable: ${realTarget}`,
+      },
+    ]);
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(readFileSync(styleFile, 'utf8')).toBe(original);
+  });
+
+  it('refuses to replace a target in a directory without write access', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const original = '.card { background: url("../assets/a.svg"); }';
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      original,
+    );
+    const findings = auditStyles(styleFile);
+    const realDirectory = fs.realpathSync(dirname(styleFile));
+    const accessError = Object.assign(new Error('simulated EACCES'), {
+      code: 'EACCES',
+    });
+    const originalAccess = fs.accessSync;
+    jest.spyOn(fs, 'accessSync').mockImplementation((filePath, mode) => {
+      if (
+        filePath === realDirectory &&
+        mode === (fs.constants.W_OK | fs.constants.X_OK)
+      ) {
+        throw accessError;
+      }
+      return originalAccess(filePath, mode);
+    });
+    const openSpy = jest.spyOn(fs, 'openSync');
+
+    const result = apply(findings);
+
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([
+      {
+        finding: findings[0],
+        reason: `real target directory is not writable: ${realDirectory}`,
+      },
+    ]);
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(readFileSync(styleFile, 'utf8')).toBe(original);
+  });
+
   it('does not overwrite source changed before the atomic rename', () => {
     writeFile(projectDir, 'assets/a.svg', '<svg />');
     const styleFile = writeFile(
@@ -311,6 +591,35 @@ describe('applyAuditFixes', () => {
     );
     expect(failure.fixes.applied).toEqual([]);
     expect(readFileSync(styleFile, 'utf8')).toBe(concurrentSource);
+    expect(
+      fs
+        .readdirSync(dirname(styleFile))
+        .filter((name) => name.endsWith('.tmp')),
+    ).toEqual([]);
+  });
+
+  it('does not undo a concurrent target mode change', () => {
+    writeFile(projectDir, 'assets/a.svg', '<svg />');
+    const original = '.card { background: url("../assets/a.svg"); }';
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      original,
+    );
+    const findings = auditStyles(styleFile);
+    const concurrentMode = 0o600;
+    const originalWrite = fs.writeFileSync;
+    jest.spyOn(fs, 'writeFileSync').mockImplementation((...args) => {
+      const result = originalWrite(...args);
+      fs.chmodSync(styleFile, concurrentMode);
+      return result;
+    });
+
+    expect(() => apply(findings)).toThrow(
+      'source metadata changed while applying audit fixes',
+    );
+    expect(readFileSync(styleFile, 'utf8')).toBe(original);
+    expect(statSync(styleFile).mode & 0o777).toBe(concurrentMode);
     expect(
       fs
         .readdirSync(dirname(styleFile))
