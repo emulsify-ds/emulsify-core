@@ -50,12 +50,13 @@ const QUOTE = String.fromCharCode(39);
 /**
  * Reject every CSS asset URL form that is wrong for a given stylesheet.
  *
- * Each fixture authors the same three URLs — canonical, bare, and a
- * deliberately wrong-depth relative one — and the build must converge all three
- * on the depth that stylesheet actually needs. The URL-prefix rejects are
+ * The Drupal SDC and no-platform alias fixtures author canonical,
+ * namespaced-alias, bare, and deliberately wrong-depth relative URLs. The
+ * build must converge all four on the depth that stylesheet actually needs.
+ * The URL-prefix rejects are
  * anchored on `url(` and repeated per quote style, so a correct deeper path can
  * never satisfy them and minifier quoting cannot make them vacuous. The
- * The optional `dist/assets/` sentinel is for lean-output fixtures, where any
+ * optional `dist/assets/` sentinel is for lean-output fixtures, where any
  * reference into the deliberately removed output asset tree is dead. Default
  * self-contained fixtures intentionally reference that directory.
  *
@@ -75,6 +76,10 @@ const rejectWrongAssetUrls = (pattern, { rejectOutputPath = false } = {}) => ({
     'url(assets/',
     'url("assets/',
     `url(${QUOTE}assets/`,
+    'url(@assets/',
+    'url("@assets/',
+    `url(${QUOTE}@assets/`,
+    '@assets/',
     ...(rejectOutputPath ? ['dist/assets/'] : []),
   ],
 });
@@ -109,6 +114,8 @@ const releaseFixtures = [
         pattern: 'components/card/card.css',
         strings: [
           '../../dist/assets/images/canonical.svg',
+          '../../dist/assets/images/canonical.svg?alias=variable#icon',
+          '../../dist/assets/images/canonical.svg?alias=literal#icon',
           '../../dist/assets/images/canonical.svg?v=2',
           '../../dist/assets/images/canonical.svg#icon',
           '.card__spaced',
@@ -156,10 +163,16 @@ const releaseFixtures = [
         strings: ['.sass-glob-fixture', '.legacy-sass-glob-fixture'],
       },
       {
+        pattern: 'dist/components/card/js/card.js',
+        strings: ['consumer-js-alias-still-resolves'],
+      },
+      {
         // Bucketed component CSS reaches the copy at the root of dist/.
         pattern: 'dist/components/card/css/card.css',
         strings: [
           '../../../assets/images/canonical.svg',
+          '../../../assets/images/canonical.svg?alias=variable#icon',
+          '../../../assets/images/canonical.svg?alias=literal#icon',
           '../../../assets/images/bare.svg',
           '../../../assets/images/logo$2x.svg',
           '../../../assets/images/relative.svg',
@@ -175,6 +188,10 @@ const releaseFixtures = [
       {
         pattern: 'dist/components/card/css/card.css',
         strings: ['../../../../assets/images/'],
+      },
+      {
+        pattern: 'dist/**/*.css',
+        strings: ['Consumer alias shadow that Core must not resolve'],
       },
     ],
   },

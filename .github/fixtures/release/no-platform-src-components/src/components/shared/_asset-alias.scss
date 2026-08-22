@@ -1,0 +1,9 @@
+$asset-alias: '@assets/images';
+
+.asset-alias-variable {
+  background-image: url('#{$asset-alias}/canonical.svg?alias=variable#icon');
+}
+
+.asset-alias-literal {
+  background-image: url('@assets/images/canonical.svg?alias=literal#icon');
+}

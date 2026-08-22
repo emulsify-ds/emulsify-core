@@ -221,6 +221,67 @@ describe('auditCssAssetReferences', () => {
     expect(audit(styleFile)).toEqual([]);
   });
 
+  it('accepts an @assets alias that resolves', () => {
+    writeFile(projectDir, 'assets/images/real.svg', '<svg />');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("@assets/images/real.svg?v=2#icon"); }',
+    );
+
+    expect(audit(styleFile)).toEqual([]);
+  });
+
+  it('reports @assets when the Core asset resolver is disabled', () => {
+    writeFile(projectDir, 'assets/images/real.svg', '<svg />');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("@assets/images/real.svg"); }',
+    );
+
+    expect(audit(styleFile, { assetRebase: false })).toEqual([
+      expect.objectContaining({
+        id: 'unresolved-css-asset-reference',
+        severity: 'warn',
+        message: expect.stringContaining('assets.rebase is disabled'),
+      }),
+    ]);
+  });
+
+  it('accepts the documented Sass variable form of @assets', () => {
+    writeFile(projectDir, 'assets/fonts/example/Avenir.woff2', 'font');
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      [
+        `$font-url: ${QUOTE}@assets/fonts/example${QUOTE};`,
+        '@font-face {',
+        `  src: url(${QUOTE}#{$font-url}/Avenir.woff2?v=2#regular${QUOTE});`,
+        '}',
+      ].join('\n'),
+    );
+
+    expect(audit(styleFile)).toEqual([]);
+  });
+
+  it('validates @assets against project roots instead of a same-named local directory', () => {
+    writeFile(
+      projectDir,
+      'src/components/card/@assets/images/local.svg',
+      '<svg />',
+    );
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("@assets/images/local.svg"); }',
+    );
+
+    expect(audit(styleFile).map((finding) => finding.id)).toEqual([
+      'unresolved-css-asset-reference',
+    ]);
+  });
+
   it('does not probe fix permissions when no URL needs a rewrite', () => {
     const styleFile = writeFile(
       projectDir,

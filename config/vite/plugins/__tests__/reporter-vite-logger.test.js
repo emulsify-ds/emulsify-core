@@ -118,6 +118,27 @@ describe('reporter logger', () => {
     ]);
   });
 
+  it.each(['@assets/images/logo.svg', '../shared/@assets/images/logo.svg'])(
+    'suppresses the expected verbose Vite notice for %s',
+    (url) => {
+      const collector = createDiagnosticsCollector();
+      const base = createBaseLogger();
+      const logger = createReporterLogger(collector, base, { verbose: true });
+      const aliasNotice = notice(url, 'src/components/card/card.scss');
+
+      logger.warnOnce(aliasNotice);
+
+      expect(base.warnOnce).not.toHaveBeenCalled();
+      expect(collector.snapshot().unresolvedAssets).toEqual([
+        {
+          url,
+          importer: 'src/components/card/card.scss',
+          count: 1,
+        },
+      ]);
+    },
+  );
+
   it('passes every other message straight through', () => {
     const collector = createDiagnosticsCollector();
     const base = createBaseLogger();

@@ -1,13 +1,13 @@
 /**
  * @file CSS asset reference audit check.
  *
- * Emulsify's documented convention is a root-absolute `url('/assets/...')`.
- * Two other forms are common and both used to ship broken: a relative URL
- * authored against the emitted CSS location, and the bare `assets/...` form.
- * The build now repairs both when the target is unambiguous
- * (config/vite/plugins/assets/css-asset-rebase.js), so what this check reports
- * is (a) references nothing can resolve, and (b) references the build has to
- * repair, which are worth writing canonically in source.
+ * Emulsify accepts root-absolute `url('/assets/...')` and namespaced
+ * `url('@assets/...')` references. Two other forms are common and both used to
+ * ship broken: a relative URL authored against the emitted CSS location, and
+ * the bare `assets/...` form. The build repairs both when the target is
+ * unambiguous (config/vite/plugins/assets/css-asset-rebase.js), so what this
+ * check reports is (a) references nothing can resolve, and (b) references the
+ * build has to repair, which are worth writing canonically in source.
  */
 
 import { dirname, resolve } from 'node:path';
@@ -28,6 +28,7 @@ import {
   classifyCssAssetUrl,
   cssUrlPath,
   findCssUrlReferences,
+  isCssAssetAlias,
   styleRuntimeDirectories,
 } from '../lib/css.js';
 
@@ -90,9 +91,31 @@ function unresolvedFinding({ filePath, projectDir = '', ref, resolution }) {
           'Remove the duplicate, or narrow assets.roots in project.emulsify.json so one file answers to the URL.',
         ]
       : [
-          'Reference project assets with the canonical root form, url(/assets/...), and keep the file under assets/ or a root declared in project.emulsify.json assets.roots.',
+          'Reference project assets with url(/assets/...) or url(@assets/...), and keep the file under assets/ or a root declared in project.emulsify.json assets.roots.',
           'Otherwise check the filename for a typo.',
         ],
+    docs: ASSET_DOCS,
+  });
+}
+
+/**
+ * Report the Core-only stylesheet alias when its resolver is disabled.
+ *
+ * @param {object} params - Reference context.
+ * @param {string} params.filePath - Absolute stylesheet path.
+ * @param {object} params.ref - URL reference.
+ * @returns {object} Finding.
+ */
+function disabledAliasFinding({ filePath, ref }) {
+  return makeFinding({
+    id: 'unresolved-css-asset-reference',
+    severity: 'warn',
+    filePath,
+    line: ref.line,
+    message: `CSS asset URL "${ref.raw}" uses the @assets stylesheet alias, but assets.rebase is disabled.`,
+    details: [
+      'Enable assets.rebase to use @assets/..., or write a URL that Vite can resolve without the Emulsify asset pipeline.',
+    ],
     docs: ASSET_DOCS,
   });
 }
@@ -124,6 +147,16 @@ function auditAssetRootReference({
     return [unresolvedFinding({ filePath, projectDir, ref, resolution })];
   }
 
+  const resolvedSuffix = ref.value.slice(cssUrlPath(ref.value).length);
+  const resolvedCanonical = `/assets/${tail}${resolvedSuffix}`;
+  const resolvedAlias = `@assets/${tail}${resolvedSuffix}`;
+
+  // The scanner expands simple same-file Sass variables in `ref.value` while
+  // retaining the authored interpolation in `ref.raw`. Accept an expansion
+  // that lands exactly on either first-class form before deciding that an
+  // interpolated reference needs manual review.
+  if (ref.value === resolvedCanonical || ref.value === resolvedAlias) return [];
+
   const interpolated = ref.raw.includes('#{');
   // A `?v=2` or `#id` suffix is part of the authored URL, not of the asset
   // path, so it survives the rewrite untouched. Interpolation also begins
@@ -132,9 +165,12 @@ function auditAssetRootReference({
   const canonical = interpolated
     ? undefined
     : `/assets/${tail}${ref.raw.slice(cssUrlPath(ref.raw).length)}`;
+  const alias = interpolated
+    ? undefined
+    : `@assets/${tail}${ref.raw.slice(cssUrlPath(ref.raw).length)}`;
 
-  // Already canonical: nothing to say.
-  if (ref.raw === canonical) return [];
+  // Both public spellings are accepted authoring forms.
+  if (ref.raw === canonical || ref.raw === alias) return [];
 
   const fix = canonical
     ? makeUrlFix(filePath, ref, canonical, canFix())
@@ -179,6 +215,7 @@ export function auditCssAssetReferences(context) {
   const { env, projectDir, styleFiles } = context;
   const findings = [];
   const assetRoots = auditAssetRoots(env).filter(safeIsDirectory);
+  const assetAliasEnabled = env.projectStructure?.assetRebase !== false;
   const sourceRoots = Array.isArray(context.sourceRoots)
     ? context.sourceRoots
     : env.projectStructure?.sourceRoots;
@@ -210,14 +247,20 @@ export function auditCssAssetReferences(context) {
       const assetPath = cssUrlPath(ref.value);
       if (!assetPath) continue;
 
+      if (isCssAssetAlias(assetPath) && !assetAliasEnabled) {
+        findings.push(disabledAliasFinding({ filePath, ref }));
+        continue;
+      }
+
       // CSS resolves non-absolute URLs from the source stylesheet first. The
       // build plugin only sees literals Vite already failed to resolve, but the
       // audit scans authored source and must preserve that precedence itself.
       // Do not probe `/assets/...` against the filesystem root: it is the
       // canonical project-asset form, not a source-relative path.
-      const sourceAsset = assetPath.startsWith('/')
-        ? undefined
-        : firstExistingFile([resolve(dirname(filePath), assetPath)]);
+      const sourceAsset =
+        assetPath.startsWith('/') || isCssAssetAlias(assetPath)
+          ? undefined
+          : firstExistingFile([resolve(dirname(filePath), assetPath)]);
       const classification = classifyCssAssetUrl(ref.value);
 
       // Some other absolute URL: the platform serves it, and there is no

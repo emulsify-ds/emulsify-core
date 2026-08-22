@@ -466,13 +466,14 @@ URLs such as `https://example.gitlab.io/project/`, from custom domains, and
 from arbitrary nested deployment paths, with no hosting-provider configuration.
 Asset lookup keys stay root-relative; only the public URL is relative.
 
-For Sass and CSS, reference the same project files with `/assets/...` URLs
-rather than the Twig-only `@assets` alias:
+For Sass and CSS, `@assets/...` is a first-class alias alongside
+`/assets/...`. Both spellings resolve through the same project asset roots and
+produce the same emitted URL; neither is reported as an asset repair:
 
 ```scss
 @font-face {
   font-family: 'Example Sans';
-  src: url('/assets/fonts/example/Example-Regular.woff2') format('woff2');
+  src: url('@assets/fonts/example/Example-Regular.woff2') format('woff2');
 }
 
 .button__icon {

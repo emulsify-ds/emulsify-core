@@ -140,10 +140,17 @@ The process exit codes are:
 
 ## Fixing CSS Asset URLs
 
-`--fix` rewrites CSS and Sass asset URLs to the canonical `/assets/...` form
-when exactly one file under one asset root answers to them. That covers the two
-non-portable shapes: the bare `url('assets/...')` form, and a relative URL whose
-depth suits the emitted CSS rather than the stylesheet. See
+With asset rebasing enabled (the default), `/assets/...` and `@assets/...` are
+equivalent first-class Sass/CSS asset aliases. The audit validates both against
+the same project asset roots and leaves both unchanged without a repair
+finding. If `assets.rebase` is disabled, the audit warns that Core will not
+resolve `@assets/...`.
+
+`--fix` rewrites legacy CSS and Sass asset URLs to `/assets/...`, the stable
+canonical autofix output, when exactly one file under one asset root answers to
+them. That covers the two non-portable shapes: the bare `url('assets/...')`
+form, and a relative URL whose depth suits the emitted CSS rather than the
+stylesheet. See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable) for
 why those break.
 

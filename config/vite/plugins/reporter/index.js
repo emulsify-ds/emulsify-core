@@ -139,7 +139,7 @@ const strictAssetFailureMessage = (
   const rebases =
     strictness === STRICTNESS.all ? snapshot.assetRebases || [] : [];
   const repaired = rebases.filter((entry) => entry.status === 'rebased');
-  const ambiguous = rebases.filter((entry) => entry.status !== 'rebased');
+  const ambiguous = rebases.filter((entry) => entry.status === 'ambiguous');
   const lines = ['Emulsify: strict CSS asset checks failed.'];
 
   if (unresolved.length) {

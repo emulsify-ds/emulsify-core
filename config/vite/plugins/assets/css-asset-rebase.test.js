@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'path';
 
 import { resolveAssetRoots } from '../../utils/asset-roots.js';
 import { resolveProjectConfig } from '../../project-config.js';
+import { createDiagnosticsCollector } from '../reporter/diagnostics.js';
 import { cssAssetUrlRelativizer } from './css-asset-relativizer.js';
 import { cssAssetRebasePlugin } from './css-asset-rebase.js';
 import {
@@ -62,6 +63,10 @@ describe('asset URL rebase rules', () => {
       ['../../assets/images/x.jpg', 'images/x.jpg'],
       ['assets/images/x.jpg', 'images/x.jpg'],
       ['/assets/images/x.jpg', 'images/x.jpg'],
+      ['@assets/images/x.jpg', 'images/x.jpg'],
+      ['@assets/icons/@assets/logo.svg', 'icons/@assets/logo.svg'],
+      ['../shared/@assets/images/x.jpg', 'images/x.jpg'],
+      ['partials/@assets/images/x.jpg', 'images/x.jpg'],
       ['./assets/x.jpg', 'x.jpg'],
     ])('reduces %s to %s', (url, expected) => {
       expect(assetTailFor(url)).toBe(expected);
@@ -74,6 +79,12 @@ describe('asset URL rebase rules', () => {
       ['./local.svg'],
       ['assets'],
       ['/assets/'],
+      ['@assets'],
+      ['@assets/'],
+      ['@assets2/images/x.jpg'],
+      ['@@assets/images/x.jpg'],
+      ['@assets/../secret.txt'],
+      ['/sites/default/@assets/images/x.jpg'],
     ])('refuses %s', (url) => {
       expect(assetTailFor(url)).toBe('');
     });
@@ -101,6 +112,57 @@ describe('asset URL rebase rules', () => {
       ).toMatchObject({
         status: 'rebased',
         url: '/assets/images/x.svg',
+      });
+    });
+
+    it('normalizes the supported @assets/ alias', () => {
+      expect(
+        planAssetUrl('@assets/images/x.svg?v=2#icon', stylesheet, roots),
+      ).toMatchObject({
+        status: 'aliased',
+        url: '/assets/images/x.svg?v=2#icon',
+        emitAs: 'assets/images/x.svg',
+        file: join(projectDir, 'assets/images/x.svg'),
+      });
+    });
+
+    it('keeps a nested @assets directory inside the aliased tail', () => {
+      mkdirSync(join(projectDir, 'assets/icons/@assets'), { recursive: true });
+      writeFileSync(join(projectDir, 'assets/logo.svg'), '<svg>wrong</svg>');
+      writeFileSync(
+        join(projectDir, 'assets/icons/@assets/logo.svg'),
+        '<svg>right</svg>',
+      );
+
+      expect(
+        planAssetUrl('@assets/icons/@assets/logo.svg', stylesheet, roots),
+      ).toMatchObject({
+        status: 'aliased',
+        url: '/assets/icons/@assets/logo.svg',
+        emitAs: 'assets/icons/@assets/logo.svg',
+        file: join(projectDir, 'assets/icons/@assets/logo.svg'),
+      });
+    });
+
+    it('normalizes an alias Sass rebased from an imported partial', () => {
+      mkdirSync(join(projectDir, 'src/components/shared/@assets/images'), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(projectDir, 'src/components/shared/@assets/images/x.svg'),
+        '<svg>shadow</svg>',
+      );
+
+      expect(
+        planAssetUrl(
+          '../shared/@assets/images/x.svg?v=2#icon',
+          stylesheet,
+          roots,
+        ),
+      ).toMatchObject({
+        status: 'aliased',
+        url: '/assets/images/x.svg?v=2#icon',
+        file: join(projectDir, 'assets/images/x.svg'),
       });
     });
 
@@ -189,6 +251,35 @@ describe('asset URL rebase rules', () => {
   });
 
   describe('rewriteStylesheetUrls', () => {
+    it.each([
+      [
+        'unquoted',
+        '.a{background:url(@assets/images/x.svg)}',
+        '.a{background:url(/assets/images/x.svg)}',
+      ],
+      [
+        'single quoted',
+        `.a{background:url(${QUOTE}@assets/images/x.svg${QUOTE})}`,
+        `.a{background:url(${QUOTE}/assets/images/x.svg${QUOTE})}`,
+      ],
+      [
+        'double quoted',
+        '.a{background:url("@assets/images/x.svg")}',
+        '.a{background:url("/assets/images/x.svg")}',
+      ],
+    ])('normalizes a %s @assets URL', (_label, css, expected) => {
+      const onPlan = jest.fn();
+
+      expect(rewriteStylesheetUrls(css, stylesheet, roots, onPlan)).toEqual({
+        code: expected,
+        changed: true,
+      });
+      expect(onPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'aliased' }),
+        { value: '@assets/images/x.svg' },
+      );
+    });
+
     it.each([
       [
         'a block comment',
@@ -378,6 +469,77 @@ describe('cssAssetRebasePlugin', () => {
     );
   });
 
+  it('normalizes @assets without reporting it as a repair', () => {
+    const env = setup();
+    const diagnostics = createDiagnosticsCollector();
+    const plugin = cssAssetRebasePlugin({
+      env,
+      diagnostics,
+      publishedAssetSources,
+      removablePublishedAssets,
+    });
+    const importer = join(projectDir, 'src/components/card/card.scss');
+    const url = '@assets/images/x.svg';
+
+    diagnostics.recordUnresolvedAsset({ url, importer });
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+
+    const result = transform(plugin, `.a{background:url(${url})}`, importer);
+    const snapshot = diagnostics.snapshot();
+
+    expect(result.code).toBe('.a{background:url(/assets/images/x.svg)}');
+    expect(snapshot.unresolvedAssets).toEqual([]);
+    expect(snapshot.assetRebases).toEqual([]);
+  });
+
+  it('reserves @assets ahead of consumer aliases in Vite CSS resolution', () => {
+    const env = setup();
+    const plugin = make(env);
+    const consumerAlias = {
+      find: '@assets',
+      replacement: join(projectDir, 'src/components/card/shadow'),
+    };
+    const aliases = [consumerAlias];
+    const config = {
+      build: {},
+      resolve: { alias: aliases },
+      environments: { client: { resolve: { alias: aliases } } },
+    };
+
+    plugin.configResolved(config);
+    plugin.configResolved(config);
+
+    const [reservation] = aliases;
+    expect(reservation).not.toBe(consumerAlias);
+    expect(reservation.customResolver()).toEqual({ id: '' });
+    expect(
+      '@assets/images/x.svg'.replace(reservation.find, reservation.replacement),
+    ).toBe('@assets/images/x.svg');
+    expect(
+      '../shared/@assets/images/x.svg'.replace(
+        reservation.find,
+        reservation.replacement,
+      ),
+    ).toBe('../shared/@assets/images/x.svg');
+    expect(
+      reservation.find.test('./local.svg?next=/@assets/images/x.svg'),
+    ).toBe(false);
+    expect(aliases.filter(({ customResolver }) => customResolver)).toHaveLength(
+      1,
+    );
+  });
+
+  it('does not reserve @assets when asset rebasing is disabled', () => {
+    const env = setup({ assetRebase: false });
+    const aliases = [];
+    const plugin = make(env);
+
+    plugin.configResolved({ build: {}, resolve: { alias: aliases } });
+
+    expect(aliases).toEqual([]);
+  });
+
   const runBundlePipeline = (env, bundle) => {
     const rebase = make(env);
     const relativizer = makeRelativizer(env);
@@ -435,7 +597,7 @@ describe('cssAssetRebasePlugin', () => {
     const plugin = make(env);
     const emitFile = jest.fn();
     const addWatchFile = jest.fn();
-    const context = { emitFile, addWatchFile };
+    const context = { addWatchFile };
     const importer = join(projectDir, 'src/components/card/card.scss');
 
     plugin.configResolved({ build: {} });
@@ -453,6 +615,7 @@ describe('cssAssetRebasePlugin', () => {
       importer,
       context,
     );
+    plugin.generateBundle.call({ emitFile }, {}, {});
 
     expect(result.code).toBe('.a{background:url(/assets/images/x.svg?v=2)}');
     expect(emitFile).toHaveBeenCalledTimes(1);
@@ -471,8 +634,26 @@ describe('cssAssetRebasePlugin', () => {
       importer,
       context,
     );
+    plugin.generateBundle.call({ emitFile }, {}, {});
 
     expect(emitFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses a Vite-emitted asset for the equivalent @assets URL', () => {
+    const env = setup();
+    const plugin = make(env);
+    const emitFile = jest.fn();
+    const importer = join(projectDir, 'src/components/card/card.scss');
+    const existing = viteCopyOf('assets/images/x.svg');
+    const bundle = { 'assets/images/x.svg': existing };
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+    transform(plugin, '.a{background:url(@assets/images/x.svg)}', importer);
+    plugin.generateBundle.call({ emitFile }, {}, bundle);
+
+    expect(emitFile).not.toHaveBeenCalled();
+    expect(bundle['assets/images/x.svg']).toBe(existing);
   });
 
   it('publishes a quoted asset filename containing a dollar sign', () => {
@@ -492,9 +673,10 @@ describe('cssAssetRebasePlugin', () => {
         plugin,
         '.dollar{background:url("/assets/images/logo$2x.svg")}',
         join(projectDir, 'src/components/card/card.scss'),
-        { emitFile, addWatchFile },
+        { addWatchFile },
       ),
     ).toBeNull();
+    plugin.generateBundle.call({ emitFile }, {}, {});
     expect(emitFile).toHaveBeenCalledWith({
       type: 'asset',
       fileName: 'assets/images/logo$2x.svg',
@@ -935,8 +1117,8 @@ describe('cssAssetRebasePlugin', () => {
       plugin,
       '.a{background:url(/assets/brand/logo.svg)}',
       join(projectDir, 'src/components/card/card.scss'),
-      { emitFile },
     );
+    plugin.generateBundle.call({ emitFile }, {}, {});
 
     expect(env.selfContainedOutput).toBe(true);
     expect(env.projectStructure.selfContainedOutput).toBe(true);
@@ -997,7 +1179,6 @@ describe('cssAssetRebasePlugin', () => {
       plugin,
       '.a{background:url(../../assets/images/x.svg)}',
       join(projectDir, 'src/components/card/card.scss'),
-      { emitFile },
     );
     bundle['components/card/css/card.css'] = {
       type: 'asset',
@@ -1005,7 +1186,7 @@ describe('cssAssetRebasePlugin', () => {
       source: code,
     };
 
-    plugin.generateBundle({}, bundle);
+    plugin.generateBundle.call({ emitFile }, {}, bundle);
 
     const relativizer = makeRelativizer(env);
     relativizer.configResolved({ build: { outDir: join(projectDir, 'dist') } });

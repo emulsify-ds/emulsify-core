@@ -7,9 +7,9 @@
  *
  * ## The problem
  *
- * Emulsify's documented convention is a root-absolute `url('/assets/...')`
- * (docs/asset-references.md). Two other forms are common in the wild and both
- * ship broken:
+ * Emulsify accepts both root-absolute `url('/assets/...')` and the namespaced
+ * `url('@assets/...')` alias (docs/asset-references.md). Two other forms are
+ * common in the wild and both ship broken:
  *
  * 1. A relative URL authored against the *emitted* CSS location rather than
  *    the stylesheet — `url('../../assets/images/x.jpg')`. Vite cannot resolve
@@ -25,12 +25,13 @@
  *
  * ## The rule
  *
- * This runs after Vite's own CSS URL resolution, so every `url()` it sees is
- * one Vite already declined to resolve. That makes the repair non-destructive
- * by construction: it can never displace a reference that works today. When
- * the `assets/...` tail of an unresolvable URL names exactly one real file
- * under a real asset root, the URL is rewritten to the canonical form and the
- * asset is queued for emit. Anything else is left exactly as it was.
+ * This runs after Vite's own CSS URL resolution, so every non-alias `url()` it
+ * sees is one Vite already declined to resolve. The `@assets/...` namespace is
+ * the intentional exception: Core reserves it before Vite resolution so a
+ * package, project alias, or same-named directory cannot displace the project
+ * asset contract. When the `assets/...` tail names exactly one real file under
+ * a real asset root, the URL is rewritten to the canonical form and the asset
+ * is queued for emit. Anything else is left exactly as it was.
  */
 
 import { dirname, posix, resolve } from 'path';
@@ -49,6 +50,9 @@ import { toPosixPath } from '../../utils/paths.js';
  * @type {string}
  */
 export const PUBLIC_ASSET_PREFIX = 'assets';
+
+/** Namespaced authoring alias for the same published asset root. */
+export const ASSET_ALIAS_PREFIX = '@assets';
 
 /**
  * Raw `url()` matcher retained for compatibility with existing deep imports.
@@ -82,9 +86,12 @@ export function splitUrlSuffix(value) {
 /**
  * Reduce a URL to the asset path it is reaching for.
  *
- * `../../assets/images/x.jpg` and `assets/images/x.jpg` both reduce to
- * `images/x.jpg`. Requiring the remainder to start with the published prefix
- * is what keeps the repair explainable: a bare `images/x.jpg` is never tried
+ * `../../assets/images/x.jpg`, `assets/images/x.jpg`, and
+ * `@assets/images/x.jpg` all reduce to `images/x.jpg`. Sass may rebase a URL
+ * from an imported partial before this plugin sees it, producing a value such
+ * as `../shared/@assets/images/x.jpg`; the alias remains authoritative in that
+ * form too. Requiring either the published prefix or an exact alias path
+ * segment keeps the repair explainable: a bare `images/x.jpg` is never tried
  * against the asset roots, because nothing about it says "project asset".
  *
  * @param {string} urlPath - URL path without quotes, query, or hash.
@@ -92,6 +99,20 @@ export function splitUrlSuffix(value) {
  */
 export function assetTailFor(urlPath) {
   const normalized = posix.normalize(toPosixPath(urlPath));
+  const relative = normalized.replace(LEADING_RELATIVE_RE, '');
+
+  // Root-absolute URLs other than `/assets/...` belong to the platform. The
+  // embedded alias form exists only because Sass rebases imported partials to
+  // their entry stylesheet, and that result is always relative.
+  if (!normalized.startsWith('/')) {
+    const parts = relative.split('/');
+    const aliasIndex = parts.indexOf(ASSET_ALIAS_PREFIX);
+
+    if (aliasIndex !== -1 && aliasIndex < parts.length - 1) {
+      return parts.slice(aliasIndex + 1).join('/');
+    }
+  }
+
   const tail = normalized
     .replace(/^\/+/, '')
     .replace(LEADING_RELATIVE_RE, '')
@@ -105,13 +126,32 @@ export function assetTailFor(urlPath) {
 }
 
 /**
+ * Determine whether a URL path uses the reserved Sass/CSS asset alias.
+ *
+ * This includes the relative form Vite creates while rebasing a literal URL
+ * from an imported Sass partial, such as `../shared/@assets/images/x.svg`.
+ *
+ * @param {string} urlPath - URL path without quotes, query, or hash.
+ * @returns {boolean} TRUE when an exact `@assets` segment names a non-empty tail.
+ */
+export function isAssetAliasPath(urlPath) {
+  const normalized = posix.normalize(toPosixPath(urlPath));
+  if (normalized.startsWith('/')) return false;
+
+  const parts = normalized.replace(LEADING_RELATIVE_RE, '').split('/');
+  const aliasIndex = parts.indexOf(ASSET_ALIAS_PREFIX);
+
+  return aliasIndex !== -1 && Boolean(parts.slice(aliasIndex + 1).join('/'));
+}
+
+/**
  * Decide what a single unresolved CSS `url()` should become.
  *
  * @param {string} value - URL value as written, without quotes.
  * @param {string} importer - Absolute path of the stylesheet being compiled.
  * @param {string[]} roots - Absolute asset roots, in precedence order.
  * @param {string} [quote=''] - URL value quote, or an empty string when unquoted.
- * @returns {{status: 'skipped'|'missing'|'ambiguous'|'rebased'|'publish', url?: string, file?: string, emitAs?: string, candidates?: string[]}} Plan.
+ * @returns {{status: 'skipped'|'missing'|'ambiguous'|'aliased'|'rebased'|'publish', url?: string, file?: string, emitAs?: string, candidates?: string[]}} Plan.
  */
 export function planAssetUrl(value, importer, roots = [], quote = '') {
   const trimmed = String(value || '').trim();
@@ -123,11 +163,12 @@ export function planAssetUrl(value, importer, roots = [], quote = '') {
   const isRootAbsolute = urlPath.startsWith('/');
   const isRelative = LEADING_RELATIVE_RE.test(urlPath);
   const isBareAssets = urlPath.startsWith(`${PUBLIC_ASSET_PREFIX}/`);
+  const isAssetAlias = isAssetAliasPath(urlPath);
 
-  // A bare specifier that is not `assets/...` belongs to Vite: it may resolve
-  // through package exports or an alias, and stealing it would be a
-  // regression.
-  if (!isRootAbsolute && !isRelative && !isBareAssets) {
+  // A bare specifier that is neither `assets/...` nor the reserved
+  // `@assets/...` alias belongs to Vite: it may resolve through package exports
+  // or another alias, and stealing it would be a regression.
+  if (!isRootAbsolute && !isRelative && !isBareAssets && !isAssetAlias) {
     return { status: 'skipped' };
   }
 
@@ -136,6 +177,7 @@ export function planAssetUrl(value, importer, roots = [], quote = '') {
   // called in isolation.
   if (
     isRelative &&
+    !isAssetAlias &&
     importer &&
     safeExists(resolve(dirname(importer), urlPath))
   ) {
@@ -164,7 +206,7 @@ export function planAssetUrl(value, importer, roots = [], quote = '') {
   }
 
   return {
-    status: 'rebased',
+    status: isAssetAlias ? 'aliased' : 'rebased',
     originalUrl: trimmed,
     url: `${canonical}${suffix}`,
     file: hit.file,
@@ -188,7 +230,7 @@ export function rewriteStylesheetUrls(code, importer, roots = [], onPlan) {
     const plan = planAssetUrl(value, importer, roots, quote);
     if (typeof onPlan === 'function') onPlan(plan, { value });
 
-    if (plan.status !== 'rebased') return match;
+    if (plan.status !== 'rebased' && plan.status !== 'aliased') return match;
 
     changed = true;
 

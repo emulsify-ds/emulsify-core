@@ -30,14 +30,17 @@ custom asset roots in `project.emulsify.json`:
 
 Configured roots are resolved relative to the project root. Paths that resolve
 outside the project are ignored. Existing root `assets/` and `src/assets/`
-directories are always included for `@assets` source lookups.
+directories are always included for Sass/CSS `@assets/...` URLs and Twig
+`source('@assets/...')` lookups.
 
 ## Sass And CSS
 
-Sass and CSS should reference project assets with `/assets/...` URLs.
+Sass and CSS can reference project assets with either `/assets/...` or
+`@assets/...` URLs. They are first-class aliases for the same project asset
+roots and produce the same emitted URL.
 
 ```scss
-$font-url: '/assets/fonts/example';
+$font-url: '@assets/fonts/example';
 
 @font-face {
   font-family: 'Example Sans';
@@ -56,11 +59,15 @@ $font-url: '/assets/fonts/example';
 }
 ```
 
-Storybook mounts existing configured asset roots at `/assets`, so these URLs
-work in stories. During the Vite build, Emulsify resolves the URL against those
-same roots and rewrites the reference to a path relative to the emitted CSS
-file. That lets built CSS under `dist/` or mirrored component output resolve
-the same project assets without hard-coding a platform-specific theme path.
+The `@assets/...` spelling is a Sass/CSS asset alias, not a package import.
+With asset rebasing enabled (the default), Emulsify reserves that namespace
+during stylesheet resolution, so a project Vite alias or package in the
+`@assets` scope cannot change which file it means. It and `/assets/...` are
+resolved against the same roots and neither is reported as an asset repair.
+Storybook mounts those roots at `/assets`. During the Vite build, Emulsify
+normalizes either spelling and writes a path relative to the emitted CSS file.
+That lets built CSS under `dist/` or mirrored component output resolve the same
+project assets without hard-coding a platform-specific theme path.
 
 By default, the build keeps `dist/` self-contained. Vite copies the project
 assets it resolves, and Emulsify emits matching copies for the bare and
@@ -108,17 +115,18 @@ same URL breaks:
 | Non-SDC               | `dist/components/card/css/card.css`         | `dist/components/assets/…`             |
 | Structure overrides   | `dist/css/src/foundation/colors/colors.css` | `dist/css/src/foundation/assets/…`     |
 
-The build repairs this. When a `url()` Vite could not resolve names the
-published `assets/` prefix, and that path matches exactly one file under exactly
-one asset root, Emulsify rewrites it to `/assets/...`, which the relativizer
-then points at the file — so every output shape gets the depth it needs. The
-bare `url('assets/...')` form is repaired the same way.
+The build repairs this. When a legacy relative or bare `url()` Vite could not
+resolve names the published `assets/` prefix, and that path matches exactly one
+file under exactly one asset root, Emulsify rewrites it to `/assets/...`, which
+the relativizer then points at the file — so every output shape gets the depth
+it needs. The first-class `/assets/...` and `@assets/...` forms already express
+that intent and are not reported as repairs.
 
 The repair is reported, not silent. A one-shot build prints what it rewrote, and
-`emulsify-audit --fix` writes the canonical form back into the stylesheet in one
-pass. Prefer fixing the source: the repair only fires when one file answers to
-the URL, and a project with the same filename under two asset roots gets a
-warning and no rewrite.
+`emulsify-audit --fix` writes the canonical `/assets/...` autofix form back into
+the stylesheet in one pass. Prefer fixing the source: the repair only fires
+when one file answers to the URL, and a project with the same filename under
+two asset roots gets a warning and no rewrite.
 
 To turn the repair off, set `assets.rebase` to `false`:
 
@@ -133,15 +141,16 @@ To turn the repair off, set `assets.rebase` to `false`:
 
 `EMULSIFY_ASSET_REBASE=0` does the same for a single build, which is the quicker
 way to check whether the repair is involved in something unexpected. This is
-an end-to-end opt-out: Emulsify skips unresolved-URL repair, keeps Vite-emitted
-project-asset copies in `dist/assets/`, and leaves Vite's emitted CSS URLs
-untouched by the final relativizer. URLs Vite cannot resolve remain as authored.
-This control is independent from `assets.selfContainedOutput`: disabling the
-repair wins and leaves the whole pipeline unchanged regardless of the output
-setting.
+an end-to-end opt-out: Emulsify skips `@assets/...` normalization and
+unresolved-URL repair, keeps Vite-emitted project-asset copies in `dist/assets/`,
+and leaves Vite's emitted CSS URLs untouched by the final relativizer. URLs
+Vite cannot resolve remain as authored. This control is independent from
+`assets.selfContainedOutput`: disabling the pipeline wins regardless of the
+output setting.
 
 Set `EMULSIFY_STRICT_ASSETS=1` to fail a build on any CSS asset URL that cannot
-be resolved, or `=2` to also fail on URLs the build had to repair.
+be resolved, or `=2` to also fail on legacy URLs the build had to repair.
+Neither first-class asset alias counts as a repair.
 
 ## Twig
 
@@ -179,7 +188,8 @@ For raster images, fonts, and other binary assets, `source('@assets/...')`
 returns a public `./assets/...` URL or image markup instead of inlining file
 contents. That URL is relative to Storybook's preview document, so a static
 build resolves it correctly from a domain root and from any deployment subpath.
-In Sass and CSS, use `/assets/...` directly rather than `@assets`.
+In Sass and CSS, `url('@assets/...')` and `url('/assets/...')` are equivalent;
+Twig's `source()` behavior applies only when the alias is passed to `source()`.
 
 Inline text assets are bundled for Storybook only. Storybook needs each one as a
 string so `source()` can return it synchronously; a theme's `vite build` does

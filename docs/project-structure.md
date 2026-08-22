@@ -112,19 +112,20 @@ asset roots use `assets.roots` and are resolved relative to the project root:
 Each root is normalized into `projectStructure.assetRoots` as an absolute path.
 Configured roots are deduplicated. Paths that resolve outside the project root
 are ignored and reported by `emulsify-audit`. Existing root `assets/` and
-`src/assets/` directories are still checked automatically for `@assets`
-references.
+`src/assets/` directories are still checked automatically for Sass/CSS
+`@assets/...` URLs and Twig `source('@assets/...')` references.
 
 Roots are resolved in precedence order — configured roots first, then `assets/`,
 then `src/assets/` — which is the order Storybook serves them at `/assets`. The
-Vite build and `emulsify-audit` read that same list, so a `url('/assets/...')`
-reference resolves identically in stories, in built CSS, and in the audit.
+Vite build and `emulsify-audit` read that same list, so `url('/assets/...')`
+and `url('@assets/...')` resolve identically in stories, in built CSS, and in
+the audit.
 
 The asset controls are independent:
 
 | Setting                      | Default | One-build environment override   | Effect                                                                                                                                           |
 | ---------------------------- | ------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `assets.rebase`              | `true`  | `EMULSIFY_ASSET_REBASE`          | Repairs otherwise unresolved asset URLs and calculates the correct emitted depth.                                                                |
+| `assets.rebase`              | `true`  | `EMULSIFY_ASSET_REBASE`          | Resolves first-class asset aliases, repairs legacy asset URLs, and calculates the correct emitted depth.                                         |
 | `assets.selfContainedOutput` | `true`  | `EMULSIFY_SELF_CONTAINED_OUTPUT` | Keeps or emits project assets under `dist/assets/`, so the output directory remains deployable by itself. Set `false` for lean source-tree URLs. |
 
 Each override accepts `0`, `false`, `off`, or `no` to select false. With
@@ -134,10 +135,11 @@ was redirected to that source; copies referenced by JavaScript or other output
 remain available. This mode is appropriate only when the complete theme
 directory is deployed.
 
-Setting `assets.rebase` to `false` disables the complete pipeline: unresolved
-CSS asset URLs are not repaired, emitted CSS is not relativized by Emulsify,
-and Vite-emitted project asset copies remain under `dist/assets/` regardless of
-`selfContainedOutput`. See
+Setting `assets.rebase` to `false` disables the complete pipeline:
+`@assets/...` URLs are not normalized, unresolved legacy CSS asset URLs are not
+repaired, emitted CSS is not relativized by Emulsify, and Vite-emitted project
+asset copies remain under `dist/assets/` regardless of `selfContainedOutput`.
+See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable).
 
 ## Story Roots

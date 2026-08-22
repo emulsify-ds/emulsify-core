@@ -121,6 +121,24 @@ describe('one-shot reporting', () => {
     expect(collector.snapshot().unresolvedAssets).toEqual([]);
   });
 
+  it('suppresses an accepted @assets alias without reporting a repair', () => {
+    const collector = createDiagnosticsCollector();
+    const url = '@assets/images/logo.png';
+
+    collector.recordUnresolvedAsset({ url, importer: 'a.scss' });
+    collector.recordAssetRebase({
+      status: 'aliased',
+      url,
+      importer: 'a.scss',
+      rewritten: '/assets/images/logo.png',
+    });
+
+    expect(collector.snapshot()).toMatchObject({
+      unresolvedAssets: [],
+      assetRebases: [],
+    });
+  });
+
   it('does not let a locationless repair hide known importers', () => {
     const collector = createDiagnosticsCollector();
     const url = '../images/logo.png';
@@ -277,7 +295,10 @@ describe('strict asset mode', () => {
   ])('counts failures at %s as %i', (strictness, expected) => {
     const snapshot = {
       unresolvedAssets: [{ url: 'a' }],
-      assetRebases: [{ url: 'b', status: 'rebased' }],
+      assetRebases: [
+        { url: 'b', status: 'rebased' },
+        { url: '@assets/c', status: 'aliased' },
+      ],
     };
 
     expect(countStrictAssetFailures(snapshot, strictness)).toBe(expected);

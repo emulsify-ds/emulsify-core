@@ -96,7 +96,9 @@ rule is assumed.
 ### Release Fixtures
 
 The release fixture suite validates the 4.x checklist items that are easy to
-automate:
+automate. Its asset cases treat `/assets/...` and `@assets/...` as equivalent
+first-class Sass/CSS aliases while separately exercising repairs for legacy
+bare and wrong-depth forms:
 
 - `drupal-sdc-src-components` builds Drupal SDC component sources and verifies mirrored root `components/` output while rejecting stale `dist/components/` component files.
 - `no-platform-src-components` verifies `none` platform output stays in `dist/` and rejects Drupal globals such as `window.Drupal`, `Drupal.behaviors`, and `attachBehaviors` in emitted JavaScript.
@@ -116,8 +118,7 @@ automate:
   emits self-contained asset copies with repaired CSS URL depth.
 - `legacy-components` verifies that projects using the legacy `components/`
   source layout continue to build into `dist/components/`, including
-  self-contained asset copies and repaired canonical, bare, and wrong-depth CSS
-  URLs.
+  self-contained asset copies and repaired bare and wrong-depth CSS URLs.
 - `structure-implementations` verifies custom structure mappings for component
   JavaScript, CSS, Twig, Storybook CSS, foundation assets, and design tokens.
 - `mixed-storybook` first verifies that Twig stories using `renderTwig()`,

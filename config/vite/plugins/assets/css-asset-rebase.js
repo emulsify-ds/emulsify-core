@@ -17,10 +17,11 @@
  * attempted URL resolution, so it sees compiled CSS with every partial inlined
  * and every interpolation expanded.
  *
- * That ordering also makes the plugin non-destructive by construction: a
- * resolved URL is already a `__VITE_ASSET__` placeholder by this point, so the
- * only literals left are ones Vite gave up on. Nothing that works today can be
- * displaced.
+ * That ordering also keeps ordinary URLs non-destructive: a resolved URL is
+ * already a `__VITE_ASSET__` placeholder by this point, so the only literals
+ * left are ones Vite gave up on. The reserved `@assets/...` namespace is the
+ * deliberate exception; the resolver bridge below prevents consumer aliases,
+ * packages, and same-named directories from claiming it first.
  *
  * ## Self-contained and lean output
  *
@@ -41,7 +42,10 @@ import { relative } from 'path';
 
 import { resolveAssetRoots } from '../../utils/asset-roots.js';
 import { toPosixPath } from '../../utils/paths.js';
-import { rewriteStylesheetUrls } from './asset-url-rebase.js';
+import {
+  ASSET_ALIAS_PREFIX,
+  rewriteStylesheetUrls,
+} from './asset-url-rebase.js';
 import { isStorybookOutput } from './storybook-output.js';
 
 /** Stylesheet requests this plugin inspects. */
@@ -89,6 +93,71 @@ function copiedAssetSource(chunk, assetRootPrefixes) {
 }
 
 /**
+ * Match the reserved alias at the start of a URL or after the relative path
+ * Sass inserts when rebasing an imported partial. The captured prefix is put
+ * back unchanged by the alias entry below.
+ *
+ * @type {RegExp}
+ */
+const ASSET_ALIAS_RESOLUTION_RE = new RegExp(
+  `^(?!/)((?:[^?#]*/)?)(?=${ASSET_ALIAS_PREFIX}/)`,
+);
+
+/**
+ * Stop Vite's private CSS resolver after it recognizes the Core alias.
+ *
+ * Vite's CSS resolver does not call user `resolveId` hooks. A truthy result
+ * with an empty id makes its isolated alias container stop without resolving a
+ * project alias, package, or same-named directory. Vite then leaves the URL for
+ * this plugin's normal-order transform, which preserves Core's configured-root
+ * resolution, diagnostics, and deterministic output paths.
+ *
+ * @returns {{id: string}} Empty resolution veto.
+ */
+const reserveAssetAlias = () => ({ id: '' });
+
+/**
+ * Install the resolver veto after Vite has normalized config.
+ *
+ * Late installation is intentional: Vite warns about alias custom resolvers
+ * while normalizing config, but creates its private CSS resolver lazily on the
+ * first stylesheet transform. Its normal module alias plugin has already
+ * captured consumer entries, so ordinary JavaScript imports keep their
+ * existing behavior. A custom resolver created after this hook sees `@assets`
+ * as reserved too; projects must not use that stylesheet namespace as a
+ * package alias.
+ *
+ * This bridge intentionally targets Vite 8, which Core pins in package.json.
+ * Vite 9 removes alias custom resolvers, so a Vite-major upgrade must replace
+ * this bridge; the conflicting-alias release fixture is the fail-loud contract
+ * test for that upgrade.
+ *
+ * @param {import('vite').ResolvedConfig|object} config - Resolved Vite config.
+ * @returns {void}
+ */
+function reserveAssetAliasForCss(config) {
+  const aliasLists = new Set([
+    config?.resolve?.alias,
+    ...Object.values(config?.environments || {}).map(
+      (environment) => environment?.resolve?.alias,
+    ),
+  ]);
+
+  for (const aliases of aliasLists) {
+    if (!Array.isArray(aliases)) continue;
+    if (aliases.some((entry) => entry?.customResolver === reserveAssetAlias)) {
+      continue;
+    }
+
+    aliases.unshift({
+      find: ASSET_ALIAS_RESOLUTION_RE,
+      replacement: '$1',
+      customResolver: reserveAssetAlias,
+    });
+  }
+}
+
+/**
  * Rebase unresolvable CSS asset URLs and manage their output target.
  *
  * @param {{env?: object, diagnostics?: object, publishedAssetSources?: Map<string, string>, removablePublishedAssets?: Set<string>}} [opts={}] - Plugin options.
@@ -104,7 +173,8 @@ export function cssAssetRebasePlugin({
   const selfContainedOutput =
     env?.projectStructure?.selfContainedOutput !== false;
   const projectDir = env?.projectDir || process.cwd();
-  const emittedAssetFileNames = new Set();
+  /** @type {Map<string, string>} Published path -> absolute source file. */
+  const pendingAssetEmissions = new Map();
 
   /** @type {string[]} */
   let roots = [];
@@ -124,13 +194,15 @@ export function cssAssetRebasePlugin({
       // Storybook serves every asset root at `/assets` through staticDirs and
       // copies them into its own output, so this plugin never owns that output.
       ownsOutput = !isStorybookOutput(config);
+
+      if (enabled) reserveAssetAliasForCss(config);
     },
 
     // Watch rebuilds must not inherit stale publication or emission state.
     buildStart() {
       publishedAssetSources.clear();
       removablePublishedAssets.clear();
-      emittedAssetFileNames.clear();
+      pendingAssetEmissions.clear();
     },
 
     transform(code, id) {
@@ -147,19 +219,15 @@ export function cssAssetRebasePlugin({
         importer,
         roots,
         (plan) => {
-          if (plan.status === 'rebased' || plan.status === 'publish') {
+          if (
+            plan.status === 'aliased' ||
+            plan.status === 'rebased' ||
+            plan.status === 'publish'
+          ) {
             if (ownsOutput) {
               if (selfContainedOutput) {
                 const fileName = plan.emitAs.replace(/^\/+/, '');
-
-                if (!emittedAssetFileNames.has(fileName)) {
-                  this.emitFile({
-                    type: 'asset',
-                    fileName,
-                    source: readFileSync(plan.file),
-                  });
-                  emittedAssetFileNames.add(fileName);
-                }
+                pendingAssetEmissions.set(fileName, plan.file);
               } else {
                 publishedAssetSources.set(
                   plan.emitAs,
@@ -175,7 +243,11 @@ export function cssAssetRebasePlugin({
           // `missing` is deliberately not recorded: Vite already warned about
           // that exact URL and the reporter's logger captures it. Recording it
           // again would double the occurrence count.
-          if (plan.status === 'rebased' || plan.status === 'ambiguous') {
+          if (
+            plan.status === 'aliased' ||
+            plan.status === 'rebased' ||
+            plan.status === 'ambiguous'
+          ) {
             diagnostics?.recordAssetRebase?.({
               status: plan.status,
               url: plan.originalUrl,
@@ -200,7 +272,25 @@ export function cssAssetRebasePlugin({
     // relativizer owns deletion because only an actual CSS rewrite proves the
     // copy is redundant; JS-only and generated assets must survive.
     generateBundle(_, bundle) {
-      if (!enabled || !ownsOutput || selfContainedOutput) return;
+      if (!enabled || !ownsOutput) return;
+
+      if (selfContainedOutput) {
+        // Vite may already have emitted this exact published path for an
+        // equivalent `/assets/...` CSS reference or a JavaScript import. Wait
+        // until the bundle is known so Core can fill only the missing paths;
+        // emitting eagerly from `transform` produces FILE_NAME_CONFLICT noise
+        // for the same file under the two accepted stylesheet spellings.
+        for (const [fileName, file] of pendingAssetEmissions) {
+          if (Object.hasOwn(bundle, fileName)) continue;
+
+          this.emitFile({
+            type: 'asset',
+            fileName,
+            source: readFileSync(file),
+          });
+        }
+        return;
+      }
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'asset' || fileName.endsWith('.css')) continue;

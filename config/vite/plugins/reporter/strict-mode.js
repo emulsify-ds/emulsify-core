@@ -91,5 +91,9 @@ export function countStrictAssetFailures(snapshot = {}, strictness) {
   const unresolved = snapshot.unresolvedAssets?.length || 0;
   if (strictness !== STRICTNESS.all) return unresolved;
 
-  return unresolved + (snapshot.assetRebases?.length || 0);
+  const repairFailures = (snapshot.assetRebases || []).filter(
+    (entry) => entry.status === 'rebased' || entry.status === 'ambiguous',
+  ).length;
+
+  return unresolved + repairFailures;
 }

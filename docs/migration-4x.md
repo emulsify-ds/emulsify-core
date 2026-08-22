@@ -15,15 +15,15 @@ compatibility impact.
 
 ## Upgrade Summary
 
-| Area                    | What Changed                                                                                                                | What Did Not Change                                                                                                                                   | What May Require Changes                                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Build tool              | Vite replaces the Webpack build.                                                                                            | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `config/emulsify-core/vite/plugins.*`.                                            |
-| Storybook               | Storybook uses `@storybook/react-vite`.                                                                                     | Twig stories and React stories can live in the same Storybook instance. Existing Twig stories that return HTML strings are wrapped for compatibility. | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook` when stories are actively migrated. |
-| Runtime                 | The Core 4 public runtime contract begins at Node.js 24. Core 4.3.0 raises its consumer floor to Node.js 24.13.0.           | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Check the installed release's `package.json#engines.node`; Core 4.3.0 consumers must use Node.js 24.13.0 or later.               |
-| Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                                    | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
-| Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `none`, `wordpress`, and `drupal`. | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | WordPress/Timber projects can use `wordpress`; other non-Drupal projects can use `none` unless they need a dedicated adapter.    |
-| Extension configuration | Vite extension files live under `config/emulsify-core/vite/plugins.*`.                                                      | Storybook overrides still live under `config/emulsify-core/storybook/...`; a11y config still lives at `config/emulsify-core/a11y.config.js`.          | Projects with old Webpack override files should replace them with Vite extensions.                                               |
-| CSS asset URLs          | Canonical, bare, and wrong-depth project-asset URLs now resolve to the correct emitted depth.                               | `dist/` remains self-contained by default, with referenced project assets under `dist/assets/`.                                                       | No consumer action is required; lean output is an explicit opt-in.                                                               |
+| Area                    | What Changed                                                                                                                               | What Did Not Change                                                                                                                                   | What May Require Changes                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Build tool              | Vite replaces the Webpack build.                                                                                                           | Component JS, Sass/CSS, Twig, metadata, and static assets still build or copy into deterministic paths.                                               | Webpack-specific customizations should move to `config/emulsify-core/vite/plugins.*`.                                            |
+| Storybook               | Storybook uses `@storybook/react-vite`.                                                                                                    | Twig stories and React stories can live in the same Storybook instance. Existing Twig stories that return HTML strings are wrapped for compatibility. | Imported Twig templates should render through `renderTwig()` from `@emulsify/core/storybook` when stories are actively migrated. |
+| Runtime                 | The Core 4 public runtime contract begins at Node.js 24. Core 4.3.0 raises its consumer floor to Node.js 24.13.0.                          | Project scripts still run through npm and the shared Emulsify Core config.                                                                            | Check the installed release's `package.json#engines.node`; Core 4.3.0 consumers must use Node.js 24.13.0 or later.               |
+| Project configuration   | `project.emulsify.json` is the source of truth for platform and structure configuration.                                                   | Existing `src/components`, root `./components`, and configured `variant.structureImplementations` remain.                                             | Projects missing `project.emulsify.json` should add one before relying on platform-specific behavior.                            |
+| Platform behavior       | Platform adapters control platform-specific behavior. Implemented adapters are currently `none`, `wordpress`, and `drupal`.                | Drupal SDC mirroring remains supported for Drupal projects that opt into it.                                                                          | WordPress/Timber projects can use `wordpress`; other non-Drupal projects can use `none` unless they need a dedicated adapter.    |
+| Extension configuration | Vite extension files live under `config/emulsify-core/vite/plugins.*`.                                                                     | Storybook overrides still live under `config/emulsify-core/storybook/...`; a11y config still lives at `config/emulsify-core/a11y.config.js`.          | Projects with old Webpack override files should replace them with Vite extensions.                                               |
+| CSS asset URLs          | `/assets/...` and `@assets/...` are equivalent first-class aliases; legacy bare and wrong-depth URLs resolve to the correct emitted depth. | `dist/` remains self-contained by default, with referenced project assets under `dist/assets/`.                                                       | No consumer action is required; lean output is an explicit opt-in.                                                               |
 
 ## Known Limitations
 
@@ -38,8 +38,9 @@ Review the [Known Limitations](../README.md#known-limitations) before upgrading.
 - Twig and React stories can coexist in the same Storybook instance.
 - `project.emulsify.json` is the source of truth for platform and structure configuration.
 - Platform-specific behavior is controlled by platform adapters instead of being assumed globally.
-- Project-asset URLs that Vite cannot resolve are repaired when exactly one
-  configured asset root matches, including bare and wrong-depth forms.
+- Sass and CSS can use either `/assets/...` or `@assets/...` as a first-class
+  project-asset alias. Legacy bare and wrong-depth forms are repaired when
+  exactly one configured asset root matches.
 
 ## What Did Not Change
 
@@ -245,11 +246,12 @@ changing the at-rule.
 
 ## CSS Asset URLs
 
-Use project-root `/assets/...` URLs for fonts, SVGs, background images, and
-other static files that live in root `assets/`.
+Use either `/assets/...` or `@assets/...` URLs for fonts, SVGs, background
+images, and other static files under a project asset root. Both are first-class
+aliases and produce the same emitted URL.
 
 ```scss
-$font-url: '/assets/fonts/example';
+$font-url: '@assets/fonts/example';
 
 @font-face {
   font-family: 'Example Sans';
@@ -261,18 +263,20 @@ $font-url: '/assets/fonts/example';
 }
 ```
 
-Storybook serves root `./assets` at `/assets`. During the Vite build, Emulsify
-resolves the URL against the project's asset roots and rewrites the reference
-relative to the emitted CSS file, so the same authored Sass works in Storybook
-and in built platform CSS.
+Storybook serves project asset roots at `/assets`. During the Vite build,
+Emulsify resolves both first-class spellings against those roots and writes the
+same path relative to the emitted CSS file, so the same authored Sass works in
+Storybook and in built platform CSS. Neither spelling is reported as a repair.
 
 By default, referenced project assets are kept or emitted under `dist/assets/`,
 and built CSS points at those copies. The output therefore remains deployable
-as a self-contained unit while canonical, bare, and wrong-depth URL forms gain
-the repair described below. Projects that always deploy the complete theme can
-set `assets.selfContainedOutput` to `false` for leaner output whose CSS reaches
-the source asset roots instead. `assets.rebase: false` is the separate,
-end-to-end escape hatch that disables repair and final relativization.
+as a self-contained unit. The first-class `/assets/...` and `@assets/...` forms
+resolve directly, while legacy bare and wrong-depth URL forms gain the repair
+described below. Projects that always deploy the complete theme can set
+`assets.selfContainedOutput` to `false` for leaner output whose CSS reaches the
+source asset roots instead. `assets.rebase: false` is the separate, end-to-end
+escape hatch that disables `@assets/...` normalization, legacy repair, and
+final relativization.
 
 Avoid hard-coded platform or deployment paths in Sass. They may work in a single
 runtime, but they bypass Storybook's static asset mount and make components
@@ -292,7 +296,9 @@ differs per project shape — so a depth that works on mirrored Drupal SDC outpu
 breaks under every other shape. Emulsify repairs these: when the URL names the
 published `assets/` prefix and matches exactly one file under one asset root, it
 is rewritten to `/assets/...` and the asset is emitted. Each repair is reported,
-and `emulsify-audit --fix` writes the canonical form back into the source. See
+and `emulsify-audit --fix` writes `/assets/...` as its stable canonical output.
+The equivalent authored `@assets/...` alias is valid and is not reported or
+rewritten. See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable) for
 the depth table, output-mode control, and `assets.rebase` opt-out.
 

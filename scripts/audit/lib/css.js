@@ -3,7 +3,10 @@
  */
 
 import { basename, dirname, resolve } from 'node:path';
-import { assetTailFor } from '../../../config/vite/plugins/assets/asset-url-rebase.js';
+import {
+  assetTailFor,
+  isAssetAliasPath,
+} from '../../../config/vite/plugins/assets/asset-url-rebase.js';
 import { tokenizeStylesheetUrls } from '../../../config/vite/utils/css-urls.js';
 import {
   compiledAssetOutputPath,
@@ -80,8 +83,9 @@ export function findCssUrlReferences(source) {
 /**
  * Classify how a filesystem-ish CSS URL should be resolved.
  *
- * - `asset-root` — `/assets/...` or `assets/...`. Resolved against the project
- *   asset roots, which is what Storybook serves and what the build rebases to.
+ * - `asset-root` — `/assets/...`, `@assets/...`, or legacy `assets/...`.
+ *   Resolved against the project asset roots, which is what Storybook serves
+ *   and what the build rebases to.
  * - `runtime` — some other absolute URL (`/sites/default/files/...`). The
  *   platform serves it; the audit has nothing to check.
  * - `relative` — resolved from the stylesheet's own directory.
@@ -93,6 +97,16 @@ export function classifyCssAssetUrl(value) {
   if (assetTailFor(cssUrlPath(value))) return 'asset-root';
 
   return value.startsWith('/') ? 'runtime' : 'relative';
+}
+
+/**
+ * Determine whether a CSS URL uses the exact namespaced asset alias.
+ *
+ * @param {string} value - URL path without query or hash.
+ * @returns {boolean} TRUE for `@assets/...` paths.
+ */
+export function isCssAssetAlias(value) {
+  return isAssetAliasPath(String(value));
 }
 
 /**

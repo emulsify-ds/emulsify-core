@@ -18,6 +18,10 @@
  * message passes straight through to Vite's own logger untouched.
  */
 
+import {
+  isAssetAliasPath,
+  splitUrlSuffix,
+} from '../assets/asset-url-rebase.js';
 import { isQuiet, isVerbose } from './verbosity.js';
 
 // Re-exported because the Vite config and the reporter both branch on it, and
@@ -360,6 +364,23 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
   const passRawThrough = verbose === undefined ? isVerbose() : verbose;
 
   /**
+   * Valid aliases deliberately reach Vite as unresolved literals so Core can
+   * apply configured-root resolution after Sass compilation. Their raw Vite
+   * notice is therefore implementation noise even in verbose mode. Missing or
+   * ambiguous aliases remain in the collector and are reported in Core's final
+   * diagnostic summary.
+   *
+   * @param {string} message - Raw log message.
+   * @returns {boolean} TRUE for an unresolved reserved-alias notice.
+   */
+  const isAssetAliasNotice = (message) => {
+    const unresolved = parseUnresolvedAsset(message);
+    if (!unresolved) return false;
+
+    return isAssetAliasPath(splitUrlSuffix(unresolved.url).path);
+  };
+
+  /**
    * Record a message if it is one the reporter owns.
    *
    * @param {string} message - Raw log message.
@@ -416,12 +437,16 @@ export function createReporterLogger(collector, baseLogger, { verbose } = {}) {
 
     warn(message, options) {
       const captured = capture(message);
-      if (!captured || passRawThrough) baseLogger.warn(message, options);
+      if (!captured || (passRawThrough && !isAssetAliasNotice(message))) {
+        baseLogger.warn(message, options);
+      }
     },
 
     warnOnce(message, options) {
       const captured = capture(message);
-      if (!captured || passRawThrough) baseLogger.warnOnce(message, options);
+      if (!captured || (passRawThrough && !isAssetAliasNotice(message))) {
+        baseLogger.warnOnce(message, options);
+      }
     },
 
     error(message, options) {

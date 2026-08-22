@@ -400,38 +400,50 @@ export function createDiagnosticsCollector() {
       );
 
       const assetRebaseList = [...assetRebases.values()];
-      const repairedReferences = new Set(
+      const handledReferences = new Set(
         assetRebaseList
-          .filter((entry) => entry.status === 'rebased')
+          .filter(
+            (entry) => entry.status === 'aliased' || entry.status === 'rebased',
+          )
           .map((entry) => assetReferenceKey(entry.importer, entry.url)),
       );
-      const repairedUrls = new Set(
+      const handledUrls = new Set(
         assetRebaseList
-          .filter((entry) => entry.status === 'rebased')
+          .filter(
+            (entry) => entry.status === 'aliased' || entry.status === 'rebased',
+          )
           .map((entry) => entry.url),
       );
       // Vite warns about a URL before the rebase plugin repairs it, so without
-      // this a repaired reference is reported as an outstanding problem. The
-      // importer remains part of the identity: repairing one stylesheet must
-      // not hide the same broken URL spelling in another stylesheet. When
-      // Vite's notice lacks an importer, fall back to URL matching because it
-      // sometimes reports the URL itself in the importer position.
+      // this a repaired reference or accepted alias is reported as an
+      // outstanding problem. The importer remains part of the identity:
+      // handling one stylesheet must not hide the same URL spelling in another
+      // stylesheet. When Vite's notice lacks an importer, fall back to URL
+      // matching because it sometimes reports the URL itself in the importer
+      // position.
       const outstandingAssets = unresolvedAssetList.filter((asset) => {
         if (
-          repairedReferences.has(assetReferenceKey(asset.importer, asset.url))
+          handledReferences.has(assetReferenceKey(asset.importer, asset.url))
         ) {
           return false;
         }
 
-        if (!asset.importer) return !repairedUrls.has(asset.url);
+        if (!asset.importer) return !handledUrls.has(asset.url);
         return true;
       });
+
+      // `@assets/...` is an accepted authoring form. It is tracked internally
+      // only to suppress Vite's pre-normalization unresolved notice and must
+      // not appear as a repair in summaries or strict-mode failures.
+      const reportedAssetRebases = assetRebaseList.filter(
+        (entry) => entry.status !== 'aliased',
+      );
 
       return {
         deprecations: deprecationList,
         deprecationsByFile: groupDeprecationsByFile(deprecationList),
         unresolvedAssets: outstandingAssets,
-        assetRebases: assetRebaseList,
+        assetRebases: reportedAssetRebases,
         externalizedModules: [...externalizedModules.values()].sort(
           (a, b) => b.count - a.count || a.module.localeCompare(b.module),
         ),
