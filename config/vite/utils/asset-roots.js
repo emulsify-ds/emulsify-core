@@ -61,9 +61,10 @@ function isSameOrInside(candidate, directory) {
  * A tail is everything after the `assets/` prefix in an authored URL, so it is
  * relative by construction. A drive-qualified (`D:/x.svg`), drive-relative
  * (`D:x.svg`), or UNC (`\\server\share\x.svg`) tail is therefore malformed,
- * and on Windows `resolve()` would switch away from the asset root. Windows
- * semantics are checked on every platform so the rejection is testable in CI
- * and a POSIX-authored URL cannot smuggle one through.
+ * and on Windows `resolve()` would switch away from the asset root. That also
+ * rejects a POSIX-legal first segment such as `x:y.png`: it is syntactically
+ * indistinguishable from a Windows drive-relative path. Windows semantics are
+ * checked on every platform so the API remains portable and testable in CI.
  *
  * @param {string} tail - Asset path relative to an asset root.
  * @returns {boolean} TRUE when the tail escapes any root it is resolved from.
@@ -154,6 +155,8 @@ export function resolveAssetRoots(
 
 /**
  * Resolve a published asset path (the part after `/assets/`) against the roots.
+ * The tail must already be relative and portable across POSIX and Windows;
+ * leading separators and Windows volume syntax are rejected as malformed.
  *
  * Overlapping roots are normal — a project can declare `./assets` explicitly
  * and still pick up the implicit root — so candidates are collapsed by their
@@ -165,11 +168,10 @@ export function resolveAssetRoots(
  * @returns {{status: 'resolved'|'ambiguous'|'missing', file?: string, root?: string, candidates: string[]}} Resolution.
  */
 export function resolveAssetTail(tail, roots = []) {
-  const raw = String(tail || '').trim();
-  if (!raw || isVolumeQualified(raw)) {
+  const cleaned = String(tail || '').trim();
+  if (!cleaned || isVolumeQualified(cleaned)) {
     return { status: 'missing', candidates: [] };
   }
-  const cleaned = raw.replace(/^\/+/, '');
 
   const seen = new Set();
   /** @type {{file: string, root: string}[]} */

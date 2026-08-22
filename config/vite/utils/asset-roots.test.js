@@ -51,9 +51,11 @@ describe('asset root resolution', () => {
   });
 
   it.each([
+    ['an absolute POSIX tail', '/logo.png'],
     ['a drive-qualified tail', 'D:/outside/secret.svg'],
     ['a backslash drive tail', 'D:\\outside\\secret.svg'],
     ['a drive-relative tail', 'D:outside/secret.svg'],
+    ['a drive-like POSIX filename', 'x:y.png'],
     ['a UNC tail', '\\\\server\\share\\secret.svg'],
     ['a forward-slash UNC tail', '//server/share/secret.svg'],
   ])('refuses %s', (_label, tail) => {
