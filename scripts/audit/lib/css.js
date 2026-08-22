@@ -53,7 +53,7 @@ function resolveSassUrlValue(value, variables) {
  * tokenizer preserves original positions, so `source.slice(start, end) === raw`.
  *
  * @param {string} source - Stylesheet source.
- * @returns {{value: string, raw: string, line: number, start: number, end: number}[]} URL references.
+ * @returns {{value: string, raw: string, quote: string, line: number, start: number, end: number}[]} URL references.
  */
 export function findCssUrlReferences(source) {
   const { urls, sourceWithoutComments } = tokenizeStylesheetUrls(source);
@@ -67,6 +67,7 @@ export function findCssUrlReferences(source) {
     references.push({
       value,
       raw,
+      quote: token.quote,
       line: lineNumberAt(source, token.start),
       start: token.valueStart,
       end: token.valueEnd,
@@ -74,32 +75,6 @@ export function findCssUrlReferences(source) {
   }
 
   return references;
-}
-
-/**
- * Determine whether a CSS URL can never name a file on disk.
- *
- * Absolute paths used to be lumped in here, which meant the documented
- * `/assets/...` convention was never validated at all — a typo in
- * `/assets/images/typoo.jpg` was caught by nothing. Classification of absolute
- * URLs now lives in `classifyCssAssetUrl`; this stays the pure transport test.
- *
- * @param {string} value - URL value.
- * @returns {boolean} TRUE when the URL is not a filesystem path.
- */
-export function isNonFilesystemCssUrl(value) {
-  return (
-    !value ||
-    value.startsWith('#') ||
-    value.startsWith('//') ||
-    value.startsWith('$') ||
-    // Anywhere, not just at position 0: an expanded `$font-url` leaves the
-    // interpolation mid-string, and guessing at it is how false findings start.
-    value.includes('#{') ||
-    /^[a-z][a-z0-9+.-]*:/i.test(value) ||
-    /^var\(/i.test(value) ||
-    /^env\(/i.test(value)
-  );
 }
 
 /**

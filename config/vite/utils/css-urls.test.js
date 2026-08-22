@@ -5,6 +5,7 @@
 import { performance } from 'node:perf_hooks';
 
 import {
+  isNonFilesystemCssUrl,
   replaceStylesheetUrlTokens,
   tokenizeStylesheetUrls,
 } from './css-urls.js';
@@ -15,6 +16,29 @@ const PERFORMANCE_BUDGET_MS = 1_000;
 
 const valuesIn = (source) =>
   tokenizeStylesheetUrls(source).urls.map(({ value }) => value);
+
+describe('isNonFilesystemCssUrl', () => {
+  it.each([
+    [
+      'a quoted dollar filename',
+      'assets/images/logo$2x.svg',
+      SINGLE_QUOTE,
+      false,
+    ],
+    ['an unquoted dollar expression', 'assets/images/logo$2x.svg', '', true],
+    ['an unquoted Sass variable', '$asset-path', '', true],
+    [
+      'unresolved Sass interpolation',
+      'assets/images/#{$name}.svg',
+      SINGLE_QUOTE,
+      true,
+    ],
+    ['a data URI', 'data:image/svg+xml,%3Csvg%3E', '', true],
+    ['a local asset path', '/assets/images/logo.svg', SINGLE_QUOTE, false],
+  ])('classifies %s', (_label, value, quote, expected) => {
+    expect(isNonFilesystemCssUrl(value, quote)).toBe(expected);
+  });
+});
 
 describe('tokenizeStylesheetUrls', () => {
   it.each([

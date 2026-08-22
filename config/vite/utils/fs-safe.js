@@ -2,7 +2,7 @@
  * @file Safe filesystem helpers for Vite config and scripts.
  */
 
-import { existsSync, readFileSync, realpathSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'fs';
 
 /**
  * Determine whether a path exists without throwing on inaccessible files.
@@ -63,6 +63,25 @@ export function safeReadJson(filePath) {
  */
 export function firstExistingPath(candidates = []) {
   return candidates.filter(Boolean).find((candidate) => safeExists(candidate));
+}
+
+/**
+ * Return the first candidate that is a regular file.
+ *
+ * `statSync()` intentionally follows symlinks so a symlink to a file remains a
+ * valid asset reference while a directory with a file-like name does not.
+ *
+ * @param {string[]} candidates - Candidate filesystem paths.
+ * @returns {string|undefined} First file path, when found.
+ */
+export function firstExistingFile(candidates = []) {
+  return candidates.filter(Boolean).find((candidate) => {
+    try {
+      return statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**

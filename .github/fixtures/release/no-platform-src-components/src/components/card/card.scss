@@ -10,6 +10,10 @@
   background-image: url('assets/images/bare.svg');
 }
 
+.asset-dollar {
+  background-image: url('/assets/images/logo$2x.svg');
+}
+
 /* Deliberately the wrong depth: this is the shape that silently works on
    mirrored Drupal SDC output and breaks in every other project shape. */
 .asset-relative {

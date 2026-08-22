@@ -17,6 +17,9 @@ const WHITESPACE_RE = /\s/;
 const SINGLE_QUOTE = String.fromCharCode(39);
 const DOUBLE_QUOTE = '"';
 
+/** URL values that cannot name a local file. */
+const NON_FILESYSTEM_URL_RE = /^(?:#|\/\/|[a-z][a-z0-9+.-]*:|var\(|env\()/i;
+
 /**
  * Determine whether a character opens a quoted CSS value.
  *
@@ -218,6 +221,29 @@ function maskComments(source, comments) {
   }
 
   return masked.join('');
+}
+
+/**
+ * Determine whether a stylesheet URL can never name a file on disk.
+ *
+ * Sass variables are meaningful in unquoted `url()` values. In a quoted value,
+ * `$` is ordinary filename data and must reach the filesystem classifier. An
+ * unresolved interpolation is skipped in either form because neither consumer
+ * can safely guess what path it represents.
+ *
+ * @param {string} value - URL value without its surrounding quotes.
+ * @param {string} [quote=''] - Token quote, or an empty string when unquoted.
+ * @returns {boolean} TRUE when the value is not a filesystem path.
+ */
+export function isNonFilesystemCssUrl(value, quote = '') {
+  const trimmed = String(value || '').trim();
+
+  return (
+    !trimmed ||
+    NON_FILESYSTEM_URL_RE.test(trimmed) ||
+    trimmed.includes('#{') ||
+    (!quote && trimmed.includes('$'))
+  );
 }
 
 /**

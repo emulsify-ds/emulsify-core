@@ -475,6 +475,34 @@ describe('cssAssetRebasePlugin', () => {
     expect(emitFile).toHaveBeenCalledTimes(2);
   });
 
+  it('publishes a quoted asset filename containing a dollar sign', () => {
+    const env = setup();
+    const dollarAsset = join(projectDir, 'src/assets/images/logo$2x.svg');
+    mkdirSync(dirname(dollarAsset), { recursive: true });
+    writeFileSync(dollarAsset, '<svg>$</svg>');
+    const plugin = make(env);
+    const emitFile = jest.fn();
+    const addWatchFile = jest.fn();
+
+    plugin.configResolved({ build: {} });
+    plugin.buildStart();
+
+    expect(
+      transform(
+        plugin,
+        '.dollar{background:url("/assets/images/logo$2x.svg")}',
+        join(projectDir, 'src/components/card/card.scss'),
+        { emitFile, addWatchFile },
+      ),
+    ).toBeNull();
+    expect(emitFile).toHaveBeenCalledWith({
+      type: 'asset',
+      fileName: 'assets/images/logo$2x.svg',
+      source: Buffer.from('<svg>$</svg>'),
+    });
+    expect(addWatchFile).toHaveBeenCalledWith(dollarAsset);
+  });
+
   it('records the copy Vite emitted for the relativizer to decide', () => {
     const env = setup({ selfContainedOutput: false });
     const plugin = make(env);

@@ -5,6 +5,8 @@
 import fs, { readFileSync, symlinkSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { resolveAssetRoots } from '../../../../config/vite/utils/asset-roots.js';
+import { rewriteStylesheetUrls } from '../../../../config/vite/plugins/assets/asset-url-rebase.js';
 import { auditCssAssetReferences } from '../css-asset-references.js';
 import { applyAuditFixes } from '../../fix.js';
 import { resetFileReadCache } from '../../lib/files.js';
@@ -75,6 +77,7 @@ describe('auditCssAssetReferences', () => {
       {
         value: '../../../assets/fonts/Avenir.woff2',
         raw: '#{$font-url}/Avenir.woff2',
+        quote: '"',
         line: 2,
         start: 59,
         end: 84,
@@ -108,6 +111,7 @@ describe('auditCssAssetReferences', () => {
       {
         value: '../icons/real.svg',
         raw: '../icons/real.svg',
+        quote: '"',
         line: 3,
         start: 118,
         end: 135,
@@ -318,6 +322,70 @@ describe('auditCssAssetReferences', () => {
     expect(readFileSync(styleFile, 'utf8')).toBe(
       '.card { background-image: url("/assets/spinner.gif"); }',
     );
+  });
+
+  it('classifies a quoted dollar filename consistently in audit and build paths', () => {
+    writeFile(projectDir, 'src/assets/images/logo$2x.svg', '<svg />');
+    const source =
+      '.dollar { background-image: url("assets/images/logo$2x.svg"); }';
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      source,
+    );
+    const roots = resolveAssetRoots({ projectDir });
+    const beforeBuildPlans = [];
+
+    expect(
+      rewriteStylesheetUrls(source, styleFile, roots, (plan) =>
+        beforeBuildPlans.push(plan.status),
+      ),
+    ).toEqual({
+      code: source.replace(
+        'assets/images/logo$2x.svg',
+        '/assets/images/logo$2x.svg',
+      ),
+      changed: true,
+    });
+    expect(beforeBuildPlans).toEqual(['rebased']);
+
+    const [finding] = audit(styleFile);
+    expect(finding).toMatchObject({
+      id: 'css-runtime-asset-reference',
+      fix: {
+        original: 'assets/images/logo$2x.svg',
+        replacement: '/assets/images/logo$2x.svg',
+      },
+    });
+    expect(applyAuditFixes([finding], { projectDir }).applied).toHaveLength(1);
+
+    resetFileReadCache();
+    const fixedSource = readFileSync(styleFile, 'utf8');
+    const afterBuildPlans = [];
+    expect(audit(styleFile)).toEqual([]);
+    expect(
+      rewriteStylesheetUrls(fixedSource, styleFile, roots, (plan) =>
+        afterBuildPlans.push(plan.status),
+      ),
+    ).toEqual({ code: fixedSource, changed: false });
+    expect(afterBuildPlans).toEqual(['publish']);
+  });
+
+  it('does not accept a directory with an asset filename as a local file', () => {
+    fs.mkdirSync(
+      join(projectDir, 'src/components/card/assets/images/bare.svg'),
+      { recursive: true },
+    );
+    const styleFile = writeFile(
+      projectDir,
+      'src/components/card/card.scss',
+      '.card { background-image: url("assets/images/bare.svg"); }',
+    );
+
+    const [finding] = audit(styleFile);
+
+    expect(finding.id).toBe('unresolved-css-asset-reference');
+    expect(finding.fix).toBeUndefined();
   });
 
   it('does not offer --fix when a stylesheet resolves outside source roots', () => {

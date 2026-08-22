@@ -13,7 +13,8 @@
 import { dirname, resolve } from 'node:path';
 import { assetTailFor } from '../../../config/vite/plugins/assets/asset-url-rebase.js';
 import { resolveAssetTail } from '../../../config/vite/utils/asset-roots.js';
-import { firstExistingPath } from '../../../config/vite/utils/fs-safe.js';
+import { isNonFilesystemCssUrl } from '../../../config/vite/utils/css-urls.js';
+import { firstExistingFile } from '../../../config/vite/utils/fs-safe.js';
 import { createAuditFixTargetChecker } from '../fix.js';
 import { displayPath, makeFinding } from '../lib/findings.js';
 import {
@@ -27,7 +28,6 @@ import {
   classifyCssAssetUrl,
   cssUrlPath,
   findCssUrlReferences,
-  isNonFilesystemCssUrl,
   styleRuntimeDirectories,
 } from '../lib/css.js';
 
@@ -205,7 +205,7 @@ export function auditCssAssetReferences(context) {
     const runtimeDirs = styleRuntimeDirectories(filePath, env, projectDir);
 
     for (const ref of findCssUrlReferences(source)) {
-      if (isNonFilesystemCssUrl(ref.value)) continue;
+      if (isNonFilesystemCssUrl(ref.value, ref.quote)) continue;
 
       const assetPath = cssUrlPath(ref.value);
       if (!assetPath) continue;
@@ -217,7 +217,7 @@ export function auditCssAssetReferences(context) {
       // canonical project-asset form, not a source-relative path.
       const sourceAsset = assetPath.startsWith('/')
         ? undefined
-        : firstExistingPath([resolve(dirname(filePath), assetPath)]);
+        : firstExistingFile([resolve(dirname(filePath), assetPath)]);
       const classification = classifyCssAssetUrl(ref.value);
 
       // Some other absolute URL: the platform serves it, and there is no
@@ -243,7 +243,7 @@ export function auditCssAssetReferences(context) {
         continue;
       }
 
-      const runtimeAsset = firstExistingPath(
+      const runtimeAsset = firstExistingFile(
         runtimeDirs.map((directory) => resolve(directory, assetPath)),
       );
       const resolvedAsset = sourceAsset || runtimeAsset;

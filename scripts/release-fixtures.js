@@ -138,6 +138,7 @@ const releaseFixtures = [
       'dist/extension-marker.txt',
       'dist/assets/images/canonical.svg',
       'dist/assets/images/bare.svg',
+      'dist/assets/images/logo$2x.svg',
       'dist/assets/images/relative.svg',
     ],
     reject: [
@@ -157,6 +158,7 @@ const releaseFixtures = [
         strings: [
           '../../../assets/images/canonical.svg',
           '../../../assets/images/bare.svg',
+          '../../../assets/images/logo$2x.svg',
           '../../../assets/images/relative.svg',
         ],
       },

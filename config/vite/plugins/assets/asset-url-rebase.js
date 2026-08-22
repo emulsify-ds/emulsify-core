@@ -36,7 +36,10 @@
 import { dirname, posix, resolve } from 'path';
 
 import { resolveAssetTail } from '../../utils/asset-roots.js';
-import { replaceStylesheetUrlTokens } from '../../utils/css-urls.js';
+import {
+  isNonFilesystemCssUrl,
+  replaceStylesheetUrlTokens,
+} from '../../utils/css-urls.js';
 import { safeExists } from '../../utils/fs-safe.js';
 import { toPosixPath } from '../../utils/paths.js';
 
@@ -61,9 +64,6 @@ export const CSS_URL_RE =
 
 /** Leading `./` and `../` segments — "the tail" is what remains after these. */
 const LEADING_RELATIVE_RE = /^(?:\.{1,2}\/)+/;
-
-/** Values that can never name a file on disk. */
-const NON_FILESYSTEM_RE = /^(?:#|\/\/|[a-z][a-z0-9+.-]*:|var\(|env\()/i;
 
 /**
  * Split a URL into its filesystem path and any `?query` / `#hash` suffix.
@@ -110,19 +110,12 @@ export function assetTailFor(urlPath) {
  * @param {string} value - URL value as written, without quotes.
  * @param {string} importer - Absolute path of the stylesheet being compiled.
  * @param {string[]} roots - Absolute asset roots, in precedence order.
+ * @param {string} [quote=''] - URL value quote, or an empty string when unquoted.
  * @returns {{status: 'skipped'|'missing'|'ambiguous'|'rebased'|'publish', url?: string, file?: string, emitAs?: string, candidates?: string[]}} Plan.
  */
-export function planAssetUrl(value, importer, roots = []) {
+export function planAssetUrl(value, importer, roots = [], quote = '') {
   const trimmed = String(value || '').trim();
-  if (!trimmed) return { status: 'skipped' };
-
-  // Sass interpolation that survives compilation only appears in unquoted
-  // url(), which Sass passes through verbatim. Never guess at it.
-  if (trimmed.includes('#{') || trimmed.includes('$')) {
-    return { status: 'skipped' };
-  }
-
-  if (NON_FILESYSTEM_RE.test(trimmed)) return { status: 'skipped' };
+  if (isNonFilesystemCssUrl(trimmed, quote)) return { status: 'skipped' };
 
   const { path: urlPath, suffix } = splitUrlSuffix(trimmed);
   if (!urlPath) return { status: 'skipped' };
@@ -192,7 +185,7 @@ export function rewriteStylesheetUrls(code, importer, roots = [], onPlan) {
   let changed = false;
 
   const next = replaceStylesheetUrlTokens(code, ({ match, quote, value }) => {
-    const plan = planAssetUrl(value, importer, roots);
+    const plan = planAssetUrl(value, importer, roots, quote);
     if (typeof onPlan === 'function') onPlan(plan, { value });
 
     if (plan.status !== 'rebased') return match;
