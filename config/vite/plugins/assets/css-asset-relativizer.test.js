@@ -7,6 +7,10 @@
  * went unnoticed.
  */
 
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 import { cssAssetUrlRelativizer } from './css-asset-relativizer.js';
 
 // The lint rule bans double-quoted strings, and these fixtures need a literal
@@ -33,13 +37,16 @@ const DEFAULT_SOURCES = new Map([
   ['static/x.svg', 'static/x.svg'],
 ]);
 
-const runOn = (bundle, { build = { outDir: 'dist' }, ...opts } = {}) => {
+const runOn = (
+  bundle,
+  { build = { outDir: 'dist' }, config = {}, ...opts } = {},
+) => {
   const plugin = cssAssetUrlRelativizer({
     env: { projectDir: '/p' },
     publishedAssetSources: DEFAULT_SOURCES,
     ...opts,
   });
-  plugin.configResolved({ build });
+  plugin.configResolved({ ...config, build });
   plugin.generateBundle({}, bundle);
 
   return bundle;
@@ -110,7 +117,9 @@ describe('cssAssetUrlRelativizer', () => {
 
   it('stays inside the output for a Storybook build', () => {
     // Storybook copies every asset root into its own output and serves them at
-    // /assets, so reaching outside that output would break the mount.
+    // /assets, so reaching outside that output would break the mount. Those
+    // copies sit outside Rollup's bundle, so an absent bundle entry must not
+    // prevent this rewrite.
     expect(
       sourceOf('assets/preview-hash.css', '.a{background:url(/assets/x.svg)}', {
         build: { outDir: '.out', assetsDir: 'storybook-assets' },
@@ -139,18 +148,80 @@ describe('cssAssetUrlRelativizer', () => {
 
   it('resolves a generated asset from inside the output', () => {
     // The SVG sprite really is build output, so it has no source mapping and
-    // must stay output-relative.
-    expect(
-      sourceOf(
+    // must stay output-relative. svg-sprite.js registers ahead of this plugin
+    // in plugins/index.js, so its emit is already in the bundle by the time
+    // this runs — the fixture has to carry it or this asserts against a bundle
+    // no build ever produces.
+    const bundle = {
+      ...cssAsset(
         'components/card/css/card.css',
         '.a{background:url(/assets/icons.svg)}',
-        {
-          publishedAssetSources: new Map([
-            ['assets/images/x.svg', 'assets/images/x.svg'],
-          ]),
-        },
       ),
+      'assets/icons.svg': {
+        type: 'asset',
+        fileName: 'assets/icons.svg',
+        source: '<svg/>',
+      },
+    };
+
+    expect(
+      runOn(bundle, {
+        publishedAssetSources: new Map([
+          ['assets/images/x.svg', 'assets/images/x.svg'],
+        ]),
+      })['components/card/css/card.css'].source,
     ).toBe('.a{background:url(../../../assets/icons.svg)}');
+  });
+
+  it.each([
+    ['an ambiguous URL', '.a{background:url(/assets/images/dupe.svg)}'],
+    ['a missing URL', '.a{background:url(assets/images/gone.svg)}'],
+  ])('leaves %s exactly as authored', (_label, source) => {
+    // The rebase plugin emits nothing for `ambiguous` or `missing`, so there is
+    // no output copy to point at. Rewriting anyway produced a confident path
+    // into dist/ that no file occupied, and the build still exited 0 — the
+    // reporter's diagnostic was the only account of it.
+    expect(
+      sourceOf('components/card/css/card.css', source, {
+        publishedAssetSources: new Map(),
+      }),
+    ).toBe(source);
+  });
+
+  it('recognizes a publicDir copy that Rollup omits from the bundle', () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'emulsify-public-assets-'));
+    const publicDir = join(projectDir, 'public');
+    mkdirSync(join(publicDir, 'assets'), { recursive: true });
+    writeFileSync(join(publicDir, 'assets/public.svg'), '<svg/>');
+
+    const options = {
+      build: {
+        outDir: join(projectDir, 'dist'),
+        copyPublicDir: true,
+      },
+      config: { publicDir },
+      env: { projectDir },
+      publishedAssetSources: new Map(),
+    };
+
+    try {
+      expect(
+        sourceOf(
+          'assets/site.css',
+          '.a{background:url(/assets/public.svg)}',
+          options,
+        ),
+      ).toBe('.a{background:url(public.svg)}');
+
+      expect(
+        sourceOf('assets/site.css', '.a{background:url(/assets/public.svg)}', {
+          ...options,
+          build: { ...options.build, copyPublicDir: false },
+        }),
+      ).toBe('.a{background:url(/assets/public.svg)}');
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 
   it('rewrites the bare assets/ form the same way as the root-absolute form', () => {

@@ -14,7 +14,7 @@
  */
 
 import { statSync } from 'fs';
-import { isAbsolute, relative, resolve, sep } from 'path';
+import { isAbsolute, relative, resolve, sep, win32 } from 'path';
 
 import { safeExists, safeRealPath } from './fs-safe.js';
 import { toPosixPath } from './paths.js';
@@ -45,7 +45,31 @@ export const GENERATED_ASSET_ROOTS = ['dist/assets'];
 function isSameOrInside(candidate, directory) {
   if (candidate === directory) return true;
   const rel = relative(directory, candidate);
+
+  // On Windows, `relative()` returns the target unchanged when it sits on
+  // another volume — `relative('C:\\p\\assets', 'D:\\out\\x.svg')` is
+  // `'D:\\out\\x.svg'`, and a UNC share behaves the same way. Neither result
+  // begins with `..`, so the checks below would read an escape as containment.
+  if (isAbsolute(rel)) return false;
+
   return Boolean(rel) && !rel.startsWith('..') && !rel.includes(`..${sep}`);
+}
+
+/**
+ * Determine whether an asset tail names a volume instead of a relative path.
+ *
+ * A tail is everything after the `assets/` prefix in an authored URL, so it is
+ * relative by construction. A drive-qualified (`D:/x.svg`), drive-relative
+ * (`D:x.svg`), or UNC (`\\server\share\x.svg`) tail is therefore malformed,
+ * and on Windows `resolve()` would switch away from the asset root. Windows
+ * semantics are checked on every platform so the rejection is testable in CI
+ * and a POSIX-authored URL cannot smuggle one through.
+ *
+ * @param {string} tail - Asset path relative to an asset root.
+ * @returns {boolean} TRUE when the tail escapes any root it is resolved from.
+ */
+function isVolumeQualified(tail) {
+  return isAbsolute(tail) || Boolean(win32.parse(tail).root);
 }
 
 /**
@@ -141,10 +165,11 @@ export function resolveAssetRoots(
  * @returns {{status: 'resolved'|'ambiguous'|'missing', file?: string, root?: string, candidates: string[]}} Resolution.
  */
 export function resolveAssetTail(tail, roots = []) {
-  const cleaned = String(tail || '')
-    .trim()
-    .replace(/^\/+/, '');
-  if (!cleaned) return { status: 'missing', candidates: [] };
+  const raw = String(tail || '').trim();
+  if (!raw || isVolumeQualified(raw)) {
+    return { status: 'missing', candidates: [] };
+  }
+  const cleaned = raw.replace(/^\/+/, '');
 
   const seen = new Set();
   /** @type {{file: string, root: string}[]} */

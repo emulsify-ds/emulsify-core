@@ -34,6 +34,7 @@
 
 import { isAbsolute, posix as pathPosix, relative, resolve } from 'path';
 
+import { resolveAssetTail } from '../../utils/asset-roots.js';
 import { replaceStylesheetUrlTokens } from '../../utils/css-urls.js';
 import { toPosixPath } from '../../utils/paths.js';
 import { PUBLIC_ASSET_PREFIX, splitUrlSuffix } from './asset-url-rebase.js';
@@ -180,6 +181,7 @@ export function cssAssetUrlRelativizer({
 
   let outDirFromProject = 'dist';
   let ownsOutput = true;
+  let copiedPublicDir = '';
 
   /**
    * Resolve the directory an emitted stylesheet occupies, project-relative.
@@ -215,12 +217,36 @@ export function cssAssetUrlRelativizer({
 
       outDirFromProject = toPosixPath(relative(projectDir, absoluteOutDir));
       ownsOutput = !isStorybookOutput(config);
+
+      const publicDir = config?.publicDir;
+      copiedPublicDir =
+        config?.build?.copyPublicDir !== false &&
+        typeof publicDir === 'string' &&
+        publicDir
+          ? isAbsolute(publicDir)
+            ? publicDir
+            : resolve(projectDir, publicDir)
+          : '';
     },
 
     generateBundle(_, bundle) {
       if (!enabled) return;
 
       const rewrittenPublishedAssets = new Set();
+      const publicAssetCopies = new Map();
+
+      const hasPublicAssetCopy = (published) => {
+        if (!copiedPublicDir) return false;
+        if (!publicAssetCopies.has(published)) {
+          publicAssetCopies.set(
+            published,
+            resolveAssetTail(published, [copiedPublicDir]).status ===
+              'resolved',
+          );
+        }
+
+        return publicAssetCopies.get(published);
+      };
 
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'asset') continue;
@@ -250,6 +276,26 @@ export function cssAssetUrlRelativizer({
               : recordedPublishedPath(urlPath, fileName, publishedAssetSources);
 
             if (!published) return match;
+
+            // Only rewrite toward a target something actually put there. The
+            // rebase plugin emits nothing for an `ambiguous` or `missing` URL,
+            // so rewriting those would invent a confident path into the output
+            // that no file occupies — turning a reported problem into a broken
+            // URL that survives a green build. Leaving the authored URL alone
+            // keeps the reporter's diagnostic the only account of it.
+            //
+            // Restricted to `ownsOutput`: a Storybook build also copies every
+            // static directory beside its bundle, so there the bundle is not
+            // the whole truth about what the output contains.
+            if (
+              ownsOutput &&
+              !Object.hasOwn(bundle, published) &&
+              !publishedAssetSources.has(published) &&
+              !hasPublicAssetCopy(published)
+            ) {
+              return match;
+            }
+
             // A copied or generated asset is reached inside the output. In lean
             // mode, a mapped project asset is reached where it lives in source.
             // Both targets are project-relative so the same subtraction works.
