@@ -176,18 +176,13 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
-  it('keeps JS doc and docs files as production entries', () => {
+  it('excludes singular and plural JS documentation files', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
       componentFilePaths: jsDocumentationEntryPaths,
     });
 
-    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
-{
-  "components/card/js/carddoc": "src/components/card/card.doc.js",
-  "components/card/js/carddocs": "src/components/card/card.docs.js",
-}
-`);
+    expect(buildRelativeInputs(ctx)).toEqual({});
   });
 
   it('builds JSX component entries with JS output keys for none projects', () => {
@@ -231,18 +226,13 @@ describe('buildInputs structure outputs', () => {
 `);
   });
 
-  it('keeps JSX doc and docs files as production entries', () => {
+  it('excludes singular and plural JSX documentation files', () => {
     projectDir = makeTempProject();
     const ctx = buildContext(projectDir, {
       componentFilePaths: jsxDocumentationEntryPaths,
     });
 
-    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
-{
-  "components/card/js/Carddoc": "src/components/card/Card.doc.jsx",
-  "components/card/js/Carddocs": "src/components/card/Card.docs.jsx",
-}
-`);
+    expect(buildRelativeInputs(ctx)).toEqual({});
   });
 
   it('supports canonical root components-only projects', () => {

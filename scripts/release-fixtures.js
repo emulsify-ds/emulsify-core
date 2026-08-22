@@ -100,6 +100,8 @@ const releaseFixtures = [
       'dist/assets/images/relative.svg',
     ],
     reject: [
+      'components/card/carddoc.js',
+      'components/card/carddocs.js',
       'components/card/card.js.map',
       'dist/components/card/card.js',
       'dist/components/card/card.css',

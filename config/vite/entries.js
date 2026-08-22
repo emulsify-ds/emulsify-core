@@ -67,14 +67,14 @@ const entryPath = (entry) =>
 /**
  * Determine whether a file should be compiled as a JS entry.
  *
- * Authoring-only siblings never become build entries: stories, component
- * metadata, pre-minified bundles, and tests.
+ * Authoring-only siblings never become build entries: stories, documentation
+ * modules, component metadata, pre-minified bundles, and tests.
  */
 const isJavaScriptEntry = (entry) => {
   const filePath = entryPath(entry);
   return (
     /\.jsx?$/.test(filePath) &&
-    !/\.(stories|component|min|test)\.jsx?$/.test(filePath)
+    !/\.(stories|docs?|component|min|test)\.jsx?$/.test(filePath)
   );
 };
 
