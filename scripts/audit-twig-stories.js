@@ -18,6 +18,12 @@ import {
   formatAuditJsonErrorReport,
   formatAuditJsonReport,
 } from './audit/report.js';
+import {
+  findRenderTwigBindings,
+  findTwigTemplateBindings,
+  parseStoryModule,
+} from './audit/lib/story-ast.js';
+import { classifyStoryRenderPaths } from './audit/lib/story-render-paths.js';
 import { lineNumberAt } from './lib/text.js';
 
 const STORY_GLOB = '**/*.stories.{js,jsx,ts,tsx}';
@@ -115,13 +121,13 @@ export function findDirectTemplateReturns(source, templateNames = []) {
 }
 
 /**
- * Analyze one Storybook story source string.
+ * Analyze one Storybook story with the legacy regex implementation.
  *
  * @param {string} source - Story source.
- * @param {string} [filePath=''] - Story file path.
+ * @param {string} filePath - Story file path.
  * @returns {object} Story analysis.
  */
-export function analyzeStorySource(source, filePath = '') {
+function analyzeStorySourceWithRegex(source, filePath) {
   const twigImports = findTwigImports(source);
   const templateNames = twigImports.map((item) => item.name);
   const hasRenderTwig = importsRenderTwig(source);
@@ -148,6 +154,70 @@ export function analyzeStorySource(source, filePath = '') {
 
   if (directTemplateReturns.length) {
     reasons.push('appears to return Twig HTML strings directly');
+  }
+
+  return {
+    filePath,
+    twigImports,
+    hasRenderTwig,
+    directTemplateReturns,
+    reasons,
+    shouldUpgrade: reasons.length > 0,
+  };
+}
+
+/**
+ * Analyze one Storybook story source string.
+ *
+ * @param {string} source - Story source.
+ * @param {string} [filePath=''] - Story file path.
+ * @returns {object} Story analysis.
+ */
+export function analyzeStorySource(source, filePath = '') {
+  const parsed = parseStoryModule(source, filePath);
+  if (!parsed) return analyzeStorySourceWithRegex(source, filePath);
+
+  const twigImports = findTwigTemplateBindings(parsed.ast);
+  const renderTwigNames = findRenderTwigBindings(parsed.ast);
+  const hasRenderTwig = renderTwigNames.size > 0;
+  const reasons = [];
+
+  if (!twigImports.length) {
+    return {
+      filePath,
+      twigImports,
+      hasRenderTwig,
+      directTemplateReturns: [],
+      reasons,
+      shouldUpgrade: false,
+    };
+  }
+
+  const classification = classifyStoryRenderPaths(parsed.ast, {
+    templateNames: twigImports.map((item) => item.name),
+    renderTwigNames,
+  });
+  const fallbackLine = Number.isInteger(twigImports[0]?.line)
+    ? twigImports[0].line
+    : 1;
+  const directTemplateReturns = classification.legacy.map((item) => ({
+    name: item.name || twigImports[0].name,
+    line: Number.isInteger(item.line) ? item.line : fallbackLine,
+  }));
+
+  if (!hasRenderTwig && classification.hasStoryRenderPath) {
+    reasons.push('imports Twig templates without renderTwig()');
+  }
+
+  if (classification.legacy.length) {
+    reasons.push('appears to return Twig HTML strings directly');
+  }
+
+  if (reasons.length && !directTemplateReturns.length) {
+    directTemplateReturns.push({
+      name: twigImports[0].name,
+      line: fallbackLine,
+    });
   }
 
   return {

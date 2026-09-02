@@ -208,6 +208,7 @@
   "dependencies": {
     "@babel/core": "^7.29.7",
     "@babel/eslint-parser": "^7.29.7",
+    "@babel/parser": "^7.29.7",
     "@babel/preset-env": "^7.29.7",
     "@emulsify/cli": "^2.2.0",
     "@eslint/js": "^9.39.5",

@@ -88,6 +88,32 @@ describe('audit-twig-stories', () => {
     expect(analyzeStorySource(source).shouldUpgrade).toBe(false);
   });
 
+  it('does not report Twig used only by a docs source helper', () => {
+    const source = [
+      'import cardTwig from "./card.twig";',
+      'const getSourceSnippet = () => cardTwig({});',
+      'export default {',
+      '  title: "Components/Card",',
+      '  parameters: { docs: { source: { transform: getSourceSnippet } } },',
+      '};',
+    ].join('\n');
+
+    expect(analyzeStorySource(source, 'card.stories.js')).toEqual({
+      filePath: 'card.stories.js',
+      twigImports: [
+        {
+          name: 'cardTwig',
+          specifier: './card.twig',
+          line: 1,
+        },
+      ],
+      hasRenderTwig: false,
+      directTemplateReturns: [],
+      reasons: [],
+      shouldUpgrade: false,
+    });
+  });
+
   it('scans project story roots and formats a readable report', () => {
     writeLegacyStory();
 
