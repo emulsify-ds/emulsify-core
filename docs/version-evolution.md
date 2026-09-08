@@ -50,3 +50,77 @@ making Emulsify Core a better fit for standalone Twig libraries, standalone
 React libraries, custom element stories, and mixed design systems. It is not a
 break from the project history; it is the same shared-tooling idea updated for
 the way modern component libraries are built.
+
+## Compatibility And Support Policy
+
+### Supported Release Lines
+
+The table records the unresolved maintenance decisions explicitly. The current
+runtime contract and the compatibility rules below do not establish a backport
+promise, a maintenance period, or an end-of-life date for any release line.
+
+| Release line       | Fixes and maintenance commitment                                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Latest 4.x minor   | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Define which fixes the latest 4.x minor receives and its maintenance commitment. -->                                   |
+| Earlier 4.x minors | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Identify which earlier 4.x minors receive backports and whether those cover security, correctness, or other fixes. --> |
+| 3.x                | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Decide whether 3.x receives fixes, which kinds, and any maintenance commitment. -->                                    |
+| 1.x and 2.x        | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Decide whether 1.x or 2.x receives fixes, which kinds, and any maintenance commitment. -->                             |
+
+The destination for a **3.x security report is not yet designated**. Its
+reporting channel and its eligibility for a backport are separate decisions;
+the table does not imply either one has been approved.
+
+<!-- MAINTAINER DECISION REQUIRED: Name the destination and reporting process for 3.x security reports. -->
+
+### Compatibility Within 4.x
+
+Subsequent 4.x releases preserve the current public Node.js floor of
+`>=24.13.0`, React and React DOM peer floors of `^18.0.0 || ^19.0.0`, and all
+other published peer dependency floors. They also preserve:
+
+- `dist/` output paths.
+- Generated BEM class names, including current serialization behavior.
+- SVG sprite fragment IDs.
+- Availability of the packaged scripts called by copied theme wrappers.
+- Existing configuration defaults.
+
+Raising a runtime or peer dependency floor, removing a supported peer major,
+changing these output contracts, removing a script entry point, or requiring a
+configuration migration requires a major release. New behavior may ship in a
+minor when it is optional and existing consumers retain their current behavior.
+Any intentional incompatibility must include a before/after migration note
+that identifies the affected consumers and the required action.
+
+### Historical Exceptions And Upgrade Checklist
+
+The Node.js floor increase in 4.3.0, from `>=24` to `>=24.13.0`, was a
+documented compatibility exception inside a minor release. It is not compliant
+with the policy above and is not precedent for another floor increase in 4.x.
+The [4.3.0 release notes](releases/4.3.0.md) remain the historical record.
+
+[`config/release-analysis.cjs`](../config/release-analysis.cjs) also retains
+explicit historical commit classifications. It treats the replacement of
+Storybook HTML with Storybook React as the 4.x major trigger despite its missing
+breaking-change footer. Three reporter corrections authored as `feat` are
+classified as patches for 4.3.1. A fourth commit, adding detailed mode and
+summary headings, is explicitly acknowledged as a capability addition but
+included in that same corrective release. The file states that this exception
+ends with that commit: further reporter capabilities take a minor. These
+specific rules remain history, not permission for a mandatory migration in
+4.5.0.
+
+For the next release checklist:
+
+- **Does 4.2 → 4.5 require a runtime change?** A 4.2 consumer on Node.js 24.0.0
+  through 24.12.x must move to at least 24.13.0 because of the existing 4.3.0
+  exception. A consumer already on 24.13.0 or later needs no runtime change;
+  4.5.0 must not raise that floor again.
+- **Does 4.2 → 4.5 require a copied-script change?** Core 4.5.0 introduces no
+  mandatory copied-script replacement or theme regeneration. Existing themes
+  whose copied audit wrapper appends a footer to stdout need the documented
+  [`>&2` correction](migration-4x.md#manual-packagejson-updates)
+  when using JSON output. That repairs an existing wrapper defect; upgrading
+  the npm package cannot edit a copied script.
+- **Where does a 3.x security report go?** The destination is an unresolved
+  maintainer decision recorded above. A release checklist must flag that
+  missing decision, rather than infer a reporting channel or support promise.
