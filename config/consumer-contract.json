@@ -4,7 +4,14 @@
       "source": ".github/fixtures/release/drupal-sdc-src-components",
       "directory": ".github/fixtures/consumer/whisk-drupal",
       "model": "emulsify-ds/emulsify-drupal/whisk",
-      "verify": ["lint-js", "lint-styles", "test", "a11y", "a11y-wcag22"],
+      "verify": [
+        "lint-js",
+        "lint-styles",
+        "test",
+        "a11y",
+        "a11y-wcag22",
+        "audit"
+      ],
       "assert": ["components/card/card.js", ".out/index.json"],
       "stories": ["fixtures-consumer-whisk--twig-card"]
     },

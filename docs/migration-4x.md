@@ -168,6 +168,24 @@ Projects with custom lint, Prettier, test, or Storybook scripts should keep
 their project-specific behavior, but should still move Core build commands away
 from `config/webpack` and into `config/vite`.
 
+Existing Core 4 themes whose copied audit wrappers print documentation footers
+to stdout need one correction for JSON consumers. Keep the footer, redirect
+its `printf` to stderr, and retain the saved audit exit status:
+
+```sh
+# Before: the footer follows the JSON on stdout.
+...; status=$?; printf "\nAudit docs: ...\n"; exit $status
+# After: stdout contains only the audit report.
+...; status=$?; printf "\nAudit docs: ...\n" >&2; exit $status
+```
+
+Apply the same redirection to `audit:twig-stories` if it has a copied footer.
+Use `npm run --silent audit -- --json` to suppress npm's own script echo, or
+call `npx --no-install emulsify-audit --json` directly. Keep `exit $status` so
+`--fail-on warn` still fails CI when warnings are found. No theme regeneration
+is required; an npm package upgrade cannot update scripts copied into the
+theme's own `package.json`.
+
 The `--silent` flags in `develop` are cosmetic. `concurrently` spawns each task
 as its own `npm run`, and npm echoes the script it is about to execute, so a
 plain `concurrently --raw --no-shell npm:vite npm:storybook` opens every develop

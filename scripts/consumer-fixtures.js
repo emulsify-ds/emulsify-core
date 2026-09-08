@@ -18,6 +18,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createUsage, parseArgs as parseCliArgs } from './lib/cli.js';
 import { run } from './lib/proc.js';
+import { verifyCopiedAuditWrapper } from './verify-copied-audit-wrapper.js';
 import {
   assertContractDependencies,
   assertFixtureCoverage,
@@ -297,6 +298,10 @@ function runConsumerFixture({
     assertReactVersion(projectDir, reactMajor);
 
     for (const scriptName of fixture.verify) {
+      if (scriptName === 'audit') {
+        verifyCopiedAuditWrapper(projectDir);
+        continue;
+      }
       run('npm', ['run', scriptName], {
         ...fixtureRunOptions(
           projectDir,
