@@ -15,6 +15,7 @@ import a11yConfig from '../config/a11y.config.js';
 
 // Project-specific configuration.
 let {
+  concurrency = 2,
   ignore = {},
   components = [],
   discoverStories = true,
@@ -49,10 +50,16 @@ const loadProjectA11yConfig = async (projectDir = process.cwd()) => {
 /**
  * Apply project-specific a11y config values over shared defaults.
  *
- * @param {{ignore?: object, components?: string[], discoverStories?: boolean, storybookBuildDir?: string, pa11y?: object}} config - Project config.
+ * @param {{concurrency?: number, ignore?: object, components?: string[], discoverStories?: boolean, storybookBuildDir?: string, pa11y?: object}} config - Project config.
  * @returns {void}
  */
 const applyProjectA11yConfig = (config = {}) => {
+  if (config.concurrency !== undefined) {
+    if (!Number.isSafeInteger(config.concurrency) || config.concurrency < 1) {
+      throw new Error('Accessibility concurrency must be a positive integer.');
+    }
+    concurrency = config.concurrency;
+  }
   ignore = config.ignore || ignore;
   components = Array.isArray(config.components)
     ? config.components
@@ -368,19 +375,39 @@ const lintComponent = async (name, { baseUrl } = {}) =>
   });
 
 /**
- * Lint a list of components, log reports, and exit(1) if any have issues.
+ * Lint components, log reports, and set exit status 1 if any have issues.
  * @param {string[]} names - List of Storybook story IDs.
  * @param {{baseUrl?: string}} [options={}] - Storybook origin options.
  * @returns {Promise<void>}
  */
 const lintReportAndExit = async (names, options = {}) => {
-  const results = await Promise.all(
-    names.map((name) => lintComponent(name, options)),
+  const results = new Array(names.length);
+  let nextIndex = 0;
+  const failures = [];
+  const worker = async () => {
+    while (nextIndex < names.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        results[index] = await lintComponent(names[index], options);
+      } catch (error) {
+        failures.push({ index, error });
+      }
+    }
+  };
+  // Drain every worker before propagating a failure so the caller can safely
+  // close the temporary Storybook server after Pa11y releases its browsers.
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, names.length) }, worker),
   );
+  if (failures.length) {
+    failures.sort((a, b) => a.index - b.index);
+    throw failures[0].error;
+  }
   const hasIssues = results.map(logReport).some(Boolean);
 
   if (hasIssues) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 };
 
