@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "a11y": "npm run storybook-build && node_modules/@emulsify/core/scripts/a11y.js -r",
+    "a11y-wcag22": "node scripts/check-wcag22.js",
     "build": "npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js",
     "coverage": "npm run test && open-cli .coverage/lcov-report/index.html",
     "develop": "npm run --silent ensure-dist && concurrently --raw --no-shell \"npm run --silent vite\" \"npm run --silent storybook\"",

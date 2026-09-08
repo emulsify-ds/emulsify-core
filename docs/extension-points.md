@@ -32,6 +32,10 @@ temporary Storybook server, including when a check rejects. Any reported issue
 or failed check produces exit status 1. This bounds browser count; it is not
 a claim about elapsed time or memory savings on a particular consumer.
 
+For optional rule selection, see the
+[WCAG 2.2 accessibility preset](accessibility.md). Importing the preset is
+independent of the concurrency setting and is not required for existing themes.
+
 ## Vite Plugins And Config Patches
 
 Projects can extend the shared Vite config with one of these files:
