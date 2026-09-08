@@ -77,6 +77,10 @@ It also supports object syntax:
 
 The helper normalizes class values and supports arrays for modifiers and extra classes. It can be used directly in an attribute position or composed into `add_attributes()`.
 
+For templates shared with Drupal, see the [Twig/PHP parity corpus](twig-php-parity.md)
+for the portable subset and known differences in object BEM, utility-class
+punctuation, attribute merging, and context consumption.
+
 ## `add_attributes()`
 
 `add_attributes()` renders HTML attributes from an object and can compose with `bem()` output:

@@ -1,0 +1,329 @@
+{
+  "schemaVersion": 1,
+  "description": "Current Twig serialization, not a canonical behavior specification. Every rendered byte, including Drupal leading spaces, is intentional evidence.",
+  "php": {
+    "repository": "https://github.com/emulsify-ds/emulsify_tools",
+    "revision": "26a5b7cf7abd5f6d05843c70af17f09a354a8e81",
+    "generatedWithPhp": "8.5.10",
+    "dependencies": {
+      "drupal/core": {
+        "version": "11.4.6",
+        "reference": "3fe867f57e51975d4b32243663c7dfd9b92d978a"
+      },
+      "twig/twig": {
+        "version": "v3.28.0",
+        "reference": "597c12ed286fb9d1701a36684ce6e0cbe28ebc8b"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "positional-bem",
+      "template": "{{ bem('title', ['small'], 'card', ['js-click']) }}",
+      "context": {},
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; BEM class values agree.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"card__title card__title--small js-click\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"card__title card__title--small js-click\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "object-bem-explicit-keys",
+      "template": "{{ bem({base_class: 'title', modifiers: ['small'], blockname: 'card'}) }}",
+      "context": {},
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; explicit base_class/blockname values agree.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"card__title card__title--small\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"card__title card__title--small\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "object-bem-block-element",
+      "template": "{{ bem({block: 'card', element: 'title', modifiers: ['small']}) }}",
+      "context": {},
+      "phpContext": "attribute",
+      "portableAttributes": false,
+      "comment": "Known divergence: Core treats block/element as card/title; Tools reverses their BEM positions. This records current behavior, not a correctness decision.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"card__title card__title--small\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"title__card title__card--small\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "bem-utility-punctuation",
+      "template": "{{ bem('card', [], '', ['md:w-1/2']) }}",
+      "context": {},
+      "phpContext": "attribute",
+      "portableAttributes": false,
+      "comment": "Known divergence: Core sanitizes md:w-1/2 to md-w-1-2; Tools preserves punctuation. This does not endorse either behavior.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"card md-w-1-2\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"card md:w-1/2\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "attribute-utility-punctuation",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "additional": {
+          "class": ["md:w-1/2"]
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": false,
+      "comment": "Known divergence: class attributes use the same Core punctuation sanitization as bem(); Tools preserves md:w-1/2.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"md-w-1-2\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"md:w-1/2\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "boolean-attributes",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "additional": {
+          "disabled": true,
+          "hidden": false,
+          "inert": null,
+          "draggable": 0
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; standalone true/false/null and numeric zero render equivalent attributes.",
+      "expected": {
+        "core": {
+          "rendered": "disabled draggable=\"0\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " disabled draggable=\"0\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "boolean-false-context-override",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "attributes": {
+          "disabled": true
+        },
+        "additional": {
+          "disabled": false
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": false,
+      "comment": "Known divergence: Core ignores an incoming false and keeps disabled; Tools replaces true with false and omits disabled. This is compatibility debt, not a chosen canonical rule.",
+      "expected": {
+        "core": {
+          "rendered": "disabled",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": "",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "list-valued-attributes",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "additional": {
+          "aria-describedby": ["a", "b"]
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; a list from a single source renders the same references.",
+      "expected": {
+        "core": {
+          "rendered": "aria-describedby=\"a b\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " aria-describedby=\"a b\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "list-valued-context-merge",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "attributes": {
+          "aria-describedby": ["a"]
+        },
+        "additional": {
+          "aria-describedby": ["b"]
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": false,
+      "comment": "Known divergence: Core replaces the context list with b; Tools appends to produce a b. The corpus records the difference without selecting the correct merge rule.",
+      "expected": {
+        "core": {
+          "rendered": "aria-describedby=\"b\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " aria-describedby=\"a b\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "attribute-escaping",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "additional": {
+          "title": "\"quoted\" & <tag>"
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; quotes, ampersands and angle brackets use the same escaping.",
+      "expected": {
+        "core": {
+          "rendered": "title=\"&quot;quoted&quot; &amp; &lt;tag&gt;\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " title=\"&quot;quoted&quot; &amp; &lt;tag&gt;\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "apostrophe-escaping",
+      "template": "{{ add_attributes(additional) }}",
+      "context": {
+        "additional": {
+          "title": "author's card"
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Known serialization divergence: Core leaves apostrophes literal inside double quotes; Drupal encodes them as &#039;. Both represent the same attribute value.",
+      "expected": {
+        "core": {
+          "rendered": "title=\"author's card\"",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " title=\"author&#039;s card\"",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "add-attributes-consumes-context",
+      "template": "{{ add_attributes(additional) }}|{{ add_attributes({}) }}",
+      "context": {
+        "attributes": {
+          "class": ["existing"],
+          "id": "card"
+        },
+        "additional": {
+          "class": ["new"]
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; native Drupal Attribute context and Core object context are consumed once.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"existing new\" id=\"card\"|",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"existing new\" id=\"card\"|",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "bem-consumes-context",
+      "template": "{{ bem('title', ['small'], 'card') }}|{{ add_attributes({}) }}",
+      "context": {
+        "attributes": {
+          "class": ["existing"],
+          "id": "headline"
+        }
+      },
+      "phpContext": "attribute",
+      "portableAttributes": true,
+      "comment": "Only the known Drupal leading-space serialization divergence; bem() consumes native Drupal Attribute context and Core object context once.",
+      "expected": {
+        "core": {
+          "rendered": "class=\"card__title card__title--small existing\" id=\"headline\"|",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " class=\"card__title card__title--small existing\" id=\"headline\"|",
+          "remainingContextAttributes": {}
+        }
+      }
+    },
+    {
+      "id": "plain-array-context-consumption",
+      "template": "{{ add_attributes({}) }}|{{ add_attributes({}) }}",
+      "context": {
+        "attributes": {
+          "id": "card"
+        }
+      },
+      "phpContext": "array",
+      "portableAttributes": false,
+      "comment": "Known divergence: PHP copies plain-array context attributes, so repeated calls print them again; Core clears its plain object. Use native Drupal Attribute objects for print-once portability.",
+      "expected": {
+        "core": {
+          "rendered": "id=\"card\"|",
+          "remainingContextAttributes": {}
+        },
+        "php": {
+          "rendered": " id=\"card\"| id=\"card\"",
+          "remainingContextAttributes": {
+            "id": "card"
+          }
+        }
+      }
+    }
+  ]
+}
