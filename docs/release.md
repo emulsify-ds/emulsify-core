@@ -65,6 +65,42 @@ publish are never pull-request checks.
 
 ## Required CI Checks
 
+Branch protection on both `develop` and `main` requires the following 19 check
+contexts, verified against the successful [CI run 32583016604](https://github.com/emulsify-ds/emulsify-core/actions/runs/32583016604)
+and the branch-protection API readback:
+
+- `release-readiness (24.13.0)`
+- `release-readiness (24.18.0)`
+- `Packed package`
+- `Fixture / drupal-sdc-src-components`
+- `Fixture / no-platform-src-components`
+- `Fixture / drupal-sdc-non-self-contained-output`
+- `Fixture / non-self-contained-src-assets`
+- `Fixture / non-self-contained-custom-asset-root`
+- `Fixture / asset-rebase-disabled`
+- `Fixture / wordpress-src-components`
+- `Fixture / legacy-components`
+- `Fixture / structure-implementations`
+- `Fixture / mixed-storybook`
+- `Fixture / large-twig-storybook`
+- `Packed consumer / whisk-drupal`
+- `Packed consumer / none`
+- `Packed consumer / wordpress-twig`
+- `React peer / 18`
+- `React peer / 19`
+
+Both branches require the pull-request branch to be up to date before merging
+(`strict: true`). A failed or pending required check blocks an ordinary merge;
+passing checks satisfy this gate alongside the existing review and access
+requirements. Both branches still require one approving review and dismiss
+stale approvals after new commits.
+
+Administrators intentionally retain their bypass: `enforce_admins` is `false`
+on both branches. Registering these check contexts preserves every other
+existing protection setting, and the repository ruleset remains disabled.
+These protection settings are managed through GitHub, separately from the
+workflow and documentation commits.
+
 The read-only CI workflow in `.github/workflows/lint.yml` divides release
 readiness into five groups:
 
