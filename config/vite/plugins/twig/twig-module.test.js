@@ -822,6 +822,135 @@ describe('Twig module plugin', () => {
     expect(output).not.toContain('<h2>Deeper</h2>');
   });
 
+  it.each(['steinhardt:heading', '@components/heading'])(
+    'selects deep duplicate %s by breadth-first and code-point directory order',
+    async (reference) => {
+      projectDir = makeTempProject();
+      const cardFile = join(projectDir, 'src/components/card/card.twig');
+      const selectedFile = join(
+        projectDir,
+        'src/components/Z-upper/text/heading/heading.twig',
+      );
+      const alternatives = [
+        ['a-lower/text/heading', 'Lowercase group'],
+        ['A-earlier/deeper/text/heading', 'Deeper earlier group'],
+        ['Z-upper/text/heading', 'Selected uppercase group'],
+      ];
+      fs.mkdirSync(join(projectDir, 'src/components/card'), {
+        recursive: true,
+      });
+      for (const [directory, label] of alternatives) {
+        const componentDir = join(projectDir, 'src/components', directory);
+        fs.mkdirSync(componentDir, { recursive: true });
+        fs.writeFileSync(
+          join(componentDir, 'heading.twig'),
+          `<h2>${label}</h2>`,
+        );
+      }
+      fs.writeFileSync(cardFile, twigInclude(reference));
+
+      const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+      const transformed = await transformTwigModule(twigPlugin, cardFile);
+
+      expect(renderGeneratedTwigModule(transformed.code)).toBe(
+        '<h2>Selected uppercase group</h2>',
+      );
+      expect(dependencyImportIds(transformed.code)).toEqual([
+        `virtual:emulsify-twig-dep:${encodeURIComponent(selectedFile)}`,
+      ]);
+    },
+  );
+
+  it('prefers a grouped sibling Twig file over HTML and named-directory candidates', async () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    const groupDir = join(projectDir, 'src/components/atoms/text');
+    const selectedFile = join(groupDir, 'heading.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
+    fs.mkdirSync(join(groupDir, 'heading'), { recursive: true });
+    fs.writeFileSync(join(groupDir, 'heading/heading.twig'), '<h2>Named</h2>');
+    fs.writeFileSync(join(groupDir, 'heading.html.twig'), '<h2>HTML</h2>');
+    fs.writeFileSync(selectedFile, '<h2>Sibling</h2>');
+    fs.writeFileSync(cardFile, twigInclude('steinhardt:heading'));
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+
+    expect(renderGeneratedTwigModule(transformed.code)).toBe(
+      '<h2>Sibling</h2>',
+    );
+    expect(dependencyImportIds(transformed.code)).toEqual([
+      `virtual:emulsify-twig-dep:${encodeURIComponent(selectedFile)}`,
+    ]);
+  });
+
+  it('does not fall back from a configured non-component namespace to grouped components', async () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    const headingDir = join(projectDir, 'src/components/atoms/text/heading');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
+    fs.mkdirSync(join(projectDir, 'src/layout'), { recursive: true });
+    fs.mkdirSync(headingDir, { recursive: true });
+    fs.writeFileSync(
+      join(headingDir, 'heading.twig'),
+      '<h2>Wrong namespace</h2>',
+    );
+    fs.writeFileSync(cardFile, twigInclude('@layout/heading'));
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const transformed = await transformTwigModule(twigPlugin, cardFile);
+    const output = renderGeneratedTwigModule(transformed.code);
+
+    expect(output).toContain('Unable to find template');
+    expect(output).not.toContain('Wrong namespace');
+    expect(dependencyImportIds(transformed.code)).toEqual([]);
+  });
+
+  it('retargets a cached grouped include after HMR adds a higher-precedence duplicate', async () => {
+    projectDir = makeTempProject();
+    const cardFile = join(projectDir, 'src/components/card/card.twig');
+    const originalDir = join(projectDir, 'src/components/beta/text/heading');
+    const preferredDir = join(projectDir, 'src/components/alpha/text/heading');
+    const preferredFile = join(preferredDir, 'heading.twig');
+    fs.mkdirSync(join(projectDir, 'src/components/card'), { recursive: true });
+    fs.mkdirSync(originalDir, { recursive: true });
+    fs.writeFileSync(join(originalDir, 'heading.twig'), '<h2>Original</h2>');
+    fs.writeFileSync(cardFile, twigInclude('steinhardt:heading'));
+
+    const twigPlugin = makeTwigModulePlugin(makeEnv(projectDir));
+    const initial = await transformTwigModule(twigPlugin, cardFile);
+    expect(renderGeneratedTwigModule(initial.code)).toBe('<h2>Original</h2>');
+
+    fs.mkdirSync(preferredDir, { recursive: true });
+    fs.writeFileSync(preferredFile, '<h2>Preferred after HMR</h2>');
+    const importerModule = { id: 'card-template' };
+    const server = {
+      moduleGraph: {
+        getModulesByFile: jest.fn((filePath) =>
+          filePath === cardFile ? [importerModule] : [],
+        ),
+        invalidateModule: jest.fn(),
+      },
+    };
+
+    const updatedModules = twigPlugin.handleHotUpdate({
+      file: preferredFile,
+      server,
+    });
+    const updated = await transformTwigModule(twigPlugin, cardFile);
+
+    expect(updatedModules).toContain(importerModule);
+    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+      importerModule,
+    );
+    expect(renderGeneratedTwigModule(updated.code)).toBe(
+      '<h2>Preferred after HMR</h2>',
+    );
+    expect(dependencyImportIds(updated.code)).toEqual([
+      `virtual:emulsify-twig-dep:${encodeURIComponent(preferredFile)}`,
+    ]);
+  });
+
   it('resolves nested transitive project-scoped dependencies', async () => {
     projectDir = makeTempProject();
     const pageDir = join(projectDir, 'src/components/page');

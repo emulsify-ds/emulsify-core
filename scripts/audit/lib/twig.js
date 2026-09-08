@@ -8,6 +8,7 @@ import {
   toAbsoluteAssetRoot,
 } from '../../../config/vite/utils/asset-roots.js';
 import { safeExists } from '../../../config/vite/utils/fs-safe.js';
+import { resolveComponentReference } from '../../../config/vite/utils/twig-component-resolver.js';
 import { candidateKeysForReference } from '../../../src/storybook/twig/reference-paths.js';
 import { lineNumberAt } from '../../lib/text.js';
 import { isSameOrInside } from './files.js';
@@ -191,19 +192,34 @@ function resolvesAssetReference(reference, env) {
  * @param {string} reference - Twig reference.
  * @param {string} filePath - Referencing file path.
  * @param {object} env - Normalized environment.
+ * @param {Map<string, string[]>} [componentGroupRootsCache] - Directory cache shared across one audit pass.
  * @returns {boolean} TRUE when a candidate exists.
  */
-export function resolvesTwigReference(reference, filePath, env) {
+export function resolvesTwigReference(
+  reference,
+  filePath,
+  env,
+  componentGroupRootsCache = new Map(),
+) {
   if (!reference || /^https?:\/\//i.test(reference)) return true;
 
   if (reference.startsWith('@assets/')) {
     return resolvesAssetReference(reference, env);
   }
 
-  const candidates =
-    reference.startsWith('./') || reference.startsWith('../')
-      ? relativeTwigCandidates(filePath, reference)
-      : candidateKeysToFiles(candidateKeysForReference(reference, env), env);
+  const isRelative = reference.startsWith('./') || reference.startsWith('../');
+  const candidates = isRelative
+    ? relativeTwigCandidates(filePath, reference)
+    : candidateKeysToFiles(candidateKeysForReference(reference, env), env);
 
-  return candidates.some(safeExists);
+  if (candidates.some(safeExists)) return true;
+  if (isRelative || !(env.singleDirectoryComponents || env.SDC)) return false;
+
+  return Boolean(
+    resolveComponentReference(
+      reference,
+      env.projectStructure?.namespaceRoots || env.namespaceRoots || {},
+      componentGroupRootsCache,
+    ),
+  );
 }

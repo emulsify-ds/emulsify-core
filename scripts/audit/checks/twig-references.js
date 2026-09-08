@@ -23,6 +23,7 @@ export function auditTwigReferences(context) {
   const knownNamespaces = new Set([...Object.keys(namespaceRoots), 'assets']);
   const findings = [];
   const seen = new Set();
+  const componentGroupRootsCache = new Map();
 
   for (const twigFile of twigFiles) {
     const source = cachedReadFile(twigFile);
@@ -47,7 +48,14 @@ export function auditTwigReferences(context) {
     }
 
     for (const ref of findTwigIncludeSourceReferences(source)) {
-      if (!resolvesTwigReference(ref.value, twigFile, env)) {
+      if (
+        !resolvesTwigReference(
+          ref.value,
+          twigFile,
+          env,
+          componentGroupRootsCache,
+        )
+      ) {
         findings.push(
           makeFinding({
             id: 'unresolved-twig-reference',
