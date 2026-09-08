@@ -425,4 +425,50 @@ describe('auditTwigReferences', () => {
       },
     ]);
   });
+
+  it('audits missing static references without flagging dynamic fragments or comments', () => {
+    writeFile(projectDir, 'src/components/card/card.twig', '<p>Card</p>');
+    const { env, twigFile } = auditReferences([]);
+    writeFile(
+      projectDir,
+      'src/components/reference-probe/reference-probe.twig',
+      [
+        '{{ include("naswa:" ~ component_name, { label: "context.twig" }) }}',
+        '{{ source("@assets/" ~ icon ~ ".svg") }}',
+        '{# {{ include("@ghost/commented.twig") }} {{ source("@ghost/commented.svg") }} #}',
+        '{{ include("@components/card/card.twig") }}',
+        '{{ include("missing-static.twig") }}',
+        '{{ source("@assets/missing-static.svg") }}',
+        '{{ include(["@components/card/card.twig", "missing-fallback.twig", "naswa:" ~ variant]) }}',
+      ].join('\n'),
+    );
+    resetFileReadCache();
+
+    const findings = auditTwigReferences({
+      env,
+      projectDir,
+      twigFiles: [twigFile],
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        id: 'unresolved-twig-reference',
+        severity: 'warn',
+        line: 5,
+        message: expect.stringContaining('"missing-static.twig"'),
+      }),
+      expect.objectContaining({
+        id: 'unresolved-twig-reference',
+        severity: 'warn',
+        line: 6,
+        message: expect.stringContaining('"@assets/missing-static.svg"'),
+      }),
+      expect.objectContaining({
+        id: 'unresolved-twig-reference',
+        severity: 'warn',
+        line: 7,
+        message: expect.stringContaining('"missing-fallback.twig"'),
+      }),
+    ]);
+  });
 });
