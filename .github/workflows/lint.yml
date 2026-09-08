@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [4.x, develop, main]
 
+# Supersede runs for the same PR; each integration push has its own group.
+# Unique push groups also prevent replacement of pending integration runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
