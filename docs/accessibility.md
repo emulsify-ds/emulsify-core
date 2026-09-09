@@ -13,6 +13,16 @@ Run the theme's existing `npm run a11y` command. No theme regeneration,
 runtime change, or configuration migration is required. Consumers that do
 not import the preset retain their existing rule selection.
 
+Each run attempts every selected story within the configured concurrency limit.
+Reports appear in story order, including completed scans when another browser
+check fails. Failed checks identify the story ID, requested URL, and original
+error details. The final summary separates attempted stories, clean scans,
+scans with reportable findings, and execution failures. Ignored findings do not
+count as reportable findings, and failed checks do not count as clean scans.
+
+Reportable findings or execution failures produce a nonzero exit status. The
+runner finishes its checks before closing the temporary Storybook server.
+
 The preset supplies `pa11y.rules: ['target-size']`. Core merges those Pa11y
 options with its shared defaults, preserving the existing actions, axe
 runner, report filters, and story discovery configuration. If a project

@@ -438,7 +438,9 @@ describe('a11y', () => {
       ).toEqual(names);
       expect(completed).not.toEqual(names);
       expect(
-        global.console.log.mock.calls.map(([line]) => line.split('?id=')[1]),
+        global.console.log.mock.calls
+          .filter(([line]) => line.startsWith('No issues found in component:'))
+          .map(([line]) => line.split('?id=')[1]),
       ).toEqual(names);
       expect(process.exitCode).toBe(0);
     },
@@ -472,14 +474,30 @@ describe('a11y', () => {
     try {
       await expect(
         lintReportAndExit(names, { baseUrl: `${server.baseUrl}/iframe.html` }),
-      ).rejects.toBe(failure);
+      ).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: [
+          expect.objectContaining({
+            storyId: 'story-0',
+            url: `${server.baseUrl}/iframe.html?id=story-0`,
+            cause: failure,
+          }),
+        ],
+      });
       expect(active).toBe(0);
       expect(peak).toBeLessThanOrEqual(2);
       expect(completed).toHaveLength(80);
       expect(
         pa11y.mock.calls.map(([url]) => new URL(url).searchParams.get('id')),
       ).toEqual(names);
-      expect(global.console.log).not.toHaveBeenCalled();
+      expect(
+        global.console.log.mock.calls.filter(([line]) =>
+          line.startsWith('No issues found in component:'),
+        ),
+      ).toHaveLength(79);
+      expect(global.console.log).toHaveBeenLastCalledWith(
+        'Accessibility summary: 80 attempted, 79 clean, 0 with findings, 1 failed to execute.',
+      );
     } finally {
       await server.close();
     }
