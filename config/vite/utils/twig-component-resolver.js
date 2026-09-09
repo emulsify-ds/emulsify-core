@@ -56,7 +56,7 @@ export const isWithinRoot = (root, filePath) => {
  * Both lexical and real paths are checked so `..` segments and symlinks cannot
  * escape the component root.
  *
- * @param {string[]} paths - Candidate absolute paths.
+ * @param {Iterable<string>} paths - Candidate absolute paths in precedence order.
  * @param {string} componentRoot - Absolute component root path.
  * @returns {string|undefined} Existing component template path.
  */
@@ -70,21 +70,25 @@ const findExistingComponentTemplateFile = (paths, componentRoot) => {
     return undefined;
   }
 
-  return paths.filter(Boolean).find((filePath) => {
+  for (const filePath of paths) {
+    if (!filePath) continue;
     const absoluteFilePath = resolve(filePath);
     if (!isWithinRoot(absoluteRoot, absoluteFilePath)) {
-      return false;
+      continue;
     }
 
     try {
-      return (
+      if (
         fs.statSync(absoluteFilePath).isFile() &&
         isWithinRoot(realRoot, fs.realpathSync(absoluteFilePath))
-      );
+      ) {
+        return filePath;
+      }
     } catch {
-      return false;
+      // A missing or unreadable candidate does not prevent later matches.
     }
-  });
+  }
+  return undefined;
 };
 
 /**
@@ -203,13 +207,19 @@ const resolveGroupedComponentTemplate = (
   templatePath,
   componentRoot,
   componentGroupRootsCache,
-) =>
-  findExistingComponentTemplateFile(
-    componentGroupRoots(componentRoot, componentGroupRootsCache).flatMap(
-      (groupRoot) => buildTemplateFileCandidates(groupRoot, templatePath),
-    ),
+) => {
+  const groupRoots = componentGroupRoots(
     componentRoot,
-  ) || null;
+    componentGroupRootsCache,
+  );
+  function* candidates() {
+    for (const groupRoot of groupRoots) {
+      yield* buildTemplateFileCandidates(groupRoot, templatePath);
+    }
+  }
+
+  return findExistingComponentTemplateFile(candidates(), componentRoot) || null;
+};
 
 /**
  * Resolve shorthand component references against the components namespace.
