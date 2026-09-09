@@ -198,7 +198,7 @@
     "prettier": "npm run check-node-version && prettier --check --config config/.prettierrc.json --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"",
     "prettier-fix": "npm run check-node-version && prettier --config config/.prettierrc.json --write --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"",
     "release:analyze": "npm run check-node-version && node scripts/verify-release-analysis.js",
-    "release:verify": "npm run check-node-version && npm run lint && npm test && npm run storybook-build && npm run fixtures:release && npm run fixtures:consumer && npm run pack:dry-run && npm run smoke:pack && npm run release:analyze",
+    "release:verify": "node scripts/release-evidence.js verify",
     "semantic-release": "npm run check-node-version && semantic-release --config ./release.config.cjs",
     "smoke:pack": "npm run check-node-version && node scripts/smoke-pack.js",
     "version:develop": "npm run check-node-version && node scripts/bump-version-from-commits.js",

@@ -20,6 +20,10 @@ import { safeExists } from '../config/vite/utils/fs-safe.js';
 import { createUsage, parseArgs as parseCliArgs } from './lib/cli.js';
 import { directorySize } from './lib/fs.js';
 import { run } from './lib/proc.js';
+import {
+  recordFixtureOutcome,
+  recordFixturePlan,
+} from './lib/release-evidence.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixturesRoot = join(repoRoot, '.github/fixtures/release');
@@ -804,6 +808,10 @@ try {
   }
 
   const fixturesToRun = selectedFixtures(options.fixtureNames);
+  recordFixturePlan(
+    'release',
+    fixturesToRun.map(({ name }) => name),
+  );
   const label =
     fixturesToRun.length === releaseFixtures.length
       ? 'full release fixture suite'
@@ -811,7 +819,25 @@ try {
 
   console.log(`Running ${fixturesToRun.length} fixture(s): ${label}`);
   for (const fixture of fixturesToRun) {
-    runFixture(fixture);
+    const startedAt = performance.now();
+    recordFixtureOutcome('release', fixture.name, 'running', 0);
+    try {
+      runFixture(fixture);
+      recordFixtureOutcome(
+        'release',
+        fixture.name,
+        'passed',
+        performance.now() - startedAt,
+      );
+    } catch (error) {
+      recordFixtureOutcome(
+        'release',
+        fixture.name,
+        'failed',
+        performance.now() - startedAt,
+      );
+      throw error;
+    }
   }
 } catch (error) {
   console.error(error.message || error);

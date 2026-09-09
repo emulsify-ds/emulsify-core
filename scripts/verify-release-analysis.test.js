@@ -3,7 +3,13 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,13 +66,18 @@ function createReleaseRepository({
   return cwd;
 }
 
-function runVerifier(cwd, args = []) {
+function runVerifier(cwd, args = [], env = {}) {
   return spawnSync(
     process.execPath,
     [verifierPath, '--base', 'release-base', ...args],
     {
       cwd,
       encoding: 'utf8',
+      env: {
+        ...process.env,
+        EMULSIFY_RELEASE_EVIDENCE_EVENTS: '',
+        ...env,
+      },
     },
   );
 }
@@ -98,15 +109,69 @@ describe('release analysis verification', () => {
     );
   });
 
+  it('records the validated prediction and resolved refs without changing stdout', () => {
+    const eventsPath = join(cwd, 'events.jsonl');
+    const args = ['--squash-title', 'feat(core): add public API'];
+    const normal = runVerifier(cwd, args);
+    const recorded = runVerifier(cwd, args, {
+      EMULSIFY_RELEASE_EVIDENCE_EVENTS: eventsPath,
+    });
+    const events = readFileSync(eventsPath, 'utf8')
+      .trim()
+      .split('\n')
+      .map(JSON.parse);
+
+    expect(recorded.status).toBe(0);
+    expect(recorded.stdout).toBe(normal.stdout);
+    expect(recorded.stderr).toBe('');
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'release-analysis',
+      publishing: false,
+      baseSha: git(cwd, ['rev-parse', 'release-base']),
+      headSha: git(cwd, ['rev-parse', 'HEAD']),
+      releaseTag: 'v1.0.0',
+      previousVersion: '1.0.0',
+      releaseType: 'minor',
+      predictedVersion: '1.1.0',
+      packageVersion: '1.1.0',
+      commitCount: 1,
+      squashChecked: true,
+      squashReleaseType: 'minor',
+    });
+    expect(events[0]).not.toHaveProperty('squashTitle');
+  });
+
+  it('preserves CLI stdout and success when optional evidence cannot be written', () => {
+    const args = ['--squash-title', 'feat(core): add public API'];
+    const normal = runVerifier(cwd, args);
+    const recorded = runVerifier(cwd, args, {
+      EMULSIFY_RELEASE_EVIDENCE_EVENTS: join(
+        cwd,
+        'package.json',
+        'events.jsonl',
+      ),
+    });
+
+    expect(recorded.status).toBe(0);
+    expect(recorded.stdout).toBe(normal.stdout);
+  });
+
   it('rejects the current non-conventional release title', () => {
-    const result = runVerifier(cwd, [
-      '--squash-title',
-      'Release(4.3.0): add web component stories and harden Core tooling',
-    ]);
+    const eventsPath = join(cwd, 'events.jsonl');
+    const result = runVerifier(
+      cwd,
+      [
+        '--squash-title',
+        'Release(4.3.0): add web component stories and harden Core tooling',
+      ],
+      { EMULSIFY_RELEASE_EVIDENCE_EVENTS: eventsPath },
+    );
 
     expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('would not produce a semantic release');
+    expect(existsSync(eventsPath)).toBe(false);
   });
 
   it('rejects a squash title that changes the predicted release type', () => {

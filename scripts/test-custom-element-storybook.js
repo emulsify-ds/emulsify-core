@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import axe from 'axe-core';
 import { launch } from 'puppeteer';
 import { preview } from 'vite';
+import { recordBrowserEvidence } from './lib/release-evidence.js';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
@@ -504,6 +505,13 @@ async function main() {
       args: process.env.CI ? ['--disable-setuid-sandbox', '--no-sandbox'] : [],
       headless: true,
     });
+    if (process.env.EMULSIFY_RELEASE_EVIDENCE_EVENTS) {
+      try {
+        recordBrowserEvidence('mixed-storybook', await browser.version());
+      } catch {
+        // Optional provenance must not change browser assertion outcomes.
+      }
+    }
     page = await browser.newPage();
     page.setDefaultTimeout(defaultTimeout);
     await page.setViewport({ height: 900, width: 1440 });

@@ -15,6 +15,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { run } from './lib/proc.js';
+import { recordTarballEvidence } from './lib/release-evidence.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, '..');
@@ -340,6 +341,7 @@ async function main() {
   tarballPath = isAbsolute(pack.filename)
     ? pack.filename
     : join(packageRoot, pack.filename);
+  recordTarballEvidence(tarballPath, pack);
   tempDir = mkdtempSync(join(tmpdir(), 'emulsify-core-pack-'));
 
   run('npm', ['init', '-y'], {
