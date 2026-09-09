@@ -235,19 +235,11 @@ comments or reviews recording ownership or acceptance. Passing checks,
 authoring the release, or maintaining a package does not assign an accountable
 owner by inference.
 
-Owner: unresolved.
-
-<!-- MAINTAINER DECISION REQUIRED: Assign an accountable owner for the residual Pa11y/Puppeteer/extract-zip chain and decide whether its current exposure is temporarily acceptable. -->
-
-Next review date: unresolved.
-
-<!-- MAINTAINER DECISION REQUIRED: Set the next review date for the residual browser extraction chain and identify the supported CI images and download/caching practices to review. -->
-
-Proposed review triggers, pending maintainer agreement: a patched extraction
-release, a Pa11y/Puppeteer dependency change, a changed CI image or browser
-provisioning method, a new download mirror/cache, or new exploit evidence.
-Any acceptance decision must identify its owner, covered environments and
-advisories, required mitigations, and expiry or next review date.
+The [maintainer decision register](maintainer-decisions.md#residual-browser-chain-acceptance)
+holds the available options, proposed review triggers, and next action for
+these unresolved decisions. This technical assessment does not establish a
+security-reporting channel or a maintenance commitment for older release lines;
+see the separate [reporting decision](maintainer-decisions.md#security-reporting-for-older-lines).
 
 ## Consumer Action and Reproduction
 

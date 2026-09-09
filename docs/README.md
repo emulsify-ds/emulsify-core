@@ -2,6 +2,11 @@
 
 These docs expand on the short project README and are organized by the task a project maintainer is usually trying to complete.
 
+For current consumer requirements and the existing 4.x compatibility rule,
+start with the [compatibility and support policy](version-evolution.md#compatibility-and-support-policy).
+The [maintainer decision register](maintainer-decisions.md) holds unresolved
+questions, evidence, and next actions; its options are not support commitments.
+
 | Topic                                                | Use This When                                                                                                         |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | [Version Evolution](version-evolution.md)            | Understanding how Emulsify Core has evolved across major releases.                                                    |

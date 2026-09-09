@@ -66,9 +66,10 @@ is passed through `add_attributes()`. Tools retains the original token. Consumer
 must account for that limitation in shared templates; 4.5.0 does not change
 selectors or silently harmonize either implementation.
 
-<!-- MAINTAINER DECISION REQUIRED: Choose which runtime defines canonical future behavior for object BEM, utility-class punctuation, false attribute overrides, list merging, and context consumption; coordinate compatibility and migration requirements before changing outputs. -->
-
-<!-- MAINTAINER DECISION REQUIRED: Name the supported Emulsify Tools version counterpart to Core 4.x; the pinned evidence revision is not a support commitment. -->
+The [maintainer decision register](maintainer-decisions.md#supported-emulsify-tools-counterparts)
+tracks unresolved decisions about a supported Tools pairing and
+[future helper behavior](maintainer-decisions.md#future-bem-and-attribute-helper-behavior).
+This release preserves the observed outputs and portable subset above.
 
 ## Reproduce The Checks
 

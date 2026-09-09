@@ -1,6 +1,11 @@
 # Native Twig Extensions
 
-Emulsify Core includes native Twig.js implementations for the Emulsify `bem()` and `add_attributes()` helpers, plus `switch`, `case`, `default`, and `endswitch` logic tags compatible with Emulsify Tools 2.x templates. These are registered through one shared extension registry so Storybook, Vite Twig rendering, and imported Twig component modules use the same behavior.
+Emulsify Core includes native Twig.js implementations for the Emulsify `bem()` and `add_attributes()` helpers, plus `switch`, `case`, `default`, and `endswitch` logic tags. These are registered through one shared extension registry so Storybook, Vite Twig rendering, and imported Twig component modules use the same behavior.
+
+The [Twig/PHP parity corpus](twig-php-parity.md) documents helper behavior
+against one pinned Emulsify Tools revision, including known differences. It
+does not establish a supported Core/Tools release pairing or parity for the
+switch tags.
 
 The extension source lives under `src/extensions/`:
 
@@ -109,7 +114,7 @@ Boolean `true` attributes render without a value, Boolean `false` and nullish va
 {% endswitch %}
 ```
 
-The implementation is designed for Twig.js templates that need parity with Emulsify Tools 2.x switch templates. It validates that `case` and `default` are used inside `switch` and supports nested expressions in case values.
+The Twig.js implementation validates that `case` and `default` are used inside `switch` and supports nested expressions in case values. These are Core's supported syntax rules; the helper parity corpus does not test PHP switch output.
 
 ## Registering Extensions
 

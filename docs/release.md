@@ -36,6 +36,12 @@ checks remain visible, and that the proposed merge strategy produces the
 intended semantic version. Passing automated checks is necessary release
 evidence, but it does not by itself establish that the release is ready.
 
+Use the [maintainer decision register](maintainer-decisions.md) to distinguish
+pending release dispositions from proposed follow-ups. It preserves unresolved
+support, security, Tools, helper-output, and licensing questions without making
+every roadmap decision an automatic release blocker. Record any approved
+decision or deferral with its evidence; the register does not grant approval.
+
 ## Required Local Verification
 
 Install the locked dependencies in a clean checkout, then run the aggregate

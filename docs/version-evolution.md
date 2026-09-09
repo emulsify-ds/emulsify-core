@@ -53,26 +53,39 @@ the way modern component libraries are built.
 
 ## Compatibility And Support Policy
 
-### Supported Release Lines
+### Current Consumer Requirements
 
-The table records the unresolved maintenance decisions explicitly. The current
-runtime contract and the compatibility rules below do not establish a backport
-promise, a maintenance period, or an end-of-life date for any release line.
+These are the current package and tested behavior contracts. They describe
+compatibility, not how long a release line receives maintenance.
 
-| Release line       | Fixes and maintenance commitment                                                                                                                                                       |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Latest 4.x minor   | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Define which fixes the latest 4.x minor receives and its maintenance commitment. -->                                   |
-| Earlier 4.x minors | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Identify which earlier 4.x minors receive backports and whether those cover security, correctness, or other fixes. --> |
-| 3.x                | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Decide whether 3.x receives fixes, which kinds, and any maintenance commitment. -->                                    |
-| 1.x and 2.x        | Pending maintainer decision. <!-- MAINTAINER DECISION REQUIRED: Decide whether 1.x or 2.x receives fixes, which kinds, and any maintenance commitment. -->                             |
+| Area          | Current contract                                                                                                                           | Source                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Node.js       | `>=24.13.0` for the current package; repository development recommends 24.18.0.                                                            | [`package.json`](../package.json), [`.nvmrc`](../.nvmrc), [runtime guide](../README.md#nodejs-runtime-policy) |
+| React peers   | React and React DOM `^18.0.0` or `^19.0.0`.                                                                                                | [`package.json`](../package.json), [consumer matrix](dependency-contract.md#react-peer-matrix)                |
+| Installation  | Generated themes using Core as their only tooling dependency assume npm's flat `node_modules` layout.                                      | [Dependency contract](dependency-contract.md#installer-assumption)                                            |
+| Build output  | Paths depend on the configured structure and platform, including opt-in Drupal SDC mirroring.                                              | [Output matrix](project-structure.md#output-path-matrix)                                                      |
+| Twig helpers  | Current Core serialization and the documented portable subset; the pinned PHP revision is evidence, not a supported Tools version pairing. | [Native helpers](native-twig-extensions.md), [parity corpus](twig-php-parity.md)                              |
+| Project audit | Versioned JSON with the documented finding fields, severities, and opt-in failure thresholds.                                              | [Audit contract](audit.md)                                                                                    |
 
-The destination for a **3.x security report is not yet designated**. Its
-reporting channel and its eligibility for a backport are separate decisions;
-the table does not imply either one has been approved.
+### Maintenance And Security Reporting
 
-<!-- MAINTAINER DECISION REQUIRED: Name the destination and reporting process for 3.x security reports. -->
+No maintenance window, backport entitlement, response-time commitment, or
+end-of-life date is established here for any release line. The existing
+compatibility rule below does not promise that a release line will receive
+future releases. Pending support decisions are recorded in the
+[maintainer decision register](maintainer-decisions.md#maintenance-commitments-and-backports).
+
+As checked September 9, 2026, no designated confidential Core reporting channel
+was verified in the repository or inherited security guidance. Public issue
+links are for ordinary bugs and feature requests; do not post vulnerability
+details there. The [reporting-status record](maintainer-decisions.md#security-reporting-for-older-lines)
+identifies the gap and next action, separately from older-line fix eligibility.
 
 ### Compatibility Within 4.x
+
+The existing 4.x compatibility rule, recorded in
+[`71426a8`](https://github.com/emulsify-ds/emulsify-core/commit/71426a81acf26986a30d502a2d52cd4bf550e32b),
+governs changes when another 4.x release is made:
 
 Subsequent 4.x releases preserve the current public Node.js floor of
 `>=24.13.0`, React and React DOM peer floors of `^18.0.0 || ^19.0.0`, and all
@@ -109,7 +122,7 @@ ends with that commit: further reporter capabilities take a minor. These
 specific rules remain history, not permission for a mandatory migration in
 4.5.0.
 
-For the next release checklist:
+For a consumer upgrading from 4.2 to 4.5:
 
 - **Does 4.2 → 4.5 require a runtime change?** A 4.2 consumer on Node.js 24.0.0
   through 24.12.x must move to at least 24.13.0 because of the existing 4.3.0
@@ -121,6 +134,3 @@ For the next release checklist:
   [`>&2` correction](migration-4x.md#manual-packagejson-updates)
   when using JSON output. That repairs an existing wrapper defect; upgrading
   the npm package cannot edit a copied script.
-- **Where does a 3.x security report go?** The destination is an unresolved
-  maintainer decision recorded above. A release checklist must flag that
-  missing decision, rather than infer a reporting channel or support promise.
