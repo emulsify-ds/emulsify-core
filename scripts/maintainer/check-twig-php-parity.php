@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Optional maintainer check; never invoked by npm, Core CI, or consumers.
+ * Optional maintainer check; never required by npm, Core CI, or consumers.
  *
  * Usage: php check-twig-php-parity.php TOOLS_CHECKOUT [AUTOLOAD] [--write]
  * See docs/twig-php-parity.md for the pinned, isolated setup.
@@ -17,6 +17,9 @@ use Drupal\emulsify_tools\TwigAttributeManager;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 
+$failureKind = 'environment';
+$caseId = NULL;
+
 try {
   $arguments = array_slice($argv, 1);
   $write = in_array('--write', $arguments, TRUE);
@@ -27,10 +30,11 @@ try {
 
   $checkout = realpath($arguments[0]);
   if ($checkout === FALSE) {
-    throw new RuntimeException('Tools checkout does not exist.');
+    throw new RuntimeException('Tools checkout does not exist: ' . $arguments[0]);
   }
   $corpusPath = __DIR__ . '/../../src/extensions/twig/__fixtures__/parity-v1.json';
-  $corpus = json_decode(file_get_contents($corpusPath), TRUE, flags: JSON_THROW_ON_ERROR);
+  $corpusJson = file_get_contents($corpusPath);
+  $corpus = json_decode($corpusJson, TRUE, flags: JSON_THROW_ON_ERROR);
   $revision = $corpus['php']['revision'];
 
   // Read exact committed bytes so a dirty checkout cannot silently redefine the pin.
@@ -48,21 +52,41 @@ try {
     $error = stream_get_contents($pipes[2]);
     fclose($pipes[1]);
     fclose($pipes[2]);
-    if (proc_close($process) !== 0 || $committed !== file_get_contents($checkout . '/' . $relativePath)) {
-      throw new RuntimeException('Tools source differs from pinned revision: ' . $relativePath . '. ' . $error);
+    if (proc_close($process) !== 0) {
+      $failureKind = 'provenance';
+      throw new RuntimeException('Cannot read Tools pin ' . $revision . ':' . $relativePath . ' in ' . $checkout . ': ' . trim($error));
+    }
+    $sourcePath = $checkout . '/' . $relativePath;
+    $observed = is_file($sourcePath) ? file_get_contents($sourcePath) : FALSE;
+    if ($committed !== $observed) {
+      $failureKind = 'provenance';
+      throw new RuntimeException('Tools source differs from pinned revision: ' . json_encode([
+        'path' => $sourcePath,
+        'revision' => $revision,
+        'expectedSha256' => hash('sha256', $committed),
+        'observedSha256' => $observed === FALSE ? NULL : hash('sha256', $observed),
+      ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
   }
 
   $autoload = $arguments[1] ?? $checkout . '/vendor/autoload.php';
   if (!is_file($autoload)) {
-    throw new RuntimeException('Composer autoload file not found; follow docs/twig-php-parity.md.');
+    throw new RuntimeException('Composer autoload file not found: ' . $autoload . '; follow docs/twig-php-parity.md.');
   }
   require $autoload;
   foreach ($corpus['php']['dependencies'] as $package => $expected) {
-    if (!InstalledVersions::isInstalled($package)
-      || InstalledVersions::getPrettyVersion($package) !== $expected['version']
-      || InstalledVersions::getReference($package) !== $expected['reference']) {
-      throw new RuntimeException('Dependency differs from corpus pin: ' . $package);
+    $installed = InstalledVersions::isInstalled($package);
+    $observed = [
+      'version' => $installed ? InstalledVersions::getPrettyVersion($package) : NULL,
+      'reference' => $installed ? InstalledVersions::getReference($package) : NULL,
+    ];
+    if (!$installed || $observed['version'] !== $expected['version'] || $observed['reference'] !== $expected['reference']) {
+      $failureKind = 'provenance';
+      throw new RuntimeException('Dependency differs from corpus pin: ' . json_encode([
+        'package' => $package,
+        'expected' => $expected,
+        'observed' => $observed,
+      ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
   }
   // Explicit loading also supports a separate Composer runtime without Tools autoloading.
@@ -76,7 +100,9 @@ try {
   $twig->addExtension(new AddAttributesTwigExtension($manager));
   $failures = [];
 
-  foreach ($corpus['cases'] as &$case) {
+  $failureKind = 'execution';
+  foreach ($corpus['cases'] as $caseIndex => &$case) {
+    $caseId = $case['id'];
     $context = $case['context'];
     $context['attributes'] ??= [];
     if ($case['phpContext'] === 'attribute') {
@@ -94,15 +120,26 @@ try {
     // Decode the observed empty attribute map consistently with the corpus JSON.
     elseif (json_decode(json_encode($actual, JSON_THROW_ON_ERROR), TRUE) !== $case['expected']['php']) {
       $failures[] = $case['id'];
-      fwrite(STDERR, $case['id'] . ': ' . json_encode($actual, JSON_THROW_ON_ERROR) . PHP_EOL);
+      // Preserve JSON object/map shapes and every serialized character in diagnostics.
+      $expected = json_decode($corpusJson, flags: JSON_THROW_ON_ERROR)->cases[$caseIndex]->expected->php;
+      fwrite(STDERR, json_encode([
+        'kind' => 'output-mismatch',
+        'runtime' => ['name' => 'PHP', 'version' => PHP_VERSION],
+        'caseId' => $caseId,
+        'expected' => $expected,
+        'observed' => $actual,
+      ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . PHP_EOL);
     }
   }
   unset($case);
+  $caseId = NULL;
 
   if ($failures !== []) {
+    $failureKind = 'output-mismatch';
     throw new RuntimeException('PHP parity mismatch: ' . implode(', ', $failures));
   }
   if ($write) {
+    $failureKind = 'environment';
     // Preserve JSON objects in the shared corpus, including empty Core expectations.
     $original = json_decode(file_get_contents($corpusPath), flags: JSON_THROW_ON_ERROR);
     foreach ($corpus['cases'] as $index => $case) {
@@ -114,6 +151,6 @@ try {
   fwrite(STDOUT, ($write ? 'Generated ' : 'Verified ') . count($corpus['cases']) . ' PHP cases at Tools ' . $revision . PHP_EOL);
 }
 catch (Throwable $error) {
-  fwrite(STDERR, $error->getMessage() . PHP_EOL);
+  fwrite(STDERR, '[' . $failureKind . '] PHP ' . PHP_VERSION . ($caseId === NULL ? '' : ' case ' . $caseId) . ': ' . $error->getMessage() . PHP_EOL);
   exit(1);
 }
