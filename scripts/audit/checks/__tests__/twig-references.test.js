@@ -36,10 +36,7 @@ describe('auditTwigReferences', () => {
       projectDir,
       'src/components/reference-probe/reference-probe.twig',
       references
-        .map(
-          (reference) =>
-            `{{ include('${reference}', {}, with_context: false) }}`,
-        )
+        .map((reference) => `{{ include('${reference}', {}, false) }}`)
         .join('\n'),
     );
     writeFile(
@@ -462,12 +459,6 @@ describe('auditTwigReferences', () => {
         severity: 'warn',
         line: 6,
         message: expect.stringContaining('"@assets/missing-static.svg"'),
-      }),
-      expect.objectContaining({
-        id: 'unresolved-twig-reference',
-        severity: 'warn',
-        line: 7,
-        message: expect.stringContaining('"missing-fallback.twig"'),
       }),
     ]);
   });

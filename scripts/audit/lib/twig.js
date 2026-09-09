@@ -138,16 +138,171 @@ function staticTwigString(expression) {
 }
 
 /**
- * Extract only complete static first arguments to include() or source().
+ * Read complete literal candidates and retain uncertainty within a fallback list.
  *
- * Fallback arrays contribute only their complete static string elements.
- * Context arguments and dynamic expressions are not template references.
+ * @param {object} argument - Argument text and source offset.
+ * @param {string} source - Comment-masked Twig source.
+ * @param {boolean} [allowArray=true] - Whether the function accepts fallbacks.
+ * @returns {object} Static candidates, array status, and dynamic-candidate flag.
+ */
+function readTwigCandidates(argument, source, allowArray = true) {
+  const result = {
+    candidates: [],
+    isFallbackArray: false,
+    hasDynamicCandidates: false,
+  };
+  if (!argument) return { ...result, hasDynamicCandidates: true };
+  let values = [argument];
+  if (argument.text.trimStart().startsWith('[')) {
+    const arrayStart = argument.offset + argument.text.indexOf('[');
+    const array = readTwigList(source, arrayStart + 1, ']');
+    const argumentEnd = argument.offset + argument.text.length;
+    if (!allowArray || !array || source.slice(array.end, argumentEnd).trim()) {
+      return { ...result, hasDynamicCandidates: true };
+    }
+    result.isFallbackArray = true;
+    values = array.values;
+  }
+
+  for (const [index, { text, offset }] of values.entries()) {
+    // An empty array and a trailing comma do not introduce a dynamic candidate.
+    if (result.isFallbackArray && index === values.length - 1 && !text.trim()) {
+      continue;
+    }
+    const value = staticTwigString(text);
+    if (value === null) {
+      result.hasDynamicCandidates = true;
+    } else {
+      result.candidates.push({
+        value,
+        line: lineNumberAt(
+          source,
+          offset + text.length - text.trimStart().length,
+        ),
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Recognize literal optionality using Core's JavaScript truthiness coercion.
+ *
+ * @param {object|undefined|null} argument - Argument, absent value, or unknown.
+ * @returns {boolean|null} Static boolean, or null when unknown.
+ */
+function staticTwigBoolean(argument) {
+  if (argument === undefined) return false;
+  const text = argument?.text.trim();
+  if (text === undefined) return null;
+  if (/^(?:true|TRUE)$/.test(text)) return true;
+  if (/^(?:false|FALSE|null|NULL|none|NONE)$/.test(text)) return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(text)) return Boolean(Number(text));
+  const literal = staticTwigString(text);
+  if (literal !== null) return Boolean(literal);
+  return null;
+}
+
+/**
+ * Read an option from a complete object literal in Twig.js property order.
+ *
+ * @param {object|undefined|null} argument - Object argument or unknown value.
+ * @param {string} name - Option key.
+ * @param {string} source - Comment-masked Twig source.
+ * @returns {object|undefined|null} Option expression, absent option, or unknown.
+ */
+function readTwigObjectOption(argument, name, source) {
+  if (argument === undefined) return undefined;
+  if (argument === null) return null;
+  const text = argument.text.trim();
+  if (!text.startsWith('{')) {
+    // Core normalizes primitive/array variables to an empty variables object.
+    if (staticTwigBoolean(argument) !== null) {
+      return undefined;
+    }
+    if (text.startsWith('[')) {
+      const start = argument.offset + argument.text.indexOf('[');
+      const array = readTwigList(source, start + 1, ']');
+      if (
+        array &&
+        !source.slice(array.end, argument.offset + argument.text.length).trim()
+      ) {
+        return undefined;
+      }
+    }
+    return null;
+  }
+
+  const start = argument.offset + argument.text.indexOf('{');
+  const object = readTwigList(source, start + 1, '}');
+  if (
+    !object ||
+    source.slice(object.end, argument.offset + argument.text.length).trim()
+  )
+    return null;
+  // Twig.js keeps the first value for duplicate object keys. A preceding
+  // computed key may already define this option, so it remains unknown.
+  for (const property of object.values) {
+    if (!property.text.trim()) continue;
+    const key = readTwigList(source, property.offset, ':');
+    if (!key || key.values.length !== 1) return null;
+    const keyText = key.values[0].text.trim();
+    const propertyName = /^[A-Za-z_]\w*$/.test(keyText)
+      ? keyText
+      : staticTwigString(keyText);
+    if (propertyName === null) return null;
+    if (propertyName === name) {
+      return {
+        text: source.slice(key.end, property.offset + property.text.length),
+        offset: key.end,
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Read supported Core optional-missing arguments, including include options.
+ *
+ * @param {string} type - include or source.
+ * @param {object[]} args - Complete arguments with source offsets.
+ * @param {string} source - Comment-masked Twig source.
+ * @returns {boolean|null} Optional, required, or unknown.
+ */
+function readIgnoreMissing(type, args, source) {
+  // Twig.js does not bind native named parameters: colon pairs become positional
+  // tokens and equals syntax does not compile. Do not infer flags from those
+  // accidental positions; keep unsupported calls explicitly unknown.
+  if (args.some(({ text }) => /^\s*[A-Za-z_]\w*\s*[:=]/.test(text)))
+    return null;
+  if (type === 'source') return staticTwigBoolean(args[1]);
+
+  let ignoreMissing = staticTwigBoolean(args[3]);
+  const variableFlag = readTwigObjectOption(args[1], 'ignore_missing', source);
+  if (variableFlag !== undefined)
+    ignoreMissing = staticTwigBoolean(variableFlag);
+
+  // This precedence mirrors Core's normalizeIncludeOptions: variables can
+  // replace withContext before a third-argument options object is inspected.
+  const variableContext = readTwigObjectOption(args[1], 'with_context', source);
+  const withContext = variableContext === undefined ? args[2] : variableContext;
+  const contextFlag = readTwigObjectOption(
+    withContext,
+    'ignore_missing',
+    source,
+  );
+  if (contextFlag !== undefined) ignoreMissing = staticTwigBoolean(contextFlag);
+  return ignoreMissing;
+}
+
+/**
+ * Scan actual Twig calls while keeping their argument boundaries and locations.
  *
  * @param {string} source - Twig source.
- * @returns {{type: string, value: string, line: number}[]} References.
+ * @returns {object} Masked source and complete calls.
  */
-export function findTwigIncludeSourceReferences(source) {
-  const references = [];
+function scanTwigReferenceCalls(source) {
+  const calls = [];
   const maskedSource = maskTwigSource(source);
   const callSource = maskTwigSource(source, true);
   const callPattern = /\b(include|source)\s*\(/g;
@@ -158,32 +313,54 @@ export function findTwigIncludeSourceReferences(source) {
     const argsStart = callMatch.index + callMatch[0].length;
     const call = readTwigList(maskedSource, argsStart, ')');
     if (!call) continue;
-
-    const first = call.values[0];
-    let values = [first];
-    if (first.text.trimStart().startsWith('[')) {
-      const arrayStart = first.offset + first.text.indexOf('[');
-      const array = readTwigList(maskedSource, arrayStart + 1, ']');
-      const firstEnd = first.offset + first.text.length;
-      if (!array || maskedSource.slice(array.end, firstEnd).trim()) continue;
-      values = array.values;
-    }
-
-    for (const { text, offset } of values) {
-      const value = staticTwigString(text);
-      if (value === null) continue;
-      references.push({
-        type: callMatch[1],
-        value,
-        line: lineNumberAt(
-          source,
-          offset + text.length - text.trimStart().length,
-        ),
-      });
-    }
+    const args = [...call.values];
+    if (!args.at(-1)?.text.trim()) args.pop();
+    calls.push({
+      type: callMatch[1],
+      args,
+      line: lineNumberAt(source, callMatch.index),
+    });
   }
+  return { calls, maskedSource };
+}
 
-  return references;
+/**
+ * Preserve the flat static-reference interface exported by the audit entrypoint.
+ *
+ * This compatibility view intentionally retains individual array literals and
+ * optional references. The audit check uses the richer call view below.
+ *
+ * @param {string} source - Twig source.
+ * @returns {{type: string, value: string, line: number}[]} Static references.
+ */
+export function findTwigIncludeSourceReferences(source) {
+  const { calls, maskedSource } = scanTwigReferenceCalls(source);
+  return calls.flatMap(({ type, args }) =>
+    readTwigCandidates(args[0], maskedSource).candidates.map((candidate) => ({
+      type,
+      ...candidate,
+    })),
+  );
+}
+
+/**
+ * Extract call-level reference semantics without compiling or rendering Twig.
+ *
+ * Candidate lines locate literals; the call line locates a grouped finding.
+ * Source only accepts a scalar name, unlike include's ordered fallback list.
+ * Dynamic candidates or optionality remain explicit internal unknown states.
+ *
+ * @param {string} source - Twig source.
+ * @returns {object[]} Calls, candidates, optionality, and source locations.
+ */
+export function findTwigReferenceCalls(source) {
+  const { calls, maskedSource } = scanTwigReferenceCalls(source);
+  return calls.map(({ type, args, line }) => ({
+    type,
+    line,
+    ...readTwigCandidates(args[0], maskedSource, type === 'include'),
+    ignoreMissing: readIgnoreMissing(type, args, maskedSource),
+  }));
 }
 
 /**
