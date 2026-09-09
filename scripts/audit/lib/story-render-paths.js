@@ -2,17 +2,16 @@
  * @file Classify modern and legacy Twig render paths in Storybook stories.
  */
 
-import { requiredTwigSpecifier } from './story-ast.js';
+import {
+  collectModuleDeclarations,
+  isNode,
+  requiredTwigSpecifier,
+  readStaticProperty,
+  staticPropertyName,
+  unwrapExpression,
+} from './story-ast.js';
+import { selectStoryExports, isStaticFalsy } from './story-selection.js';
 
-const EXPRESSION_WRAPPERS = new Set([
-  'ChainExpression',
-  'ParenthesizedExpression',
-  'TSAsExpression',
-  'TSNonNullExpression',
-  'TSSatisfiesExpression',
-  'TSTypeAssertion',
-  'TypeCastExpression',
-]);
 const FUNCTION_TYPES = new Set([
   'ArrowFunctionExpression',
   'ClassMethod',
@@ -22,18 +21,6 @@ const FUNCTION_TYPES = new Set([
   'ObjectMethod',
 ]);
 const SHADOWED_BINDING = Symbol('shadowed binding');
-
-/**
- * Determine whether a value is a Babel AST node.
- *
- * @param {unknown} value - Possible AST node.
- * @returns {boolean} TRUE when the value is an AST node.
- */
-function isNode(value) {
-  return Boolean(
-    value && typeof value === 'object' && typeof value.type === 'string',
-  );
-}
 
 /**
  * Return direct AST children for a node.
@@ -56,35 +43,6 @@ function childNodes(node) {
 }
 
 /**
- * Remove transparent syntax wrappers from an expression.
- *
- * @param {object} node - Babel expression node.
- * @returns {object} Unwrapped expression.
- */
-function unwrapExpression(node) {
-  let value = node;
-
-  while (isNode(value) && EXPRESSION_WRAPPERS.has(value.type)) {
-    value = value.expression;
-  }
-
-  return value;
-}
-
-/**
- * Get the module statements from a Babel File or Program.
- *
- * @param {object} ast - Babel File or Program.
- * @returns {object[]} Module statements.
- */
-function moduleBody(ast) {
-  if (ast?.type === 'File') return ast.program?.body || [];
-  if (ast?.type === 'Program') return ast.body || [];
-
-  return [];
-}
-
-/**
  * Get a one-based source line for a node.
  *
  * @param {object} node - Babel AST node.
@@ -92,96 +50,6 @@ function moduleBody(ast) {
  */
 function nodeLine(node) {
   return Number.isInteger(node?.loc?.start?.line) ? node.loc.start.line : 1;
-}
-
-/**
- * Record module-scope function and variable declarations.
- *
- * @param {object} declaration - Babel declaration.
- * @param {Map<string, object>} declarations - Declaration map.
- * @returns {void}
- */
-function addModuleDeclaration(declaration, declarations) {
-  if (declaration?.type === 'FunctionDeclaration' && declaration.id?.name) {
-    declarations.set(declaration.id.name, {
-      node: declaration,
-      value: declaration,
-    });
-    return;
-  }
-
-  if (declaration?.type !== 'VariableDeclaration') return;
-
-  for (const declarator of declaration.declarations) {
-    if (declarator.id?.type !== 'Identifier' || !declarator.init) continue;
-
-    declarations.set(declarator.id.name, {
-      node: declarator,
-      value: declarator.init,
-    });
-  }
-}
-
-/**
- * Collect module-scope declarations by local name.
- *
- * @param {object} ast - Babel File or Program.
- * @returns {Map<string, object>} Module declaration map.
- */
-function collectModuleDeclarations(ast) {
-  const declarations = new Map();
-
-  for (const statement of moduleBody(ast)) {
-    if (statement.type === 'ExportNamedDeclaration') {
-      addModuleDeclaration(statement.declaration, declarations);
-    } else {
-      addModuleDeclaration(statement, declarations);
-    }
-  }
-
-  return declarations;
-}
-
-/**
- * Read a static property name.
- *
- * @param {object} property - Babel object or member property.
- * @returns {string} Property name, or an empty string.
- */
-function staticPropertyName(property) {
-  const key = property?.key || property?.property;
-
-  if (key?.type === 'Identifier' && !property.computed) return key.name;
-  if (key?.type === 'StringLiteral') return key.value;
-
-  return '';
-}
-
-/**
- * Read an object's effective render property.
- *
- * @param {object} objectExpression - Babel object expression.
- * @returns {{node: object, lineNode: object}|null} Render value and location.
- */
-function objectRenderValue(objectExpression) {
-  for (
-    let index = objectExpression.properties.length - 1;
-    index >= 0;
-    index -= 1
-  ) {
-    const property = objectExpression.properties[index];
-    if (staticPropertyName(property) !== 'render') continue;
-
-    if (property.type === 'ObjectMethod') {
-      return { node: property, lineNode: property };
-    }
-
-    if (property.type === 'ObjectProperty') {
-      return { node: property.value, lineNode: property };
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -199,158 +67,93 @@ function isBindCall(node) {
 }
 
 /**
- * Resolve identifier aliases to their module-scope value.
+ * Resolve a selected export to the render Storybook would use.
  *
- * @param {object} node - Babel expression.
- * @param {Map<string, object>} declarations - Module declaration map.
- * @param {Set<object>} [visited] - Values already resolved.
- * @returns {object} Resolved expression.
- */
-function resolveModuleValue(node, declarations, visited = new Set()) {
-  const value = unwrapExpression(node);
-  if (!isNode(value) || visited.has(value)) return value;
-  visited.add(value);
-
-  if (value.type !== 'Identifier' || !declarations.has(value.name)) {
-    return value;
-  }
-
-  return resolveModuleValue(
-    declarations.get(value.name).value,
-    declarations,
-    visited,
-  );
-}
-
-/**
- * Resolve one story value to its effective render path.
+ * Function stories supply their own render. Object stories inherit metadata's
+ * render only when their own render is absent or statically falsy. Unknown
+ * values remain unresolved instead of being assumed to use a modern default.
  *
- * @param {object} node - Story value.
- * @param {Map<string, object>} declarations - Module declaration map.
+ * @param {object} node - Selected story or render value.
+ * @param {object} context - Reusable module information and lexical bindings.
+ * @param {object} defaultRender - Known, absent, or unknown metadata render.
  * @param {object} [lineNode] - Preferred source location.
- * @param {Set<object>} [visited] - Nodes already resolved.
- * @returns {{node: object, lineNode: object}|null} Render path.
+ * @param {Set<object>} [visited] - Nodes on this resolution path.
+ * @param {boolean} [storyValue] - Whether an object represents a CSF story.
+ * @returns {object} Render node and location, or an explicit unknown result.
  */
 function resolveRenderPath(
   node,
-  declarations,
+  context,
+  defaultRender,
   lineNode = null,
   visited = new Set(),
+  storyValue = true,
 ) {
+  const { declarations } = context;
   const value = unwrapExpression(node);
-  if (!isNode(value) || visited.has(value)) return null;
+  if (!isNode(value) || visited.has(value)) return { unknown: true };
   visited.add(value);
 
   if (value.type === 'Identifier' && declarations.has(value.name)) {
     const declaration = declarations.get(value.name);
     return resolveRenderPath(
       declaration.value,
-      declarations,
+      context,
+      defaultRender,
       declaration.node,
       visited,
+      storyValue,
+    );
+  }
+
+  if (value.type === 'MemberExpression') {
+    const resolved = resolveBindingValue(value, context);
+    if (!resolved || resolved === value) return { unknown: true };
+    return resolveRenderPath(
+      resolved,
+      context,
+      defaultRender,
+      lineNode,
+      visited,
+      storyValue,
     );
   }
 
   if (isBindCall(value)) {
     return resolveRenderPath(
       value.callee.object,
-      declarations,
+      context,
+      defaultRender,
       lineNode,
       visited,
+      false,
     );
   }
 
-  if (value.type === 'ObjectExpression') {
-    const renderValue = objectRenderValue(value);
-    if (!renderValue) return null;
-
+  if (value.type === 'ObjectExpression' && storyValue) {
+    let render = readStaticProperty(value, 'render', declarations);
+    if (
+      render.state === 'absent' ||
+      (render.state === 'known' && isStaticFalsy(render.node, declarations))
+    ) {
+      render = defaultRender;
+    }
+    if (render.state !== 'known') return { unknown: true };
     return resolveRenderPath(
-      renderValue.node,
-      declarations,
-      renderValue.lineNode,
+      render.node,
+      context,
+      defaultRender,
+      render.lineNode,
       visited,
+      false,
     );
   }
 
-  return { node: value, lineNode: lineNode || value };
-}
-
-/**
- * Determine whether a named export is story-like.
- *
- * Lower-camel exports are treated as module helpers rather than CSF stories.
- *
- * @param {string} name - Exported name.
- * @returns {boolean} TRUE when the export can be a story render path.
- */
-function isStoryExportName(name) {
-  return typeof name === 'string' && /^[A-Z]/.test(name);
-}
-
-/**
- * Read an imported or exported identifier name.
- *
- * @param {object} node - Babel identifier or string literal.
- * @returns {string} Static name, or an empty string.
- */
-function identifierName(node) {
-  if (node?.type === 'Identifier') return node.name;
-  if (node?.type === 'StringLiteral') return node.value;
-
-  return '';
-}
-
-/**
- * Enumerate explicit Storybook render paths.
- *
- * @param {object} ast - Babel File or Program.
- * @param {Map<string, object>} declarations - Module declaration map.
- * @returns {{node: object, lineNode: object}[]} Render paths.
- */
-function collectStoryRenderPaths(ast, declarations) {
-  const paths = [];
-  const addPath = (value, lineNode = null) => {
-    const path = resolveRenderPath(value, declarations, lineNode);
-    if (!path) return;
-
-    paths.push(path);
+  return {
+    node: value,
+    lineNode: lineNode || value,
+    unknown: !isFunctionNode(value),
   };
-
-  for (const statement of moduleBody(ast)) {
-    if (statement.type === 'ExportDefaultDeclaration') {
-      const meta = resolveModuleValue(statement.declaration, declarations);
-      if (meta?.type === 'ObjectExpression') {
-        const renderValue = objectRenderValue(meta);
-        if (renderValue) addPath(renderValue.node, renderValue.lineNode);
-      }
-      continue;
-    }
-
-    if (statement.type !== 'ExportNamedDeclaration') continue;
-
-    const declaration = statement.declaration;
-    if (declaration?.type === 'FunctionDeclaration') {
-      if (isStoryExportName(declaration.id?.name)) {
-        addPath(declaration, declaration);
-      }
-    } else if (declaration?.type === 'VariableDeclaration') {
-      for (const declarator of declaration.declarations) {
-        if (isStoryExportName(declarator.id?.name) && declarator.init) {
-          addPath(declarator.init, declarator);
-        }
-      }
-    }
-
-    if (statement.source) continue;
-    for (const specifier of statement.specifiers) {
-      const exportedName = identifierName(specifier.exported);
-      if (!isStoryExportName(exportedName)) continue;
-
-      addPath(specifier.local, specifier);
-    }
-  }
-
-  return paths;
 }
 
 /**
@@ -745,8 +548,9 @@ function findFunctionTwigReturn(functionNode, context, active) {
  * @param {object} options - Binding names used by the story module.
  * @param {Iterable<string>} options.templateNames - Twig template bindings.
  * @param {Iterable<string>} options.renderTwigNames - renderTwig bindings.
- * @returns {{legacy: {name: string, line: number}[], hasStoryRenderPath: boolean}}
- * Render path classification.
+ * @returns {object} Legacy render locations, selected-path presence, and
+ * internal unknown selection/render states. A clean result is not proof that
+ * an unresolved consumer render is modern.
  */
 export function classifyStoryRenderPaths(
   ast,
@@ -756,7 +560,8 @@ export function classifyStoryRenderPaths(
   const templateNameSet = new Set(templateNames);
   const renderTwigNameSet = new Set(renderTwigNames);
   const scopesByNode = collectNodeScopes(ast);
-  const paths = collectStoryRenderPaths(ast, declarations);
+  const selection = selectStoryExports(ast, declarations);
+  let hasUnknownStoryRenderPath = false;
   const legacy = [];
 
   const context = {
@@ -766,13 +571,30 @@ export function classifyStoryRenderPaths(
     renderTwigNames: renderTwigNameSet,
   };
 
-  for (const path of paths) {
+  for (const story of selection.stories) {
+    const path = resolveRenderPath(
+      story.node,
+      context,
+      selection.defaultRender,
+      story.lineNode,
+    );
     const name = findTwigInValue(path.node, context, new Set());
-    if (name) legacy.push({ name, line: nodeLine(path.lineNode) });
+    if (name) {
+      legacy.push({ name, line: nodeLine(path.lineNode) });
+    } else if (path.unknown) {
+      const resolved = resolveBindingValue(path.node, context);
+      const modern =
+        resolved?.type === 'CallExpression' &&
+        isRenderTwigCallee(resolved.callee, context);
+      if (!modern && !isFunctionNode(resolved))
+        hasUnknownStoryRenderPath = true;
+    }
   }
 
   return {
     legacy,
-    hasStoryRenderPath: paths.length > 0,
+    hasStoryRenderPath: selection.stories.length > 0,
+    hasUnknownStorySelection: selection.hasUnknownSelection,
+    hasUnknownStoryRenderPath,
   };
 }

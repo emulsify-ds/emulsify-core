@@ -288,8 +288,8 @@ describe('independent story render paths', () => {
         'export const Story = (args) => { console.log(cardTwig(args)); return "plain HTML"; };',
       ],
       [
-        'non-story export',
-        'export const getSourceSnippet = () => cardTwig({});\nexport const Story = () => "plain HTML";',
+        'metadata-excluded export',
+        'export const getSourceSnippet = () => cardTwig({});\nexport default { excludeStories: ["getSourceSnippet"] };\nexport const Story = () => "plain HTML";',
       ],
       [
         'play function',
@@ -342,7 +342,7 @@ describe('independent story render paths', () => {
 
   it.each([
     'export const Modern = { render: renderTwig(Template) };',
-    'export default { render: renderTwig(withContainer(Template)) };',
+    'export default { render: renderTwig(withContainer(Template)) };\nexport const Modern = {};',
     'export const Modern = { render: renderTwig((args) => Template(args)) };',
   ])('keeps composed modern rendering clean: %s', (story) => {
     expectClean(analyze(['const Template = (args) => cardTwig(args);', story]));

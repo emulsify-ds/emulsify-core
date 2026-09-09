@@ -11,6 +11,7 @@ describe('legacy Twig story detection cases', () => {
       'import { renderTwig } from "@emulsify/core/storybook";',
       'const renderCta = (args) => ctaTwig(context(args));',
       'export default { render: renderTwig(withContainer(renderCta)) };',
+      'export const Default = {};',
     ].join('\n');
 
     expect(analyzeStorySource(source).shouldUpgrade).toBe(false);
@@ -21,6 +22,7 @@ describe('legacy Twig story detection cases', () => {
       'import cardTwig from "./card.twig";',
       'import { renderTwig } from "@emulsify/core/storybook";',
       'export default { render: renderTwig((args) => cardTwig(args)) };',
+      'export const Default = {};',
     ].join('\n');
 
     expect(analyzeStorySource(source).shouldUpgrade).toBe(false);
@@ -31,6 +33,7 @@ describe('legacy Twig story detection cases', () => {
       'import cardTwig from "./card.twig";',
       'import { renderTwig } from "@emulsify/core/storybook";',
       'export default { render: renderTwig(cardTwig, { context }) };',
+      'export const Default = {};',
     ].join('\n');
 
     expect(analyzeStorySource(source).shouldUpgrade).toBe(false);
@@ -76,6 +79,7 @@ describe('legacy Twig story detection cases', () => {
       'import { renderTwig as rt } from "@emulsify/core/storybook";',
       'const render = (args) => cardTwig(args);',
       'export default { render: rt(render) };',
+      'export const Default = {};',
     ].join('\n');
 
     expect(analyzeStorySource(source).shouldUpgrade).toBe(false);
@@ -86,6 +90,7 @@ describe('legacy Twig story detection cases', () => {
       'import cardTwig from "./card.twig";',
       'import { renderTwig } from "@emulsify/core";',
       'export default { render: renderTwig((args) => cardTwig(args)) };',
+      'export const Default = {};',
     ].join('\n');
 
     const result = analyzeStorySource(source);
@@ -99,12 +104,13 @@ describe('legacy Twig story detection cases', () => {
     expect(Number.isInteger(line)).toBe(true);
   });
 
-  it('H. ignores a non-story Twig source helper (known false positive)', () => {
+  it('H. ignores an explicitly excluded Twig source helper', () => {
     const source = [
       'import cardTwig from "./card.twig";',
       'import { renderTwig } from "@emulsify/core/storybook";',
       'export const getSourceSnippet = () => cardTwig({});',
-      'export default { render: renderTwig(cardTwig) };',
+      'export default { render: renderTwig(cardTwig), excludeStories: ["getSourceSnippet"] };',
+      'export const Default = {};',
     ].join('\n');
 
     expect(analyzeStorySource(source).shouldUpgrade).toBe(false);
