@@ -2,6 +2,8 @@
  * @file Classify modern and legacy Twig render paths in Storybook stories.
  */
 
+import { requiredTwigSpecifier } from './story-ast.js';
+
 const EXPRESSION_WRAPPERS = new Set([
   'ChainExpression',
   'ParenthesizedExpression',
@@ -502,49 +504,18 @@ function visitScopedAst(node, scopes, visitor) {
 }
 
 /**
- * Mark renderTwig calls, their arguments, and resolved helpers as modern.
+ * Record each node's lexical environment once for the module.
+ *
+ * A helper retains its declaration scope when another render path calls it.
+ * These maps contain bindings only, never modern/legacy classification state.
  *
  * @param {object} ast - Babel File or Program.
- * @param {Map<string, object>} declarations - Module declaration map.
- * @param {Set<string>} renderTwigNames - Local renderTwig binding names.
- * @returns {Set<object>} Modern AST nodes.
+ * @returns {WeakMap<object, Map<string, unknown>[]>} Declaration-site scopes.
  */
-function collectModernNodes(ast, declarations, renderTwigNames) {
-  const modernNodes = new Set();
-  const visitedDeclarations = new Set();
-
-  const markSubtree = (node, scopes = []) => {
-    visitScopedAst(node, scopes, (current, currentScopes) => {
-      modernNodes.add(current);
-
-      if (current.type !== 'Identifier') return;
-      if (findLocalBinding(current.name, currentScopes).found) return;
-
-      const declaration = declarations.get(current.name);
-      if (!declaration || visitedDeclarations.has(declaration.node)) return;
-
-      visitedDeclarations.add(declaration.node);
-      modernNodes.add(declaration.node);
-      markSubtree(declaration.value);
-    });
-  };
-
-  visitScopedAst(ast, [], (node, scopes) => {
-    const callee = unwrapExpression(node.callee);
-    if (
-      node.type !== 'CallExpression' ||
-      callee?.type !== 'Identifier' ||
-      !renderTwigNames.has(callee.name) ||
-      findLocalBinding(callee.name, scopes).found
-    ) {
-      return;
-    }
-
-    modernNodes.add(node);
-    for (const argument of node.arguments) markSubtree(argument, scopes);
-  });
-
-  return modernNodes;
+function collectNodeScopes(ast) {
+  const scopesByNode = new WeakMap();
+  visitScopedAst(ast, [], (node, scopes) => scopesByNode.set(node, scopes));
+  return scopesByNode;
 }
 
 /**
@@ -558,133 +529,188 @@ function isFunctionNode(node) {
 }
 
 /**
- * Resolve a local or module binding value.
+ * Resolve an identifier in its declaration-site lexical environment.
  *
- * @param {string} name - Identifier name.
- * @param {Map<string, unknown>[]} localScopes - Function-local scopes.
- * @param {Map<string, object>} declarations - Module declarations.
- * @returns {{found: boolean, local: boolean, value: unknown}} Binding result.
+ * @param {object} node - Identifier expression.
+ * @param {object} context - Reusable module information.
+ * @returns {{found: boolean, value: unknown}} Binding result.
  */
-function boundValue(name, localScopes, declarations) {
-  const local = findLocalBinding(name, localScopes);
-  if (local.found) return { ...local, local: true };
+function boundValue(node, context) {
+  const local = findLocalBinding(
+    node.name,
+    context.scopesByNode.get(node) || [],
+  );
+  if (local.found) return local;
 
-  if (declarations.has(name)) {
-    return {
-      found: true,
-      local: false,
-      value: declarations.get(name).value,
-    };
-  }
-
-  return { found: false, local: false, value: null };
+  const declaration = context.declarations.get(node.name);
+  return declaration
+    ? { found: true, value: declaration.value }
+    : { found: false, value: null };
 }
 
 /**
- * Find a Twig template evaluated by a returned value.
+ * Resolve aliases and static object properties without evaluating functions.
  *
- * @param {object} node - Returned expression or nested callback.
- * @param {object} context - Classification context.
- * @param {Map<string, unknown>[]} localScopes - Function-local scopes.
- * @param {Set<object>} visited - Values already followed.
+ * @param {object} node - Value or function reference.
+ * @param {object} context - Reusable module information.
+ * @param {Set<object>} [active] - Current alias chain.
+ * @returns {object|null} Resolved value, or null for an unknown/cyclic binding.
+ */
+function resolveBindingValue(node, context, active = new Set()) {
+  const value = unwrapExpression(node);
+  if (!isNode(value) || active.has(value)) return null;
+  active.add(value);
+
+  try {
+    if (value.type === 'Identifier') {
+      const binding = boundValue(value, context);
+      if (
+        context.templateNames.has(value.name) &&
+        requiredTwigSpecifier({ id: value, init: binding.value })
+      ) {
+        return value;
+      }
+      return binding.found
+        ? resolveBindingValue(binding.value, context, active)
+        : value;
+    }
+
+    if (value.type === 'MemberExpression') {
+      const object = resolveBindingValue(value.object, context, active);
+      const name = staticPropertyName(value);
+      if (object?.type !== 'ObjectExpression' || !name) return null;
+
+      for (const property of [...object.properties].reverse()) {
+        // An unknown later override makes the effective property uncertain.
+        if (
+          property.type === 'SpreadElement' ||
+          (property.computed && !staticPropertyName(property))
+        ) {
+          return null;
+        }
+        if (staticPropertyName(property) !== name) continue;
+        return resolveBindingValue(
+          property.type === 'ObjectMethod' ? property : property.value,
+          context,
+          active,
+        );
+      }
+      return null;
+    }
+
+    return value;
+  } finally {
+    active.delete(value);
+  }
+}
+
+/**
+ * Determine whether a callee resolves to the imported modern renderer.
+ *
+ * @param {object} node - Callee expression, possibly aliased or bound.
+ * @param {object} context - Reusable module information.
+ * @param {Set<object>} [active] - Current bound-callee chain.
+ * @returns {boolean} TRUE for the public renderTwig binding.
+ */
+function isRenderTwigCallee(node, context, active = new Set()) {
+  const value = resolveBindingValue(node, context);
+  if (!value || active.has(value)) return false;
+  active.add(value);
+
+  if (isBindCall(value)) {
+    return isRenderTwigCallee(value.callee.object, context, active);
+  }
+
+  return (
+    value.type === 'Identifier' &&
+    !boundValue(value, context).found &&
+    context.renderTwigNames.has(value.name)
+  );
+}
+
+/**
+ * Find a Twig template contributing to the current returned value.
+ *
+ * A renderTwig invocation ends this path without marking its arguments or
+ * declarations. Active nodes belong only to this traversal and are released
+ * on return, so a recursive branch cannot hide a later branch's findings.
+ *
+ * @param {object} node - Returned expression or render function.
+ * @param {object} context - Reusable module information.
+ * @param {Set<object>} active - Nodes on the current render path.
  * @returns {string} Twig binding name, or an empty string.
  */
-function findTwigInValue(node, context, localScopes, visited) {
+function findTwigInValue(node, context, active) {
   const value = unwrapExpression(node);
-  if (!isNode(value) || visited.has(value) || context.modernNodes.has(value)) {
-    return '';
-  }
-  visited.add(value);
+  if (!isNode(value) || active.has(value)) return '';
+  active.add(value);
 
-  if (isFunctionNode(value)) {
-    return findFunctionTwigReturn(value, context, localScopes);
-  }
-
-  if (value.type === 'Identifier') {
-    const binding = boundValue(value.name, localScopes, context.declarations);
-    if (binding.found) {
-      if (!isNode(binding.value)) return '';
-
-      return findTwigInValue(
-        binding.value,
-        context,
-        binding.local ? localScopes : [],
-        visited,
-      );
+  try {
+    if (isFunctionNode(value)) {
+      return findFunctionTwigReturn(value, context, active);
     }
 
-    return context.templateNames.has(value.name) ? value.name : '';
-  }
-
-  if (value.type === 'CallExpression') {
-    const callee = unwrapExpression(value.callee);
-    if (callee?.type === 'Identifier') {
-      const binding = boundValue(
-        callee.name,
-        localScopes,
-        context.declarations,
-      );
-      if (binding.found && isNode(binding.value)) {
-        const name = findTwigInValue(
-          binding.value,
-          context,
-          binding.local ? localScopes : [],
-          visited,
-        );
-        if (name) return name;
-      } else if (!binding.found && context.templateNames.has(callee.name)) {
-        return callee.name;
+    if (value.type === 'Identifier' || value.type === 'MemberExpression') {
+      const resolved = resolveBindingValue(value, context);
+      if (!resolved && value.type === 'MemberExpression') {
+        return findTwigInValue(value.object, context, active);
       }
+      if (resolved !== value) {
+        return findTwigInValue(resolved, context, active);
+      }
+      return context.templateNames.has(value.name) ? value.name : '';
     }
 
-    for (const argument of value.arguments) {
-      const name = findTwigInValue(argument, context, localScopes, visited);
+    if (value.type === 'CallExpression') {
+      if (isRenderTwigCallee(value.callee, context)) return '';
+      if (isBindCall(value)) {
+        return findTwigInValue(value.callee.object, context, active);
+      }
+
+      const name = findTwigInValue(value.callee, context, active);
+      if (name) return name;
+
+      for (const argument of value.arguments) {
+        const argumentName = findTwigInValue(argument, context, active);
+        if (argumentName) return argumentName;
+      }
+
+      return '';
+    }
+
+    // Property names are not references to similarly named template imports.
+    if (value.type === 'ObjectProperty') {
+      return findTwigInValue(value.value, context, active);
+    }
+
+    for (const child of childNodes(value)) {
+      const name = findTwigInValue(child, context, active);
       if (name) return name;
     }
 
     return '';
+  } finally {
+    active.delete(value);
   }
-
-  for (const child of childNodes(value)) {
-    const name = findTwigInValue(child, context, localScopes, visited);
-    if (name) return name;
-  }
-
-  return '';
 }
 
 /**
- * Find a Twig-returning statement without crossing a nested function boundary.
+ * Find a Twig-returning statement without entering an uncalled nested function.
  *
  * @param {object} node - Current statement or expression.
- * @param {object} context - Classification context.
- * @param {Map<string, unknown>[]} localScopes - Current lexical scopes.
+ * @param {object} context - Reusable module information.
+ * @param {Set<object>} active - Nodes on the current render path.
  * @returns {string} Twig binding name, or an empty string.
  */
-function findTwigReturnInNode(node, context, localScopes) {
+function findTwigReturnInNode(node, context, active) {
   if (!isNode(node) || isFunctionNode(node)) return '';
 
-  if (node.type === 'BlockStatement') {
-    const blockScopes = [collectBlockBindings(node), ...localScopes];
-    for (const statement of node.body) {
-      const name = findTwigReturnInNode(statement, context, blockScopes);
-      if (name) return name;
-    }
-    return '';
-  }
-
-  if (node.type === 'CatchClause') {
-    const bindings = new Map();
-    addPatternBindings(node.param, bindings);
-    return findTwigReturnInNode(node.body, context, [bindings, ...localScopes]);
-  }
-
   if (node.type === 'ReturnStatement' && node.argument) {
-    return findTwigInValue(node.argument, context, localScopes, new Set());
+    return findTwigInValue(node.argument, context, active);
   }
 
   for (const child of childNodes(node)) {
-    const name = findTwigReturnInNode(child, context, localScopes);
+    const name = findTwigReturnInNode(child, context, active);
     if (name) return name;
   }
 
@@ -695,25 +721,21 @@ function findTwigReturnInNode(node, context, localScopes) {
  * Find a Twig template returned by a function render path.
  *
  * @param {object} functionNode - Babel function node.
- * @param {object} context - Classification context.
- * @param {Map<string, unknown>[]} [parentScopes] - Enclosing local scopes.
+ * @param {object} context - Reusable module information.
+ * @param {Set<object>} active - Nodes on the current render path.
  * @returns {string} Twig binding name, or an empty string.
  */
-function findFunctionTwigReturn(functionNode, context, parentScopes = []) {
-  if (context.visitedFunctions.has(functionNode)) return '';
-  context.visitedFunctions.add(functionNode);
-
+function findFunctionTwigReturn(functionNode, context, active) {
   const body = unwrapExpression(functionNode.body);
-  const localScopes = [collectFunctionBindings(functionNode), ...parentScopes];
 
   if (
     functionNode.type === 'ArrowFunctionExpression' &&
     body?.type !== 'BlockStatement'
   ) {
-    return findTwigInValue(body, context, localScopes, new Set());
+    return findTwigInValue(body, context, active);
   }
 
-  return findTwigReturnInNode(body, context, localScopes);
+  return findTwigReturnInNode(body, context, active);
 }
 
 /**
@@ -733,20 +755,19 @@ export function classifyStoryRenderPaths(
   const declarations = collectModuleDeclarations(ast);
   const templateNameSet = new Set(templateNames);
   const renderTwigNameSet = new Set(renderTwigNames);
-  const modernNodes = collectModernNodes(ast, declarations, renderTwigNameSet);
+  const scopesByNode = collectNodeScopes(ast);
   const paths = collectStoryRenderPaths(ast, declarations);
   const legacy = [];
 
-  for (const path of paths) {
-    if (modernNodes.has(path.node)) continue;
+  const context = {
+    declarations,
+    scopesByNode,
+    templateNames: templateNameSet,
+    renderTwigNames: renderTwigNameSet,
+  };
 
-    const context = {
-      declarations,
-      modernNodes,
-      templateNames: templateNameSet,
-      visitedFunctions: new Set(),
-    };
-    const name = findTwigInValue(path.node, context, [], new Set());
+  for (const path of paths) {
+    const name = findTwigInValue(path.node, context, new Set());
     if (name) legacy.push({ name, line: nodeLine(path.lineNode) });
   }
 

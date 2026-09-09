@@ -73,7 +73,7 @@ function isTwigSpecifier(value) {
  * @param {object} declarator - Babel variable declarator.
  * @returns {string} Twig specifier, or an empty string.
  */
-function requiredTwigSpecifier(declarator) {
+export function requiredTwigSpecifier(declarator) {
   const init = declarator.init;
 
   if (

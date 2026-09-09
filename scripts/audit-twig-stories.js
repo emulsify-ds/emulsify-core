@@ -205,7 +205,7 @@ export function analyzeStorySource(source, filePath = '') {
     line: Number.isInteger(item.line) ? item.line : fallbackLine,
   }));
 
-  if (!hasRenderTwig && classification.hasStoryRenderPath) {
+  if (!hasRenderTwig && classification.legacy.length) {
     reasons.push('imports Twig templates without renderTwig()');
   }
 
