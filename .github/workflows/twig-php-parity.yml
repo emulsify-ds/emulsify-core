@@ -15,8 +15,6 @@ jobs:
     name: JavaScript parity observations
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      npm_config_cache: ${{ runner.temp }}/parity-javascript/npm-cache
     steps:
       - name: Checkout Core
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -29,6 +27,7 @@ jobs:
       - name: Install locked JavaScript dependencies
         run: |
           mkdir -p "$RUNNER_TEMP/parity-javascript/diagnostics"
+          export npm_config_cache="$RUNNER_TEMP/parity-javascript/npm-cache"
           { git rev-parse HEAD; node --version; npm --version; } > "$RUNNER_TEMP/parity-javascript/diagnostics/environment.log"
           # This focused Jest check needs no install hooks or browser downloads.
           npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee "$RUNNER_TEMP/parity-javascript/diagnostics/install.log"
@@ -53,10 +52,6 @@ jobs:
     name: Pinned PHP observations
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      PARITY_ROOT: ${{ runner.temp }}/parity-php
-      COMPOSER_HOME: ${{ runner.temp }}/parity-php/composer-home
-      COMPOSER_CACHE_DIR: ${{ runner.temp }}/parity-php/composer-cache
     steps:
       - name: Checkout Core
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -72,6 +67,9 @@ jobs:
           coverage: none
       - name: Provision pinned source and serializer dependencies
         run: |
+          export PARITY_ROOT="$RUNNER_TEMP/parity-php"
+          export COMPOSER_HOME="$PARITY_ROOT/composer-home"
+          export COMPOSER_CACHE_DIR="$PARITY_ROOT/composer-cache"
           mkdir -p "$PARITY_ROOT/diagnostics" "$PARITY_ROOT/runtime"
           { git rev-parse HEAD; php --version; composer --version; } > "$PARITY_ROOT/diagnostics/environment.log" 2>&1
           php <<'PHP'
@@ -97,9 +95,10 @@ jobs:
             2>&1 | tee "$PARITY_ROOT/diagnostics/install.log"
       - name: Verify pinned PHP output
         run: |
+          parity_root="$RUNNER_TEMP/parity-php"
           php scripts/maintainer/check-twig-php-parity.php \
-            "$PARITY_ROOT/tools" "$PARITY_ROOT/runtime/vendor/autoload.php" \
-            2>&1 | tee "$PARITY_ROOT/diagnostics/check.log"
+            "$parity_root/tools" "$parity_root/runtime/vendor/autoload.php" \
+            2>&1 | tee "$parity_root/diagnostics/check.log"
       - name: Verify tracked files are unchanged
         if: always()
         run: git diff --exit-code
