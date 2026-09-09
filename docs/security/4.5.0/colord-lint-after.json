@@ -1,0 +1,22 @@
+{
+  "matchesBefore": true,
+  "unchangedExpectedFinding": {
+    "output": ".fixture { color: #ff0000; }",
+    "errored": true,
+    "warnings": [
+      {
+        "line": 1,
+        "column": 19,
+        "endLine": 1,
+        "endColumn": 26,
+        "rule": "color-named",
+        "severity": "error",
+        "text": "Expected \"#ff0000\" to be \"red\" (color-named)"
+      }
+    ]
+  },
+  "validNamedColor": {
+    "errored": false,
+    "warnings": []
+  }
+}

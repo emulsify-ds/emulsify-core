@@ -1,0 +1,64 @@
+{
+  "installer": "<suite>/consumer/node_modules/puppeteer/install.mjs",
+  "puppeteerVersion": "24.43.1",
+  "configSkipDownload": false,
+  "environmentSkipDownload": true,
+  "environmentExecutablePathAbsent": true,
+  "cacheEntries": [],
+  "outputs": [
+    {
+      "name": "installer-guard-selftest",
+      "command": [
+        "<node24>/bin/node",
+        "--import",
+        "<suite>/managed-browser-proof/deny-installer-network.mjs",
+        "--input-type=module",
+        "-e",
+        ""
+      ],
+      "node": "v24.19.0",
+      "status": 0,
+      "events": [
+        {
+          "event": "guard-ready",
+          "node": "v24.19.0"
+        },
+        {
+          "event": "blocked-network",
+          "api": "https.get"
+        },
+        {
+          "event": "guard-exit",
+          "code": 0,
+          "attempts": 1
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "installer-skip",
+      "command": [
+        "<node24>/bin/node",
+        "--import",
+        "<suite>/managed-browser-proof/deny-installer-network.mjs",
+        "<suite>/consumer/node_modules/puppeteer/install.mjs"
+      ],
+      "node": "v24.19.0",
+      "status": 0,
+      "events": [
+        {
+          "event": "guard-ready",
+          "node": "v24.19.0"
+        },
+        {
+          "event": "guard-exit",
+          "code": 0,
+          "attempts": 0
+        }
+      ],
+      "stdout": "**INFO** Skipping downloading browsers as instructed.\n",
+      "stderr": ""
+    }
+  ]
+}
