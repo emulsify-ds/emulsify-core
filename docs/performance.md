@@ -2,6 +2,11 @@
 
 Emulsify Core favors predictable output and simple project configuration. The defaults are suitable for small and medium component libraries, and the release fixtures cover the main supported structures. Larger libraries should keep source roots intentional and use the fixture commands below to compare changes.
 
+For repeated developer-workload measurements, use the opt-in
+[audit, resolver, and browser benchmarks](../scripts/benchmarks/README.md).
+The [4.5.0 measurements](releases/4.5.0-performance.md) distinguish release
+behavior changes from the measured grouped-resolver optimization.
+
 ## Development Sourcemaps
 
 `vite build --watch` leaves JavaScript and CSS readable and emits external maps
