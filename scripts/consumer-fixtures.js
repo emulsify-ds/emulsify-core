@@ -306,8 +306,8 @@ function runConsumerFixture({
     assertReactVersion(projectDir, reactMajor);
 
     for (const scriptName of fixture.verify) {
-      if (scriptName === 'audit') {
-        verifyCopiedAuditWrapper(projectDir);
+      if (['audit', 'audit:twig-stories'].includes(scriptName)) {
+        verifyCopiedAuditWrapper(projectDir, scriptName);
         continue;
       }
       run('npm', ['run', scriptName], {

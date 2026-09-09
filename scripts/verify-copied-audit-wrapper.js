@@ -8,15 +8,34 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const wrappers = {
+  audit: {
+    failArgs: ['--fail-on', 'warn'],
+    footer:
+      'Audit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration',
+  },
+  'audit:twig-stories': {
+    failArgs: ['--fail-on-found'],
+    footer:
+      'Migration docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility',
+  },
+};
+
 /**
  * Exercise the actual packed audit through the consumer's copied npm script.
  * A separate source root gives both calls the same known migration warning.
  *
  * @param {string} projectDir - Installed consumer fixture directory.
+ * @param {string} scriptName - Copied audit script to verify.
  * @returns {void}
  */
-export function verifyCopiedAuditWrapper(projectDir) {
-  const auditRoot = mkdtempSync(join(tmpdir(), 'emulsify-audit-wrapper-'));
+export function verifyCopiedAuditWrapper(projectDir, scriptName = 'audit') {
+  assert.ok(Object.hasOwn(wrappers, scriptName), 'Unknown audit wrapper.');
+  const { failArgs, footer } = wrappers[scriptName];
+  const auditRoot = mkdtempSync(
+    join(tmpdir(), 'emulsify audit "wrapper" root-'),
+  );
+  const storyPath = 'src/components/card/card.stories.js';
 
   try {
     const componentDir = join(auditRoot, 'src/components/card');
@@ -27,7 +46,7 @@ export function verifyCopiedAuditWrapper(projectDir) {
     );
     writeFileSync(join(componentDir, 'card.twig'), '<p>{{ title }}</p>');
     writeFileSync(
-      join(componentDir, 'card.stories.js'),
+      join(auditRoot, storyPath),
       'import cardTwig from "./card.twig";\nexport const Card = (args) => cardTwig(args);\n',
     );
 
@@ -37,12 +56,12 @@ export function verifyCopiedAuditWrapper(projectDir) {
         [
           'run',
           '--silent',
-          'audit',
+          scriptName,
           '--',
           '--root',
           auditRoot,
           '--json',
-          ...(failOnWarn ? ['--fail-on', 'warn'] : []),
+          ...(failOnWarn ? failArgs : []),
         ],
         {
           cwd: projectDir,
@@ -55,25 +74,32 @@ export function verifyCopiedAuditWrapper(projectDir) {
       assert.equal(
         result.status,
         failOnWarn ? 1 : 0,
-        `Copied audit wrapper returned an incorrect exit status: ${result.stderr}`,
+        `Copied ${scriptName} wrapper returned an incorrect exit status: ${result.stderr}`,
       );
       // Parse the entire stream: stripping a footer or selecting a JSON line
       // would hide exactly the copied-wrapper regression this fixture covers.
       const report = JSON.parse(result.stdout);
       assert.equal(report.schemaVersion, 1);
       assert.equal(report.tool.name, '@emulsify/core');
-      assert.ok(
-        report.findings.some(
-          ({ id, severity }) =>
-            id === 'legacy-twig-story' && severity === 'warn',
-        ),
-        'Expected the known legacy story warning in the packed audit report.',
+      assert.equal(report.files.stories, 1);
+      assert.deepEqual(report.summary, { error: 0, warn: 1, info: 0 });
+      assert.deepEqual(
+        report.findings.map(({ id, severity, path }) => ({
+          id,
+          severity,
+          path,
+        })),
+        [{ id: 'legacy-twig-story', severity: 'warn', path: storyPath }],
+        'Expected only the controlled legacy story warning from the selected root.',
       );
-      assert.match(result.stderr, /Audit docs: https:\/\/github\.com\//);
+      assert.ok(
+        result.stderr.split(/\r?\n/).includes(footer),
+        `Copied ${scriptName} wrapper omitted its expected stderr footer.`,
+      );
     }
 
     console.log(
-      '  ✓ Copied audit wrapper: JSON stdout, stderr footer, exits 0/1',
+      `  ✓ Copied ${scriptName} wrapper: JSON stdout, stderr footer, quoted root, exits 0/1`,
     );
   } finally {
     rmSync(auditRoot, { recursive: true, force: true });

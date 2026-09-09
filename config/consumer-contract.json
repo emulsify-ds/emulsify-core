@@ -10,7 +10,8 @@
         "test",
         "a11y",
         "a11y-wcag22",
-        "audit"
+        "audit",
+        "audit:twig-stories"
       ],
       "assert": ["components/card/card.js", ".out/index.json"],
       "stories": ["fixtures-consumer-whisk--twig-card"]
