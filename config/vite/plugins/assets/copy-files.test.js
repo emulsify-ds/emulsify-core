@@ -328,6 +328,85 @@ describe('source copy plugins', () => {
       ).toBe(true);
     });
 
+    it.each([
+      'module',
+      'theme',
+      'inc',
+      'install',
+      'profile',
+      'engine',
+      'phtml',
+      'php5',
+      'PHP8',
+      'mjs',
+      'cjs',
+      'ts',
+      'tsx',
+      'mts',
+      'cts',
+      'mtsx',
+      'ctsx',
+    ])(
+      'leaves .%s source out of copied output and watch paths',
+      (extension) => {
+        const { structure, outDir } = scaffold();
+        const sourceFiles = [
+          ['src/components/card', 'components/card'],
+          ['src/mixed', 'global/mixed'],
+        ].map(([sourceDir, outputDir]) => {
+          const source = join(projectDir, sourceDir, `source.${extension}`);
+          mkdirSync(dirname(source), { recursive: true });
+          writeFileSync(source, 'source stays private to the build');
+          return [source, join(outDir, outputDir, `source.${extension}`)];
+        });
+        const plugin = copyAllSrcAssetsPlugin({ structure });
+        const watched = watchedBy(plugin, { outDir, watch: {} });
+        plugin.writeBundle();
+
+        for (const [source, output] of sourceFiles) {
+          expect(watched).not.toContain(source);
+          expect(existsSync(output)).toBe(false);
+          expect(readFileSync(source, 'utf8')).toBe(
+            'source stays private to the build',
+          );
+        }
+      },
+    );
+
+    it('continues copying arbitrary non-code asset types', () => {
+      const { structure, outDir } = scaffold();
+      const extensions = [
+        'css',
+        'woff2',
+        'pdf',
+        'xml',
+        'wasm',
+        'webmanifest',
+        'custom-asset',
+      ];
+      for (const extension of extensions) {
+        writeFileSync(
+          join(projectDir, 'src/components/card', `asset.${extension}`),
+          `fixture ${extension}`,
+        );
+      }
+      const plugin = copyAllSrcAssetsPlugin({ structure });
+      const watched = watchedBy(plugin, { outDir, watch: {} });
+      plugin.writeBundle();
+
+      for (const extension of extensions) {
+        expect(watched).toContain(
+          join(projectDir, 'src/components/card', `asset.${extension}`),
+        );
+        expect(
+          readFileSync(
+            join(outDir, 'components/card', `asset.${extension}`),
+            'utf8',
+          ),
+        ).toBe(`fixture ${extension}`);
+      }
+    });
+
     it('watches every template and asset it will copy', () => {
       // Twig and static assets are copied rather than compiled, so none of them
       // reach Rollup's module graph and nothing else would watch them. Saving a
