@@ -34,6 +34,32 @@ graphs, so `--omit=dev` does not remove the residual browser chain. The clean
 patched Core installation succeeds with exit code 0; all final Core and
 consumer audits above exit 1 because of the residual high-severity entries.
 
+## Version-Pinned Installer Approvals
+
+The release follow-up restores exact-version `allowScripts` entries for the
+locked `@parcel/watcher@2.6.0`, `esbuild@0.28.1`, and Puppeteer versions
+`24.43.1` and `25.10.0`. The existing `fsevents@2.3.3` and
+`unrs-resolver@1.12.2` pins remain. Every approved version is present in the
+lockfile; historical Puppeteer approvals for absent versions are omitted.
+
+npm matches registry approvals against the identity in the lockfile's
+`resolved` URL. The dependency refresh omitted that URL and the integrity
+metadata for watcher, esbuild, and Pa11y's Puppeteer. Their exact metadata
+was restored from the lockfile preceding `fbbc6b9` and checked against
+`npm view <package>@<locked-version> dist --json` on September 11, 2026.
+No dependency versions changed. The regression tests use npm's installed
+policy matcher to verify that locked installers are approved and an
+unreviewed future version is not.
+
+Version pinning makes a new version **unreviewed**; it does not block its
+script by itself. In the inspected npm 11.17.0 and 11.19.1 implementations,
+`strict-allow-scripts` defaults to `false`, so unreviewed scripts run with a
+notice. Enforcing a failure requires `--strict-allow-scripts`; an explicit
+`false` policy entry denies a script even without strict mode. This change
+restores bounded approvals while retaining the existing strict-mode setting.
+The managed-browser proof below concerns skipped browser downloads, which
+is a separate control from npm's installer-approval policy.
+
 ## Compatible Remediation
 
 ### `colord`: oversized malformed color strings
