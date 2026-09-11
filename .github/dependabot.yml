@@ -1,8 +1,12 @@
-# Keeps npm dependency metadata current for the package root.
+# Keeps npm dependencies and immutable GitHub Actions references maintained.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: '/'
     # Weekly updates reduce churn while keeping dependencies maintained.
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: '/'
     schedule:
       interval: weekly

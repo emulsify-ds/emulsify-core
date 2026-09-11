@@ -11,7 +11,7 @@
 
 import fs from 'fs';
 import { readFile, stat } from 'fs/promises';
-import { basename, dirname, isAbsolute, relative, resolve } from 'path';
+import { basename, dirname, relative, resolve } from 'path';
 import Twig from 'twig';
 
 import {
@@ -27,6 +27,12 @@ import {
 import { firstExistingPath, safeExists } from '../../utils/fs-safe.js';
 import { createLruCache } from '../../utils/lru.js';
 import { toPosixPath } from '../../utils/paths.js';
+import {
+  buildTemplateFileCandidates,
+  isWithinRoot,
+  parseTwigNamespaceReference,
+  resolveComponentReference,
+} from '../../utils/twig-component-resolver.js';
 import { unique } from '../../../../src/extensions/shared/lists.js';
 
 /** Twig token types that can reference another template file. */
@@ -339,29 +345,6 @@ const collectStaticSourceReferences = (tokens = []) => [
 ];
 
 /**
- * Build likely filesystem candidates for a Twig template reference.
- *
- * @param {string} baseDir - Directory used as the resolution root.
- * @param {string} templatePath - Template path from Twig source.
- * @returns {string[]} Candidate absolute paths.
- */
-const buildTemplateFileCandidates = (baseDir, templatePath) => {
-  const normalizedTemplatePath = toPosixPath(templatePath);
-  const withoutTwigExt = normalizedTemplatePath.replace(/\.twig$/i, '');
-  const stem = basename(withoutTwigExt);
-
-  return unique(
-    [
-      resolve(baseDir, normalizedTemplatePath),
-      resolve(baseDir, `${normalizedTemplatePath}.twig`),
-      resolve(baseDir, `${normalizedTemplatePath}.html.twig`),
-      resolve(baseDir, withoutTwigExt, `${stem}.twig`),
-      resolve(baseDir, withoutTwigExt, `${stem}.html.twig`),
-    ].filter(Boolean),
-  );
-};
-
-/**
  * Return the first candidate that exists as a file.
  *
  * @param {string[]} paths - Candidate absolute paths.
@@ -375,60 +358,6 @@ const findExistingTemplateFile = (paths) =>
       return false;
     }
   });
-
-/**
- * Determine whether a file path is equal to or below a candidate root.
- *
- * @param {string} root - Absolute root path.
- * @param {string} filePath - Absolute file path.
- * @returns {boolean} TRUE when the file belongs to the root.
- */
-const isWithinRoot = (root, filePath) => {
-  const rootRelativePath = relative(root, filePath);
-  return (
-    rootRelativePath === '' ||
-    (!!rootRelativePath &&
-      !rootRelativePath.startsWith('..') &&
-      !isAbsolute(rootRelativePath))
-  );
-};
-
-/**
- * Return the first component template candidate contained by its configured root.
- *
- * Both lexical and real paths are checked so `..` segments and symlinks cannot
- * escape the component root.
- *
- * @param {string[]} paths - Candidate absolute paths.
- * @param {string} componentRoot - Absolute component root path.
- * @returns {string|undefined} Existing component template path.
- */
-const findExistingComponentTemplateFile = (paths, componentRoot) => {
-  const absoluteRoot = resolve(componentRoot);
-  let realRoot;
-
-  try {
-    realRoot = fs.realpathSync(absoluteRoot);
-  } catch {
-    return undefined;
-  }
-
-  return paths.filter(Boolean).find((filePath) => {
-    const absoluteFilePath = resolve(filePath);
-    if (!isWithinRoot(absoluteRoot, absoluteFilePath)) {
-      return false;
-    }
-
-    try {
-      return (
-        fs.statSync(absoluteFilePath).isFile() &&
-        isWithinRoot(realRoot, fs.realpathSync(absoluteFilePath))
-      );
-    } catch {
-      return false;
-    }
-  });
-};
 
 /**
  * Find the most specific configured Twig root for a template file.
@@ -549,161 +478,6 @@ const rewriteTemplateReferencesToIds = (tokens = [], fromFilePath, options) =>
   });
 
 /**
- * Resolve Twig namespace syntax to a namespace root and relative path.
- *
- * @param {string} templatePath - Template reference from Twig source.
- * @param {Record<string, string>} [namespaces={}] - Namespace root map.
- * @returns {{ namespace: string, root: string, path: string }|null}
- *   Namespace lookup result.
- */
-const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
-  const namespaceNames = Object.keys(namespaces);
-  const atNamespace = templatePath.match(/^@([^/]+)\/(.+)$/);
-  if (atNamespace && namespaces[atNamespace[1]]) {
-    return {
-      namespace: atNamespace[1],
-      root: namespaces[atNamespace[1]],
-      path: atNamespace[2],
-    };
-  }
-
-  const doubleColon = templatePath.match(/^([^:]+)::(.+)$/);
-  if (doubleColon && namespaces[doubleColon[1]]) {
-    return {
-      namespace: doubleColon[1],
-      root: namespaces[doubleColon[1]],
-      path: doubleColon[2],
-    };
-  }
-
-  const singleColon = templatePath.match(/^([^:/.]+):(.+)$/);
-  if (singleColon && namespaces[singleColon[1]]) {
-    return {
-      namespace: singleColon[1],
-      root: namespaces[singleColon[1]],
-      path: singleColon[2],
-    };
-  }
-
-  const slashNamespace = namespaceNames.find((namespace) =>
-    templatePath.startsWith(`${namespace}/`),
-  );
-  if (slashNamespace) {
-    return {
-      namespace: slashNamespace,
-      // Namespace names come from the normalized Twig namespace map.
-      root: namespaces[slashNamespace],
-      path: templatePath.slice(slashNamespace.length + 1),
-    };
-  }
-
-  return null;
-};
-
-/**
- * Return grouping directories below the configured component root.
- *
- * Breadth-first traversal preserves direct and one-level behavior before
- * searching deeper groups. Siblings use code-point order so duplicate
- * shorthand names resolve consistently across filesystems.
- *
- * @param {string} componentRoot - Absolute component root path.
- * @returns {string[]} Absolute grouping directory paths.
- */
-const componentGroupRoots = (componentRoot) => {
-  if (!componentRoot) return [];
-
-  const absoluteRoot = resolve(componentRoot);
-  if (componentGroupRootsCache.has(absoluteRoot)) {
-    return componentGroupRootsCache.get(absoluteRoot);
-  }
-
-  const groupRoots = [];
-  const pendingDirectories = [absoluteRoot];
-
-  for (let index = 0; index < pendingDirectories.length; index += 1) {
-    const directory = pendingDirectories[index];
-    let entries;
-
-    try {
-      entries = fs.readdirSync(directory, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-
-    const childDirectories = entries
-      .filter((entry) => entry.isDirectory())
-      .sort(({ name: left }, { name: right }) =>
-        left === right ? 0 : left < right ? -1 : 1,
-      )
-      .map((entry) => resolve(directory, entry.name))
-      .filter((childDirectory) => isWithinRoot(absoluteRoot, childDirectory));
-
-    groupRoots.push(...childDirectories);
-    pendingDirectories.push(...childDirectories);
-  }
-
-  componentGroupRootsCache.set(absoluteRoot, groupRoots);
-  return groupRoots;
-};
-
-/**
- * Resolve a component reference through recursively grouped directories.
- *
- * Project-scoped component IDs can use the component name (`project:button`)
- * even when projects organize components under grouping paths such as
- * `atoms/text`.
- *
- * @param {string} templatePath - Component-relative template reference.
- * @param {string} componentRoot - Absolute component root path.
- * @returns {string|null} Existing template path when found.
- */
-const resolveGroupedComponentTemplate = (templatePath, componentRoot) =>
-  findExistingComponentTemplateFile(
-    componentGroupRoots(componentRoot).flatMap((groupRoot) =>
-      buildTemplateFileCandidates(groupRoot, templatePath),
-    ),
-    componentRoot,
-  ) || null;
-
-/**
- * Resolve shorthand component references against the components namespace.
- *
- * @param {string} templatePath - Template reference from Twig source.
- * @param {string} componentRoot - Absolute component root path.
- * @returns {string|null} Existing template path when found.
- */
-const resolveComponentShorthandReference = (templatePath, componentRoot) => {
-  if (!componentRoot || templatePath.startsWith('.')) return null;
-
-  const shorthandPath =
-    templatePath.startsWith('@') && !templatePath.includes('/')
-      ? templatePath.slice(1)
-      : templatePath;
-  const directComponentPath = findExistingComponentTemplateFile(
-    buildTemplateFileCandidates(componentRoot, shorthandPath),
-    componentRoot,
-  );
-  if (directComponentPath) {
-    return directComponentPath;
-  }
-
-  const genericNamespace = templatePath.match(/^@?[^/:]+[:/](.+)$/);
-  if (!genericNamespace) {
-    return null;
-  }
-
-  const genericComponentPath = genericNamespace[1];
-
-  return (
-    findExistingComponentTemplateFile(
-      buildTemplateFileCandidates(componentRoot, genericComponentPath),
-      componentRoot,
-    ) || resolveGroupedComponentTemplate(genericComponentPath, componentRoot)
-  );
-};
-
-/**
  * Build a stable key segment for include resolution cache entries.
  *
  * @param {ReturnType<typeof makeTwigPluginOptions>} options - Twig plugin options.
@@ -734,27 +508,19 @@ const resolveTwigTemplateWithoutCache = (templatePath, fromDir, options) => {
     options.namespaces,
   );
   if (namespaced) {
-    const namespacedTemplate =
-      namespaced.namespace === 'components'
-        ? findExistingComponentTemplateFile(
-            buildTemplateFileCandidates(namespaced.root, namespaced.path),
-            namespaced.root,
-          )
-        : findExistingTemplateFile(
-            buildTemplateFileCandidates(namespaced.root, namespaced.path),
-          );
-    if (namespacedTemplate) {
-      return namespacedTemplate;
-    }
-
     if (namespaced.namespace === 'components') {
-      return resolveGroupedComponentTemplate(
-        namespaced.path,
-        options.namespaces?.components,
+      return resolveComponentReference(
+        templatePath,
+        options.namespaces,
+        componentGroupRootsCache,
       );
     }
 
-    return null;
+    return (
+      findExistingTemplateFile(
+        buildTemplateFileCandidates(namespaced.root, namespaced.path),
+      ) || null
+    );
   }
 
   const relativeTemplate = findExistingTemplateFile([
@@ -764,9 +530,10 @@ const resolveTwigTemplateWithoutCache = (templatePath, fromDir, options) => {
 
   return (
     relativeTemplate ||
-    resolveComponentShorthandReference(
+    resolveComponentReference(
       templatePath,
-      options.namespaces?.components,
+      options.namespaces,
+      componentGroupRootsCache,
     )
   );
 };
@@ -996,7 +763,7 @@ export function makeTwigPluginOptions(env) {
     namespaces: makeTwigNamespaces(env),
     functions: getTwigFunctionMap(),
     registerDrupalTwigFilters: shouldRegisterDrupalTwigFilters(env),
-    // Twig updates are handled by emulsifyTwigModulePlugin.handleHotUpdate.
+    // Twig updates are handled by emulsifyTwigModulePlugin.hotUpdate.
     // Vituum's full reload would defeat HMR by reloading the whole iframe on
     // every Twig save before module graph invalidation can update the story.
     reload: () => false,
@@ -1403,7 +1170,7 @@ export function emulsifyTwigModulePlugin(options) {
         };
       }
     },
-    handleHotUpdate({ file, server }) {
+    hotUpdate({ type, file, modules: changedModules = [] }) {
       const filePath = resolve(file);
       const componentRoot = options.namespaces?.components
         ? resolve(options.namespaces.components)
@@ -1442,7 +1209,11 @@ export function emulsifyTwigModulePlugin(options) {
         !!projectRoot &&
         isWithinRoot(resolve(projectRoot), filePath) &&
         fileExists !== knownFile;
-      const structuralChange = componentDirectoryChanged || projectPathChanged;
+      const structuralChange =
+        type === 'create' ||
+        type === 'delete' ||
+        componentDirectoryChanged ||
+        projectPathChanged;
 
       if (file.endsWith('.twig')) {
         compileCache.delete(filePath);
@@ -1459,7 +1230,7 @@ export function emulsifyTwigModulePlugin(options) {
          * directory invalidated. New or deleted files can change previous
          * resolution misses, so those events clear the full resolution cache.
          */
-        if (fileExists && knownFile) {
+        if (type === 'update' && fileExists && knownFile) {
           invalidateKnownResolutionCacheEntries(filePath);
         } else {
           resolutionCache.clear();
@@ -1475,6 +1246,9 @@ export function emulsifyTwigModulePlugin(options) {
       }
 
       if (structuralChange) {
+        // Every environment receives the event, including after shared known-
+        // file state was cleared. Namespace roots can also be outside a project.
+        resolutionCache.clear();
         compileCache.clear();
       }
 
@@ -1489,12 +1263,15 @@ export function emulsifyTwigModulePlugin(options) {
         return undefined;
       }
 
-      const moduleGraph = server?.moduleGraph;
+      const moduleGraph = this.environment?.moduleGraph;
       if (!moduleGraph?.getModulesByFile) {
         return undefined;
       }
 
-      const modules = new Set(moduleGraph.getModulesByFile(filePath) || []);
+      const modules = new Set([
+        ...changedModules,
+        ...(moduleGraph.getModulesByFile(filePath) || []),
+      ]);
       const dependencyModule = moduleGraph.getModuleById?.(dependencyModuleId);
       if (dependencyModule) {
         moduleGraph.invalidateModule?.(dependencyModule);

@@ -301,4 +301,75 @@ describe('audit orchestrator', () => {
       },
     });
   });
+
+  it.each([
+    ['modern and legacy', true],
+    ['modern-only', false],
+  ])(
+    'classifies a shared helper in %s stories through the executable',
+    (_label, hasLegacy) => {
+      writeConfiguredProject();
+      writeFile(
+        projectDir,
+        'src/components/card/card.twig',
+        '<p>{{ title }}</p>',
+      );
+      writeFile(
+        projectDir,
+        'src/components/card/card.stories.js',
+        [
+          'import cardTwig from "./card.twig";',
+          'import { renderTwig } from "@emulsify/core/storybook";',
+          'const Template = (args) => cardTwig(args);',
+          'export default { title: "Card" };',
+          'export const Modern = { render: renderTwig(Template) };',
+          ...(hasLegacy ? ['export const Legacy = Template.bind({});'] : []),
+        ].join('\n'),
+      );
+
+      const result = spawnSync(
+        process.execPath,
+        [auditScript, '--root', projectDir, '--json'],
+        { encoding: 'utf8' },
+      );
+      const findings = hasLegacy
+        ? [
+            {
+              id: 'legacy-twig-story',
+              severity: 'warn',
+              path: 'src/components/card/card.stories.js',
+              line: 3,
+              message:
+                'Twig story appears to return an HTML string directly. This remains compatible, but renderTwig() is preferred for active migrations.',
+              details: ['appears to return Twig HTML strings directly'],
+              docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#legacy-twig-story-compatibility',
+            },
+          ]
+        : [];
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+      expect(JSON.parse(result.stdout)).toEqual({
+        schemaVersion: 1,
+        tool: { name: corePackage.name, version: corePackage.version },
+        root: '.',
+        summary: { error: 0, warn: findings.length, info: 0 },
+        files: { stories: 1, twig: 1, code: 1, styles: 0 },
+        findings,
+      });
+      expect(result.stdout).not.toContain(projectDir);
+
+      const failingOnFound = spawnSync(
+        process.execPath,
+        [auditScript, '--root', projectDir, '--json', '--fail-on-found'],
+        { encoding: 'utf8' },
+      );
+
+      expect(failingOnFound.status).toBe(findings.length);
+      expect(failingOnFound.stderr).toBe('');
+      expect(JSON.parse(failingOnFound.stdout)).toEqual(
+        JSON.parse(result.stdout),
+      );
+    },
+  );
 });

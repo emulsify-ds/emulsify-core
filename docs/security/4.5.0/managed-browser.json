@@ -1,0 +1,165 @@
+{
+  "node": "v24.19.0",
+  "consumer": "<suite>/consumer",
+  "runtimeVersions": {
+    "core": "4.5.0",
+    "pa11y": "9.1.1",
+    "puppeteer": "24.43.1",
+    "chromium": "Chrome/124.0.6355.0"
+  },
+  "browserPath": "/opt/homebrew/bin/chromium",
+  "browserCache": {
+    "path": "<suite>/browser-cache",
+    "entries": []
+  },
+  "installer": {
+    "status": 0,
+    "guardedNetworkCalls": 0,
+    "guardSelftestCalls": 1,
+    "skipDownloadEnv": true,
+    "executableEnvAbsent": true,
+    "localConfigSkipDownload": false
+  },
+  "wcag": {
+    "command": ["node", "scripts/check-wcag22.js"],
+    "status": 0,
+    "results": [
+      {
+        "name": "default-small",
+        "size": 10,
+        "preset": false,
+        "status": 0
+      },
+      {
+        "name": "preset-small",
+        "size": 10,
+        "preset": true,
+        "status": 1
+      },
+      {
+        "name": "preset-corrected",
+        "size": 24,
+        "preset": true,
+        "status": 0
+      },
+      {
+        "name": "default-after-preset",
+        "size": 10,
+        "preset": false,
+        "status": 0
+      }
+    ]
+  },
+  "explicitProjectConfig": {
+    "status": 0,
+    "executableEnvAbsent": true,
+    "launchTrace": [
+      {
+        "event": "launch-request",
+        "node": "v24.19.0",
+        "executablePath": "/opt/homebrew/bin/chromium",
+        "environmentExecutablePath": null
+      },
+      {
+        "event": "browser-launched",
+        "pid": 29948,
+        "spawnfile": "/opt/homebrew/bin/chromium",
+        "version": "Chrome/124.0.6355.0"
+      },
+      {
+        "event": "browser-disconnected",
+        "pid": 29948
+      }
+    ]
+  },
+  "consumerChecks": [
+    {
+      "name": "lint-js",
+      "command": ["<node24>/bin/npm", "run", "lint-js"],
+      "status": 0,
+      "signal": null,
+      "stdout": "\n> consumer-whisk-drupal@1.0.0 lint-js\n> eslint --config config/emulsify-core/eslint.config.js --no-error-on-unmatched-pattern ./config ./src ./components\n\n",
+      "stderr": ""
+    },
+    {
+      "name": "lint-styles",
+      "command": ["<node24>/bin/npm", "run", "lint-styles"],
+      "status": 0,
+      "signal": null,
+      "stdout": "\n> consumer-whisk-drupal@1.0.0 lint-styles\n> stylelint --config config/emulsify-core/stylelintrc.config.json --allow-empty-input './src/**/*.scss' './components/**/*.scss'\n\n",
+      "stderr": ""
+    },
+    {
+      "name": "test",
+      "command": ["<node24>/bin/npm", "run", "test"],
+      "status": 0,
+      "signal": null,
+      "note": "Jest found no tests and exited 0 through the fixture’s intentional --passWithNoTests option; this is command-wiring validation, not a new unit-test pass count.",
+      "stdout": "\n> consumer-whisk-drupal@1.0.0 test\n> jest --coverage --passWithNoTests --config ./config/jest.config.js\n\nNo tests found, exiting with code 0\n----------|---------|----------|---------|---------|-------------------\nFile      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s \n----------|---------|----------|---------|---------|-------------------\nAll files |       0 |        0 |       0 |       0 |                   \n----------|---------|----------|---------|---------|-------------------\n",
+      "stderr": ""
+    },
+    {
+      "name": "a11y",
+      "command": ["<node24>/bin/npm", "run", "a11y"],
+      "status": 0,
+      "signal": null,
+      "stdout": "\n> consumer-whisk-drupal@1.0.0 a11y\n> npm run storybook-build && node_modules/@emulsify/core/scripts/a11y.js -r\n\n\n> consumer-whisk-drupal@1.0.0 storybook-build\n> npm run build && storybook build -c node_modules/@emulsify/core/.storybook -o .out\n\n\n> consumer-whisk-drupal@1.0.0 build\n> npm run ensure-dist && vite build --config node_modules/@emulsify/core/config/vite/vite.config.js\n\n\n> consumer-whisk-drupal@1.0.0 ensure-dist\n> mkdir -p dist\n\nvite v8.2.2 building client environment for production...\ntransforming...\n✓ 87 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/assets/images/bare.svg         6.45 kB │ gzip:  0.47 kB\ndist/assets/images/relative.svg     6.45 kB │ gzip:  0.47 kB\ndist/assets/images/canonical.svg    6.45 kB │ gzip:  0.47 kB\ndist/components/card/card.css       0.68 kB │ gzip:  0.19 kB\ndist/components/card/card.js      190.95 kB │ gzip: 52.54 kB\n\n✓ built in 552ms\n\n  2 css asset urls rebased to /assets/\n\n      assets/images/bare.svg -> /assets/images/bare.svg\n      ../assets/images/relative.svg -> /assets/images/relative.svg\n\n      run `emulsify-audit --fix` to write these canonically in source\n\n┌  Building storybook v10.6.0\n│\n◇  Cleaning outputDir: .out\n│\n◇  Loading presets\n│\n◇  Building manager..\n│\n●  Building open services..\n│\n●  Building preview..\nvite v8.2.2 building client environment for production...\ntransforming...\n│\n●  Copying static files: assets at .out/assets\n│\n●  Copying static files: dist/assets at .out/assets\n│\n●  Copying static files: dist/assets at .out\n✓ 192 modules transformed.\nrendering chunks...\ncomputing gzip size...\n.out/dist/assets/images/bare.svg                         6.45 kB │ gzip:   0.47 kB\n.out/dist/assets/images/relative.svg                     6.45 kB │ gzip:   0.47 kB\n.out/dist/assets/images/canonical.svg                    6.45 kB │ gzip:   0.47 kB\n.out/iframe.html                                        19.11 kB │ gzip:   5.32 kB\n.out/css-components.css                                  0.64 kB │ gzip:   0.19 kB\n.out/storybook-assets/axe-Dkl8oDa-.js                    0.05 kB │ gzip:   0.07 kB\n.out/storybook-assets/css-components-BMBp9dP1.js         0.09 kB │ gzip:   0.10 kB\n.out/storybook-assets/css-dist-TVBj4TXR.js               0.09 kB │ gzip:   0.10 kB\n.out/storybook-assets/_content-D2J15kHs.js               0.14 kB │ gzip:   0.14 kB\n.out/storybook-assets/card-Dj-Sp60p.js                   0.31 kB │ gzip:   0.26 kB\n.out/storybook-assets/card.stories-B0yKkN1t.js           0.50 kB │ gzip:   0.33 kB\n.out/storybook-assets/rolldown-runtime-DkW27tQK.js       1.19 kB │ gzip:   0.67 kB\n.out/storybook-assets/preload-helper-wdlQj8DP.js         1.31 kB │ gzip:   0.74 kB\n.out/storybook-assets/_drupal-5Oqv8yIx.js                4.52 kB │ gzip:   1.21 kB\n.out/storybook-assets/bare-BcrlM0y9.js                   6.57 kB │ gzip:   0.57 kB\n.out/storybook-assets/relative-DS-v8uHt.js               6.57 kB │ gzip:   0.57 kB\n.out/storybook-assets/canonical-7aAwG3d8.js              6.57 kB │ gzip:   0.57 kB\n.out/storybook-assets/react-BZJXY1be.js                  7.53 kB │ gzip:   2.88 kB\n.out/vite-inject-mocker-entry.js                        27.86 kB │ gzip:   9.67 kB\n.out/storybook-assets/matchers-JIUQ3HVY-C789_MAK.js     28.79 kB │ gzip:   9.68 kB\n.out/storybook-assets/react-18-BsXQ1n6U.js             182.49 kB │ gzip:  57.49 kB\n.out/storybook-assets/card-op4irILW.js                 201.39 kB │ gzip:  54.20 kB\n.out/storybook-assets/axe-CE0XdUim.js                  586.89 kB │ gzip: 160.19 kB\n.out/iframe.js                                       1,148.00 kB │ gzip: 324.59 kB\n\n✓ built in 523ms\n│\n◇  Output directory:\n│  <suite>/consumer/.out\n│\n└  Storybook build completed successfully\n\nNo issues found in component: http://127.0.0.1:51608/iframe.html?id=fixtures-consumer-whisk--twig-card&viewMode=story\nAccessibility summary: 1 attempted, 1 clean, 0 with findings, 0 failed to execute.\n",
+      "stderr": "[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\n"
+    },
+    {
+      "name": "audit-wrapper-contract",
+      "command": [
+        "<node24>/bin/node",
+        "--input-type=module",
+        "-e",
+        "import { verifyCopiedAuditWrapper } from '<checkout>/scripts/verify-copied-audit-wrapper.js'; verifyCopiedAuditWrapper(\"<suite>/consumer\");"
+      ],
+      "status": 0,
+      "signal": null,
+      "stdout": "  ✓ Copied audit wrapper: JSON stdout, stderr footer, exits 0/1\n",
+      "stderr": ""
+    },
+    {
+      "name": "audit-current-consumer",
+      "command": [
+        "<node24>/bin/npm",
+        "run",
+        "--silent",
+        "audit",
+        "--",
+        "--json"
+      ],
+      "status": 0,
+      "signal": null,
+      "findingCount": 3,
+      "schemaVersion": 1,
+      "findings": [
+        {
+          "id": "generated-package-json-migration-needed",
+          "severity": "warn",
+          "message": "package.json does not match the generated-theme scripts expected by Emulsify Core 4."
+        },
+        {
+          "id": "css-runtime-asset-reference",
+          "severity": "info",
+          "message": "CSS asset URL \"assets/images/bare.svg\" is not the canonical asset form, so the build has to repair it."
+        },
+        {
+          "id": "css-runtime-asset-reference",
+          "severity": "info",
+          "message": "CSS asset URL \"../assets/images/relative.svg\" is not the canonical asset form, so the build has to repair it."
+        }
+      ],
+      "stdout": "{\n  \"schemaVersion\": 1,\n  \"tool\": {\n    \"name\": \"@emulsify/core\",\n    \"version\": \"4.5.0\"\n  },\n  \"root\": \".\",\n  \"summary\": {\n    \"error\": 0,\n    \"warn\": 1,\n    \"info\": 2\n  },\n  \"files\": {\n    \"stories\": 1,\n    \"twig\": 2,\n    \"code\": 4,\n    \"styles\": 2\n  },\n  \"findings\": [\n    {\n      \"id\": \"generated-package-json-migration-needed\",\n      \"severity\": \"warn\",\n      \"path\": \"package.json\",\n      \"message\": \"package.json does not match the generated-theme scripts expected by Emulsify Core 4.\",\n      \"details\": [\n        \"Add scripts.audit:twig-stories.\"\n      ],\n      \"docs\": \"https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#manual-packagejson-updates\"\n    },\n    {\n      \"id\": \"css-runtime-asset-reference\",\n      \"severity\": \"info\",\n      \"path\": \"src/components/card/card.scss\",\n      \"line\": 24,\n      \"message\": \"CSS asset URL \\\"assets/images/bare.svg\\\" is not the canonical asset form, so the build has to repair it.\",\n      \"details\": [\n        \"Resolved asset: assets/images/bare.svg.\",\n        \"Rewrite it as url(/assets/images/bare.svg).\",\n        \"Run `emulsify-audit --fix` to apply this automatically.\"\n      ],\n      \"docs\": \"https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/asset-references.md#sass-and-css\"\n    },\n    {\n      \"id\": \"css-runtime-asset-reference\",\n      \"severity\": \"info\",\n      \"path\": \"src/components/card/card.scss\",\n      \"line\": 30,\n      \"message\": \"CSS asset URL \\\"../assets/images/relative.svg\\\" is not the canonical asset form, so the build has to repair it.\",\n      \"details\": [\n        \"Resolved asset: assets/images/relative.svg.\",\n        \"Rewrite it as url(/assets/images/relative.svg).\",\n        \"Run `emulsify-audit --fix` to apply this automatically.\"\n      ],\n      \"docs\": \"https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/asset-references.md#sass-and-css\"\n    }\n  ]\n}\n",
+      "stderr": "\nAudit docs: https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/migration-4x.md#storybook-migration\n"
+    }
+  ],
+  "limitations": [
+    "Guard observes HTTP/HTTPS/fetch calls; the actual installed skip branch returns before download, install, or archive extraction.",
+    "This avoids Puppeteer browser artifact download/extraction; it does not remove its transitive packages or suppress npm audit findings.",
+    "Managed Chromium version is an existing local executable, not a recommendation that this browser version is current.",
+    "Npm package installation still downloads and extracts npm package tarballs."
+  ],
+  "proofSource": "import { appendFileSync } from 'node:fs';\nimport { createRequire } from 'node:module';\nconst coreRequire = createRequire(process.env.MANAGED_CORE_PACKAGE);\nconst pa11yRequire = createRequire(coreRequire.resolve('pa11y/package.json'));\nconst puppeteer = pa11yRequire('puppeteer');\nconst realLaunch = puppeteer.launch;\nconst record = (event) => appendFileSync(process.env.MANAGED_BROWSER_LAUNCH_TRACE, JSON.stringify(event) + '\\n');\npuppeteer.launch = async function (...args) {\n  record({ event: 'launch-request', node: process.version, executablePath: args[0]?.executablePath, environmentExecutablePath: process.env.PUPPETEER_EXECUTABLE_PATH ?? null });\n  const browser = await realLaunch.apply(this, args);\n  const child = browser.process();\n  record({ event: 'browser-launched', pid: child?.pid, spawnfile: child?.spawnfile, version: await browser.version() });\n  browser.once('disconnected', () => record({ event: 'browser-disconnected', pid: child?.pid }));\n  return browser;\n};\n",
+  "projectConfig": "export default { components: ['managed-browser'], discoverStories: false, storybookBuildDir: '.out', pa11y: { chromeLaunchConfig: { executablePath: '/opt/homebrew/bin/chromium', args: ['--no-sandbox', '--disable-setuid-sandbox'] } } };\n"
+}

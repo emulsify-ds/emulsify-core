@@ -48,7 +48,7 @@ export const Default = {};
 
 The recommended Twig story shape is `render: renderTwig(template, { context })`. The `context` function keeps the Storybook control names and the Twig variable names connected in one predictable place. Emulsify can then render the Twig output through React, which keeps controls, HMR, lazy `source()` re-renders, and platform behavior attachment working consistently.
 
-Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()` and `source()` through the normalized project structure model. Drupal-specific Twig filters are registered only when the active platform adapter enables Drupal behavior. The WordPress adapter keeps these Core Twig authoring features available without emulating WordPress or Timber PHP runtime behavior.
+Storybook's Twig runtime supports Emulsify's native Twig helpers plus `include()` and `source()` through the normalized project structure model. The Drupal adapter registers Drupal-specific Twig filters automatically. Projects using `none` or `wordpress` can also opt in with `storybook.registerDrupalTwigFilters: true` in `project.emulsify.json`, without enabling Drupal behavior attachment or SDC output mirroring; see [Drupal Twig filters](extension-points.md#storybook-twigjs-extensions). The WordPress adapter keeps these Core Twig authoring features available without emulating WordPress or Timber PHP runtime behavior.
 
 ## Component Metadata Imports
 

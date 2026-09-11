@@ -1,0 +1,227 @@
+{
+  "version": "1.0.0",
+  "name": "consumer-whisk-drupal",
+  "dependencies": {
+    "@emulsify/core": {
+      "version": "4.5.0",
+      "resolved": "file:<suite>/artifacts/emulsify-core-4.5.0.tgz",
+      "overridden": false,
+      "dependencies": {
+        "@storybook/addon-a11y": {
+          "version": "10.6.0",
+          "resolved": "https://registry.npmjs.org/@storybook/addon-a11y/-/addon-a11y-10.6.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "axe-core": {
+              "version": "4.13.0"
+            }
+          }
+        },
+        "axe-core": {
+          "version": "4.13.0",
+          "resolved": "https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz",
+          "overridden": false
+        },
+        "eslint": {
+          "version": "9.39.5",
+          "resolved": "https://registry.npmjs.org/eslint/-/eslint-9.39.5.tgz",
+          "overridden": false,
+          "dependencies": {
+            "@eslint/eslintrc": {
+              "version": "3.3.7",
+              "resolved": "https://registry.npmjs.org/@eslint/eslintrc/-/eslintrc-3.3.7.tgz",
+              "overridden": false,
+              "dependencies": {
+                "js-yaml": {
+                  "version": "4.3.2",
+                  "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.2.tgz",
+                  "overridden": false
+                }
+              }
+            }
+          }
+        },
+        "jest": {
+          "version": "30.5.1",
+          "resolved": "https://registry.npmjs.org/jest/-/jest-30.5.1.tgz",
+          "overridden": false,
+          "dependencies": {
+            "@jest/core": {
+              "version": "30.5.1",
+              "resolved": "https://registry.npmjs.org/@jest/core/-/core-30.5.1.tgz",
+              "overridden": false,
+              "dependencies": {
+                "@jest/transform": {
+                  "version": "30.5.1",
+                  "resolved": "https://registry.npmjs.org/@jest/transform/-/transform-30.5.1.tgz",
+                  "overridden": false,
+                  "dependencies": {
+                    "babel-plugin-istanbul": {
+                      "version": "8.0.0",
+                      "resolved": "https://registry.npmjs.org/babel-plugin-istanbul/-/babel-plugin-istanbul-8.0.0.tgz",
+                      "overridden": false,
+                      "dependencies": {
+                        "@istanbuljs/load-nyc-config": {
+                          "version": "1.1.0",
+                          "resolved": "https://registry.npmjs.org/@istanbuljs/load-nyc-config/-/load-nyc-config-1.1.0.tgz",
+                          "overridden": false,
+                          "dependencies": {
+                            "js-yaml": {
+                              "version": "3.15.2",
+                              "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-3.15.2.tgz",
+                              "overridden": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "js-yaml": {
+          "version": "5.4.1",
+          "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-5.4.1.tgz",
+          "overridden": false
+        },
+        "pa11y": {
+          "version": "9.1.1",
+          "resolved": "https://registry.npmjs.org/pa11y/-/pa11y-9.1.1.tgz",
+          "overridden": false,
+          "dependencies": {
+            "axe-core": {
+              "version": "4.11.4",
+              "resolved": "https://registry.npmjs.org/axe-core/-/axe-core-4.11.4.tgz",
+              "overridden": false
+            },
+            "puppeteer": {
+              "version": "24.43.1",
+              "resolved": "https://registry.npmjs.org/puppeteer/-/puppeteer-24.43.1.tgz",
+              "overridden": false,
+              "dependencies": {
+                "@puppeteer/browsers": {
+                  "version": "2.13.2",
+                  "resolved": "https://registry.npmjs.org/@puppeteer/browsers/-/browsers-2.13.2.tgz",
+                  "overridden": false,
+                  "dependencies": {
+                    "extract-zip": {
+                      "version": "2.0.1",
+                      "resolved": "https://registry.npmjs.org/extract-zip/-/extract-zip-2.0.1.tgz",
+                      "overridden": false
+                    }
+                  }
+                },
+                "puppeteer-core": {
+                  "version": "24.43.1",
+                  "resolved": "https://registry.npmjs.org/puppeteer-core/-/puppeteer-core-24.43.1.tgz",
+                  "overridden": false,
+                  "dependencies": {
+                    "@puppeteer/browsers": {
+                      "version": "2.13.2"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "stylelint-config-standard-scss": {
+          "version": "17.0.0",
+          "resolved": "https://registry.npmjs.org/stylelint-config-standard-scss/-/stylelint-config-standard-scss-17.0.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "stylelint-config-recommended-scss": {
+              "version": "17.0.1",
+              "resolved": "https://registry.npmjs.org/stylelint-config-recommended-scss/-/stylelint-config-recommended-scss-17.0.1.tgz",
+              "overridden": false,
+              "dependencies": {
+                "stylelint-config-recommended": {
+                  "version": "18.0.0",
+                  "resolved": "https://registry.npmjs.org/stylelint-config-recommended/-/stylelint-config-recommended-18.0.0.tgz",
+                  "overridden": false,
+                  "dependencies": {
+                    "stylelint": {
+                      "version": "17.15.0"
+                    }
+                  }
+                },
+                "stylelint-scss": {
+                  "version": "7.2.0",
+                  "resolved": "https://registry.npmjs.org/stylelint-scss/-/stylelint-scss-7.2.0.tgz",
+                  "overridden": false,
+                  "dependencies": {
+                    "stylelint": {
+                      "version": "17.15.0"
+                    }
+                  }
+                },
+                "stylelint": {
+                  "version": "17.15.0"
+                }
+              }
+            },
+            "stylelint-config-standard": {
+              "version": "40.0.0",
+              "resolved": "https://registry.npmjs.org/stylelint-config-standard/-/stylelint-config-standard-40.0.0.tgz",
+              "overridden": false,
+              "dependencies": {
+                "stylelint": {
+                  "version": "17.15.0"
+                }
+              }
+            },
+            "stylelint": {
+              "version": "17.15.0"
+            }
+          }
+        },
+        "stylelint-prettier": {
+          "version": "5.0.3",
+          "resolved": "https://registry.npmjs.org/stylelint-prettier/-/stylelint-prettier-5.0.3.tgz",
+          "overridden": false,
+          "dependencies": {
+            "stylelint": {
+              "version": "17.15.0"
+            }
+          }
+        },
+        "stylelint-selector-bem-pattern": {
+          "version": "5.0.0",
+          "resolved": "https://registry.npmjs.org/stylelint-selector-bem-pattern/-/stylelint-selector-bem-pattern-5.0.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "stylelint": {
+              "version": "17.15.0"
+            }
+          }
+        },
+        "stylelint": {
+          "version": "17.15.0",
+          "resolved": "https://registry.npmjs.org/stylelint/-/stylelint-17.15.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "colord": {
+              "version": "2.10.0",
+              "resolved": "https://registry.npmjs.org/colord/-/colord-2.10.0.tgz",
+              "overridden": false
+            },
+            "cosmiconfig": {
+              "version": "9.0.2",
+              "resolved": "https://registry.npmjs.org/cosmiconfig/-/cosmiconfig-9.0.2.tgz",
+              "overridden": false,
+              "dependencies": {
+                "js-yaml": {
+                  "version": "4.3.2",
+                  "resolved": "https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.2.tgz",
+                  "overridden": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

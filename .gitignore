@@ -23,3 +23,6 @@ vendor
 
 # Jest
 .coverage
+
+# Generated internal verification evidence (not approval or release metadata).
+.release-evidence

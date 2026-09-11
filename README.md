@@ -50,6 +50,11 @@ See [Version Evolution](docs/version-evolution.md) for major-version history
 and the [4.3.0 release notes](docs/releases/4.3.0.md) for the compatibility
 changes and additions in that release.
 
+The [compatibility and support policy](docs/version-evolution.md#compatibility-and-support-policy)
+separates current requirements and the existing 4.x compatibility rule from
+maintenance promises. Pending decisions live in the
+[maintainer register](docs/maintainer-decisions.md).
+
 ## Authoring Models
 
 Emulsify Core supports Twig and React authoring workflows plus a focused
@@ -269,7 +274,11 @@ Do not add comments to JSON files, lockfiles, binary assets, generated output,
 legal documents, or dependency files. Those formats either do not support
 comments or should remain exact artifacts.
 
-Please also follow the issue template and pull request templates provided. See below for the correct places to post issues:
+Please also follow the issue template and pull request templates provided.
+The issue links below are for ordinary bugs and feature requests, not
+confidential vulnerability details. See the
+[security-reporting status](docs/maintainer-decisions.md#security-reporting-for-older-lines)
+before preparing a security report.
 
 1. [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/issues)
 2. [Emulsify Tools (Drupal module)](https://www.drupal.org/project/issues/emulsify_tools)

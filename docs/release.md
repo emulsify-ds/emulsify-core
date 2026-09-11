@@ -36,6 +36,12 @@ checks remain visible, and that the proposed merge strategy produces the
 intended semantic version. Passing automated checks is necessary release
 evidence, but it does not by itself establish that the release is ready.
 
+Use the [maintainer decision register](maintainer-decisions.md) to distinguish
+pending release dispositions from proposed follow-ups. It preserves unresolved
+support, security, Tools, helper-output, and licensing questions without making
+every roadmap decision an automatic release blocker. Record any approved
+decision or deferral with its evidence; the register does not grant approval.
+
 ## Required Local Verification
 
 Install the locked dependencies in a clean checkout, then run the aggregate
@@ -46,7 +52,8 @@ npm ci
 npm run release:verify
 ```
 
-`release:verify` intentionally does not install dependencies. It runs:
+`release:verify` intentionally does not install dependencies. It preserves this
+order and stops after the first failed command:
 
 - linting and unit tests;
 - the repository Storybook build;
@@ -56,6 +63,66 @@ npm run release:verify
 - the packed-package smoke test; and
 - the non-publishing release analysis.
 
+### Generated Evidence For The Checked Revision
+
+Each `release:verify` invocation initializes a fresh
+`.release-evidence/report.json`. This generated directory is ignored by Git;
+the report identifies the checked source rather than a future documentation
+commit. Save the report before another invocation replaces it. Use the report
+from the actual release candidate instead of copying current test or fixture
+totals into release notes.
+
+The internal JSON format has `schemaVersion: 1`. It records local or
+`github-actions` provenance, the checked-out Git HEAD and resolved release
+base, available pull-request head/merge SHAs, and tracked-tree state before
+and after verification. Tracked-change and lockfile hashes distinguish a
+dirty checkout from its commit. A changed or dirty source tree remains
+explicit; a report bearing a HEAD SHA does not imply an unmodified checkout.
+Snapshots before and after each check preserve observed source changes even
+if a later check restores the initial state. Untracked files are counted
+without recording their paths or contents; their presence makes the report
+incomplete because their contents are not fingerprinted.
+Node.js, npm, operating system, and architecture describe the environment.
+
+Per-check records include status and elapsed duration. Jest totals are included
+when structured Jest results are available. Fixture outcomes, hashes of actual
+tarballs, observed browser versions, and the structured non-publishing release
+prediction are retained when produced by the corresponding check. A browser
+version is `unavailable` when it was not observed; it is not inferred from a
+dependency version. Tarball records also identify the npm version observed
+inside the pack process (`npmVersionInPackProcess`), which can differ from
+the top-level npm version. Durations describe the individual run, not a
+controlled performance comparison.
+
+Statuses distinguish `passed`, `failed`, `skipped`, and `unavailable`. After a
+failure, later commands are skipped rather than represented as passing. A
+check marked `skipped` or `unavailable` makes the report incomplete, even when
+the job's selected commands succeed. For example, a CI job can succeed while
+release analysis is skipped because its pull-request condition is false.
+Inspect each report's scope before combining results from different jobs.
+Handled cancellation retains partial evidence and forwards the signal to
+the command's own process group on POSIX systems. On Windows, signalling
+reaches only the direct child process.
+
+CI uploads separate, uniquely named `release-evidence-...` artifacts for its
+jobs and matrix entries. Their reports describe the checked-out revision,
+including a prospective merge revision where applicable; they are not a
+repository-wide status inferred from one successful job. Raw command output
+stays in the normal Actions logs or local terminal. It is not embedded in the
+JSON report. For local investigation, redirect console output to a separate
+location outside `.release-evidence/` if it needs to be retained.
+Open the matching Actions run's **Artifacts** section to download its reports;
+check their source SHA and run attempt before using them. If writing evidence
+fails, any report already on disk is stale and must not be used for that
+attempt. Restore write access and rerun the intended checks.
+
+The report is evidence of execution, not approval, risk acceptance, or
+publication authorization. Dependency security audits, the optional PHP
+parity check, and the authenticated semantic-release dry run remain separate
+checks with their own evidence. The
+[maintainer decision register](maintainer-decisions.md) and
+[release review](release-review.md) retain their independent purpose.
+
 CI runs the corresponding checks, although it keeps the expensive fixture and
 packed-package work in parallel jobs for faster feedback. After a merge, the
 publish workflow repeats the aggregate `release:verify` command against the
@@ -64,6 +131,42 @@ separate release job. The authenticated semantic-release dry run and real
 publish are never pull-request checks.
 
 ## Required CI Checks
+
+Branch protection on both `develop` and `main` requires the following 19 check
+contexts, verified against the successful [CI run 32583016604](https://github.com/emulsify-ds/emulsify-core/actions/runs/32583016604)
+and the branch-protection API readback:
+
+- `release-readiness (24.13.0)`
+- `release-readiness (24.18.0)`
+- `Packed package`
+- `Fixture / drupal-sdc-src-components`
+- `Fixture / no-platform-src-components`
+- `Fixture / drupal-sdc-non-self-contained-output`
+- `Fixture / non-self-contained-src-assets`
+- `Fixture / non-self-contained-custom-asset-root`
+- `Fixture / asset-rebase-disabled`
+- `Fixture / wordpress-src-components`
+- `Fixture / legacy-components`
+- `Fixture / structure-implementations`
+- `Fixture / mixed-storybook`
+- `Fixture / large-twig-storybook`
+- `Packed consumer / whisk-drupal`
+- `Packed consumer / none`
+- `Packed consumer / wordpress-twig`
+- `React peer / 18`
+- `React peer / 19`
+
+Both branches require the pull-request branch to be up to date before merging
+(`strict: true`). A failed or pending required check blocks an ordinary merge;
+passing checks satisfy this gate alongside the existing review and access
+requirements. Both branches still require one approving review and dismiss
+stale approvals after new commits.
+
+Administrators intentionally retain their bypass: `enforce_admins` is `false`
+on both branches. Registering these check contexts preserves every other
+existing protection setting, and the repository ruleset remains disabled.
+These protection settings are managed through GitHub, separately from the
+workflow and documentation commits.
 
 The read-only CI workflow in `.github/workflows/lint.yml` divides release
 readiness into five groups:
@@ -208,6 +311,13 @@ release rules as semantic-release. It reports the release type and predicted
 version, and verifies that the prediction matches `package.json`, without
 changing package metadata, creating a tag, creating a GitHub release, or
 publishing to npm.
+
+When run through the evidence collector, the existing prediction is also
+recorded with resolved base and head commits. This does not rerun analysis or
+change its normal CLI output or exit status. The report omits raw commit
+messages and the prospective squash title. Its package-version check reads
+the checked-out `package.json`; use the report's source and tracked-tree
+metadata when assessing that result.
 
 The develop-version workflow uses that same complete unreleased range after
 each push to `develop`. It calculates the prospective version from the latest

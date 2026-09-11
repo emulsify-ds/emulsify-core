@@ -9,16 +9,7 @@ import { readdirSync } from 'fs';
 import { join, relative, sep } from 'path';
 
 import { relativeFrom } from '../../project-structure.js';
-
-const DEFAULT_SKIP_DIRS = [
-  'node_modules',
-  '.git',
-  '.cache',
-  '.vite',
-  '.out',
-  '.coverage',
-  'dist',
-];
+import { DEFAULT_SKIP_DIRS } from '../../utils/source-directory-skips.js';
 
 /**
  * Depth-first walk to list every file under a given root.
@@ -91,13 +82,16 @@ export const isComponentMetadataFile = (filePath) =>
 
 /**
  * Determine whether a file should be copied by the static asset pass.
+ * Server-side and uncompiled module sources can share roots with static assets
+ * without being published by this pass. Unknown non-code extensions still copy.
  *
  * @param {string} filePath - Absolute or relative file path.
  * @returns {boolean} TRUE for non-code source assets.
  */
 export const isStaticSourceAsset = (filePath) =>
-  !/\.(jsx?|scss|twig|map)$/i.test(filePath) &&
-  !isComponentMetadataFile(filePath);
+  !/\.([cm]?[jt]sx?|scss|twig|map|php\d?|phtml|inc|module|theme|install|profile|engine)$/i.test(
+    filePath,
+  ) && !isComponentMetadataFile(filePath);
 
 /**
  * Build the roots that should not be crawled during a global source pass.

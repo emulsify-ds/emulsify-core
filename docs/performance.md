@@ -2,6 +2,11 @@
 
 Emulsify Core favors predictable output and simple project configuration. The defaults are suitable for small and medium component libraries, and the release fixtures cover the main supported structures. Larger libraries should keep source roots intentional and use the fixture commands below to compare changes.
 
+For repeated developer-workload measurements, use the opt-in
+[audit, resolver, and browser benchmarks](../scripts/benchmarks/README.md).
+The [4.5.0 measurements](releases/4.5.0-performance.md) distinguish release
+behavior changes from the measured grouped-resolver optimization.
+
 ## Development Sourcemaps
 
 `vite build --watch` leaves JavaScript and CSS readable and emits external maps
@@ -137,4 +142,15 @@ List available fixtures:
 npm run fixtures:release:list
 ```
 
-The `large-twig-storybook` fixture reports Storybook build time, output size, and generated Twig component count. Treat those numbers as trend data for local comparison rather than fixed pass/fail budgets.
+The `large-twig-storybook` fixture reports Storybook build time, total output
+size, total JavaScript size, fixture-owned JavaScript size, and generated Twig
+component count. Build timing is trend data for comparison under equivalent
+conditions; it has no fixed pass/fail duration budget.
+
+There is a separate enforced byte ceiling in
+[`scripts/release-fixtures.js`](../scripts/release-fixtures.js): fixture-owned
+JavaScript must total **less than 182,329 bytes**. The ceiling is exclusive, so
+182,329 bytes fails. It applies only to the fixture's `_content-*`, `gallery-*`,
+`gallery.stories-*`, and `item-*` JavaScript chunks under `storybook-assets/`,
+not all Storybook manager/runtime chunks or the total output size. Changing
+this byte limit is a fixture policy change; it is not a timing result.

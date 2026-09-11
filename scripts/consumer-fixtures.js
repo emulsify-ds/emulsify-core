@@ -19,6 +19,12 @@ import { fileURLToPath } from 'node:url';
 import { createUsage, parseArgs as parseCliArgs } from './lib/cli.js';
 import { run } from './lib/proc.js';
 import {
+  recordFixtureOutcome,
+  recordFixturePlan,
+  recordTarballEvidence,
+} from './lib/release-evidence.js';
+import { verifyCopiedAuditWrapper } from './verify-copied-audit-wrapper.js';
+import {
   assertContractDependencies,
   assertFixtureCoverage,
   assertProvidedBinaries,
@@ -268,6 +274,10 @@ function assertFixtureOutput(projectDir, fixtureName, fixture) {
   }
 }
 
+function fixtureRunLabel({ fixtureName, reactMajor }) {
+  return reactMajor ? `${fixtureName}-react-${reactMajor}` : fixtureName;
+}
+
 function runConsumerFixture({
   fixtureName,
   reactMajor,
@@ -275,8 +285,7 @@ function runConsumerFixture({
   tarballPath,
 }) {
   const fixture = contract.fixtures[fixtureName];
-  const suffix = reactMajor ? `-react-${reactMajor}` : '';
-  const label = `${fixtureName}${suffix}`;
+  const label = fixtureRunLabel({ fixtureName, reactMajor });
   const projectDir = mkdtempSync(join(suiteDir, `${label}-`));
 
   console.log(`\nConsumer fixture: ${label}`);
@@ -297,6 +306,10 @@ function runConsumerFixture({
     assertReactVersion(projectDir, reactMajor);
 
     for (const scriptName of fixture.verify) {
+      if (['audit', 'audit:twig-stories'].includes(scriptName)) {
+        verifyCopiedAuditWrapper(projectDir, scriptName);
+        continue;
+      }
       run('npm', ['run', scriptName], {
         ...fixtureRunOptions(
           projectDir,
@@ -324,9 +337,11 @@ function packCore(suiteDir) {
   );
   const [pack] = JSON.parse(output);
 
-  return isAbsolute(pack.filename)
+  const tarballPath = isAbsolute(pack.filename)
     ? pack.filename
     : join(suiteDir, pack.filename);
+  recordTarballEvidence(tarballPath, pack);
+  return tarballPath;
 }
 
 export function main(argv = process.argv.slice(2)) {
@@ -350,12 +365,32 @@ export function main(argv = process.argv.slice(2)) {
 
   const fixtureNames = selectedFixtureNames(options.fixtureNames);
   const runs = fixtureRuns(fixtureNames, options.reactMajors);
+  recordFixturePlan('consumer', runs.map(fixtureRunLabel));
   const suiteDir = mkdtempSync(join(tmpdir(), 'emulsify-consumers-'));
 
   try {
     const tarballPath = packCore(suiteDir);
     for (const fixtureRun of runs) {
-      runConsumerFixture({ ...fixtureRun, suiteDir, tarballPath });
+      const label = fixtureRunLabel(fixtureRun);
+      const startedAt = performance.now();
+      recordFixtureOutcome('consumer', label, 'running', 0);
+      try {
+        runConsumerFixture({ ...fixtureRun, suiteDir, tarballPath });
+        recordFixtureOutcome(
+          'consumer',
+          label,
+          'passed',
+          performance.now() - startedAt,
+        );
+      } catch (error) {
+        recordFixtureOutcome(
+          'consumer',
+          label,
+          'failed',
+          performance.now() - startedAt,
+        );
+        throw error;
+      }
     }
   } finally {
     rmSync(suiteDir, { force: true, recursive: true });

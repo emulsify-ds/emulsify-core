@@ -1,0 +1,115 @@
+# Optional pinned observations; deliberately outside required CI and publication.
+name: Optional Twig PHP parity
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  javascript:
+    name: JavaScript parity observations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Core
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: '.nvmrc'
+      - name: Install locked JavaScript dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/parity-javascript/diagnostics"
+          export npm_config_cache="$RUNNER_TEMP/parity-javascript/npm-cache"
+          { git rev-parse HEAD; node --version; npm --version; } > "$RUNNER_TEMP/parity-javascript/diagnostics/environment.log"
+          # This focused Jest check needs no install hooks or browser downloads.
+          npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee "$RUNNER_TEMP/parity-javascript/diagnostics/install.log"
+      - name: Verify exact Core output and browser equivalence
+        run: |
+          node node_modules/jest/bin/jest.js --config config/jest.config.js \
+            --runInBand --coverage=false src/extensions/twig/__tests__/php-parity.test.js \
+            --json --outputFile "$RUNNER_TEMP/parity-javascript/diagnostics/jest.json" \
+            2>&1 | tee "$RUNNER_TEMP/parity-javascript/diagnostics/check.log"
+      - name: Verify tracked files are unchanged
+        if: always()
+        run: git diff --exit-code
+      - name: Upload JavaScript diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: twig-parity-javascript
+          path: ${{ runner.temp }}/parity-javascript/diagnostics
+          if-no-files-found: ignore
+          retention-days: 7
+  php:
+    name: Pinned PHP observations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Core
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install PHP 8.5 and pinned Composer
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          # setup-php selects the compatible minor; record the actual patch below.
+          php-version: '8.5'
+          tools: composer:2.10.3
+          extensions: dom, gd, pdo, simplexml, xml, mbstring
+          coverage: none
+      - name: Provision pinned source and serializer dependencies
+        run: |
+          export PARITY_ROOT="$RUNNER_TEMP/parity-php"
+          export COMPOSER_HOME="$PARITY_ROOT/composer-home"
+          export COMPOSER_CACHE_DIR="$PARITY_ROOT/composer-cache"
+          mkdir -p "$PARITY_ROOT/diagnostics" "$PARITY_ROOT/runtime"
+          { git rev-parse HEAD; php --version; composer --version; } > "$PARITY_ROOT/diagnostics/environment.log" 2>&1
+          php <<'PHP'
+          <?php
+          $corpus = json_decode(file_get_contents('src/extensions/twig/__fixtures__/parity-v1.json'), true, flags: JSON_THROW_ON_ERROR);
+          if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 5) {
+            fwrite(STDERR, 'Environment failure: expected PHP 8.5.x, observed ' . PHP_VERSION . PHP_EOL);
+            exit(1);
+          }
+          file_put_contents(getenv('PARITY_ROOT') . '/diagnostics/pins.json', json_encode($corpus['php'], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+          $require = array_map(static fn (array $pin): string => $pin['version'], $corpus['php']['dependencies']);
+          file_put_contents(getenv('PARITY_ROOT') . '/runtime/composer.json', json_encode(['require' => $require], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+          PHP
+          tools_revision="$(php -r '$corpus=json_decode(file_get_contents("src/extensions/twig/__fixtures__/parity-v1.json"),true); echo $corpus["php"]["revision"];')"
+          [[ "$tools_revision" =~ ^[0-9a-f]{40}$ ]]
+          git init --quiet "$PARITY_ROOT/tools"
+          git -C "$PARITY_ROOT/tools" remote add origin https://github.com/emulsify-ds/emulsify_tools.git
+          git -C "$PARITY_ROOT/tools" fetch --depth=1 origin "$tools_revision" 2>&1 | tee "$PARITY_ROOT/diagnostics/tools.log"
+          git -C "$PARITY_ROOT/tools" checkout --detach FETCH_HEAD 2>&1 | tee -a "$PARITY_ROOT/diagnostics/tools.log"
+          # No Drupal site, Tools dev dependencies, Composer plugins, or scripts.
+          composer --working-dir="$PARITY_ROOT/runtime" install \
+            --no-dev --no-interaction --no-plugins --no-scripts --prefer-dist --no-progress \
+            2>&1 | tee "$PARITY_ROOT/diagnostics/install.log"
+      - name: Verify pinned PHP output
+        run: |
+          parity_root="$RUNNER_TEMP/parity-php"
+          php scripts/maintainer/check-twig-php-parity.php \
+            "$parity_root/tools" "$parity_root/runtime/vendor/autoload.php" \
+            2>&1 | tee "$parity_root/diagnostics/check.log"
+      - name: Verify tracked files are unchanged
+        if: always()
+        run: git diff --exit-code
+      - name: Upload PHP diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: twig-parity-php
+          path: |
+            ${{ runner.temp }}/parity-php/diagnostics
+            ${{ runner.temp }}/parity-php/runtime/composer.json
+            ${{ runner.temp }}/parity-php/runtime/composer.lock
+          if-no-files-found: ignore
+          retention-days: 7

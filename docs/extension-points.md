@@ -14,6 +14,28 @@ Project-level extension locations live under `config/emulsify-core`:
 
 Vite extensions should use `config/emulsify-core/vite/`. Storybook overrides should continue using `config/emulsify-core/storybook/`, and the a11y script continues to read `config/emulsify-core/a11y.config.js`.
 
+### Accessibility scan concurrency
+
+Accessibility scans run at most two Pa11y checks (and their browsers) at once.
+Projects can optionally set a positive integer `concurrency` in
+`config/emulsify-core/a11y.config.js`:
+
+```js
+export default {
+  concurrency: 4,
+};
+```
+
+Every configured and discovered story is still scanned, and reports retain
+story input order. The runner waits for active checks before closing its
+temporary Storybook server, including when a check rejects. Any reported issue
+or failed check produces exit status 1. This bounds browser count; it is not
+a claim about elapsed time or memory savings on a particular consumer.
+
+For optional rule selection, see the
+[WCAG 2.2 accessibility preset](accessibility.md). Importing the preset is
+independent of the concurrency setting and is not required for existing themes.
+
 ## Vite Plugins And Config Patches
 
 Projects can extend the shared Vite config with one of these files:

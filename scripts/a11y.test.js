@@ -10,6 +10,7 @@ import pa11y from 'pa11y';
 
 import a11yConfig from '../config/a11y.config.js';
 import {
+  applyProjectA11yConfig,
   discoverStoryIds,
   severityToColor,
   issueIsValid,
@@ -35,6 +36,7 @@ const STORYBOOK_IFRAME = path.join(STORYBOOK_BUILD_DIR, 'iframe.html');
 pa11y.mockResolvedValue('very official report');
 
 const tempDirs = [];
+const originalExitCode = process.exitCode;
 
 function makeStorybookBuild(indexSource) {
   const buildDir = mkdtempSync(path.join(tmpdir(), 'emulsify-a11y-'));
@@ -71,9 +73,13 @@ describe('a11y', () => {
     // Reset mocked process and console state between report scenarios.
     global.console.log.mockClear();
     global.process.exit.mockClear();
+    pa11y.mockClear();
+    applyProjectA11yConfig({ concurrency: 2 });
+    process.exitCode = 0;
   });
 
   afterEach(() => {
+    process.exitCode = originalExitCode;
     for (const tempDir of tempDirs) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -397,6 +403,113 @@ describe('a11y', () => {
     });
 
     await lintReportAndExit(['taco-bell']);
-    expect(global.process.exit).toHaveBeenCalledWith(1);
+    expect(process.exitCode).toBe(1);
   });
+
+  it.each([2, 4])(
+    'scans all 80 IDs once with at most %i checks and reports in input order',
+    async (limit) => {
+      if (limit !== 2) applyProjectA11yConfig({ concurrency: limit });
+      const names = Array.from({ length: 80 }, (_, index) => `story-${index}`);
+      let active = 0;
+      let peak = 0;
+      const completed = [];
+      pa11y.mockImplementation(async (pageUrl) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        const id = new URL(pageUrl).searchParams.get('id');
+        const index = names.indexOf(id);
+        await new Promise((resolve) =>
+          setTimeout(resolve, index % 2 === 0 ? 5 : 0),
+        );
+        active -= 1;
+        completed.push(id);
+        return { issues: [], pageUrl };
+      });
+
+      await lintReportAndExit(names, {
+        baseUrl: 'http://localhost/iframe.html',
+      });
+
+      expect(peak).toBe(limit);
+      expect(active).toBe(0);
+      expect(
+        pa11y.mock.calls.map(([url]) => new URL(url).searchParams.get('id')),
+      ).toEqual(names);
+      expect(completed).not.toEqual(names);
+      expect(
+        global.console.log.mock.calls
+          .filter(([line]) => line.startsWith('No issues found in component:'))
+          .map(([line]) => line.split('?id=')[1]),
+      ).toEqual(names);
+      expect(process.exitCode).toBe(0);
+    },
+  );
+
+  it('drains all 80 IDs and in-flight checks before server cleanup after rejection', async () => {
+    const buildDir = makeStorybookBuild();
+    writeFileSync(path.join(buildDir, 'iframe.html'), 'Storybook ready');
+    const server = await startStorybookServer(buildDir);
+    const names = Array.from({ length: 80 }, (_, index) => `story-${index}`);
+    const failure = new Error('Browser failed');
+    let active = 0;
+    let peak = 0;
+    const completed = [];
+    pa11y.mockImplementation(async (pageUrl) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      try {
+        if (pageUrl.endsWith('id=story-0')) throw failure;
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        expect(await readUrl(`${server.baseUrl}/iframe.html`)).toBe(
+          'Storybook ready',
+        );
+        return { issues: [], pageUrl };
+      } finally {
+        active -= 1;
+        completed.push(pageUrl);
+      }
+    });
+
+    try {
+      await expect(
+        lintReportAndExit(names, { baseUrl: `${server.baseUrl}/iframe.html` }),
+      ).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: [
+          expect.objectContaining({
+            storyId: 'story-0',
+            url: `${server.baseUrl}/iframe.html?id=story-0`,
+            cause: failure,
+          }),
+        ],
+      });
+      expect(active).toBe(0);
+      expect(peak).toBeLessThanOrEqual(2);
+      expect(completed).toHaveLength(80);
+      expect(
+        pa11y.mock.calls.map(([url]) => new URL(url).searchParams.get('id')),
+      ).toEqual(names);
+      expect(
+        global.console.log.mock.calls.filter(([line]) =>
+          line.startsWith('No issues found in component:'),
+        ),
+      ).toHaveLength(79);
+      expect(global.console.log).toHaveBeenLastCalledWith(
+        'Accessibility summary: 80 attempted, 79 clean, 0 with findings, 1 failed to execute.',
+      );
+    } finally {
+      await server.close();
+    }
+    await expect(readUrl(`${server.baseUrl}/iframe.html`)).rejects.toThrow();
+  });
+
+  it.each([0, -1, 1.5, '2', Infinity, NaN])(
+    'rejects invalid concurrency %s',
+    (concurrency) => {
+      expect(() => applyProjectA11yConfig({ concurrency })).toThrow(
+        'Accessibility concurrency must be a positive integer.',
+      );
+    },
+  );
 });

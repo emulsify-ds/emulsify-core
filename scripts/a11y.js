@@ -15,6 +15,7 @@ import a11yConfig from '../config/a11y.config.js';
 
 // Project-specific configuration.
 let {
+  concurrency = 2,
   ignore = {},
   components = [],
   discoverStories = true,
@@ -49,10 +50,16 @@ const loadProjectA11yConfig = async (projectDir = process.cwd()) => {
 /**
  * Apply project-specific a11y config values over shared defaults.
  *
- * @param {{ignore?: object, components?: string[], discoverStories?: boolean, storybookBuildDir?: string, pa11y?: object}} config - Project config.
+ * @param {{concurrency?: number, ignore?: object, components?: string[], discoverStories?: boolean, storybookBuildDir?: string, pa11y?: object}} config - Project config.
  * @returns {void}
  */
 const applyProjectA11yConfig = (config = {}) => {
+  if (config.concurrency !== undefined) {
+    if (!Number.isSafeInteger(config.concurrency) || config.concurrency < 1) {
+      throw new Error('Accessibility concurrency must be a positive integer.');
+    }
+    concurrency = config.concurrency;
+  }
   ignore = config.ignore || ignore;
   components = Array.isArray(config.components)
     ? config.components
@@ -354,13 +361,22 @@ const logReport = ({ issues, pageUrl }) => {
 };
 
 /**
+ * Build the requested URL consistently for scans and execution-failure reports.
+ * @param {string} name - Story ID.
+ * @param {{baseUrl?: string}} [options={}] - Storybook origin options.
+ * @returns {string} Requested story URL.
+ */
+const storyUrl = (name, { baseUrl } = {}) =>
+  `${baseUrl || resolveStorybookIframe()}?id=${name}`;
+
+/**
  * Run pa11y on a single Storybook story by its ID.
  * @param {string} name - Story ID (e.g., "components-button--primary").
  * @param {{baseUrl?: string}} [options={}] - Storybook origin options.
  * @returns {Promise<{ issues: Pa11yIssue[], pageUrl: string }>} Pa11y result.
  */
-const lintComponent = async (name, { baseUrl } = {}) =>
-  pa11y(`${baseUrl || resolveStorybookIframe()}?id=${name}`, {
+const lintComponent = async (name, options = {}) =>
+  pa11y(storyUrl(name, options), {
     includeNotices: true,
     includeWarnings: true,
     runners: ['axe'],
@@ -368,19 +384,82 @@ const lintComponent = async (name, { baseUrl } = {}) =>
   });
 
 /**
- * Lint a list of components, log reports, and exit(1) if any have issues.
+ * @typedef {Object} StoryOutcome
+ * @property {string} storyId - Selected Storybook story ID.
+ * @property {string} url - Requested story URL, even when navigation fails.
+ * @property {'completed'|'failed'} status - Scan execution outcome.
+ * @property {object} [report] - Completed Pa11y report.
+ * @property {Error} [error] - Contextual execution error with the original cause.
+ */
+
+/**
+ * Lint every selected story and report all outcomes before rejecting failures.
+ *
+ * Reportable findings set a nonzero exit status. Execution failures also reject
+ * with an AggregateError whose errors preserve story context and original causes.
  * @param {string[]} names - List of Storybook story IDs.
  * @param {{baseUrl?: string}} [options={}] - Storybook origin options.
  * @returns {Promise<void>}
  */
 const lintReportAndExit = async (names, options = {}) => {
-  const results = await Promise.all(
-    names.map((name) => lintComponent(name, options)),
+  /** @type {StoryOutcome[]} */
+  const outcomes = new Array(names.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < names.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const storyId = names[index];
+      const url = storyUrl(storyId, options);
+      try {
+        const report = await lintComponent(storyId, options);
+        outcomes[index] = { storyId, url, status: 'completed', report };
+      } catch (cause) {
+        const error = new Error(
+          `Accessibility check failed for story "${storyId}" (${url}): ${cause?.message || cause}`,
+          { cause },
+        );
+        Object.assign(error, { storyId, url });
+        outcomes[index] = { storyId, url, status: 'failed', error };
+      }
+    }
+  };
+  // Pa11y releases its browsers before settling. Drain every worker before
+  // reporting or rejecting so the caller can safely close the Storybook server.
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, names.length) }, worker),
   );
-  const hasIssues = results.map(logReport).some(Boolean);
 
-  if (hasIssues) {
-    process.exit(1);
+  const failures = [];
+  let clean = 0;
+  let withFindings = 0;
+  for (const outcome of outcomes) {
+    if (outcome.status === 'failed') {
+      failures.push(outcome.error);
+      // Use the same output stream as completed reports to retain input order.
+      // Logging the original error object keeps its stack and nested causes.
+      console.log(
+        `Execution failed for story: ${outcome.storyId}\nURL: ${outcome.url}`,
+        outcome.error.cause,
+      );
+    } else if (logReport(outcome.report)) {
+      withFindings += 1;
+    } else {
+      clean += 1;
+    }
+  }
+  console.log(
+    `Accessibility summary: ${outcomes.length} attempted, ${clean} clean, ${withFindings} with findings, ${failures.length} failed to execute.`,
+  );
+
+  if ((withFindings || failures.length) && !process.exitCode) {
+    process.exitCode = 1;
+  }
+  if (failures.length) {
+    throw new AggregateError(
+      failures,
+      `Accessibility execution failed for ${failures.length} ${failures.length === 1 ? 'story' : 'stories'}.`,
+    );
   }
 };
 

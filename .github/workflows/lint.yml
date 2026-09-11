@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [4.x, develop, main]
 
+# Supersede runs for the same PR; each integration push has its own group.
+# Unique push groups also prevent replacement of pending integration runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -20,50 +26,88 @@ jobs:
           - '24.18.0'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
+      - name: Plan release evidence
+        continue-on-error: true
+        run: node scripts/release-evidence.js init install lint test storybook-build
       - name: Install
         # npm ci keeps release-readiness checks locked to package-lock.json.
-        run: npm ci
+        run: node scripts/release-evidence.js run install -- npm ci
       - name: Lint
-        run: npm run lint
+        run: node scripts/release-evidence.js run lint -- npm run lint
       - name: Test
-        run: npm test
+        run: node scripts/release-evidence.js run test --jest -- npm test
       - name: Storybook build
-        run: npm run storybook-build
+        run: node scripts/release-evidence.js run storybook-build -- npm run storybook-build
+      - name: Finalize release evidence
+        id: evidence-finalize
+        if: always()
+        continue-on-error: true
+        run: node scripts/release-evidence.js finish
+      - name: Upload release evidence
+        if: always() && steps.evidence-finalize.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-node-${{ matrix.node-version }}-attempt-${{ github.run_attempt }}
+          path: .release-evidence/report.json
+          include-hidden-files: true
+          if-no-files-found: ignore
   package-readiness:
     name: Packed package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Plan release evidence
+        continue-on-error: true
+        run: node scripts/release-evidence.js init install pack-dry-run smoke-pack release-analysis
       - name: Install
         # npm ci keeps packed-package checks locked to package-lock.json.
-        run: npm ci
+        run: node scripts/release-evidence.js run install -- npm ci
       - name: Verify package contents
-        run: npm run pack:dry-run
+        run: node scripts/release-evidence.js run pack-dry-run -- npm run pack:dry-run
       - name: Test packed package
-        run: npm run smoke:pack
+        run: node scripts/release-evidence.js run smoke-pack -- npm run smoke:pack
       - name: Verify release calculation
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
         env:
           RELEASE_FROM: ${{ github.event.pull_request.base.sha }}
           RELEASE_TO: HEAD
           RELEASE_SQUASH_MESSAGE: ${{ github.event.pull_request.title }}
-        run: npm run release:analyze
+        run: node scripts/release-evidence.js run release-analysis -- npm run release:analyze
+      - name: Record inapplicable release calculation
+        if: always() && !(github.event_name == 'pull_request' && github.base_ref == 'main')
+        continue-on-error: true
+        run: node scripts/release-evidence.js skip release-analysis condition-false
+      - name: Finalize release evidence
+        id: evidence-finalize
+        if: always()
+        continue-on-error: true
+        run: node scripts/release-evidence.js finish
+      - name: Upload release evidence
+        if: always() && steps.evidence-finalize.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-packed-package-attempt-${{ github.run_attempt }}
+          path: .release-evidence/report.json
+          include-hidden-files: true
+          if-no-files-found: ignore
   fixture-builds:
     name: Fixture / ${{ matrix.fixture }}
     runs-on: ubuntu-latest
@@ -84,25 +128,42 @@ jobs:
           - large-twig-storybook
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Plan release evidence
+        continue-on-error: true
+        run: node scripts/release-evidence.js init install fixtures-release
       - name: Install
         # npm ci keeps fixture checks locked to package-lock.json.
-        run: npm ci
+        run: node scripts/release-evidence.js run install -- npm ci
       - name: Fixture build
-        run: npm run fixtures:release -- --fixture ${{ matrix.fixture }}
+        run: node scripts/release-evidence.js run fixtures-release -- npm run fixtures:release -- --fixture ${{ matrix.fixture }}
       - name: Upload mixed Storybook browser diagnostics
         if: failure() && matrix.fixture == 'mixed-storybook'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mixed-storybook-browser-diagnostics
           path: .out/fixture-browser-diagnostics/mixed-storybook
+          if-no-files-found: ignore
+      - name: Finalize release evidence
+        id: evidence-finalize
+        if: always()
+        continue-on-error: true
+        run: node scripts/release-evidence.js finish
+      - name: Upload release evidence
+        if: always() && steps.evidence-finalize.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-fixture-${{ matrix.fixture }}-attempt-${{ github.run_attempt }}
+          path: .release-evidence/report.json
+          include-hidden-files: true
           if-no-files-found: ignore
   consumer-fixtures:
     name: Packed consumer / ${{ matrix.fixture }}
@@ -117,19 +178,36 @@ jobs:
           - wordpress-twig
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Plan release evidence
+        continue-on-error: true
+        run: node scripts/release-evidence.js init install fixtures-consumer
       - name: Install
         # npm ci keeps packed-consumer checks locked to package-lock.json.
-        run: npm ci
+        run: node scripts/release-evidence.js run install -- npm ci
       - name: Test packed consumer
-        run: npm run fixtures:consumer -- --fixture ${{ matrix.fixture }}
+        run: node scripts/release-evidence.js run fixtures-consumer -- npm run fixtures:consumer -- --fixture ${{ matrix.fixture }}
+      - name: Finalize release evidence
+        id: evidence-finalize
+        if: always()
+        continue-on-error: true
+        run: node scripts/release-evidence.js finish
+      - name: Upload release evidence
+        if: always() && steps.evidence-finalize.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-consumer-${{ matrix.fixture }}-attempt-${{ github.run_attempt }}
+          path: .release-evidence/report.json
+          include-hidden-files: true
+          if-no-files-found: ignore
   react-peer-fixtures:
     name: React peer / ${{ matrix.react }}
     runs-on: ubuntu-latest
@@ -142,16 +220,33 @@ jobs:
           - '19'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Plan release evidence
+        continue-on-error: true
+        run: node scripts/release-evidence.js init install fixtures-consumer
       - name: Install
         # npm ci keeps React peer checks locked to package-lock.json.
-        run: npm ci
+        run: node scripts/release-evidence.js run install -- npm ci
       - name: Test packed Storybook consumer
-        run: npm run fixtures:consumer -- --fixture mixed-storybook --react ${{ matrix.react }}
+        run: node scripts/release-evidence.js run fixtures-consumer -- npm run fixtures:consumer -- --fixture mixed-storybook --react ${{ matrix.react }}
+      - name: Finalize release evidence
+        id: evidence-finalize
+        if: always()
+        continue-on-error: true
+        run: node scripts/release-evidence.js finish
+      - name: Upload release evidence
+        if: always() && steps.evidence-finalize.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-react-${{ matrix.react }}-attempt-${{ github.run_attempt }}
+          path: .release-evidence/report.json
+          include-hidden-files: true
+          if-no-files-found: ignore

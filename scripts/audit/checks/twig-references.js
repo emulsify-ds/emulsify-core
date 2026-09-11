@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { makeFinding } from '../lib/findings.js';
 import { cachedReadFile } from '../lib/files.js';
 import {
-  findTwigIncludeSourceReferences,
+  findTwigReferenceCalls,
   findTwigNamespaceReferences,
   resolvesTwigReference,
 } from '../lib/twig.js';
@@ -23,6 +23,7 @@ export function auditTwigReferences(context) {
   const knownNamespaces = new Set([...Object.keys(namespaceRoots), 'assets']);
   const findings = [];
   const seen = new Set();
+  const componentGroupRootsCache = new Map();
 
   for (const twigFile of twigFiles) {
     const source = cachedReadFile(twigFile);
@@ -46,15 +47,25 @@ export function auditTwigReferences(context) {
       );
     }
 
-    for (const ref of findTwigIncludeSourceReferences(source)) {
-      if (!resolvesTwigReference(ref.value, twigFile, env)) {
+    for (const call of findTwigReferenceCalls(source)) {
+      // Optional or uncertain calls cannot establish a required missing target.
+      if (call.ignoreMissing !== false || call.hasDynamicCandidates) continue;
+      const resolved = call.candidates.some(
+        ({ value }) =>
+          value !== '' &&
+          resolvesTwigReference(value, twigFile, env, componentGroupRootsCache),
+      );
+      if (!resolved) {
+        const description = call.isFallbackArray
+          ? `fallback candidates ${JSON.stringify(call.candidates.map(({ value }) => value))}`
+          : `reference "${call.candidates[0].value}"`;
         findings.push(
           makeFinding({
             id: 'unresolved-twig-reference',
             severity: 'warn',
             filePath: twigFile,
-            line: ref.line,
-            message: `${ref.type}() reference "${ref.value}" could not be resolved from the normalized Twig roots.`,
+            line: call.line,
+            message: `${call.type}() ${description} could not be resolved from the normalized Twig roots.`,
             docs: 'https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/storybook.md#include',
           }),
         );

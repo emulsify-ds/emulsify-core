@@ -168,6 +168,38 @@ Projects with custom lint, Prettier, test, or Storybook scripts should keep
 their project-specific behavior, but should still move Core build commands away
 from `config/webpack` and into `config/vite`.
 
+Existing Core 4 themes whose copied audit wrappers print documentation footers
+to stdout need one correction for JSON consumers. Keep the footer, redirect
+its `printf` to stderr, and retain the saved audit exit status:
+
+```sh
+# Before: the footer follows the JSON on stdout.
+...; status=$?; printf "\nAudit docs: ...\n"; exit $status
+# After: stdout contains only the audit report.
+...; status=$?; printf "\nAudit docs: ...\n" >&2; exit $status
+```
+
+Apply the same redirection to `audit:twig-stories` if it has a copied footer.
+Keep `"$@"` in the wrapper so each argument is forwarded intact, and use npm's
+silent invocation to suppress its own script echo:
+
+```sh
+npm run --silent audit -- --root "/path/to/my theme" --json --fail-on warn
+npm run --silent audit:twig-stories -- --root "/path/to/my theme" --json --fail-on-found
+```
+
+The two audit commands use different failure flags. Preserve `status=$?`
+immediately after the executable and `exit $status` after the footer, so a
+successful `printf` cannot mask an audit failure. The direct alternatives are
+`npx --no-install emulsify-audit --json` and
+`npx --no-install emulsify-audit-twig-stories --json`.
+
+No theme regeneration is required; updating Core cannot edit scripts already
+copied into the theme's own `package.json`. New themes receive the wrappers
+from the starter revision used to generate them. See the
+[verified starter availability](releases/4.5.0.md#starter-availability) before
+assuming a starter release contains the correction.
+
 The `--silent` flags in `develop` are cosmetic. `concurrently` spawns each task
 as its own `npm run`, and npm echoes the script it is about to execute, so a
 plain `concurrently --raw --no-shell npm:vite npm:storybook` opens every develop

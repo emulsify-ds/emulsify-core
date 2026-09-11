@@ -1,0 +1,426 @@
+{
+  "reviewedAt": "2026-09-09T15:02:55.289Z",
+  "sourceCommit": "6a74618eccbae9487f47674b405339d1eda851cf",
+  "node": "v24.19.0",
+  "npm": "11.17.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "baselineLockSha256": "b2232b497112f01e7e2440ec7f1b45e02fe08bf15f22d8b0d9974cff931dec93",
+  "patchedCoreLockSha256": "4baeb3a2810e639405eb705ede638c9a08f678407ef8a3884a188974264e8ed5",
+  "consumerLockSha256": "6cd022e6f49d3ee17147f0fe0433dde4dad232c0df7f4b740e5f526a55ee4604",
+  "patch": [
+    {
+      "path": "node_modules/colord",
+      "before": {
+        "version": "2.9.3",
+        "resolved": "https://registry.npmjs.org/colord/-/colord-2.9.3.tgz",
+        "integrity": "sha512-jeC1axXpnb0/2nn/Y1LPuLdgXBLH7aDcHu4KEKfqw3CUhX7ZpfBSlPKyqXE6btIgEzfWtrX3/tyBCaCvXvMkOw==",
+        "license": "MIT"
+      },
+      "after": {
+        "version": "2.10.0",
+        "resolved": "https://registry.npmjs.org/colord/-/colord-2.10.0.tgz",
+        "integrity": "sha512-AidJptpBJmjTclAp9BkLwJi0T93fo5epJnbaZslpg6QVzpHjAiveF55mE9AcUJiGMqRHgMDY8soMsQtuNYMHfw==",
+        "license": "MIT"
+      }
+    }
+  ],
+  "packageManifestChanged": false,
+  "pack": {
+    "version": "4.5.0",
+    "filename": "emulsify-core-4.5.0.tgz",
+    "shasum": "9a9e6f5c5bc130a944d7ac8eae8d4b8c8ad1a9f8",
+    "integrity": "sha512-U4vWfCV2xOU82PfIt82G9m8yq9SC06OagzkfILZxPh3J/JCPKUHK9Lajiy/FH4oRAf3e3YCkxbEpupKmPiAl3g==",
+    "sha256": "9abb3382224b78e114a2c0c209255ab5d8f31e9d999943d1bfff7d3ea8e8e153",
+    "coreLockPackaged": false,
+    "sameIntegrityAfterLockPatch": true,
+    "consumerIsSymlink": false
+  },
+  "audits": [
+    {
+      "file": "core-before-audit.json",
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 5,
+        "critical": 0,
+        "total": 6
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-2wm5-q62r-hmrv",
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+      ],
+      "recordedAt": "2026-09-09T14:51:47.309Z"
+    },
+    {
+      "file": "core-before-audit-omit-dev.json",
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 5,
+        "critical": 0,
+        "total": 6
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-2wm5-q62r-hmrv",
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+      ],
+      "recordedAt": "2026-09-09T14:51:48.600Z"
+    },
+    {
+      "file": "core-after-audit.json",
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 5,
+        "critical": 0,
+        "total": 5
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+      ],
+      "recordedAt": "2026-09-09T14:54:59.648Z"
+    },
+    {
+      "file": "core-after-audit-omit-dev.json",
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 5,
+        "critical": 0,
+        "total": 5
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+      ],
+      "recordedAt": "2026-09-09T14:54:57.745Z"
+    },
+    {
+      "file": "consumer-audit.json",
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 6,
+        "critical": 0,
+        "total": 6
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+      ],
+      "recordedAt": "2026-09-09T14:53:41.216Z"
+    },
+    {
+      "file": "consumer-audit-omit-dev.json",
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 6,
+        "critical": 0,
+        "total": 6
+      },
+      "advisories": [
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+      ],
+      "recordedAt": "2026-09-09T14:53:39.328Z"
+    }
+  ],
+  "versions": {
+    "core": {
+      "pa11y": [
+        {
+          "path": "node_modules/pa11y",
+          "version": "9.1.1",
+          "dev": false
+        }
+      ],
+      "puppeteer": [
+        {
+          "path": "node_modules/pa11y/node_modules/puppeteer",
+          "version": "24.43.1",
+          "dev": false
+        },
+        {
+          "path": "node_modules/puppeteer",
+          "version": "25.7.0",
+          "dev": true
+        }
+      ],
+      "puppeteer-core": [
+        {
+          "path": "node_modules/pa11y/node_modules/puppeteer-core",
+          "version": "24.43.1",
+          "dev": false
+        },
+        {
+          "path": "node_modules/puppeteer-core",
+          "version": "25.7.0",
+          "dev": true
+        }
+      ],
+      "@puppeteer/browsers": [
+        {
+          "path": "node_modules/@puppeteer/browsers",
+          "version": "3.2.0",
+          "dev": true
+        },
+        {
+          "path": "node_modules/pa11y/node_modules/@puppeteer/browsers",
+          "version": "2.13.2",
+          "dev": false
+        }
+      ],
+      "extract-zip": [
+        {
+          "path": "node_modules/extract-zip",
+          "version": "2.0.1",
+          "dev": false
+        }
+      ],
+      "colord": [
+        {
+          "path": "node_modules/colord",
+          "version": "2.10.0",
+          "dev": false
+        }
+      ],
+      "stylelint": [
+        {
+          "path": "node_modules/stylelint",
+          "version": "17.14.1",
+          "dev": false
+        }
+      ],
+      "js-yaml": [
+        {
+          "path": "node_modules/@eslint/eslintrc/node_modules/js-yaml",
+          "version": "4.3.2",
+          "dev": false
+        },
+        {
+          "path": "node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml",
+          "version": "3.15.2",
+          "dev": false
+        },
+        {
+          "path": "node_modules/cosmiconfig/node_modules/js-yaml",
+          "version": "4.3.2",
+          "dev": false
+        },
+        {
+          "path": "node_modules/js-yaml",
+          "version": "5.3.0",
+          "dev": false
+        }
+      ],
+      "axe-core": [
+        {
+          "path": "node_modules/axe-core",
+          "version": "4.13.0",
+          "dev": false
+        },
+        {
+          "path": "node_modules/pa11y/node_modules/axe-core",
+          "version": "4.11.4",
+          "dev": false
+        }
+      ],
+      "npm": [
+        {
+          "path": "node_modules/npm",
+          "version": "11.19.1",
+          "dev": true
+        }
+      ]
+    },
+    "consumer": {
+      "pa11y": [
+        {
+          "path": "node_modules/pa11y",
+          "version": "9.1.1",
+          "dev": false
+        }
+      ],
+      "puppeteer": [
+        {
+          "path": "node_modules/puppeteer",
+          "version": "24.43.1",
+          "dev": false
+        }
+      ],
+      "puppeteer-core": [
+        {
+          "path": "node_modules/puppeteer-core",
+          "version": "24.43.1",
+          "dev": false
+        }
+      ],
+      "@puppeteer/browsers": [
+        {
+          "path": "node_modules/@puppeteer/browsers",
+          "version": "2.13.2",
+          "dev": false
+        }
+      ],
+      "extract-zip": [
+        {
+          "path": "node_modules/extract-zip",
+          "version": "2.0.1",
+          "dev": false
+        }
+      ],
+      "colord": [
+        {
+          "path": "node_modules/colord",
+          "version": "2.10.0",
+          "dev": false
+        }
+      ],
+      "stylelint": [
+        {
+          "path": "node_modules/stylelint",
+          "version": "17.15.0",
+          "dev": false
+        }
+      ],
+      "js-yaml": [
+        {
+          "path": "node_modules/@eslint/eslintrc/node_modules/js-yaml",
+          "version": "4.3.2",
+          "dev": false
+        },
+        {
+          "path": "node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml",
+          "version": "3.15.2",
+          "dev": false
+        },
+        {
+          "path": "node_modules/cosmiconfig/node_modules/js-yaml",
+          "version": "4.3.2",
+          "dev": false
+        },
+        {
+          "path": "node_modules/js-yaml",
+          "version": "5.4.1",
+          "dev": false
+        }
+      ],
+      "axe-core": [
+        {
+          "path": "node_modules/axe-core",
+          "version": "4.13.0",
+          "dev": false
+        },
+        {
+          "path": "node_modules/pa11y/node_modules/axe-core",
+          "version": "4.11.4",
+          "dev": false
+        }
+      ],
+      "npm": []
+    }
+  },
+  "checks": {
+    "coreBaselineInstall": {
+      "status": 0,
+      "stdout": "npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation\n\n> @parcel/watcher@2.6.0 install\n> node scripts/build-from-source.js\n\n\n> esbuild@0.28.1 postinstall\n> node install.js\n\n\n> puppeteer@25.7.0 postinstall\n> node install.mjs\n\n**INFO** Skipping downloading browsers as instructed.\n\n> unrs-resolver@1.12.2 postinstall\n> node postinstall.js\n\n\n> puppeteer@24.43.1 postinstall\n> node install.mjs\n\n**INFO** Skipping downloading browsers as instructed.\n\n> @emulsify/core@4.5.0 prepare\n> npm run check-node-version && husky\n\n\n> @emulsify/core@4.5.0 check-node-version\n> node scripts/check-node-version.js\n\n.git can't be found\nadded 1381 packages in 14s\n"
+    },
+    "corePatchedInstall": {
+      "status": 0,
+      "stdout": "npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation\n\n> @parcel/watcher@2.6.0 install\n> node scripts/build-from-source.js\n\n\n> esbuild@0.28.1 postinstall\n> node install.js\n\n\n> puppeteer@25.7.0 postinstall\n> node install.mjs\n\n**INFO** Skipping downloading browsers as instructed.\n\n> unrs-resolver@1.12.2 postinstall\n> node postinstall.js\n\n\n> puppeteer@24.43.1 postinstall\n> node install.mjs\n\n**INFO** Skipping downloading browsers as instructed.\n\n> @emulsify/core@4.5.0 prepare\n> npm run check-node-version && husky\n\n\n> @emulsify/core@4.5.0 check-node-version\n> node scripts/check-node-version.js\n\n.git can't be found\nadded 1381 packages in 13s\n"
+    },
+    "consumerResolve": {
+      "status": 0,
+      "stdout": "\nup to date in 6s\n"
+    },
+    "consumerLockedInstall": {
+      "status": 0,
+      "stdout": "npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation\nnpm warn deprecated eslint@9.39.5: This version is no longer supported. Please see https://eslint.org/version-support for other options.\n\n> @parcel/watcher@2.6.0 install\n> node scripts/build-from-source.js\n\n\n> esbuild@0.28.2 postinstall\n> node install.js\n\n\n> puppeteer@24.43.1 postinstall\n> node install.mjs\n\n**INFO** Skipping downloading browsers as instructed.\n\n> unrs-resolver@1.12.2 postinstall\n> node postinstall.js\n\n\nadded 1111 packages in 5s\nnpm warn allow-scripts 5 packages have install scripts not yet covered by allowScripts:\nnpm warn allow-scripts   @parcel/watcher@2.6.0 (install: node scripts/build-from-source.js)\nnpm warn allow-scripts   esbuild@0.28.2 (postinstall: node install.js)\nnpm warn allow-scripts   fsevents@2.3.3 (install: (install scripts present))\nnpm warn allow-scripts   puppeteer@24.43.1 (postinstall: node install.mjs)\nnpm warn allow-scripts   unrs-resolver@1.12.2 (postinstall: node postinstall.js)\nnpm warn allow-scripts\nnpm warn allow-scripts Run `npm approve-scripts --allow-scripts-pending` to review, or `npm approve-scripts <pkg>` to allow.\n"
+    },
+    "coreAccessibilityTests": {
+      "status": 0,
+      "stdout": "\nTest Suites: 4 passed, 4 total\nTests:       40 passed, 40 total\nSnapshots:   3 passed, 3 total\nTime:        1.262 s\nRan all test suites matching scripts/a11y.test.js|scripts/a11y-outcomes.test.js|scripts/a11y-cli.test.js|config/a11y-wcag22.test.js.\n"
+    },
+    "coreLint": {
+      "status": 0,
+      "stdout": "\n> @emulsify/core@4.5.0 lint\n> npm run check-node-version && npm run lint-js && npm run prettier\n\n\n> @emulsify/core@4.5.0 check-node-version\n> node scripts/check-node-version.js\n\n\n> @emulsify/core@4.5.0 lint-js\n> npm run check-node-version && eslint --config config/eslint.config.js ./.cli ./.storybook ./config ./scripts ./src\n\n\n> @emulsify/core@4.5.0 check-node-version\n> node scripts/check-node-version.js\n\n\n> @emulsify/core@4.5.0 prettier\n> npm run check-node-version && prettier --check --config config/.prettierrc.json --ignore-unknown \"**/*.{js,mjs,cjs,jsx,json,yml,yaml,scss,md,twig}\"\n\n\n> @emulsify/core@4.5.0 check-node-version\n> node scripts/check-node-version.js\n\nChecking formatting...\nAll matched files use Prettier code style!\n"
+    },
+    "coreComponentAudit": {
+      "status": 0,
+      "report": {
+        "schemaVersion": 1,
+        "tool": {
+          "name": "@emulsify/core",
+          "version": "4.5.0"
+        },
+        "root": ".",
+        "summary": {
+          "error": 1,
+          "warn": 2,
+          "info": 0
+        },
+        "files": {
+          "stories": 1,
+          "twig": 1,
+          "code": 32,
+          "styles": 0
+        },
+        "findings": [
+          {
+            "id": "missing-project-config",
+            "severity": "error",
+            "message": "project.emulsify.json is missing, so platform and structure defaults may not match the project.",
+            "docs": "https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/project-structure.md"
+          },
+          {
+            "id": "drupal-assumption-non-drupal",
+            "severity": "warn",
+            "path": "src/storybook/platform-behaviors.js",
+            "line": 50,
+            "message": "Drupal-specific Storybook/runtime code was found, but the active platform is not drupal.",
+            "docs": "https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/platform-adapters.md"
+          },
+          {
+            "id": "drupal-assumption-non-drupal",
+            "severity": "warn",
+            "path": "src/storybook/twig/drupal-filters.js",
+            "line": 5,
+            "message": "Drupal-specific Storybook/runtime code was found, but the active platform is not drupal.",
+            "docs": "https://github.com/emulsify-ds/emulsify-core/blob/4.x/docs/platform-adapters.md"
+          }
+        ]
+      }
+    },
+    "defaultStylelintRule": {
+      "colorNamed": null,
+      "ruleCount": 121
+    }
+  },
+  "notes": [
+    "Initial exploratory network-enabled runs selected Node26.8.1/npm11.19.0. All reported tables were repeated with explicit Node24 PATH, including lifecycle scripts.",
+    "A package-pack retry used the isolated npm cache after the sandbox denied default-cache writes. No global permissions or cache ownership were changed.",
+    "npm update colord produced an unrelated bundled picomatch peer flag refresh; only the colord entry was retained and the resulting lockfile was clean-installed.",
+    "Consumer Jest has no discovered tests and uses --passWithNoTests; command wiring is checked, not counted as unit coverage.",
+    "Core component audit is separate from npm audit; its library checkout has no consumer project configuration.",
+    "Archived consumer lockfile and audit JSON use repository formatting; parsed contents are unchanged. Both original installed-lock and formatted archive digests are recorded."
+  ],
+  "archivedConsumerLockSha256": "2aaffe9215496b8fdff9113de00e5ad42187695b2aa3bbc9fbe8e53978241ce0",
+  "consumerLockContentSha256": "7fee4cc9491c718ce81dea4b025f7407809e2787c23d5b34956546d945328bf3"
+}

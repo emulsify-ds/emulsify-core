@@ -1,0 +1,32 @@
+{
+  "command": [
+    "<node24>/bin/node",
+    "--import",
+    "<suite>/managed-browser-proof/trace-browser-launch.mjs",
+    "<suite>/consumer/node_modules/@emulsify/core/scripts/a11y.js",
+    "-r"
+  ],
+  "node": "v24.19.0",
+  "status": 0,
+  "signal": null,
+  "environmentExecutablePathAbsent": true,
+  "events": [
+    {
+      "event": "launch-request",
+      "node": "v24.19.0",
+      "executablePath": "/opt/homebrew/bin/chromium",
+      "environmentExecutablePath": null
+    },
+    {
+      "event": "browser-launched",
+      "pid": 29948,
+      "spawnfile": "/opt/homebrew/bin/chromium",
+      "version": "Chrome/124.0.6355.0"
+    },
+    {
+      "event": "browser-disconnected",
+      "pid": 29948
+    }
+  ],
+  "cacheEntries": []
+}

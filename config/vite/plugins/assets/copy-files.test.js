@@ -12,7 +12,7 @@ import {
   utimesSync,
   writeFileSync,
 } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 import { resolveProjectConfig } from '../../project-config.js';
 import { resolveProjectStructure } from '../../project-structure.js';
@@ -56,6 +56,7 @@ describe('source copy plugins', () => {
     writeFileSync(join(componentDir, 'card.js'), 'console.log("skip");');
     writeFileSync(join(componentDir, 'Card.jsx'), 'export function Card() {}');
     writeFileSync(join(componentDir, 'card.scss'), '.skip {}');
+    writeFileSync(join(componentDir, 'Card.php'), '<?php class Card {}');
 
     const structure = resolveProjectStructure(
       makeEnv(projectDir, {
@@ -80,6 +81,7 @@ describe('source copy plugins', () => {
     expect(existsSync(join(outDir, 'components/card/card.js'))).toBe(false);
     expect(existsSync(join(outDir, 'components/card/Card.jsx'))).toBe(false);
     expect(existsSync(join(outDir, 'components/card/card.scss'))).toBe(false);
+    expect(existsSync(join(outDir, 'components/card/Card.php'))).toBe(false);
   });
 
   it('records only copied files whose bytes were written this cycle', () => {
@@ -162,6 +164,10 @@ describe('source copy plugins', () => {
     writeFileSync(join(projectDir, 'src/components/card/image.png'), 'image');
     writeFileSync(join(projectDir, 'src/foundation/icons/icon.svg'), '<svg />');
     writeFileSync(
+      join(projectDir, 'src/foundation/icons/Icon.php'),
+      '<?php class Icon {}',
+    );
+    writeFileSync(
       join(projectDir, 'src/foundation/icons/_partial.twig'),
       '<span></span>',
     );
@@ -184,6 +190,7 @@ describe('source copy plugins', () => {
     );
     expect(existsSync(join(outDir, 'components/card/image.png'))).toBe(true);
     expect(existsSync(join(outDir, 'foundation/icons/icon.svg'))).toBe(true);
+    expect(existsSync(join(outDir, 'foundation/icons/Icon.php'))).toBe(false);
     // Emitted from a named structure root too, not only from component roots.
     expect(existsSync(join(outDir, 'foundation/icons/_partial.twig'))).toBe(
       true,
@@ -277,6 +284,128 @@ describe('source copy plugins', () => {
 
       return addWatchFile.mock.calls.map(([path]) => path);
     };
+
+    it('leaves PHP in source without copying it or watching it for rebuilds', () => {
+      const { structure, outDir } = scaffold();
+      const phpFiles = [
+        'src/Hook/PageTitleHooks.php',
+        'src/Plugin/Block/ExampleBlock.php',
+        'src/components/card/Card.PHP',
+        'src/mixed/Helper.php',
+      ];
+      for (const file of phpFiles) {
+        const source = join(projectDir, file);
+        mkdirSync(dirname(source), { recursive: true });
+        writeFileSync(source, '<?php // Server-side source.');
+      }
+      const mixedAsset = join(projectDir, 'src/mixed/icon.svg');
+      writeFileSync(mixedAsset, '<svg />');
+      const watched = [];
+
+      for (const factory of [copyTwigFilesPlugin, copyAllSrcAssetsPlugin]) {
+        const plugin = factory({ structure });
+        watched.push(...watchedBy(plugin, { outDir, watch: {} }));
+        plugin.writeBundle();
+      }
+
+      for (const file of phpFiles) {
+        expect(watched).not.toContain(join(projectDir, file));
+        expect(readFileSync(join(projectDir, file), 'utf8')).toBe(
+          '<?php // Server-side source.',
+        );
+      }
+      expect(existsSync(join(outDir, 'global/Hook'))).toBe(false);
+      expect(existsSync(join(outDir, 'global/Plugin'))).toBe(false);
+      expect(existsSync(join(outDir, 'components/card/Card.PHP'))).toBe(false);
+      expect(existsSync(join(outDir, 'global/mixed/Helper.php'))).toBe(false);
+      expect(watched).toContain(mixedAsset);
+      expect(readFileSync(join(outDir, 'global/mixed/icon.svg'), 'utf8')).toBe(
+        '<svg />',
+      );
+      expect(existsSync(join(outDir, 'components/card/card.twig'))).toBe(true);
+      expect(
+        existsSync(join(outDir, 'components/card/card.component.yml')),
+      ).toBe(true);
+    });
+
+    it.each([
+      'module',
+      'theme',
+      'inc',
+      'install',
+      'profile',
+      'engine',
+      'phtml',
+      'php5',
+      'PHP8',
+      'mjs',
+      'cjs',
+      'ts',
+      'tsx',
+      'mts',
+      'cts',
+      'mtsx',
+      'ctsx',
+    ])(
+      'leaves .%s source out of copied output and watch paths',
+      (extension) => {
+        const { structure, outDir } = scaffold();
+        const sourceFiles = [
+          ['src/components/card', 'components/card'],
+          ['src/mixed', 'global/mixed'],
+        ].map(([sourceDir, outputDir]) => {
+          const source = join(projectDir, sourceDir, `source.${extension}`);
+          mkdirSync(dirname(source), { recursive: true });
+          writeFileSync(source, 'source stays private to the build');
+          return [source, join(outDir, outputDir, `source.${extension}`)];
+        });
+        const plugin = copyAllSrcAssetsPlugin({ structure });
+        const watched = watchedBy(plugin, { outDir, watch: {} });
+        plugin.writeBundle();
+
+        for (const [source, output] of sourceFiles) {
+          expect(watched).not.toContain(source);
+          expect(existsSync(output)).toBe(false);
+          expect(readFileSync(source, 'utf8')).toBe(
+            'source stays private to the build',
+          );
+        }
+      },
+    );
+
+    it('continues copying arbitrary non-code asset types', () => {
+      const { structure, outDir } = scaffold();
+      const extensions = [
+        'css',
+        'woff2',
+        'pdf',
+        'xml',
+        'wasm',
+        'webmanifest',
+        'custom-asset',
+      ];
+      for (const extension of extensions) {
+        writeFileSync(
+          join(projectDir, 'src/components/card', `asset.${extension}`),
+          `fixture ${extension}`,
+        );
+      }
+      const plugin = copyAllSrcAssetsPlugin({ structure });
+      const watched = watchedBy(plugin, { outDir, watch: {} });
+      plugin.writeBundle();
+
+      for (const extension of extensions) {
+        expect(watched).toContain(
+          join(projectDir, 'src/components/card', `asset.${extension}`),
+        );
+        expect(
+          readFileSync(
+            join(outDir, 'components/card', `asset.${extension}`),
+            'utf8',
+          ),
+        ).toBe(`fixture ${extension}`);
+      }
+    });
 
     it('watches every template and asset it will copy', () => {
       // Twig and static assets are copied rather than compiled, so none of them

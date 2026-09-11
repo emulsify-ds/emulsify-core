@@ -17,19 +17,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Plan release evidence
+        continue-on-error: true
+        run: node scripts/release-evidence.js init install check-node-version lint test storybook-build fixtures-release fixtures-consumer pack-dry-run smoke-pack release-analysis
       - name: Install
-        run: npm ci
+        run: node scripts/release-evidence.js run install -- npm ci
       - name: Verify release readiness
+        env:
+          EMULSIFY_RELEASE_EVIDENCE_CONTINUE: 'true'
         run: npm run release:verify
+      - name: Finalize release evidence
+        id: evidence-finalize
+        if: always()
+        continue-on-error: true
+        run: node scripts/release-evidence.js finish
+      - name: Upload release evidence
+        if: always() && steps.evidence-finalize.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-validate-main-attempt-${{ github.run_attempt }}
+          path: .release-evidence/report.json
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   release:
     name: Publish Package
@@ -42,12 +61,12 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'

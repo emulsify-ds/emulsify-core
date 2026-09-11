@@ -32,7 +32,7 @@ export const Default = {};
 
 ### Recommended Twig Story Pattern
 
-Use `render: renderTwig(template, { context })` for new Twig stories and for stories you are actively editing. The `context` function is the place to translate Storybook args into the variable names the Twig template expects. Keeping that mapping next to the story makes the component contract easier to inspect, test, and maintain.
+Use `render: renderTwig(template, { context })` for new Twig stories and for stories you are actively editing. The first argument to `renderTwig()` may be a directly imported `.twig` module or any function that returns Twig HTML. The `context` function is the place to translate Storybook args into the variable names the Twig template expects. Keeping that mapping next to the story makes the component contract easier to inspect, test, and maintain.
 
 This pattern is preferred because it gives Storybook a normal React render function instead of a bare HTML string. Emulsify can then render the Twig output through its React-managed `TwigHtmlStory` wrapper, update the visible markup whenever controls change, re-render after lazy `source()` content finishes loading, and attach platform behaviors such as Drupal behaviors at the right time.
 
@@ -69,6 +69,18 @@ export default {
 };
 
 export const Accordion = {};
+```
+
+A template-rendering function can also be composed through a wrapper before it
+is passed to `renderTwig()`. This is a supported modern pattern and is not
+classified as a legacy Twig story:
+
+```js
+const renderComponent = (args) => template(context(args));
+
+export default {
+  render: renderTwig(withContainer(renderComponent)),
+};
 ```
 
 Generated projects can include legacy Twig story checks in the full project

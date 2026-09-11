@@ -4,6 +4,7 @@
  * @file Predict semantic-release output without running publishing plugins.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -17,6 +18,7 @@ import {
   isCliEntrypoint,
   parseArgs as parseCliArgs,
 } from './lib/cli.js';
+import { recordReleaseAnalysis } from './lib/release-evidence.js';
 
 export { parseReleaseTag };
 
@@ -252,6 +254,21 @@ export async function runCli(
       head: options.head,
       squashTitle: options.squashTitle,
     });
+
+    if (env.EMULSIFY_RELEASE_EVIDENCE_EVENTS) {
+      try {
+        const [baseSha, headSha] = [options.base, options.head].map((ref) =>
+          execFileSync('git', ['rev-parse', '--verify', `${ref}^{commit}`], {
+            cwd,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          }).trim(),
+        );
+        await recordReleaseAnalysis(prediction, { baseSha, headSha });
+      } catch {
+        // Optional evidence must not change the release decision or CLI output.
+      }
+    }
 
     console.log(
       `semantic-release predicts ${prediction.releaseType}: ${prediction.releaseTag} -> v${prediction.predictedVersion} from ${prediction.commitCount} commits.`,
