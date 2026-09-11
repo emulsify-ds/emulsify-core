@@ -9,16 +9,7 @@ import { readdirSync } from 'fs';
 import { join, relative, sep } from 'path';
 
 import { relativeFrom } from '../../project-structure.js';
-
-const DEFAULT_SKIP_DIRS = [
-  'node_modules',
-  '.git',
-  '.cache',
-  '.vite',
-  '.out',
-  '.coverage',
-  'dist',
-];
+import { DEFAULT_SKIP_DIRS } from '../../utils/source-directory-skips.js';
 
 /**
  * Depth-first walk to list every file under a given root.

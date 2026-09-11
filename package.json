@@ -104,6 +104,7 @@
     "config/vite/utils/package-version.js",
     "config/vite/utils/paths.js",
     "config/vite/utils/react-singleton.js",
+    "config/vite/utils/source-directory-skips.js",
     "config/vite/utils/source-maps.js",
     "config/vite/utils/twig-component-resolver.js",
     "config/vite/vite.config.js",

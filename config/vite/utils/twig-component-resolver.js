@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
 import { toPosixPath } from './paths.js';
+import { DEFAULT_SKIP_DIRS } from './source-directory-skips.js';
 import { unique } from '../../../src/extensions/shared/lists.js';
 
 /**
@@ -147,7 +148,7 @@ export const parseTwigNamespaceReference = (templatePath, namespaces = {}) => {
  * Return grouping directories below the configured component root.
  *
  * Breadth-first traversal preserves direct and one-level behavior before
- * searching deeper groups. Siblings use code-point order so duplicate
+ * searching deeper groups. Siblings use UTF-16 code-unit order so duplicate
  * shorthand names resolve consistently across filesystems.
  *
  * @param {string} componentRoot - Absolute component root path.
@@ -176,7 +177,10 @@ const componentGroupRoots = (componentRoot, componentGroupRootsCache) => {
     }
 
     const childDirectories = entries
-      .filter((entry) => entry.isDirectory())
+      .filter(
+        (entry) =>
+          entry.isDirectory() && !DEFAULT_SKIP_DIRS.includes(entry.name),
+      )
       .sort(({ name: left }, { name: right }) =>
         left === right ? 0 : left < right ? -1 : 1,
       )
@@ -274,7 +278,7 @@ const resolveComponentShorthandReference = (
  * Resolve component namespace paths and project-scoped component shorthand.
  *
  * Configured non-component namespaces remain scoped to their own roots. Direct
- * candidates precede grouped candidates, which retain breadth-first/code-point
+ * candidates precede grouped candidates, which retain breadth-first/UTF-16
  * order for duplicate component names.
  *
  * @param {string} templatePath - Template reference from Twig source.

@@ -58,6 +58,37 @@ describe('grouped component candidate lookup', () => {
     expect(resolveReference(reference)).toBe(target);
   });
 
+  it.each([
+    'node_modules',
+    '.git',
+    '.cache',
+    '.vite',
+    '.out',
+    '.coverage',
+    'dist',
+  ])(
+    'does not discover component groups inside %s directories',
+    (directory) => {
+      write(`alpha/${directory}/nested/card/card.twig`);
+      const readDirectories = jest.spyOn(fs, 'readdirSync');
+
+      expect(resolveReference()).toBeNull();
+      expect(cache.get(root)).toEqual([path.join(root, 'alpha')]);
+      expect(readDirectories).not.toHaveBeenCalledWith(
+        path.join(root, 'alpha', directory),
+        expect.anything(),
+      );
+    },
+  );
+
+  it('preserves project shorthand through deeply nested component groups', () => {
+    const groups = Array.from({ length: 40 }, (_, index) => `group-${index}`);
+    const target = write(`${groups.join('/')}/card/card.twig`);
+
+    expect(resolveReference()).toBe(target);
+    expect(resolveReference('@components/card')).toBe(target);
+  });
+
   it('does not construct later grouped candidates after the first match', () => {
     const winner = write('alpha/card.twig');
     write('zeta/deep/card.twig');
@@ -85,7 +116,12 @@ describe('grouped component candidate lookup', () => {
       ['alpha/deep/card.twig', 'beta/card.twig'],
       'beta/card.twig',
     ],
-    ['code point', ['alpha/card.twig', 'Zeta/card.twig'], 'Zeta/card.twig'],
+    ['UTF-16', ['alpha/card.twig', 'Zeta/card.twig'], 'Zeta/card.twig'],
+    [
+      'UTF-16 including supplementary characters',
+      ['\uE000/card.twig', '\u{10000}/card.twig'],
+      '\u{10000}/card.twig',
+    ],
   ])('preserves %s duplicate precedence', (name, candidates, expected) => {
     candidates.forEach(write);
     expect(resolveReference()).toBe(path.join(root, expected));
