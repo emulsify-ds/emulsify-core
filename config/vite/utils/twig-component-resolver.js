@@ -248,7 +248,9 @@ const resolveComponentShorthandReference = (
     return directComponentPath;
   }
 
-  const genericNamespace = templatePath.match(/^@?[^/:]+[:/](.+)$/);
+  // A bare directory path keeps every segment; only explicit namespace syntax
+  // can drop its prefix before searching component groups.
+  const genericNamespace = templatePath.match(/^(?:@[^/:]+\/|@?[^/:]+:)(.+)$/);
   if (!genericNamespace) {
     return null;
   }

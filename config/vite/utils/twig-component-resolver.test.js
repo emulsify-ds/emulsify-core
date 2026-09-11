@@ -33,6 +33,31 @@ describe('grouped component candidate lookup', () => {
   const resolveReference = (reference = 'test_theme:card') =>
     resolveComponentReference(reference, { components: root }, cache);
 
+  it.each(['atoms/button/button.twig', 'atoms/button'])(
+    'does not discard the first directory in the bare path %s',
+    (reference) => {
+      write('molecules/button/button.twig');
+
+      expect(resolveReference(reference)).toBeNull();
+      expect(cache.size).toBe(0);
+    },
+  );
+
+  it.each([
+    'molecules/button/button.twig',
+    'molecules/button',
+    'components/molecules/button',
+    '@components/molecules/button',
+    'components:button',
+    'components::button',
+    'test_theme:button',
+    '@test_theme/button',
+  ])('preserves explicit paths and namespace shorthand in %s', (reference) => {
+    const target = write('molecules/button/button.twig');
+
+    expect(resolveReference(reference)).toBe(target);
+  });
+
   it('does not construct later grouped candidates after the first match', () => {
     const winner = write('alpha/card.twig');
     write('zeta/deep/card.twig');
