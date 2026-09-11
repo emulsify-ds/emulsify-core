@@ -91,12 +91,13 @@ export const isComponentMetadataFile = (filePath) =>
 
 /**
  * Determine whether a file should be copied by the static asset pass.
+ * PHP classes can share source roots with frontend files but stay server-side.
  *
  * @param {string} filePath - Absolute or relative file path.
  * @returns {boolean} TRUE for non-code source assets.
  */
 export const isStaticSourceAsset = (filePath) =>
-  !/\.(jsx?|scss|twig|map)$/i.test(filePath) &&
+  !/\.(jsx?|scss|twig|map|php)$/i.test(filePath) &&
   !isComponentMetadataFile(filePath);
 
 /**

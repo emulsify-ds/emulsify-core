@@ -10,6 +10,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -136,6 +137,63 @@ describe('Vite development output', () => {
 
   afterEach(() => {
     rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['development', runDevelopmentBuild],
+    ['production', runProductionBuild],
+  ])('keeps PHP source out of %s output', (_mode, runBuild) => {
+    const phpSource = '<?php\n// Theme implementation.\n';
+    const phpPaths = [
+      'Hook/PageTitleHooks.php',
+      'Custom/Nested/Formatter.PHP',
+      'components/card/Hook/CardHooks.php',
+      'components/card/card.pHp',
+    ];
+    for (const relativePath of phpPaths) {
+      const file = join(projectDir, 'src', relativePath);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, phpSource);
+    }
+
+    const globalAsset = 'Frontend asset beside PHP source.\n';
+    writeFileSync(join(projectDir, 'src/Custom/asset.txt'), globalAsset);
+
+    const stalePhp = join(projectDir, 'dist/global/Hook/PageTitleHooks.php');
+    mkdirSync(dirname(stalePhp), { recursive: true });
+    writeFileSync(stalePhp, phpSource);
+
+    runBuild(projectDir);
+
+    for (const relativePath of phpPaths) {
+      expect(readFileSync(join(projectDir, 'src', relativePath), 'utf8')).toBe(
+        phpSource,
+      );
+      const outputPath = relativePath.startsWith('components/')
+        ? relativePath
+        : join('dist/global', relativePath);
+      expect(existsSync(join(projectDir, outputPath))).toBe(false);
+    }
+    for (const directory of [
+      'dist/global/Hook',
+      'dist/global/Custom/Nested',
+      'components/card/Hook',
+    ]) {
+      expect(existsSync(join(projectDir, directory))).toBe(false);
+    }
+    expect(
+      readFileSync(join(projectDir, 'dist/global/Custom/asset.txt'), 'utf8'),
+    ).toBe(globalAsset);
+    for (const file of ['card.asset.txt', 'card.twig', 'card.component.yml']) {
+      expect(
+        readFileSync(join(projectDir, 'components/card', file), 'utf8'),
+      ).toBe(
+        readFileSync(join(projectDir, 'src/components/card', file), 'utf8'),
+      );
+    }
+    for (const file of ['card.js', 'card.css']) {
+      expect(existsSync(join(projectDir, 'components/card', file))).toBe(true);
+    }
   });
 
   it('writes readable JS and correctly located JS/CSS maps only in development', () => {

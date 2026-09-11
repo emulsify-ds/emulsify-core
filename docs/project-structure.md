@@ -32,7 +32,7 @@ When `src/` exists, global styles and scripts can live elsewhere under `src/`, o
 
 #### Global Styles And Scripts
 
-Anything under `src/` that is not inside a component root is treated as global: styles and scripts meant to apply across every page, or to affect every component, rather than to belong to one. Each such directory emits to `dist/global/<directory>/`, so `src/foundation/type.scss` becomes `dist/global/foundation/css/type.css`.
+Frontend files under `src/` that are not inside a component root are treated as global: styles and scripts meant to apply across every page, or to affect every component, rather than to belong to one. Each such directory emits to `dist/global/<directory>/`, so `src/foundation/type.scss` becomes `dist/global/foundation/css/type.css`.
 
 ```text
 src/
@@ -45,6 +45,20 @@ src/
 No configuration is needed and no directory name is required — the build handles every directory under `src/` this way. `foundation/`, `base/`, and `global/` are the conventional names, and the develop reporter lists those three on their own `input` rows so you can see what each contributed; see [Develop Reporter](develop-reporter.md). Other directory names build identically but report under the `src/` row.
 
 These directories are deliberately not Twig namespaces. A namespace exists so a template can `include()` another template, and global CSS and JS are not templates. Directories that do hold templates — `layout/` and `tokens/` — are discovered as namespaces automatically, as described in [Twig Namespace Roots](#twig-namespace-roots).
+
+#### PHP Alongside Frontend Files
+
+PHP classes can stay under `src/`, including Drupal classes such as
+`src/Hook/PageTitleHooks.php`. Files ending in `.php` (case-insensitive) are
+excluded from static asset copying and the copy plugins' build watch list
+across all platforms and source roots. PHP-only directories produce no output;
+frontend files sharing a directory with PHP keep their normal output paths.
+No `project.emulsify.json` changes are needed.
+
+After upgrading, restart `npm run develop` or run a fresh build. With Core's
+default output cleaning, that first build removes any previously copied PHP
+under `dist/`. Projects that disable output cleaning must remove those stale
+generated copies themselves.
 
 ### Root `./components`
 
@@ -189,6 +203,7 @@ Emulsify Core preserves current exclusion behavior for build inputs:
 - Test files are excluded from entry generation.
 - Eligible `.jsx` files are compiled as production entries and emitted with `.js` filenames.
 - `.jsx` source files are excluded from static asset copying.
+- `.php` source files are excluded from static asset copying and its build watch list.
 - `cl-*` and `sb-*` Storybook styles are routed to Storybook output paths.
 
 Asset copying and entry generation both consume the normalized project structure model so roots, namespaces, and output paths stay aligned.
