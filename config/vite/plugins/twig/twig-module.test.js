@@ -57,6 +57,11 @@ describe('Twig module plugin', () => {
     return plugin;
   };
 
+  const hotUpdate = (
+    plugin,
+    { environment = {}, type = 'update', ...context },
+  ) => plugin.hotUpdate.call({ environment }, { type, ...context });
+
   const dependencyImportIds = (code) =>
     Array.from(
       code.matchAll(/from ["'](virtual:emulsify-twig-dep:[^"']+)["']/g),
@@ -302,7 +307,7 @@ describe('Twig module plugin', () => {
     expect(afterFirstTransform).toBeLessThanOrEqual(candidatePaths.size);
     expect(afterSecondTransform).toBe(afterFirstTransform);
 
-    twigPlugin.handleHotUpdate({ file: firstFile, server: {} });
+    hotUpdate(twigPlugin, { file: firstFile, environment: {} });
     await transformTwigModule(twigPlugin, thirdFile);
 
     expect(candidateStatCount()).toBeGreaterThan(afterSecondTransform);
@@ -924,7 +929,7 @@ describe('Twig module plugin', () => {
     fs.mkdirSync(preferredDir, { recursive: true });
     fs.writeFileSync(preferredFile, '<h2>Preferred after HMR</h2>');
     const importerModule = { id: 'card-template' };
-    const server = {
+    const environment = {
       moduleGraph: {
         getModulesByFile: jest.fn((filePath) =>
           filePath === cardFile ? [importerModule] : [],
@@ -933,14 +938,15 @@ describe('Twig module plugin', () => {
       },
     };
 
-    const updatedModules = twigPlugin.handleHotUpdate({
+    const updatedModules = hotUpdate(twigPlugin, {
       file: preferredFile,
-      server,
+      type: 'create',
+      environment,
     });
     const updated = await transformTwigModule(twigPlugin, cardFile);
 
     expect(updatedModules).toContain(importerModule);
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       importerModule,
     );
     expect(renderGeneratedTwigModule(updated.code)).toBe(
@@ -1068,7 +1074,7 @@ describe('Twig module plugin', () => {
     fs.mkdirSync(headingDir, { recursive: true });
     fs.writeFileSync(headingFile, '<h2>Added by HMR</h2>');
     const importerModule = { id: 'card-template' };
-    const server = {
+    const environment = {
       moduleGraph: {
         getModulesByFile: jest.fn((filePath) =>
           filePath === cardFile ? [importerModule] : [],
@@ -1077,16 +1083,22 @@ describe('Twig module plugin', () => {
       },
     };
 
-    const updatedModules = twigPlugin.handleHotUpdate({
+    const groupRootScan = jest.spyOn(fs, 'readdirSync');
+    const updatedModules = hotUpdate(twigPlugin, {
       file: headingFile,
-      server,
+      type: 'create',
+      environment,
     });
     const updated = await transformTwigModule(twigPlugin, cardFile);
 
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       importerModule,
     );
     expect(updatedModules).toContain(importerModule);
+    expect(groupRootScan).toHaveBeenCalledWith(
+      join(projectDir, 'src/components'),
+      { withFileTypes: true },
+    );
     expect(renderGeneratedTwigModule(updated.code)).toContain(
       '<h2>Added by HMR</h2>',
     );
@@ -1111,7 +1123,7 @@ describe('Twig module plugin', () => {
 
     fs.rmSync(headingDir, { recursive: true, force: true });
     const importerModule = { id: 'card-template' };
-    const server = {
+    const environment = {
       moduleGraph: {
         getModulesByFile: jest.fn((filePath) =>
           filePath === cardFile ? [importerModule] : [],
@@ -1120,17 +1132,23 @@ describe('Twig module plugin', () => {
       },
     };
 
-    const updatedModules = twigPlugin.handleHotUpdate({
+    const groupRootScan = jest.spyOn(fs, 'readdirSync');
+    const updatedModules = hotUpdate(twigPlugin, {
       file: headingFile,
-      server,
+      type: 'delete',
+      environment,
     });
     const updated = await transformTwigModule(twigPlugin, cardFile);
     const output = renderGeneratedTwigModule(updated.code);
 
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       importerModule,
     );
     expect(updatedModules).toContain(importerModule);
+    expect(groupRootScan).toHaveBeenCalledWith(
+      join(projectDir, 'src/components'),
+      { withFileTypes: true },
+    );
     expect(output).not.toContain('Removed by HMR');
     expect(output).toContain('Unable to find template');
     expect(output).not.toContain('fs.statSync is not a function');
@@ -1174,7 +1192,7 @@ describe('Twig module plugin', () => {
       new Date(Date.now() + 1000),
       new Date(Date.now() + 1000),
     );
-    twigPlugin.handleHotUpdate({ file: cardFile, server: {} });
+    hotUpdate(twigPlugin, { file: cardFile, environment: {} });
 
     const second = await transformTwigModule(twigPlugin, cardFile);
     const secondRender = createGeneratedTwigModuleRender(second.code);
@@ -1277,7 +1295,7 @@ describe('Twig module plugin', () => {
 
     const changedModule = { id: 'changed-template' };
     const importerModule = { id: 'importer-template' };
-    const server = {
+    const environment = {
       moduleGraph: {
         getModulesByFile: jest.fn((filePath) => {
           if (filePath === sharedFile) return [changedModule];
@@ -1288,13 +1306,13 @@ describe('Twig module plugin', () => {
       },
     };
 
-    const updatedModules = twigPlugin.handleHotUpdate({
+    const updatedModules = hotUpdate(twigPlugin, {
       file: sharedFile,
-      server,
+      environment,
     });
     await transformTwigModule(twigPlugin, parentFile);
 
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       importerModule,
     );
     expect(updatedModules).toEqual(
@@ -1343,7 +1361,7 @@ describe('Twig module plugin', () => {
     const firstModule = { id: 'first-importer' };
     const secondModule = { id: 'second-importer' };
     const dependencyModule = { id: 'virtual-dependency' };
-    const server = {
+    const environment = {
       moduleGraph: {
         getModuleById: jest.fn(() => dependencyModule),
         getModulesByFile: jest.fn((filePath) => {
@@ -1356,20 +1374,20 @@ describe('Twig module plugin', () => {
       },
     };
 
-    const updatedModules = twigPlugin.handleHotUpdate({
+    const updatedModules = hotUpdate(twigPlugin, {
       file: sharedFile,
-      server,
+      environment,
     });
     const updatedFirst = await transformTwigModule(twigPlugin, firstFile);
     const updatedSecond = await transformTwigModule(twigPlugin, secondFile);
 
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       dependencyModule,
     );
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       firstModule,
     );
-    expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(environment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       secondModule,
     );
     expect(updatedModules).toEqual(
@@ -1415,7 +1433,7 @@ describe('Twig module plugin', () => {
 
     const deletedModule = { id: 'deleted-template' };
     const importerModule = { id: 'importer-template' };
-    const unlinkServer = {
+    const unlinkEnvironment = {
       moduleGraph: {
         getModulesByFile: jest.fn((filePath) => {
           if (filePath === sharedFile) return [deletedModule];
@@ -1426,30 +1444,38 @@ describe('Twig module plugin', () => {
       },
     };
 
-    const updatedModules = twigPlugin.handleHotUpdate({
+    const updatedModules = hotUpdate(twigPlugin, {
       file: sharedFile,
-      server: unlinkServer,
+      type: 'delete',
+      environment: unlinkEnvironment,
     });
     await transformTwigModule(twigPlugin, unrelatedFile);
 
-    const staleServer = {
+    const staleEnvironment = {
       moduleGraph: {
         getModulesByFile: jest.fn(),
         invalidateModule: jest.fn(),
       },
     };
 
-    expect(unlinkServer.moduleGraph.invalidateModule).toHaveBeenCalledWith(
+    expect(unlinkEnvironment.moduleGraph.invalidateModule).toHaveBeenCalledWith(
       importerModule,
     );
     expect(updatedModules).toEqual(
       expect.arrayContaining([deletedModule, importerModule]),
     );
     expect(
-      twigPlugin.handleHotUpdate({ file: sharedFile, server: staleServer }),
+      hotUpdate(twigPlugin, {
+        file: sharedFile,
+        environment: staleEnvironment,
+      }),
     ).toBeUndefined();
-    expect(staleServer.moduleGraph.getModulesByFile).not.toHaveBeenCalled();
-    expect(staleServer.moduleGraph.invalidateModule).not.toHaveBeenCalled();
+    expect(
+      staleEnvironment.moduleGraph.getModulesByFile,
+    ).not.toHaveBeenCalled();
+    expect(
+      staleEnvironment.moduleGraph.invalidateModule,
+    ).not.toHaveBeenCalled();
   });
 
   it('uses independent Twig instances when stories share an included template', async () => {

@@ -763,7 +763,7 @@ export function makeTwigPluginOptions(env) {
     namespaces: makeTwigNamespaces(env),
     functions: getTwigFunctionMap(),
     registerDrupalTwigFilters: shouldRegisterDrupalTwigFilters(env),
-    // Twig updates are handled by emulsifyTwigModulePlugin.handleHotUpdate.
+    // Twig updates are handled by emulsifyTwigModulePlugin.hotUpdate.
     // Vituum's full reload would defeat HMR by reloading the whole iframe on
     // every Twig save before module graph invalidation can update the story.
     reload: () => false,
@@ -1170,7 +1170,7 @@ export function emulsifyTwigModulePlugin(options) {
         };
       }
     },
-    handleHotUpdate({ file, server }) {
+    hotUpdate({ type, file, modules: changedModules = [] }) {
       const filePath = resolve(file);
       const componentRoot = options.namespaces?.components
         ? resolve(options.namespaces.components)
@@ -1209,7 +1209,11 @@ export function emulsifyTwigModulePlugin(options) {
         !!projectRoot &&
         isWithinRoot(resolve(projectRoot), filePath) &&
         fileExists !== knownFile;
-      const structuralChange = componentDirectoryChanged || projectPathChanged;
+      const structuralChange =
+        type === 'create' ||
+        type === 'delete' ||
+        componentDirectoryChanged ||
+        projectPathChanged;
 
       if (file.endsWith('.twig')) {
         compileCache.delete(filePath);
@@ -1226,7 +1230,7 @@ export function emulsifyTwigModulePlugin(options) {
          * directory invalidated. New or deleted files can change previous
          * resolution misses, so those events clear the full resolution cache.
          */
-        if (fileExists && knownFile) {
+        if (type === 'update' && fileExists && knownFile) {
           invalidateKnownResolutionCacheEntries(filePath);
         } else {
           resolutionCache.clear();
@@ -1242,6 +1246,9 @@ export function emulsifyTwigModulePlugin(options) {
       }
 
       if (structuralChange) {
+        // Every environment receives the event, including after shared known-
+        // file state was cleared. Namespace roots can also be outside a project.
+        resolutionCache.clear();
         compileCache.clear();
       }
 
@@ -1256,12 +1263,15 @@ export function emulsifyTwigModulePlugin(options) {
         return undefined;
       }
 
-      const moduleGraph = server?.moduleGraph;
+      const moduleGraph = this.environment?.moduleGraph;
       if (!moduleGraph?.getModulesByFile) {
         return undefined;
       }
 
-      const modules = new Set(moduleGraph.getModulesByFile(filePath) || []);
+      const modules = new Set([
+        ...changedModules,
+        ...(moduleGraph.getModulesByFile(filePath) || []),
+      ]);
       const dependencyModule = moduleGraph.getModuleById?.(dependencyModuleId);
       if (dependencyModule) {
         moduleGraph.invalidateModule?.(dependencyModule);
