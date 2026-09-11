@@ -4,15 +4,24 @@ Reviewed September 9, 2026. This record separates dependency remediation,
 technical exposure, operational mitigation, and maintainer risk acceptance.
 Passing installation or accessibility checks does not establish risk acceptance.
 
+**Historical dependency assessment.** The advisory counts, dependency paths,
+consumer lockfile, and managed-browser proof below describe the September 9
+baseline and targeted patch identified here. They have not been regenerated
+after the `fbbc6b9` dependency refresh or the September 11 release corrections.
+The installer-approval section records a separate September 11 verification;
+it does not refresh the advisory assessment or establish acceptance of the
+current dependency tree. See the
+[release evidence scope](releases/4.5.0-assessment.md#september-11-evidence-scope-and-corrections).
+
 The evidence uses `npm audit --json` and `npm audit --omit=dev --json`.
 `npm run audit` is Core's component-readiness audit and does not produce this
 dependency report. Vulnerable package-entry counts include affected parents;
 they are not counts of distinct advisories or CVEs.
 
-## Current Verification
+## September 9 Verification
 
 The source baseline is `6a74618eccbae9487f47674b405339d1eda851cf`, followed
-by the targeted Core lockfile update described below. Final verification pins
+by the targeted Core lockfile update described below. That verification pins
 Node.js **24.19.0** and npm **11.17.0** explicitly. Earlier exploratory runs
 under Node.js 26/npm 11.19 are excluded from the comparison.
 
