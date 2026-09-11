@@ -11,6 +11,37 @@ import { createTwigIncludeFunction } from '../../../../src/storybook/twig/includ
 
 describe('Core runtime optionality parity', () => {
   it.each([
+    ['item', 'false', false],
+    ['card_data', 'false', false],
+    ['item.card', 'false', false],
+    ['data|merge({a: 1})', 'false', false],
+    ['{ 0: item, ignore_missing: false }', 'true', false],
+    ['{ 0: item, ignore_missing: true }', 'false', true],
+    ['item', 'true', true],
+  ])(
+    'checks variables %s with positional ignore_missing %s like the runtime',
+    (variables, flag, optional) => {
+      const expression = `include("missing.twig", ${variables}, true, ${flag})`;
+      const runtime = Twig.factory();
+      runtime.extendFunction('include', createTwigIncludeFunction());
+      const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        runtime.twig({ data: `{{ ${expression} }}`, rethrow: true }).render({
+          item: { card: { label: 'Card' } },
+          card_data: { label: 'Card' },
+          data: { label: 'Card' },
+        });
+        expect(errors).toHaveBeenCalledTimes(optional ? 0 : 1);
+        expect(
+          findTwigReferenceCalls(`{{ ${expression} }}`)[0].ignoreMissing,
+        ).toBe(optional);
+      } finally {
+        errors.mockRestore();
+      }
+    },
+  );
+
+  it.each([
     ['{ ignore_missing: true, ignore_missing: false }', false, true],
     ['{ ignore_missing: false, ignore_missing: true }', true, false],
     ['{}', 'FALSE', false],
@@ -147,6 +178,18 @@ describe('structured Twig reference calls', () => {
 
   it.each([
     ['include("card.twig")', false],
+    ['include("card.twig", item)', false],
+    ['include("card.twig", card_data)', false],
+    ['include("card.twig", item.card)', false],
+    ['include("card.twig", data|merge({a: 1}))', false],
+    ['include("card.twig", item, true)', false],
+    ['include("card.twig", { 0: item, ignore_missing: false })', false],
+    ['include("card.twig", item, true, true)', true],
+    ['include("card.twig", item, true, optional)', null],
+    ['include("card.twig", item, { ignore_missing: true })', true],
+    ['include("card.twig", item, { ignore_missing: optional })', null],
+    ['include("card.twig", {}, context_options)', null],
+    ['include("card.twig", { with_context: context_options })', null],
     ['include("card.twig", { ignore_missing: true })', true],
     ['include("card.twig", {}, true)', false],
     ['include("card.twig", {}, false, true)', true],

@@ -86,6 +86,50 @@ describe('auditTwigReferences', () => {
     ]);
   });
 
+  it('reports every required static include with opaque variables and preserves optional calls', () => {
+    const { env, twigFile } = auditReferences([]);
+    const requiredCalls = [
+      'include("@components/missing.twig")',
+      'include("@components/missing.twig", { label: "x" })',
+      'include("@components/missing.twig", item)',
+      'include("@components/missing.twig", card_data)',
+      'include("@components/missing.twig", data|merge({a: 1}))',
+      'include("@components/missing.twig", item, true)',
+      'include("@components/missing.twig", item.card)',
+      'include("@components/missing.twig", { 0: item, ignore_missing: false })',
+    ];
+    writeFile(
+      projectDir,
+      'src/components/reference-probe/reference-probe.twig',
+      [
+        ...requiredCalls,
+        'include("@components/missing.twig", item, true, true)',
+        'include("@components/missing.twig", {}, true, true)',
+        'include("@components/missing.twig", { ignore_missing: true })',
+        'include("@components/missing.twig", { ignore_missing: optional })',
+        'include("@components/missing.twig", item, true, optional)',
+        'source("optional.twig", true)',
+        'include(["@components/missing.twig", selected_template], item)',
+        'include(template = "@components/missing.twig")',
+      ]
+        .map((expression) => `{{ ${expression} }}`)
+        .join('\n'),
+    );
+    resetFileReadCache();
+
+    expect(
+      auditTwigReferences({ env, projectDir, twigFiles: [twigFile] }),
+    ).toEqual(
+      requiredCalls.map((expression, index) =>
+        expect.objectContaining({
+          id: 'unresolved-twig-reference',
+          line: index + 1,
+          message: expect.stringContaining('"@components/missing.twig"'),
+        }),
+      ),
+    );
+  });
+
   it('resolves source() asset references from configured asset roots', () => {
     const twigFile = writeFile(projectDir, 'src/components/icon/icon.twig');
     writeFile(projectDir, 'custom-assets/icons/foo.svg', '<svg></svg>');

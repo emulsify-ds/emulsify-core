@@ -209,13 +209,22 @@ function staticTwigBoolean(argument) {
  * @param {object|undefined|null} argument - Object argument or unknown value.
  * @param {string} name - Option key.
  * @param {string} source - Comment-masked Twig source.
+ * @param {boolean} [isVariablesArgument=false] - Ignore opaque variables bags.
  * @returns {object|undefined|null} Option expression, absent option, or unknown.
  */
-function readTwigObjectOption(argument, name, source) {
+function readTwigObjectOption(
+  argument,
+  name,
+  source,
+  isVariablesArgument = false,
+) {
   if (argument === undefined) return undefined;
   if (argument === null) return null;
   const text = argument.text.trim();
   if (!text.startsWith('{')) {
+    // An opaque variables bag does not declare an ignore-missing option.
+    // Explicit flag expressions and with-context options remain uncertain.
+    if (isVariablesArgument) return undefined;
     // Core normalizes primitive/array variables to an empty variables object.
     if (staticTwigBoolean(argument) !== null) {
       return undefined;
@@ -239,7 +248,7 @@ function readTwigObjectOption(argument, name, source) {
     !object ||
     source.slice(object.end, argument.offset + argument.text.length).trim()
   )
-    return null;
+    return isVariablesArgument ? undefined : null;
   // Twig.js keeps the first value for duplicate object keys. A preceding
   // computed key may already define this option, so it remains unknown.
   for (const property of object.values) {
@@ -247,7 +256,7 @@ function readTwigObjectOption(argument, name, source) {
     const key = readTwigList(source, property.offset, ':');
     if (!key || key.values.length !== 1) return null;
     const keyText = key.values[0].text.trim();
-    const propertyName = /^[A-Za-z_]\w*$/.test(keyText)
+    const propertyName = /^(?:[A-Za-z_]\w*|-?\d+(?:\.\d+)?)$/.test(keyText)
       ? keyText
       : staticTwigString(keyText);
     if (propertyName === null) return null;
@@ -278,13 +287,23 @@ function readIgnoreMissing(type, args, source) {
   if (type === 'source') return staticTwigBoolean(args[1]);
 
   let ignoreMissing = staticTwigBoolean(args[3]);
-  const variableFlag = readTwigObjectOption(args[1], 'ignore_missing', source);
+  const variableFlag = readTwigObjectOption(
+    args[1],
+    'ignore_missing',
+    source,
+    true,
+  );
   if (variableFlag !== undefined)
     ignoreMissing = staticTwigBoolean(variableFlag);
 
   // This precedence mirrors Core's normalizeIncludeOptions: variables can
   // replace withContext before a third-argument options object is inspected.
-  const variableContext = readTwigObjectOption(args[1], 'with_context', source);
+  const variableContext = readTwigObjectOption(
+    args[1],
+    'with_context',
+    source,
+    true,
+  );
   const withContext = variableContext === undefined ? args[2] : variableContext;
   const contextFlag = readTwigObjectOption(
     withContext,
