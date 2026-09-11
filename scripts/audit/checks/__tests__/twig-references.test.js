@@ -45,7 +45,7 @@ describe('auditTwigReferences', () => {
       JSON.stringify({
         project: {
           platform: 'drupal',
-          machineName: 'naswa',
+          machineName: 'test_theme',
           singleDirectoryComponents: true,
         },
         ...config,
@@ -101,10 +101,10 @@ describe('auditTwigReferences', () => {
   });
 
   it.each([
-    ['naswa:card', 'src/components/card/card.twig'],
-    ['naswa:footer', 'src/components/navigation/footer/footer.twig'],
+    ['test_theme:card', 'src/components/card/card.twig'],
+    ['test_theme:footer', 'src/components/navigation/footer/footer.twig'],
     [
-      'naswa:heading',
+      'test_theme:heading',
       'src/components/atoms/typography/headings/heading/heading.twig',
     ],
     [
@@ -119,13 +119,13 @@ describe('auditTwigReferences', () => {
     expect(findings).toEqual([]);
   });
 
-  it('resolves all five grouped NASWA component IDs without audit warnings', () => {
+  it('resolves all five grouped test component IDs without audit warnings', () => {
     const targets = {
-      'naswa:connect': 'src/components/navigation/connect/connect.twig',
-      'naswa:footer': 'src/components/navigation/footer/footer.twig',
-      'naswa:login': 'src/components/forms/login/login.twig',
-      'naswa:search': 'src/components/forms/search/search.twig',
-      'naswa:main': 'src/components/navigation/main/main.twig',
+      'test_theme:connect': 'src/components/navigation/connect/connect.twig',
+      'test_theme:footer': 'src/components/navigation/footer/footer.twig',
+      'test_theme:login': 'src/components/forms/login/login.twig',
+      'test_theme:search': 'src/components/forms/search/search.twig',
+      'test_theme:main': 'src/components/navigation/main/main.twig',
     };
     for (const targetFile of Object.values(targets)) {
       writeFile(projectDir, targetFile, '<p>Component</p>');
@@ -176,11 +176,15 @@ describe('auditTwigReferences', () => {
     for (const targetFile of paths) {
       writeFile(projectDir, targetFile, '<footer>Footer</footer>');
     }
-    const { env, findings } = auditReferences(['naswa:footer']);
+    const { env, findings } = auditReferences(['test_theme:footer']);
 
     expect(findings).toEqual([]);
     expect(
-      resolveComponentReference('naswa:footer', env.namespaceRoots, new Map()),
+      resolveComponentReference(
+        'test_theme:footer',
+        env.namespaceRoots,
+        new Map(),
+      ),
     ).toBe(join(projectDir, expectedPath));
   });
 
@@ -197,9 +201,9 @@ describe('auditTwigReferences', () => {
     );
     const { env, twigFile } = auditReferences([]);
     const references = Array.from({ length: 20 }, () => [
-      'naswa:search',
-      'naswa:footer',
-      'naswa:not-real',
+      'test_theme:search',
+      'test_theme:footer',
+      'test_theme:not-real',
     ]).flat();
     writeFile(
       projectDir,
@@ -216,7 +220,7 @@ describe('auditTwigReferences', () => {
       findings.every(
         ({ id, message }) =>
           id === 'unresolved-twig-reference' &&
-          message.includes('naswa:not-real'),
+          message.includes('test_theme:not-real'),
       ),
     ).toBe(true);
     const visitedDirectories = readDirectories.mock.calls.map(([path]) => path);
@@ -286,14 +290,14 @@ describe('auditTwigReferences', () => {
       '<p>A different component</p>',
     );
 
-    const { findings } = auditReferences(['naswa:not-real']);
+    const { findings } = auditReferences(['test_theme:not-real']);
 
     expect(findings).toEqual([
       expect.objectContaining({
         id: 'unresolved-twig-reference',
         severity: 'warn',
         line: 1,
-        message: expect.stringContaining('"naswa:not-real"'),
+        message: expect.stringContaining('"test_theme:not-real"'),
       }),
     ]);
   });
@@ -305,7 +309,7 @@ describe('auditTwigReferences', () => {
       '<footer>Generated only</footer>',
     );
 
-    const { findings } = auditReferences(['naswa:footer']);
+    const { findings } = auditReferences(['test_theme:footer']);
 
     expect(findings).toEqual([
       expect.objectContaining({ id: 'unresolved-twig-reference' }),
@@ -430,13 +434,13 @@ describe('auditTwigReferences', () => {
       projectDir,
       'src/components/reference-probe/reference-probe.twig',
       [
-        '{{ include("naswa:" ~ component_name, { label: "context.twig" }) }}',
+        '{{ include("test_theme:" ~ component_name, { label: "context.twig" }) }}',
         '{{ source("@assets/" ~ icon ~ ".svg") }}',
         '{# {{ include("@ghost/commented.twig") }} {{ source("@ghost/commented.svg") }} #}',
         '{{ include("@components/card/card.twig") }}',
         '{{ include("missing-static.twig") }}',
         '{{ source("@assets/missing-static.svg") }}',
-        '{{ include(["@components/card/card.twig", "missing-fallback.twig", "naswa:" ~ variant]) }}',
+        '{{ include(["@components/card/card.twig", "missing-fallback.twig", "test_theme:" ~ variant]) }}',
       ].join('\n'),
     );
     resetFileReadCache();

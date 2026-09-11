@@ -26,7 +26,7 @@ describe('findTwigIncludeSourceReferences', () => {
   });
 
   it.each([
-    '{{ include("naswa:" ~ component_name) }}',
+    '{{ include("test_theme:" ~ component_name) }}',
     '{{ include(component_name ~ ".twig") }}',
     '{{ source("@assets/" ~ icon ~ ".svg") }}',
     '{{ include(enabled ? "first.twig" : "second.twig") }}',
@@ -56,7 +56,7 @@ describe('findTwigIncludeSourceReferences', () => {
     const source = [
       '{{ include([',
       '  "static-first.twig",',
-      '  "naswa:" ~ component_name,',
+      '  "test_theme:" ~ component_name,',
       '  component_name ~ ".twig",',
       '  enabled ? "ternary-first.twig" : "ternary-second.twig",',
       '  choose("function-argument.twig", ["nested.twig"]),',
@@ -80,7 +80,7 @@ describe('findTwigIncludeSourceReferences', () => {
       '  [',
       '    "first.twig",',
       '    {# "commented-element.twig", #}',
-      '    "naswa:" ~ component_name,',
+      '    "test_theme:" ~ component_name,',
       '    "second.twig"',
       '  ],',
       '  { label: "context.twig" }',
