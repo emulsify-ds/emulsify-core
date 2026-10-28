@@ -1,0 +1,833 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@bundled-es-modules/deepmerge": {
+      "name": "@bundled-es-modules/deepmerge",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "deepmerge"
+      ],
+      "effects": [
+        "style-dictionary"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@bundled-es-modules/deepmerge"
+      ],
+      "fixAvailable": false
+    },
+    "@emulsify/cli": {
+      "name": "@emulsify/cli",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "ajv",
+        "simple-git"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@emulsify/cli"
+      ],
+      "fixAvailable": false
+    },
+    "@emulsify/core": {
+      "name": "@emulsify/core",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@emulsify/cli",
+        "@storybook/addon-a11y",
+        "@storybook/addon-links",
+        "@storybook/addon-themes",
+        "@storybook/builder-webpack5",
+        "@storybook/server-webpack5",
+        "add-attributes-twig-extension",
+        "bem-twig-extension",
+        "jest",
+        "storybook",
+        "style-dictionary",
+        "twig",
+        "twig-drupal-filters",
+        "twig-testing-library",
+        "twigjs-loader"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@emulsify/core"
+      ],
+      "fixAvailable": false
+    },
+    "@jest/core": {
+      "name": "@jest/core",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "jest-config"
+      ],
+      "effects": [
+        "jest",
+        "jest-cli"
+      ],
+      "range": ">=25.2.0-alpha.86",
+      "nodes": [
+        "node_modules/@jest/core"
+      ],
+      "fixAvailable": false
+    },
+    "@simple-git/argv-parser": {
+      "name": "@simple-git/argv-parser",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1241198,
+          "name": "@simple-git/argv-parser",
+          "dependency": "@simple-git/argv-parser",
+          "title": "simple-git: `VISUAL` editor environment variable is omitted from unsafe editor detection",
+          "url": "https://github.com/advisories/GHSA-v5rq-49vh-5v5c",
+          "severity": "critical",
+          "cwe": [
+            "CWE-78",
+            "CWE-184"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<2.0.1"
+        }
+      ],
+      "effects": [
+        "simple-git"
+      ],
+      "range": "<2.0.1",
+      "nodes": [
+        "node_modules/@simple-git/argv-parser"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/addon-a11y": {
+      "name": "@storybook/addon-a11y",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "storybook"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "9.1.0-alpha.0 - 9.2.0-alpha.3",
+      "nodes": [
+        "node_modules/@storybook/addon-a11y"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/addon-links": {
+      "name": "@storybook/addon-links",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "storybook"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "9.1.0-alpha.0 - 9.2.0-alpha.3",
+      "nodes": [
+        "node_modules/@storybook/addon-links"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/addon-themes": {
+      "name": "@storybook/addon-themes",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "storybook"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "9.1.0-alpha.0 - 9.2.0-alpha.3",
+      "nodes": [
+        "node_modules/@storybook/addon-themes"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/builder-webpack5": {
+      "name": "@storybook/builder-webpack5",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@storybook/core-webpack",
+        "fork-ts-checker-webpack-plugin",
+        "storybook",
+        "webpack-dev-middleware"
+      ],
+      "effects": [
+        "@emulsify/core",
+        "@storybook/server-webpack5"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@storybook/builder-webpack5"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/core-webpack": {
+      "name": "@storybook/core-webpack",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "storybook"
+      ],
+      "effects": [
+        "@storybook/builder-webpack5",
+        "@storybook/preset-server-webpack"
+      ],
+      "range": "9.1.0-alpha.0 - 9.2.0-alpha.3",
+      "nodes": [
+        "node_modules/@storybook/core-webpack"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/preset-server-webpack": {
+      "name": "@storybook/preset-server-webpack",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@storybook/core-webpack",
+        "storybook"
+      ],
+      "effects": [
+        "@storybook/server-webpack5"
+      ],
+      "range": "9.1.0-alpha.0 - 9.2.0-alpha.3",
+      "nodes": [
+        "node_modules/@storybook/preset-server-webpack"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/server": {
+      "name": "@storybook/server",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "storybook"
+      ],
+      "effects": [
+        "@storybook/server-webpack5"
+      ],
+      "range": "9.1.0-alpha.0 - 9.2.0-alpha.3",
+      "nodes": [
+        "node_modules/@storybook/server"
+      ],
+      "fixAvailable": false
+    },
+    "@storybook/server-webpack5": {
+      "name": "@storybook/server-webpack5",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@storybook/builder-webpack5",
+        "@storybook/preset-server-webpack",
+        "@storybook/server",
+        "storybook"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "<=11.0.0-alpha.4",
+      "nodes": [
+        "node_modules/@storybook/server-webpack5"
+      ],
+      "fixAvailable": false
+    },
+    "@vitest/mocker": {
+      "name": "@vitest/mocker",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1193684,
+          "name": "@vitest/mocker",
+          "dependency": "@vitest/mocker",
+          "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": ">=2.1.0 <4.1.11"
+        },
+        {
+          "source": 1242767,
+          "name": "@vitest/mocker",
+          "dependency": "@vitest/mocker",
+          "title": "Vitest: Code injection via unauthenticated manual mock registration",
+          "url": "https://github.com/advisories/GHSA-qxg6-89mg-rqv8",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-94",
+            "CWE-116",
+            "CWE-306"
+          ],
+          "cvss": {
+            "score": 4.7,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N"
+          },
+          "range": ">=2.1.0-beta.7 <4.1.12"
+        }
+      ],
+      "effects": [
+        "storybook"
+      ],
+      "range": "<=4.1.11",
+      "nodes": [
+        "node_modules/@vitest/mocker"
+      ],
+      "fixAvailable": false
+    },
+    "add-attributes-twig-extension": {
+      "name": "add-attributes-twig-extension",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "twig"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": ">=0.1.0",
+      "nodes": [
+        "node_modules/add-attributes-twig-extension"
+      ],
+      "fixAvailable": false
+    },
+    "ajv": {
+      "name": "ajv",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1113715,
+          "name": "ajv",
+          "dependency": "ajv",
+          "title": "ajv has ReDoS when using `$data` option",
+          "url": "https://github.com/advisories/GHSA-2g4f-4pwh-qvx6",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400",
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=7.0.0-alpha.0 <8.18.0"
+        }
+      ],
+      "effects": [
+        "@emulsify/cli"
+      ],
+      "range": "7.0.0-alpha.0 - 8.17.1",
+      "nodes": [
+        "node_modules/ajv"
+      ],
+      "fixAvailable": false
+    },
+    "bem-twig-extension": {
+      "name": "bem-twig-extension",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "twig"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": ">=0.1.0",
+      "nodes": [
+        "node_modules/bem-twig-extension"
+      ],
+      "fixAvailable": false
+    },
+    "deepmerge": {
+      "name": "deepmerge",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1243505,
+          "name": "deepmerge",
+          "dependency": "deepmerge",
+          "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+          "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+          "severity": "low",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+          },
+          "range": ">=4.2.0 <=4.3.1"
+        }
+      ],
+      "effects": [
+        "@bundled-es-modules/deepmerge",
+        "fork-ts-checker-webpack-plugin",
+        "jest-config"
+      ],
+      "range": ">=4.2.0",
+      "nodes": [
+        "node_modules/deepmerge"
+      ],
+      "fixAvailable": false
+    },
+    "fork-ts-checker-webpack-plugin": {
+      "name": "fork-ts-checker-webpack-plugin",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "deepmerge"
+      ],
+      "effects": [
+        "@storybook/builder-webpack5"
+      ],
+      "range": ">=5.0.0-alpha.1",
+      "nodes": [
+        "node_modules/fork-ts-checker-webpack-plugin"
+      ],
+      "fixAvailable": false
+    },
+    "jest": {
+      "name": "jest",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "@jest/core",
+        "jest-cli"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": ">=25.2.0-alpha.86",
+      "nodes": [
+        "node_modules/jest"
+      ],
+      "fixAvailable": false
+    },
+    "jest-cli": {
+      "name": "jest-cli",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "@jest/core",
+        "jest-config"
+      ],
+      "effects": [
+        "jest"
+      ],
+      "range": ">=25.2.0-alpha.86",
+      "nodes": [
+        "node_modules/jest-cli"
+      ],
+      "fixAvailable": false
+    },
+    "jest-config": {
+      "name": "jest-config",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "deepmerge"
+      ],
+      "effects": [
+        "@jest/core",
+        "jest-cli"
+      ],
+      "range": ">=25.2.0-alpha.86",
+      "nodes": [
+        "node_modules/jest-config"
+      ],
+      "fixAvailable": false
+    },
+    "locutus": {
+      "name": "locutus",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1114169,
+          "name": "locutus",
+          "dependency": "locutus",
+          "title": "locutus call_user_func_array vulnerable to Remote Code Execution (RCE) due to Code Injection",
+          "url": "https://github.com/advisories/GHSA-fp25-p6mj-qqg6",
+          "severity": "high",
+          "cwe": [
+            "CWE-95"
+          ],
+          "cvss": {
+            "score": 8.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": "<=2.0.39"
+        },
+        {
+          "source": 1114705,
+          "name": "locutus",
+          "dependency": "locutus",
+          "title": "Locutus vulnerable to RCE via unsanitized input in create_function()",
+          "url": "https://github.com/advisories/GHSA-vh9h-29pq-r5m8",
+          "severity": "critical",
+          "cwe": [
+            "CWE-94"
+          ],
+          "cvss": {
+            "score": 9.8,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": "<=3.0.13"
+        },
+        {
+          "source": 1115695,
+          "name": "locutus",
+          "dependency": "locutus",
+          "title": "Locutus Prototype Pollution due to incomplete fix for CVE-2026-25521",
+          "url": "https://github.com/advisories/GHSA-vc8f-x9pp-wf5p",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=2.0.39 <3.0.25"
+        },
+        {
+          "source": 1115696,
+          "name": "locutus",
+          "dependency": "locutus",
+          "title": "Locutus has Prototype Pollution via __proto__ Key Injection in unserialize()",
+          "url": "https://github.com/advisories/GHSA-4mph-v827-f877",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<3.0.25"
+        }
+      ],
+      "effects": [
+        "twig"
+      ],
+      "range": "<=3.0.24",
+      "nodes": [
+        "node_modules/locutus"
+      ],
+      "fixAvailable": false
+    },
+    "minimatch": {
+      "name": "minimatch",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1113459,
+          "name": "minimatch",
+          "dependency": "minimatch",
+          "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<3.1.3"
+        },
+        {
+          "source": 1113538,
+          "name": "minimatch",
+          "dependency": "minimatch",
+          "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj",
+          "severity": "high",
+          "cwe": [
+            "CWE-407"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<3.1.3"
+        },
+        {
+          "source": 1113546,
+          "name": "minimatch",
+          "dependency": "minimatch",
+          "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<3.1.4"
+        }
+      ],
+      "effects": [
+        "twig"
+      ],
+      "range": "<=3.1.3",
+      "nodes": [
+        "node_modules/twig/node_modules/minimatch"
+      ],
+      "fixAvailable": false
+    },
+    "simple-git": {
+      "name": "simple-git",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        "@simple-git/argv-parser",
+        {
+          "source": 1241199,
+          "name": "simple-git",
+          "dependency": "simple-git",
+          "title": "simple-git unsafe-operation guard does not block trailer command configuration",
+          "url": "https://github.com/advisories/GHSA-x6jw-m9v5-85vh",
+          "severity": "critical",
+          "cwe": [
+            "CWE-78",
+            "CWE-184"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=3.15.0 <4.0.1"
+        },
+        {
+          "source": 1241200,
+          "name": "simple-git",
+          "dependency": "simple-git",
+          "title": "simple-git allows command execution through unblocked Git configuration includes",
+          "url": "https://github.com/advisories/GHSA-g4wm-2vf7-vfgr",
+          "severity": "high",
+          "cwe": [
+            "CWE-77",
+            "CWE-78"
+          ],
+          "cvss": {
+            "score": 8.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": "<=3.36.0"
+        },
+        {
+          "source": 1242216,
+          "name": "simple-git",
+          "dependency": "simple-git",
+          "title": "simple-git: unsafe-operations plugin bypass via git long-option abbreviation (--receive-p/--exe) -> command execution (residual of CVE-2026-28291)",
+          "url": "https://github.com/advisories/GHSA-858h-whjf-mvg5",
+          "severity": "high",
+          "cwe": [
+            "CWE-77",
+            "CWE-88"
+          ],
+          "cvss": {
+            "score": 8.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": "<=3.36.0"
+        }
+      ],
+      "effects": [
+        "@emulsify/cli"
+      ],
+      "range": "<=4.0.1",
+      "nodes": [
+        "node_modules/simple-git"
+      ],
+      "fixAvailable": false
+    },
+    "storybook": {
+      "name": "storybook",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@vitest/mocker"
+      ],
+      "effects": [
+        "@emulsify/core",
+        "@storybook/addon-a11y",
+        "@storybook/addon-links",
+        "@storybook/addon-themes",
+        "@storybook/builder-webpack5",
+        "@storybook/core-webpack",
+        "@storybook/preset-server-webpack",
+        "@storybook/server",
+        "@storybook/server-webpack5"
+      ],
+      "range": "9.1.0-alpha.0 - 10.1.0-beta.6",
+      "nodes": [
+        "node_modules/storybook"
+      ],
+      "fixAvailable": false
+    },
+    "style-dictionary": {
+      "name": "style-dictionary",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        "@bundled-es-modules/deepmerge"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": ">=4.0.0-prerelease.0",
+      "nodes": [
+        "node_modules/style-dictionary"
+      ],
+      "fixAvailable": false
+    },
+    "twig": {
+      "name": "twig",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "locutus",
+        "minimatch"
+      ],
+      "effects": [
+        "@emulsify/core",
+        "add-attributes-twig-extension",
+        "bem-twig-extension",
+        "twig-drupal-filters",
+        "twig-testing-library",
+        "twigjs-loader"
+      ],
+      "range": "0.4.0 - 1.17.1",
+      "nodes": [
+        "node_modules/twig"
+      ],
+      "fixAvailable": false
+    },
+    "twig-drupal-filters": {
+      "name": "twig-drupal-filters",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "twig"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/twig-drupal-filters"
+      ],
+      "fixAvailable": false
+    },
+    "twig-testing-library": {
+      "name": "twig-testing-library",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "twig"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/twig-testing-library"
+      ],
+      "fixAvailable": false
+    },
+    "twigjs-loader": {
+      "name": "twigjs-loader",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "twig"
+      ],
+      "effects": [
+        "@emulsify/core"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/twigjs-loader"
+      ],
+      "fixAvailable": false
+    },
+    "webpack-dev-middleware": {
+      "name": "webpack-dev-middleware",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240027,
+          "name": "webpack-dev-middleware",
+          "dependency": "webpack-dev-middleware",
+          "title": "webpack-dev-middleware vulnerable to Path Traversal via non-slash-terminated publicPath",
+          "url": "https://github.com/advisories/GHSA-g84c-rxfj-3j2c",
+          "severity": "high",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 7.4,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:N/A:N"
+          },
+          "range": "<7.4.5"
+        }
+      ],
+      "effects": [
+        "@storybook/builder-webpack5"
+      ],
+      "range": "<7.4.5",
+      "nodes": [
+        "node_modules/webpack-dev-middleware"
+      ],
+      "fixAvailable": false
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 8,
+      "moderate": 9,
+      "high": 12,
+      "critical": 3,
+      "total": 32
+    },
+    "dependencies": {
+      "prod": 1093,
+      "dev": 0,
+      "optional": 79,
+      "peer": 18,
+      "peerOptional": 0,
+      "total": 1189
+    }
+  }
+}

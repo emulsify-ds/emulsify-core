@@ -1,5 +1,19 @@
-module.exports = {
+import { fileURLToPath } from 'node:url';
+
+export default {
+  rootDir: process.cwd(),
   testEnvironment: 'jsdom',
+  transform: {
+    '^.+\\.[jt]sx?$': [
+      'babel-jest',
+      {
+        configFile: fileURLToPath(
+          new URL('./babel.config.js', import.meta.url),
+        ),
+      },
+    ],
+  },
+  snapshotFormat: { escapeString: false, printBasicPrototype: true },
   coverageDirectory: '.coverage',
   // @TODO: once every file has 100% test coverage,
   // these thresholds should be updated.

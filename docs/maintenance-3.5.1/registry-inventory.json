@@ -1,0 +1,3072 @@
+{
+  "queriedAt": "2026-10-28T20:23:47.587Z",
+  "registry": "https://registry.npmjs.org",
+  "peerDependencies": {},
+  "optionalDependencies": {},
+  "packages": [
+    {
+      "section": "dependencies",
+      "name": "@babel/core",
+      "previous": "^7.28.5",
+      "latest": "8.0.9",
+      "tags": {
+        "bridge6": "6.0.0-bridge.1",
+        "esm": "7.21.4-esm.4",
+        "next": "8.0.0-rc.6",
+        "latest": "8.0.9"
+      },
+      "engines": {
+        "node": "^22.18.0 || >=24.11.0"
+      },
+      "repository": {
+        "url": "https://github.com/babel/babel.git",
+        "type": "git",
+        "directory": "packages/babel-core"
+      },
+      "time": "2026-10-23T15:11:22.697Z",
+      "latestInPreviousMajor": {
+        "version": "7.29.7",
+        "engines": {
+          "node": ">=6.9.0"
+        },
+        "dependencies": {
+          "debug": "^4.1.0",
+          "json5": "^2.2.3",
+          "semver": "^6.3.1",
+          "gensync": "^1.0.0-beta.2",
+          "@babel/types": "^7.29.7",
+          "@babel/parser": "^7.29.7",
+          "@babel/helpers": "^7.29.7",
+          "@babel/template": "^7.29.7",
+          "@babel/traverse": "^7.29.7",
+          "@babel/generator": "^7.29.7",
+          "@babel/code-frame": "^7.29.7",
+          "convert-source-map": "^2.0.0",
+          "@jridgewell/remapping": "^2.3.5",
+          "@babel/helper-module-transforms": "^7.29.7",
+          "@babel/helper-compilation-targets": "^7.29.7"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@babel/preset-env",
+      "previous": "^7.28.5",
+      "latest": "8.0.7",
+      "tags": {
+        "esm": "7.21.4-esm.4",
+        "next": "8.0.0-rc.6",
+        "latest": "8.0.7"
+      },
+      "engines": {
+        "node": "^22.18.0 || >=24.11.0"
+      },
+      "peerDependencies": {
+        "@babel/core": "^8.0.0"
+      },
+      "repository": {
+        "url": "https://github.com/babel/babel.git",
+        "type": "git",
+        "directory": "packages/babel-preset-env"
+      },
+      "time": "2026-10-07T09:59:22.725Z",
+      "latestInPreviousMajor": {
+        "version": "7.29.7",
+        "engines": {
+          "node": ">=6.9.0"
+        },
+        "peerDependencies": {
+          "@babel/core": "^7.0.0-0"
+        },
+        "dependencies": {
+          "semver": "^6.3.1",
+          "core-js-compat": "^3.48.0",
+          "@babel/compat-data": "^7.29.7",
+          "@babel/preset-modules": "0.1.6-no-external-plugins",
+          "@babel/helper-plugin-utils": "^7.29.7",
+          "babel-plugin-polyfill-corejs2": "^0.4.15",
+          "babel-plugin-polyfill-corejs3": "^0.14.0",
+          "@babel/helper-validator-option": "^7.29.7",
+          "@babel/plugin-transform-for-of": "^7.29.7",
+          "@babel/plugin-transform-spread": "^7.29.7",
+          "@babel/plugin-transform-classes": "^7.29.7",
+          "@babel/plugin-transform-literals": "^7.29.7",
+          "@babel/helper-compilation-targets": "^7.29.7",
+          "babel-plugin-polyfill-regenerator": "^0.6.6",
+          "@babel/plugin-transform-new-target": "^7.29.7",
+          "@babel/plugin-transform-parameters": "^7.29.7",
+          "@babel/plugin-transform-modules-amd": "^7.29.7",
+          "@babel/plugin-transform-modules-umd": "^7.29.7",
+          "@babel/plugin-transform-regenerator": "^7.29.7",
+          "@babel/plugin-transform-dotall-regex": "^7.29.7",
+          "@babel/plugin-transform-json-strings": "^7.29.7",
+          "@babel/plugin-transform-object-super": "^7.29.7",
+          "@babel/plugin-transform-sticky-regex": "^7.29.7",
+          "@babel/plugin-transform-block-scoping": "^7.29.7",
+          "@babel/plugin-transform-destructuring": "^7.29.7",
+          "@babel/plugin-transform-function-name": "^7.29.7",
+          "@babel/plugin-transform-typeof-symbol": "^7.29.7",
+          "@babel/plugin-transform-unicode-regex": "^7.29.7",
+          "@babel/plugin-syntax-import-assertions": "^7.29.7",
+          "@babel/plugin-syntax-import-attributes": "^7.29.7",
+          "@babel/plugin-transform-duplicate-keys": "^7.29.7",
+          "@babel/plugin-transform-dynamic-import": "^7.29.7",
+          "@babel/plugin-transform-reserved-words": "^7.29.7",
+          "@babel/plugin-syntax-unicode-sets-regex": "^7.18.6",
+          "@babel/plugin-transform-arrow-functions": "^7.29.7",
+          "@babel/plugin-transform-private-methods": "^7.29.7",
+          "@babel/plugin-transform-unicode-escapes": "^7.29.7",
+          "@babel/plugin-transform-class-properties": "^7.29.7",
+          "@babel/plugin-transform-modules-commonjs": "^7.29.7",
+          "@babel/plugin-transform-modules-systemjs": "^7.29.7",
+          "@babel/plugin-transform-regexp-modifiers": "^7.29.7",
+          "@babel/plugin-transform-numeric-separator": "^7.29.7",
+          "@babel/plugin-transform-optional-chaining": "^7.29.7",
+          "@babel/plugin-transform-property-literals": "^7.29.7",
+          "@babel/plugin-transform-template-literals": "^7.29.7",
+          "@babel/plugin-transform-async-to-generator": "^7.29.7",
+          "@babel/plugin-transform-class-static-block": "^7.29.7",
+          "@babel/plugin-transform-object-rest-spread": "^7.29.7",
+          "@babel/plugin-transform-unicode-sets-regex": "^7.29.7",
+          "@babel/plugin-transform-computed-properties": "^7.29.7",
+          "@babel/plugin-transform-shorthand-properties": "^7.29.7",
+          "@babel/plugin-transform-export-namespace-from": "^7.29.7",
+          "@babel/plugin-transform-block-scoped-functions": "^7.29.7",
+          "@babel/plugin-transform-optional-catch-binding": "^7.29.7",
+          "@babel/plugin-transform-unicode-property-regex": "^7.29.7",
+          "@babel/plugin-transform-exponentiation-operator": "^7.29.7",
+          "@babel/plugin-proposal-private-property-in-object": "7.21.0-placeholder-for-preset-env.2",
+          "@babel/plugin-transform-async-generator-functions": "^7.29.7",
+          "@babel/plugin-transform-member-expression-literals": "^7.29.7",
+          "@babel/plugin-transform-private-property-in-object": "^7.29.7",
+          "@babel/plugin-transform-nullish-coalescing-operator": "^7.29.7",
+          "@babel/plugin-transform-explicit-resource-management": "^7.29.7",
+          "@babel/plugin-transform-logical-assignment-operators": "^7.29.7",
+          "@babel/plugin-transform-named-capturing-groups-regex": "^7.29.7",
+          "@babel/plugin-bugfix-firefox-class-in-computed-class-key": "^7.29.7",
+          "@babel/plugin-bugfix-safari-rest-destructuring-rhs-array": "^7.29.7",
+          "@babel/plugin-bugfix-safari-class-field-initializer-scope": "^7.29.7",
+          "@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly": "^7.29.7",
+          "@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining": "^7.29.7",
+          "@babel/plugin-transform-duplicate-named-capturing-groups-regex": "^7.29.7",
+          "@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression": "^7.29.7"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@emulsify/cli",
+      "previous": "^1.11.4",
+      "latest": "2.4.1",
+      "tags": {
+        "latest": "2.4.1"
+      },
+      "engines": {
+        "node": ">=24"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+ssh://git@github.com/emulsify-ds/emulsify-cli.git"
+      },
+      "time": "2026-08-31T03:28:40.134Z",
+      "latestInPreviousMajor": {
+        "version": "1.12.2",
+        "engines": {
+          "node": ">=20"
+        },
+        "dependencies": {
+          "ajv": "^7.2.4",
+          "chalk": "^4.1.0",
+          "ramda": "^0.27.1",
+          "consola": "^2.15.3",
+          "fs-extra": "^11.2.0",
+          "progress": "^2.0.3",
+          "commander": "^12.0.0",
+          "simple-git": "^3.24.0",
+          "ajv-formats": "^2.1.1",
+          "@types/progress": "^2.0.5"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@eslint/js",
+      "previous": "^10.0.1",
+      "latest": "10.0.1",
+      "tags": {
+        "next": "10.0.0-rc.0",
+        "latest": "10.0.1",
+        "maintenance": "9.39.5"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "peerDependencies": {
+        "eslint": "^10.0.0"
+      },
+      "peerDependenciesMeta": {
+        "eslint": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/eslint/eslint.git",
+        "type": "git",
+        "directory": "packages/js"
+      },
+      "time": "2026-02-06T22:34:56.290Z",
+      "latestInPreviousMajor": {
+        "version": "10.0.1",
+        "engines": {
+          "node": "^20.19.0 || ^22.13.0 || >=24"
+        },
+        "peerDependencies": {
+          "eslint": "^10.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@storybook/addon-a11y",
+      "previous": "^9.1.20",
+      "latest": "10.6.5",
+      "tags": {
+        "debug": "6.0.28-alpha.3",
+        "foo": "6.4.0-alpha.27",
+        "prerelease": "6.5.17-alpha.0",
+        "future": "7.1.0-alpha.29",
+        "pr-22631": "7.1.1-pr-22631-1689802540-351503cb.0",
+        "pr-23508": "7.1.1-pr-23508-1689802571-5ec8c1c3.0",
+        "tag-for-publishing-older-releases": "8.2.10",
+        "v8-canary": "0.0.0-pr-34009-sha-c90626e7",
+        "v7-canary": "0.0.0-pr-34011-sha-c45b0f3f",
+        "v7": "7.6.24",
+        "v9-canary": "0.0.0-pr-35198-sha-9d05c353",
+        "canary": "0.0.0-pr-36141-sha-6ddbeb4a",
+        "v9": "9.1.21",
+        "v8": "8.6.19",
+        "next": "11.0.0-alpha.8",
+        "latest": "10.6.5"
+      },
+      "peerDependencies": {
+        "storybook": "^10.6.5"
+      },
+      "repository": {
+        "url": "https://github.com/storybookjs/storybook.git",
+        "type": "git",
+        "directory": "code/addons/a11y"
+      },
+      "time": "2026-10-27T15:52:01.766Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.21",
+        "peerDependencies": {
+          "storybook": "^9.1.21"
+        },
+        "dependencies": {
+          "axe-core": "^4.2.0",
+          "@storybook/global": "^5.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@storybook/addon-links",
+      "previous": "^9.1.20",
+      "latest": "10.6.5",
+      "tags": {
+        "debug": "6.0.28-alpha.3",
+        "prerelease": "6.5.17-alpha.0",
+        "future": "7.1.0-alpha.29",
+        "pr-22631": "7.1.1-pr-22631-1689802540-351503cb.0",
+        "pr-23508": "7.1.1-pr-23508-1689802571-5ec8c1c3.0",
+        "tag-for-publishing-older-releases": "8.2.10",
+        "v8-canary": "0.0.0-pr-34009-sha-c90626e7",
+        "v7-canary": "0.0.0-pr-34011-sha-c45b0f3f",
+        "v7": "7.6.24",
+        "v9-canary": "0.0.0-pr-35198-sha-9d05c353",
+        "canary": "0.0.0-pr-36141-sha-6ddbeb4a",
+        "v9": "9.1.21",
+        "v8": "8.6.19",
+        "next": "11.0.0-alpha.8",
+        "latest": "10.6.5"
+      },
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "storybook": "^10.6.5",
+        "@types/react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      },
+      "peerDependenciesMeta": {
+        "react": {
+          "optional": true
+        },
+        "@types/react": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "https://github.com/storybookjs/storybook.git",
+        "type": "git",
+        "directory": "code/addons/links"
+      },
+      "time": "2026-10-27T15:51:47.115Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.21",
+        "peerDependencies": {
+          "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0-beta",
+          "storybook": "^9.1.21"
+        },
+        "dependencies": {
+          "@storybook/global": "^5.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@storybook/addon-styling-webpack",
+      "previous": "^2.0.0",
+      "latest": "3.0.2",
+      "tags": {
+        "next": "1.0.0-next.1",
+        "canary": "3.0.1--canary.38.b37227d.0",
+        "latest": "3.0.2"
+      },
+      "peerDependencies": {
+        "webpack": "^5.0.0",
+        "storybook": "^10.0.0 || ^10.0.0-0 || ^10.1.0-0 || ^10.2.0-0 || ^10.3.0-0 || ^10.4.0-0"
+      },
+      "repository": {
+        "url": "git+https://github.com/storybookjs/addon-styling-webpack.git",
+        "type": "git"
+      },
+      "time": "2026-03-31T14:35:22.961Z",
+      "latestInPreviousMajor": {
+        "version": "2.0.0",
+        "peerDependencies": {
+          "webpack": "^5.0.0",
+          "storybook": "^9.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@storybook/addon-themes",
+      "previous": "^9.1.20",
+      "latest": "10.6.5",
+      "tags": {
+        "tag-for-publishing-older-releases": "8.2.10",
+        "v8-canary": "0.0.0-pr-34009-sha-c90626e7",
+        "v7-canary": "0.0.0-pr-34011-sha-c45b0f3f",
+        "v7": "7.6.24",
+        "v9-canary": "0.0.0-pr-35198-sha-9d05c353",
+        "canary": "0.0.0-pr-36141-sha-6ddbeb4a",
+        "v9": "9.1.21",
+        "v8": "8.6.19",
+        "next": "11.0.0-alpha.8",
+        "latest": "10.6.5"
+      },
+      "peerDependencies": {
+        "storybook": "^10.6.5"
+      },
+      "repository": {
+        "url": "https://github.com/storybookjs/storybook.git",
+        "type": "git",
+        "directory": "code/addons/themes"
+      },
+      "time": "2026-10-27T15:51:52.382Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.21",
+        "peerDependencies": {
+          "storybook": "^9.1.21"
+        },
+        "dependencies": {
+          "ts-dedent": "^2.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@storybook/builder-webpack5",
+      "previous": "^9.1.20",
+      "latest": "10.6.5",
+      "tags": {
+        "prerelease": "6.5.17-alpha.0",
+        "future": "7.1.0-alpha.29",
+        "pr-22631": "7.1.1-pr-22631-1689802540-351503cb.0",
+        "pr-23508": "7.1.1-pr-23508-1689802571-5ec8c1c3.0",
+        "tag-for-publishing-older-releases": "8.2.10",
+        "v8-canary": "0.0.0-pr-34009-sha-c90626e7",
+        "v7-canary": "0.0.0-pr-34011-sha-c45b0f3f",
+        "v7": "7.6.24",
+        "v9-canary": "0.0.0-pr-35198-sha-9d05c353",
+        "canary": "0.0.0-pr-36141-sha-6ddbeb4a",
+        "v9": "9.1.21",
+        "v8": "8.6.19",
+        "next": "11.0.0-alpha.8",
+        "latest": "10.6.5"
+      },
+      "peerDependencies": {
+        "storybook": "^10.6.5"
+      },
+      "peerDependenciesMeta": {
+        "typescript": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "https://github.com/storybookjs/storybook.git",
+        "type": "git",
+        "directory": "code/builders/builder-webpack5"
+      },
+      "time": "2026-10-27T15:53:22.795Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.21",
+        "peerDependencies": {
+          "storybook": "^9.1.21"
+        },
+        "dependencies": {
+          "webpack": "5",
+          "ts-dedent": "^2.0.0",
+          "css-loader": "^6.7.1",
+          "magic-string": "^0.30.5",
+          "style-loader": "^3.3.1",
+          "es-module-lexer": "^1.5.0",
+          "cjs-module-lexer": "^1.2.3",
+          "html-webpack-plugin": "^5.5.0",
+          "terser-webpack-plugin": "^5.3.1",
+          "webpack-dev-middleware": "^6.1.2",
+          "webpack-hot-middleware": "^2.25.1",
+          "@storybook/core-webpack": "9.1.21",
+          "webpack-virtual-modules": "^0.6.0",
+          "fork-ts-checker-webpack-plugin": "^8.0.0",
+          "case-sensitive-paths-webpack-plugin": "^2.4.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "@storybook/server-webpack5",
+      "previous": "^9.1.20",
+      "latest": "10.6.5",
+      "tags": {
+        "future": "7.1.0-alpha.29",
+        "pr-22631": "7.1.1-pr-22631-1689802540-351503cb.0",
+        "pr-23508": "7.1.1-pr-23508-1689802571-5ec8c1c3.0",
+        "tag-for-publishing-older-releases": "8.2.10",
+        "v8-canary": "0.0.0-pr-34009-sha-c90626e7",
+        "v7-canary": "0.0.0-pr-34011-sha-c45b0f3f",
+        "v7": "7.6.24",
+        "v9-canary": "0.0.0-pr-35198-sha-9d05c353",
+        "canary": "0.0.0-pr-36141-sha-6ddbeb4a",
+        "v9": "9.1.21",
+        "v8": "8.6.19",
+        "next": "11.0.0-alpha.8",
+        "latest": "10.6.5"
+      },
+      "peerDependencies": {
+        "storybook": "^10.6.5"
+      },
+      "repository": {
+        "url": "https://github.com/storybookjs/storybook.git",
+        "type": "git",
+        "directory": "code/frameworks/server-webpack5"
+      },
+      "time": "2026-10-27T15:54:06.145Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.21",
+        "engines": {
+          "node": ">=20.0.0"
+        },
+        "peerDependencies": {
+          "storybook": "^9.1.21"
+        },
+        "dependencies": {
+          "@storybook/server": "9.1.21",
+          "@storybook/builder-webpack5": "9.1.21",
+          "@storybook/preset-server-webpack": "9.1.21"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "add-attributes-twig-extension",
+      "previous": "^0.1.0",
+      "latest": "0.1.0",
+      "tags": {
+        "latest": "0.1.0"
+      },
+      "peerDependencies": {
+        "twig": "^1.13.3"
+      },
+      "time": "2019-09-13T19:24:12.955Z",
+      "latestInPreviousMajor": {
+        "version": "0.1.0",
+        "peerDependencies": {
+          "twig": "^1.13.3"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "autoprefixer",
+      "previous": "^10.4.21",
+      "latest": "10.6.2",
+      "tags": {
+        "latest": "10.6.2"
+      },
+      "engines": {
+        "node": "^10 || ^12 || >=14"
+      },
+      "peerDependencies": {
+        "postcss": "^8.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/postcss/autoprefixer.git",
+        "type": "git"
+      },
+      "time": "2026-10-26T21:34:23.184Z",
+      "latestInPreviousMajor": {
+        "version": "10.6.2",
+        "engines": {
+          "node": "^10 || ^12 || >=14"
+        },
+        "peerDependencies": {
+          "postcss": "^8.1.0"
+        },
+        "dependencies": {
+          "picocolors": "^1.1.1",
+          "fraction.js": "^5.3.4",
+          "browserslist": "^4.28.9",
+          "caniuse-lite": "^1.0.30001810",
+          "postcss-value-parser": "^4.2.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "babel-loader",
+      "previous": "^10.0.0",
+      "latest": "10.1.1",
+      "tags": {
+        "old": "5.4.2",
+        "next": "8.0.0-beta.6",
+        "latest": "10.1.1"
+      },
+      "engines": {
+        "node": "^18.20.0 || ^20.10.0 || >=22.0.0"
+      },
+      "peerDependencies": {
+        "@babel/core": "^7.12.0 || ^8.0.0-beta.1",
+        "@rspack/core": "^1.0.0 || ^2.0.0-0",
+        "webpack": ">=5.61.0"
+      },
+      "peerDependenciesMeta": {
+        "@rspack/core": {
+          "optional": true
+        },
+        "webpack": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/babel/babel-loader.git"
+      },
+      "time": "2026-03-09T17:58:03.612Z",
+      "latestInPreviousMajor": {
+        "version": "10.1.1",
+        "engines": {
+          "node": "^18.20.0 || ^20.10.0 || >=22.0.0"
+        },
+        "peerDependencies": {
+          "@babel/core": "^7.12.0 || ^8.0.0-beta.1",
+          "@rspack/core": "^1.0.0 || ^2.0.0-0",
+          "webpack": ">=5.61.0"
+        },
+        "dependencies": {
+          "find-up": "^5.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "babel-preset-minify",
+      "previous": "^0.5.2",
+      "latest": "0.5.2",
+      "tags": {
+        "latest": "0.5.2",
+        "canary": "0.6.0-alpha.9"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/babel/minify/tree/master/packages/babel-preset-minify"
+      },
+      "time": "2022-05-06T18:33:34.553Z",
+      "latestInPreviousMajor": {
+        "version": "0.5.2",
+        "dependencies": {
+          "babel-plugin-minify-builtins": "^0.5.0",
+          "babel-plugin-minify-constant-folding": "^0.5.0",
+          "babel-plugin-minify-dead-code-elimination": "^0.5.2",
+          "babel-plugin-minify-flip-comparisons": "^0.4.3",
+          "babel-plugin-minify-guarded-expressions": "^0.4.4",
+          "babel-plugin-minify-infinity": "^0.4.3",
+          "babel-plugin-minify-mangle-names": "^0.5.1",
+          "babel-plugin-minify-numeric-literals": "^0.4.3",
+          "babel-plugin-minify-replace": "^0.5.0",
+          "babel-plugin-minify-simplify": "^0.5.1",
+          "babel-plugin-minify-type-constructors": "^0.4.3",
+          "babel-plugin-transform-inline-consecutive-adds": "^0.4.3",
+          "babel-plugin-transform-member-expression-literals": "^6.9.4",
+          "babel-plugin-transform-merge-sibling-variables": "^6.9.5",
+          "babel-plugin-transform-minify-booleans": "^6.9.4",
+          "babel-plugin-transform-property-literals": "^6.9.4",
+          "babel-plugin-transform-regexp-constructors": "^0.4.3",
+          "babel-plugin-transform-remove-console": "^6.9.4",
+          "babel-plugin-transform-remove-debugger": "^6.9.4",
+          "babel-plugin-transform-remove-undefined": "^0.5.0",
+          "babel-plugin-transform-simplify-comparison-operators": "^6.9.4",
+          "babel-plugin-transform-undefined-to-void": "^6.9.4",
+          "lodash": "^4.17.11"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "bem-twig-extension",
+      "previous": "^0.1.1",
+      "latest": "0.1.1",
+      "tags": {
+        "latest": "0.1.1"
+      },
+      "time": "2019-10-11T17:17:50.125Z",
+      "latestInPreviousMajor": {
+        "version": "0.1.1",
+        "dependencies": {
+          "twig": "^1.13.3"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "breakpoint-sass",
+      "previous": "^3.0.0",
+      "latest": "3.0.0",
+      "tags": {
+        "latest": "3.0.0",
+        "next": "4.0.0-beta.1"
+      },
+      "peerDependencies": {
+        "sass": "^1.25"
+      },
+      "repository": {
+        "url": "git+https://github.com/at-import/breakpoint.git",
+        "type": "git"
+      },
+      "time": "2022-08-14T09:56:37.079Z",
+      "latestInPreviousMajor": {
+        "version": "3.0.0",
+        "peerDependencies": {
+          "sass": "^1.25"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "clean-webpack-plugin",
+      "previous": "^4.0.0",
+      "latest": "4.0.0",
+      "tags": {
+        "latest": "4.0.0"
+      },
+      "engines": {
+        "node": ">=10.0.0"
+      },
+      "peerDependencies": {
+        "webpack": ">=4.0.0 <6.0.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/johnagan/clean-webpack-plugin.git"
+      },
+      "time": "2021-09-01T13:41:41.162Z",
+      "latestInPreviousMajor": {
+        "version": "4.0.0",
+        "engines": {
+          "node": ">=10.0.0"
+        },
+        "peerDependencies": {
+          "webpack": ">=4.0.0 <6.0.0"
+        },
+        "dependencies": {
+          "del": "^4.1.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "concurrently",
+      "previous": "^9.2.1",
+      "latest": "10.0.6",
+      "tags": {
+        "latest": "10.0.6",
+        "backport": "9.2.5"
+      },
+      "engines": {
+        "node": ">=22"
+      },
+      "repository": {
+        "url": "git+https://github.com/open-cli-tools/concurrently.git",
+        "type": "git"
+      },
+      "time": "2026-10-08T12:53:46.263Z",
+      "latestInPreviousMajor": {
+        "version": "9.2.5",
+        "engines": {
+          "node": ">=18"
+        },
+        "dependencies": {
+          "rxjs": "7.8.2",
+          "chalk": "4.1.2",
+          "yargs": "17.7.2",
+          "tree-kill": "1.2.2",
+          "shell-quote": "1.12.0",
+          "supports-color": "8.1.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "copy-webpack-plugin",
+      "previous": "^14.0.0",
+      "latest": "14.0.0",
+      "tags": {
+        "version-5": "5.1.2",
+        "version-6": "6.4.1",
+        "latest": "14.0.0"
+      },
+      "engines": {
+        "node": ">= 20.9.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/copy-webpack-plugin.git",
+        "type": "git"
+      },
+      "time": "2026-03-02T16:45:25.776Z",
+      "latestInPreviousMajor": {
+        "version": "14.0.0",
+        "engines": {
+          "node": ">= 20.9.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.1.0"
+        },
+        "dependencies": {
+          "tinyglobby": "^0.2.12",
+          "glob-parent": "^6.0.1",
+          "schema-utils": "^4.2.0",
+          "normalize-path": "^3.0.0",
+          "serialize-javascript": "^7.0.3"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "css-loader",
+      "previous": "^7.1.1",
+      "latest": "7.1.5",
+      "tags": {
+        "latest": "7.1.5"
+      },
+      "engines": {
+        "node": ">= 18.12.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.27.0",
+        "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0"
+      },
+      "peerDependenciesMeta": {
+        "webpack": {
+          "optional": true
+        },
+        "@rspack/core": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/css-loader.git",
+        "type": "git"
+      },
+      "time": "2026-08-28T12:13:52.908Z",
+      "latestInPreviousMajor": {
+        "version": "7.1.5",
+        "engines": {
+          "node": ">= 18.12.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.27.0",
+          "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0"
+        },
+        "dependencies": {
+          "semver": "^7.6.3",
+          "postcss": "^8.4.40",
+          "icss-utils": "^5.1.0",
+          "postcss-value-parser": "^4.2.0",
+          "postcss-modules-scope": "^3.2.0",
+          "postcss-modules-values": "^4.0.0",
+          "postcss-modules-extract-imports": "^3.1.0",
+          "postcss-modules-local-by-default": "^4.0.5"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "eslint",
+      "previous": "^10.1.0",
+      "latest": "10.13.0",
+      "tags": {
+        "es6jsx": "0.11.0-alpha.0",
+        "next": "10.0.0-rc.2",
+        "maintenance": "9.39.5",
+        "latest": "10.13.0"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "peerDependencies": {
+        "jiti": "*"
+      },
+      "peerDependenciesMeta": {
+        "jiti": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/eslint/eslint.git",
+        "type": "git"
+      },
+      "time": "2026-10-16T14:24:10.765Z",
+      "latestInPreviousMajor": {
+        "version": "10.13.0",
+        "engines": {
+          "node": "^20.19.0 || ^22.13.0 || >=24"
+        },
+        "peerDependencies": {
+          "jiti": "*"
+        },
+        "dependencies": {
+          "ajv": "^6.14.0",
+          "debug": "^4.3.2",
+          "espree": "^11.2.0",
+          "ignore": "^5.2.0",
+          "esquery": "^1.7.0",
+          "esutils": "^2.0.2",
+          "find-up": "^5.0.0",
+          "is-glob": "^4.0.0",
+          "minimatch": "^10.2.5",
+          "optionator": "^0.9.3",
+          "cross-spawn": "^7.0.6",
+          "glob-parent": "^6.0.2",
+          "imurmurhash": "^0.1.4",
+          "@eslint/core": "^1.2.1",
+          "eslint-scope": "^9.1.2",
+          "@humanfs/node": "^0.16.6",
+          "@types/estree": "^1.0.6",
+          "fast-deep-equal": "^3.1.3",
+          "natural-compare": "^1.4.0",
+          "file-entry-cache": "11.1.5 || >11.1.6 <12",
+          "@eslint/plugin-kit": "^0.7.3",
+          "eslint-visitor-keys": "^5.0.1",
+          "@eslint/config-array": "^0.23.5",
+          "@humanwhocodes/retry": "^0.4.2",
+          "escape-string-regexp": "^4.0.0",
+          "@eslint/config-helpers": "^0.7.0",
+          "@eslint-community/regexpp": "^4.12.2",
+          "@eslint-community/eslint-utils": "^4.8.0",
+          "@humanwhocodes/module-importer": "^1.0.1",
+          "json-stable-stringify-without-jsonify": "^1.0.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "eslint-config-prettier",
+      "previous": "^10.1.8",
+      "latest": "10.1.8",
+      "tags": {
+        "latest": "10.1.8",
+        "release-v8": "8.10.2",
+        "release-v9": "9.1.2"
+      },
+      "peerDependencies": {
+        "eslint": ">=7.0.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/prettier/eslint-config-prettier.git",
+        "type": "git"
+      },
+      "time": "2025-07-18T18:40:08.244Z",
+      "latestInPreviousMajor": {
+        "version": "10.1.8",
+        "peerDependencies": {
+          "eslint": ">=7.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "eslint-plugin-jest",
+      "previous": "^29.15.1",
+      "latest": "29.17.0",
+      "tags": {
+        "next": "29.0.2-next.1",
+        "latest": "29.17.0"
+      },
+      "engines": {
+        "node": "^20.12.0 || ^22.0.0 || >=24.0.0"
+      },
+      "peerDependencies": {
+        "jest": "*",
+        "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0",
+        "typescript": ">=4.8.4 <8.0.0",
+        "@typescript-eslint/eslint-plugin": "^8.0.0"
+      },
+      "peerDependenciesMeta": {
+        "jest": {
+          "optional": true
+        },
+        "typescript": {
+          "optional": true
+        },
+        "@typescript-eslint/eslint-plugin": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/jest-community/eslint-plugin-jest.git",
+        "type": "git"
+      },
+      "time": "2026-10-12T19:14:27.393Z",
+      "latestInPreviousMajor": {
+        "version": "29.17.0",
+        "engines": {
+          "node": "^20.12.0 || ^22.0.0 || >=24.0.0"
+        },
+        "peerDependencies": {
+          "jest": "*",
+          "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0",
+          "typescript": ">=4.8.4 <8.0.0",
+          "@typescript-eslint/eslint-plugin": "^8.0.0"
+        },
+        "dependencies": {
+          "@typescript-eslint/utils": "^8.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "eslint-plugin-prettier",
+      "previous": "^5.5.4",
+      "latest": "5.5.7",
+      "tags": {
+        "alpha": "5.0.0-alpha.2",
+        "release-v4": "4.2.5",
+        "latest": "5.5.7"
+      },
+      "engines": {
+        "node": "^14.18.0 || >=16.0.0"
+      },
+      "peerDependencies": {
+        "eslint": ">=8.0.0",
+        "prettier": ">=3.0.0",
+        "@types/eslint": ">=8.0.0",
+        "eslint-config-prettier": ">= 7.0.0 <10.0.0 || >=10.1.0"
+      },
+      "peerDependenciesMeta": {
+        "@types/eslint": {
+          "optional": true
+        },
+        "eslint-config-prettier": {
+          "optional": true
+        }
+      },
+      "repository": "https://github.com/prettier/eslint-plugin-prettier.git",
+      "time": "2026-10-13T12:38:26.597Z",
+      "latestInPreviousMajor": {
+        "version": "5.5.7",
+        "engines": {
+          "node": "^14.18.0 || >=16.0.0"
+        },
+        "peerDependencies": {
+          "eslint": ">=8.0.0",
+          "prettier": ">=3.0.0",
+          "@types/eslint": ">=8.0.0",
+          "eslint-config-prettier": ">= 7.0.0 <10.0.0 || >=10.1.0"
+        },
+        "dependencies": {
+          "synckit": "^0.12.3",
+          "prettier-linter-helpers": "^1.0.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "eslint-plugin-security",
+      "previous": "^4.0.0",
+      "latest": "4.2.0",
+      "tags": {
+        "latest": "4.2.0"
+      },
+      "engines": {
+        "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/eslint-community/eslint-plugin-security.git",
+        "type": "git"
+      },
+      "time": "2026-10-01T06:51:12.579Z",
+      "latestInPreviousMajor": {
+        "version": "4.2.0",
+        "engines": {
+          "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+        },
+        "dependencies": {
+          "safe-regex": "^2.1.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "file-loader",
+      "previous": "^6.2.0",
+      "latest": "6.2.0",
+      "tags": {
+        "beta": "1.0.0-rc.0",
+        "latest": "6.2.0"
+      },
+      "engines": {
+        "node": ">= 10.13.0"
+      },
+      "peerDependencies": {
+        "webpack": "^4.0.0 || ^5.0.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack-contrib/file-loader.git",
+        "type": "git"
+      },
+      "time": "2020-10-27T17:10:43.883Z",
+      "latestInPreviousMajor": {
+        "version": "6.2.0",
+        "engines": {
+          "node": ">= 10.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^4.0.0 || ^5.0.0"
+        },
+        "dependencies": {
+          "loader-utils": "^2.0.0",
+          "schema-utils": "^3.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "fs-extra",
+      "previous": "^11.3.2",
+      "latest": "11.4.1",
+      "tags": {
+        "latest": "11.4.1"
+      },
+      "engines": {
+        "node": ">=14.14"
+      },
+      "repository": {
+        "url": "git+https://github.com/jprichardson/node-fs-extra.git",
+        "type": "git"
+      },
+      "time": "2026-09-22T16:20:08.500Z",
+      "latestInPreviousMajor": {
+        "version": "11.4.1",
+        "engines": {
+          "node": ">=14.14"
+        },
+        "dependencies": {
+          "jsonfile": "^6.0.1",
+          "graceful-fs": "^4.2.0",
+          "universalify": "^2.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "glob",
+      "previous": "^13.0.6",
+      "latest": "14.0.3",
+      "tags": {
+        "legacy": "4.5.3",
+        "v7-legacy": "7.2.0",
+        "legacy-v9": "9.3.5",
+        "legacy-v10": "10.5.0",
+        "latest": "14.0.3"
+      },
+      "engines": {
+        "node": "18 || 20 || >=22"
+      },
+      "repository": {
+        "url": "git+ssh://git@github.com/isaacs/node-glob.git",
+        "type": "git"
+      },
+      "time": "2026-10-28T04:08:39.624Z",
+      "latestInPreviousMajor": {
+        "version": "13.0.6",
+        "engines": {
+          "node": "18 || 20 || >=22"
+        },
+        "dependencies": {
+          "minipass": "^7.1.3",
+          "minimatch": "^10.2.2",
+          "path-scurry": "^2.0.2"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "graceful-fs",
+      "previous": "^4.2.11",
+      "latest": "4.2.11",
+      "tags": {
+        "latest": "4.2.11",
+        "old": "3.0.12"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/isaacs/node-graceful-fs.git"
+      },
+      "time": "2023-03-16T19:30:19.323Z",
+      "latestInPreviousMajor": {
+        "version": "4.2.11"
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "html-webpack-plugin",
+      "previous": "^5.6.4",
+      "latest": "5.6.8",
+      "tags": {
+        "webpack-3": "3.2.0",
+        "webpack-4": "4.5.2",
+        "latest": "5.6.8"
+      },
+      "engines": {
+        "node": ">=10.13.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.20.0",
+        "@rspack/core": "0.x || 1.x || 2.x"
+      },
+      "peerDependenciesMeta": {
+        "webpack": {
+          "optional": true
+        },
+        "@rspack/core": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/jantimon/html-webpack-plugin.git",
+        "type": "git"
+      },
+      "time": "2026-07-25T11:19:58.390Z",
+      "latestInPreviousMajor": {
+        "version": "5.6.8",
+        "engines": {
+          "node": ">=10.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.20.0",
+          "@rspack/core": "0.x || 1.x || 2.x"
+        },
+        "dependencies": {
+          "lodash": "^4.17.21",
+          "tapable": "^2.0.0",
+          "pretty-error": "^4.0.0",
+          "html-minifier-terser": "^6.0.2",
+          "@types/html-minifier-terser": "^6.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "image-minimizer-webpack-plugin",
+      "previous": "^5.0.0",
+      "latest": "5.0.0",
+      "tags": {
+        "latest": "5.0.0"
+      },
+      "engines": {
+        "node": ">= 20.9.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.1.0"
+      },
+      "peerDependenciesMeta": {
+        "svgo": {
+          "optional": true
+        },
+        "sharp": {
+          "optional": true
+        },
+        "imagemin": {
+          "optional": true
+        },
+        "@squoosh/lib": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/image-minimizer-webpack-plugin.git",
+        "type": "git"
+      },
+      "time": "2026-03-03T12:28:46.259Z",
+      "latestInPreviousMajor": {
+        "version": "5.0.0",
+        "engines": {
+          "node": ">= 20.9.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.1.0"
+        },
+        "dependencies": {
+          "schema-utils": "^4.2.0",
+          "serialize-javascript": "^7.0.3"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "imagemin",
+      "previous": "^9.0.1",
+      "latest": "9.0.1",
+      "tags": {
+        "latest": "9.0.1"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "repository": {
+        "url": "git+https://github.com/imagemin/imagemin.git",
+        "type": "git"
+      },
+      "time": "2025-03-07T09:39:51.932Z",
+      "latestInPreviousMajor": {
+        "version": "9.0.1",
+        "engines": {
+          "node": ">=18"
+        },
+        "dependencies": {
+          "ow": "^2.0.0",
+          "junk": "^4.0.1",
+          "slash": "^5.1.0",
+          "globby": "^14.0.1",
+          "p-pipe": "^4.0.0",
+          "file-type": "^19.0.0",
+          "environment": "^1.0.0",
+          "image-dimensions": "^2.3.0",
+          "uint8array-extras": "^1.1.0",
+          "change-file-extension": "^0.1.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "imagemin-jpegtran",
+      "previous": "^8.0.0",
+      "latest": "8.0.0",
+      "tags": {
+        "latest": "8.0.0"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/imagemin/imagemin-jpegtran.git"
+      },
+      "time": "2024-09-25T09:19:19.014Z",
+      "latestInPreviousMajor": {
+        "version": "8.0.0",
+        "engines": {
+          "node": ">=18"
+        },
+        "dependencies": {
+          "execa": "^9.4.0",
+          "file-type": "^19.5.0",
+          "image-dimensions": "^2.3.0",
+          "jpegtran-bin": "^7.0.0",
+          "uint8array-extras": "^1.4.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "imagemin-optipng",
+      "previous": "^8.0.0",
+      "latest": "8.0.0",
+      "tags": {
+        "latest": "8.0.0"
+      },
+      "engines": {
+        "node": ">=10"
+      },
+      "repository": {
+        "url": "git+https://github.com/imagemin/imagemin-optipng.git",
+        "type": "git"
+      },
+      "time": "2020-05-24T14:08:36.093Z",
+      "latestInPreviousMajor": {
+        "version": "8.0.0",
+        "engines": {
+          "node": ">=10"
+        },
+        "dependencies": {
+          "is-png": "^2.0.0",
+          "exec-buffer": "^3.0.0",
+          "optipng-bin": "^7.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "jest",
+      "previous": "^30.2.0",
+      "latest": "30.5.2",
+      "tags": {
+        "next": "30.0.0-rc.1",
+        "latest": "30.5.2"
+      },
+      "engines": {
+        "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+      },
+      "peerDependencies": {
+        "node-notifier": "^8.0.1 || ^9.0.0 || ^10.0.0"
+      },
+      "peerDependenciesMeta": {
+        "node-notifier": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/jestjs/jest.git",
+        "type": "git",
+        "directory": "packages/jest"
+      },
+      "time": "2026-09-18T13:58:07.141Z",
+      "latestInPreviousMajor": {
+        "version": "30.5.2",
+        "engines": {
+          "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+        },
+        "peerDependencies": {
+          "node-notifier": "^8.0.1 || ^9.0.0 || ^10.0.0"
+        },
+        "dependencies": {
+          "jest-cli": "30.5.2",
+          "@jest/core": "30.5.2",
+          "@jest/types": "30.5.1",
+          "import-local": "^3.2.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "jest-environment-jsdom",
+      "previous": "^30.2.0",
+      "latest": "30.5.2",
+      "tags": {
+        "next": "30.0.0-rc.1",
+        "latest": "30.5.2"
+      },
+      "engines": {
+        "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+      },
+      "peerDependencies": {
+        "canvas": "^3.0.0"
+      },
+      "peerDependenciesMeta": {
+        "canvas": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/jestjs/jest.git",
+        "type": "git",
+        "directory": "packages/jest-environment-jsdom"
+      },
+      "time": "2026-09-18T13:56:40.727Z",
+      "latestInPreviousMajor": {
+        "version": "30.5.2",
+        "engines": {
+          "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+        },
+        "peerDependencies": {
+          "canvas": "^3.0.0"
+        },
+        "dependencies": {
+          "jsdom": "^26.1.0",
+          "@types/jsdom": "^21.1.7",
+          "@jest/environment": "30.5.2",
+          "@jest/environment-jsdom-abstract": "30.5.2"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "js-yaml",
+      "previous": "^4.1.0",
+      "latest": "5.5.0",
+      "tags": {
+        "v4-legacy": "4.3.2",
+        "v3-legacy": "3.15.2",
+        "latest": "5.5.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/nodeca/js-yaml.git",
+        "type": "git"
+      },
+      "time": "2026-10-15T23:28:37.500Z",
+      "latestInPreviousMajor": {
+        "version": "4.3.2",
+        "dependencies": {
+          "argparse": "^2.0.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "js-yaml-loader",
+      "previous": "^1.2.2",
+      "latest": "1.2.2",
+      "tags": {
+        "latest": "1.2.2"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/wwilsman/js-yaml-loader.git"
+      },
+      "time": "2019-06-28T21:55:07.367Z",
+      "latestInPreviousMajor": {
+        "version": "1.2.2",
+        "dependencies": {
+          "js-yaml": "^3.13.1",
+          "loader-utils": "^1.2.3",
+          "un-eval": "^1.2.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "mini-css-extract-plugin",
+      "previous": "^2.9.4",
+      "latest": "2.10.2",
+      "tags": {
+        "latest": "2.10.2"
+      },
+      "engines": {
+        "node": ">= 12.13.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.0.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/webpack/mini-css-extract-plugin.git"
+      },
+      "time": "2026-03-26T12:29:35.739Z",
+      "latestInPreviousMajor": {
+        "version": "2.10.2",
+        "engines": {
+          "node": ">= 12.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.0.0"
+        },
+        "dependencies": {
+          "schema-utils": "^4.0.0",
+          "tapable": "^2.2.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "node-sass-glob-importer",
+      "previous": "^5.3.3",
+      "latest": "5.3.3",
+      "tags": {
+        "latest": "5.3.3"
+      },
+      "engines": {
+        "node": ">=6.11.1",
+        "npm": ">=3.0.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/maoberlehner/node-sass-magic-importer.git"
+      },
+      "time": "2023-07-02T09:40:19.316Z",
+      "latestInPreviousMajor": {
+        "version": "5.3.3",
+        "engines": {
+          "node": ">=6.11.1",
+          "npm": ">=3.0.0"
+        },
+        "dependencies": {
+          "node-sass-magic-importer": "^5.3.3"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "normalize.css",
+      "previous": "^8.0.1",
+      "latest": "8.0.1",
+      "tags": {
+        "latest": "8.0.1"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/necolas/normalize.css.git"
+      },
+      "time": "2018-11-09T22:48:56.639Z",
+      "latestInPreviousMajor": {
+        "version": "8.0.1"
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "open-cli",
+      "previous": "^9.0.0",
+      "latest": "9.0.0",
+      "tags": {
+        "latest": "9.0.0"
+      },
+      "engines": {
+        "node": ">=22"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/sindresorhus/open-cli.git"
+      },
+      "time": "2026-03-25T16:39:19.867Z",
+      "latestInPreviousMajor": {
+        "version": "9.0.0",
+        "engines": {
+          "node": ">=22"
+        },
+        "dependencies": {
+          "file-type": "^21.3.4",
+          "meow": "^14.1.0",
+          "open": "^11.0.0",
+          "tempy": "^3.2.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "pa11y",
+      "previous": "^9.0.1",
+      "latest": "10.0.0",
+      "tags": {
+        "latest": "10.0.0"
+      },
+      "engines": {
+        "node": "^22.13.0 || >=24"
+      },
+      "repository": {
+        "url": "git+https://github.com/pa11y/pa11y.git",
+        "type": "git"
+      },
+      "time": "2026-08-28T14:09:00.766Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.1",
+        "engines": {
+          "node": ">=20"
+        },
+        "dependencies": {
+          "bfj": "~9.1.3",
+          "kleur": "~4.1.5",
+          "semver": "~7.7.4",
+          "envinfo": "~7.21.0",
+          "axe-core": "~4.11.1",
+          "mustache": "~4.2.0",
+          "commander": "~14.0.3",
+          "puppeteer": "^24.37.5",
+          "node.extend": "~2.0.3",
+          "@pa11y/html_codesniffer": "^2.6.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "postcss",
+      "previous": "^8.5.6",
+      "latest": "8.5.32",
+      "tags": {
+        "latest": "8.5.32"
+      },
+      "engines": {
+        "node": "^10 || ^12 || >=14"
+      },
+      "repository": {
+        "url": "git+https://github.com/postcss/postcss.git",
+        "type": "git"
+      },
+      "time": "2026-10-26T20:36:42.832Z",
+      "latestInPreviousMajor": {
+        "version": "8.5.32",
+        "engines": {
+          "node": "^10 || ^12 || >=14"
+        },
+        "dependencies": {
+          "nanoid": "^3.3.20",
+          "picocolors": "^1.1.1",
+          "source-map-js": "^1.2.2"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "postcss-loader",
+      "previous": "^8.2.0",
+      "latest": "8.2.1",
+      "tags": {
+        "version-4": "4.3.0",
+        "latest": "8.2.1"
+      },
+      "engines": {
+        "node": ">= 18.12.0"
+      },
+      "peerDependencies": {
+        "postcss": "^7.0.0 || ^8.0.1",
+        "webpack": "^5.0.0",
+        "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0"
+      },
+      "peerDependenciesMeta": {
+        "webpack": {
+          "optional": true
+        },
+        "@rspack/core": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/postcss-loader.git",
+        "type": "git"
+      },
+      "time": "2026-02-15T19:44:38.246Z",
+      "latestInPreviousMajor": {
+        "version": "8.2.1",
+        "engines": {
+          "node": ">= 18.12.0"
+        },
+        "peerDependencies": {
+          "postcss": "^7.0.0 || ^8.0.1",
+          "webpack": "^5.0.0",
+          "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0"
+        },
+        "dependencies": {
+          "jiti": "^2.5.1",
+          "semver": "^7.6.2",
+          "cosmiconfig": "^9.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "postcss-scss",
+      "previous": "^4.0.9",
+      "latest": "4.0.9",
+      "tags": {
+        "latest": "4.0.9"
+      },
+      "engines": {
+        "node": ">=12.0"
+      },
+      "peerDependencies": {
+        "postcss": "^8.4.29"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/postcss/postcss-scss.git"
+      },
+      "time": "2023-09-28T22:18:12.631Z",
+      "latestInPreviousMajor": {
+        "version": "4.0.9",
+        "engines": {
+          "node": ">=12.0"
+        },
+        "peerDependencies": {
+          "postcss": "^8.4.29"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "ramda",
+      "previous": "^0.32.0",
+      "latest": "0.32.0",
+      "tags": {
+        "0.2.0": "0.2.0",
+        "es-rc": "0.24.1-es.rc3",
+        "latest": "0.32.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git://github.com/ramda/ramda.git"
+      },
+      "time": "2025-10-10T16:29:39.432Z",
+      "latestInPreviousMajor": {
+        "version": "0.32.0",
+        "dependencies": {}
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "regenerator-runtime",
+      "previous": "^0.14.1",
+      "latest": "0.14.1",
+      "tags": {
+        "latest": "0.14.1",
+        "next": "0.14.1"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/facebook/regenerator.git#main"
+      },
+      "time": "2023-12-15T20:52:02.938Z",
+      "latestInPreviousMajor": {
+        "version": "0.14.1"
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "sass",
+      "previous": "^1.93.2",
+      "latest": "1.106.1",
+      "tags": {
+        "test": "1.26.0-test.3",
+        "rc": "1.45.0-rc.2",
+        "latest": "1.106.1"
+      },
+      "engines": {
+        "node": ">=20.19.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/sass/dart-sass.git",
+        "type": "git"
+      },
+      "time": "2026-10-21T21:53:25.240Z",
+      "latestInPreviousMajor": {
+        "version": "1.106.1",
+        "engines": {
+          "node": ">=20.19.0"
+        },
+        "dependencies": {
+          "chokidar": "^5.0.0",
+          "immutable": "^5.1.5",
+          "source-map-js": ">=0.6.2 <2.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "sass-loader",
+      "previous": "^16.0.6",
+      "latest": "17.1.0",
+      "tags": {
+        "fix-3.2.2": "3.2.3",
+        "next": "10.0.0-rc.0",
+        "version-10": "10.5.2",
+        "latest": "17.1.0"
+      },
+      "engines": {
+        "node": ">= 22.11.0"
+      },
+      "peerDependencies": {
+        "sass": "^1.3.0",
+        "webpack": "^5.0.0",
+        "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0",
+        "sass-embedded": "*"
+      },
+      "peerDependenciesMeta": {
+        "sass": {
+          "optional": true
+        },
+        "webpack": {
+          "optional": true
+        },
+        "@rspack/core": {
+          "optional": true
+        },
+        "sass-embedded": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/sass-loader.git",
+        "type": "git"
+      },
+      "time": "2026-10-27T17:03:24.291Z",
+      "latestInPreviousMajor": {
+        "version": "16.0.8",
+        "engines": {
+          "node": ">= 18.12.0"
+        },
+        "peerDependencies": {
+          "sass": "^1.3.0",
+          "webpack": "^5.0.0",
+          "node-sass": "^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0 || ^9.0.0",
+          "@rspack/core": "0.x || ^1.0.0 || ^2.0.0-0",
+          "sass-embedded": "*"
+        },
+        "dependencies": {
+          "neo-async": "^2.6.2"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "storybook",
+      "previous": "^9.1.20",
+      "latest": "10.6.5",
+      "tags": {
+        "v8-canary": "0.0.0-pr-34009-sha-c90626e7",
+        "v7-canary": "0.0.0-pr-34011-sha-c45b0f3f",
+        "v7": "7.6.24",
+        "v9-canary": "0.0.0-pr-35198-sha-9d05c353",
+        "canary": "0.0.0-pr-36141-sha-6ddbeb4a",
+        "v9": "9.1.21",
+        "v8": "8.6.19",
+        "next": "11.0.0-alpha.8",
+        "latest": "10.6.5"
+      },
+      "peerDependencies": {
+        "prettier": "^2 || ^3",
+        "vite-plus": "^0.1.15 || ^0.2.0",
+        "@types/react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      },
+      "peerDependenciesMeta": {
+        "prettier": {
+          "optional": true
+        },
+        "vite-plus": {
+          "optional": true
+        },
+        "@types/react": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "https://github.com/storybookjs/storybook.git",
+        "type": "git",
+        "directory": "code/core"
+      },
+      "time": "2026-10-27T15:59:26.537Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.21",
+        "peerDependencies": {
+          "prettier": "^2 || ^3"
+        },
+        "dependencies": {
+          "ws": "^8.18.0",
+          "recast": "^0.23.5",
+          "semver": "^7.6.2",
+          "esbuild": "^0.18.0 || ^0.19.0 || ^0.20.0 || ^0.21.0 || ^0.22.0 || ^0.23.0 || ^0.24.0 || ^0.25.0",
+          "better-opn": "^3.0.2",
+          "@vitest/spy": "3.2.4",
+          "@vitest/expect": "3.2.4",
+          "@vitest/mocker": "3.2.4",
+          "esbuild-register": "^3.5.0",
+          "@storybook/global": "^5.0.0",
+          "@testing-library/jest-dom": "^6.6.3",
+          "@testing-library/user-event": "^14.6.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "style-dictionary",
+      "previous": "^5.1.1",
+      "latest": "5.7.1",
+      "tags": {
+        "next": "3.0.0-rc.10",
+        "unstable": "3.7.3-rc.1",
+        "prerelease": "4.0.0-prerelease.39",
+        "rc": "5.0.0-rc.2",
+        "latest": "5.7.1"
+      },
+      "engines": {
+        "node": ">=22.0.0"
+      },
+      "repository": {
+        "url": "git://github.com/style-dictionary/style-dictionary.git",
+        "type": "git"
+      },
+      "time": "2026-10-24T13:47:54.373Z",
+      "latestInPreviousMajor": {
+        "version": "5.7.1",
+        "engines": {
+          "node": ">=22.0.0"
+        },
+        "dependencies": {
+          "chalk": "^5.3.0",
+          "json5": "^2.2.2",
+          "prettier": "^3.3.3",
+          "commander": "^12.1.0",
+          "colorjs.io": "^0.5.2",
+          "tinycolor2": "^1.6.0",
+          "change-case": "^5.3.0",
+          "is-plain-obj": "^4.1.0",
+          "path-unified": "^0.2.0",
+          "@zip.js/zip.js": "^2.7.44",
+          "@bundled-es-modules/glob": "^13.0.6-hotfix.0",
+          "@bundled-es-modules/memfs": "^4.17.0",
+          "@bundled-es-modules/deepmerge": "^4.3.2"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "stylelint",
+      "previous": "^17.7.0",
+      "latest": "17.16.0",
+      "tags": {
+        "latest": "17.16.0",
+        "next": "18.0.0-next.0"
+      },
+      "engines": {
+        "node": ">=20.19.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/stylelint/stylelint.git",
+        "type": "git"
+      },
+      "time": "2026-10-01T10:17:13.977Z",
+      "latestInPreviousMajor": {
+        "version": "17.16.0",
+        "engines": {
+          "node": ">=20.19.0"
+        },
+        "dependencies": {
+          "meow": "^14.1.0",
+          "debug": "^4.4.3",
+          "table": "^6.9.0",
+          "colord": "^2.10.0",
+          "globby": "^16.2.4",
+          "ignore": "^7.0.6",
+          "postcss": "^8.5.26",
+          "css-tree": "^3.2.1",
+          "globjoin": "^0.1.4",
+          "svg-tags": "^1.0.0",
+          "fast-glob": "^3.3.3",
+          "html-tags": "^5.1.0",
+          "micromatch": "^4.0.8",
+          "picocolors": "^1.1.1",
+          "cosmiconfig": "^9.0.2",
+          "string-width": "^8.2.2",
+          "global-modules": "^2.0.0",
+          "normalize-path": "^3.0.0",
+          "file-entry-cache": "^11.1.5",
+          "mathml-tag-names": "^4.0.0",
+          "write-file-atomic": "^7.0.1",
+          "@csstools/css-calc": "^3.3.0",
+          "css-functions-list": "^3.3.3",
+          "fastest-levenshtein": "^1.0.16",
+          "import-meta-resolve": "^4.2.0",
+          "postcss-safe-parser": "^7.0.1",
+          "supports-hyperlinks": "^4.5.0",
+          "postcss-value-parser": "^4.2.0",
+          "@csstools/css-tokenizer": "^4.0.0",
+          "postcss-selector-parser": "^7.1.5",
+          "@csstools/selector-specificity": "^6.0.0",
+          "@csstools/css-parser-algorithms": "^4.0.0",
+          "@csstools/media-query-list-parser": "^5.0.0",
+          "@csstools/selector-resolve-nested": "^4.0.1",
+          "@csstools/css-syntax-patches-for-csstree": "^1.1.9"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "stylelint-config-standard-scss",
+      "previous": "^17.0.0",
+      "latest": "17.0.0",
+      "tags": {
+        "next": "2.0.0-0",
+        "latest": "17.0.0"
+      },
+      "engines": {
+        "node": ">=20"
+      },
+      "peerDependencies": {
+        "postcss": "^8.3.3",
+        "stylelint": "^17.0.0"
+      },
+      "peerDependenciesMeta": {
+        "postcss": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/stylelint-scss/stylelint-config-standard-scss.git"
+      },
+      "time": "2026-01-15T13:32:18.181Z",
+      "latestInPreviousMajor": {
+        "version": "17.0.0",
+        "engines": {
+          "node": ">=20"
+        },
+        "peerDependencies": {
+          "postcss": "^8.3.3",
+          "stylelint": "^17.0.0"
+        },
+        "dependencies": {
+          "stylelint-config-recommended-scss": "^17.0.0",
+          "stylelint-config-standard": "^40.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "stylelint-prettier",
+      "previous": "^5.0.3",
+      "latest": "5.0.3",
+      "tags": {
+        "latest": "5.0.3"
+      },
+      "engines": {
+        "node": ">=18.12.0"
+      },
+      "peerDependencies": {
+        "prettier": ">=3.0.0",
+        "stylelint": ">=16.0.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/prettier/stylelint-prettier.git"
+      },
+      "time": "2025-01-27T04:47:07.921Z",
+      "latestInPreviousMajor": {
+        "version": "5.0.3",
+        "engines": {
+          "node": ">=18.12.0"
+        },
+        "peerDependencies": {
+          "prettier": ">=3.0.0",
+          "stylelint": ">=16.0.0"
+        },
+        "dependencies": {
+          "prettier-linter-helpers": "^1.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "stylelint-webpack-plugin",
+      "previous": "^5.0.1",
+      "latest": "5.1.0",
+      "tags": {
+        "2x": "2.5.0",
+        "latest": "5.1.0"
+      },
+      "engines": {
+        "node": ">= 18.12.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.0.0",
+        "stylelint": "^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/stylelint-webpack-plugin.git",
+        "type": "git"
+      },
+      "time": "2026-02-04T13:30:13.364Z",
+      "latestInPreviousMajor": {
+        "version": "5.1.0",
+        "engines": {
+          "node": ">= 18.12.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.0.0",
+          "stylelint": "^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0"
+        },
+        "dependencies": {
+          "globby": "^11.1.0",
+          "micromatch": "^4.0.5",
+          "jest-worker": "^29.7.0",
+          "schema-utils": "^4.2.0",
+          "normalize-path": "^3.0.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "svg-spritemap-webpack-plugin",
+      "previous": "^5.0.3",
+      "latest": "5.1.5",
+      "tags": {
+        "latest": "5.1.5"
+      },
+      "engines": {
+        "node": "^22.16.0 || >=24.0.0"
+      },
+      "peerDependencies": {
+        "svgo": "^4.0.0",
+        "webpack": "^5.0.0",
+        "typescript": "^4.0.0 || ^5.0.0 || ^6.0.0",
+        "svg4everybody": "^2.1.9"
+      },
+      "peerDependenciesMeta": {
+        "typescript": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/cascornelissen/svg-spritemap-webpack-plugin.git",
+        "type": "git"
+      },
+      "time": "2026-10-22T13:26:42.468Z",
+      "latestInPreviousMajor": {
+        "version": "5.1.5",
+        "engines": {
+          "node": "^22.16.0 || >=24.0.0"
+        },
+        "peerDependencies": {
+          "svgo": "^4.0.0",
+          "webpack": "^5.0.0",
+          "typescript": "^4.0.0 || ^5.0.0 || ^6.0.0",
+          "svg4everybody": "^2.1.9"
+        },
+        "dependencies": {
+          "zod": "^4.6.7",
+          "glob": "^13.0.6",
+          "mkdirp": "^3.0.1",
+          "lodash-es": "^4.18.1",
+          "loader-utils": "^3.3.1",
+          "webpack-merge": "^6.0.1",
+          "@xmldom/xmldom": "^0.9.8",
+          "mini-svg-data-uri": "^1.4.4",
+          "svg-element-attributes": "^2.2.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "terser-webpack-plugin",
+      "previous": "^5.3.9",
+      "latest": "5.6.1",
+      "tags": {
+        "version-2": "2.3.8",
+        "version-1": "1.4.6",
+        "latest": "5.6.1"
+      },
+      "engines": {
+        "node": ">= 10.13.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.1.0"
+      },
+      "peerDependenciesMeta": {
+        "csso": {
+          "optional": true
+        },
+        "cssnano": {
+          "optional": true
+        },
+        "esbuild": {
+          "optional": true
+        },
+        "postcss": {
+          "optional": true
+        },
+        "@swc/css": {
+          "optional": true
+        },
+        "@swc/core": {
+          "optional": true
+        },
+        "@swc/html": {
+          "optional": true
+        },
+        "clean-css": {
+          "optional": true
+        },
+        "uglify-js": {
+          "optional": true
+        },
+        "lightningcss": {
+          "optional": true
+        },
+        "@minify-html/node": {
+          "optional": true
+        },
+        "html-minifier-terser": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/minimizer-webpack-plugin.git",
+        "type": "git"
+      },
+      "time": "2026-05-27T17:31:34.637Z",
+      "latestInPreviousMajor": {
+        "version": "5.6.1",
+        "engines": {
+          "node": ">= 10.13.0"
+        },
+        "peerDependencies": {
+          "webpack": "^5.1.0"
+        },
+        "dependencies": {
+          "terser": "^5.31.1",
+          "jest-worker": "^27.4.5",
+          "schema-utils": "^4.3.0",
+          "@jridgewell/trace-mapping": "^0.3.25"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "token-transformer",
+      "previous": "^0.0.33",
+      "latest": "0.0.33",
+      "tags": {
+        "latest": "0.0.33"
+      },
+      "deprecated": "Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.",
+      "repository": {
+        "url": "git+https://github.com/tokens-studio/figma-plugin.git",
+        "type": "git",
+        "directory": "token-transformer"
+      },
+      "time": "2023-05-25T07:38:30.568Z",
+      "latestInPreviousMajor": {
+        "version": "0.0.33",
+        "deprecated": "Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.",
+        "dependencies": {
+          "yargs": "^17.6.2"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "twig-drupal-filters",
+      "previous": "^3.2.0",
+      "latest": "3.2.0",
+      "tags": {
+        "latest": "3.2.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/kalamuna/twig-drupal-filters.git"
+      },
+      "time": "2022-10-28T14:27:44.280Z",
+      "latestInPreviousMajor": {
+        "version": "3.2.0",
+        "dependencies": {
+          "object-keys": "^1.1.1",
+          "twig": "^1.15.4"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "twig-testing-library",
+      "previous": "^1.2.0",
+      "latest": "1.2.0",
+      "tags": {
+        "latest": "1.2.0"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/larowlan/twig-testing-library.git"
+      },
+      "time": "2021-07-01T10:17:13.788Z",
+      "latestInPreviousMajor": {
+        "version": "1.2.0",
+        "dependencies": {
+          "@babel/runtime": "^7.13.10",
+          "@testing-library/dom": "^7.30.3",
+          "core-js": "^3.10.2",
+          "drupal-attribute": "^1.0.2",
+          "twig": "^1.15.4"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "twigjs-loader",
+      "previous": "^1.0.3",
+      "latest": "1.0.3",
+      "tags": {
+        "latest": "1.0.3"
+      },
+      "engines": {
+        "node": ">=8.0"
+      },
+      "peerDependencies": {
+        "twig": "1.x"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/megahertz/twigjs-loader.git"
+      },
+      "time": "2022-08-20T17:02:00.871Z",
+      "latestInPreviousMajor": {
+        "version": "1.0.3",
+        "engines": {
+          "node": ">=8.0"
+        },
+        "peerDependencies": {
+          "twig": "1.x"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "webpack",
+      "previous": "^5.102.1",
+      "latest": "5.112.2",
+      "tags": {
+        "legacy": "1.15.0",
+        "webpack-2": "2.7.0",
+        "webpack-3": "3.12.0",
+        "next": "5.0.0-rc.6",
+        "webpack-4": "4.47.0",
+        "latest": "5.112.2"
+      },
+      "engines": {
+        "node": ">=10.13.0"
+      },
+      "peerDependenciesMeta": {
+        "webpack-cli": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/webpack.git",
+        "type": "git"
+      },
+      "time": "2026-10-23T12:18:11.101Z",
+      "latestInPreviousMajor": {
+        "version": "5.112.2",
+        "engines": {
+          "node": ">=10.13.0"
+        },
+        "dependencies": {
+          "events": "^3.2.0",
+          "mime-db": "^1.54.0",
+          "tapable": "^2.3.0",
+          "watchpack": "^2.6.3",
+          "graceful-fs": "^4.2.11",
+          "browserslist": "^4.28.1",
+          "schema-utils": "^4.8.1",
+          "@types/estree": "^1.0.8",
+          "es-module-lexer": "^2.1.0",
+          "webpack-sources": "^3.6.0",
+          "enhanced-resolve": "^5.26.0",
+          "@types/json-schema": "^7.0.15",
+          "@webassemblyjs/ast": "^1.14.1",
+          "chrome-trace-event": "^1.0.2",
+          "@webassemblyjs/wasm-edit": "^1.14.1",
+          "minimizer-webpack-plugin": "^5.13.0",
+          "@webassemblyjs/wasm-parser": "^1.14.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "webpack-cli",
+      "previous": "^7.0.2",
+      "latest": "7.2.3",
+      "tags": {
+        "4.0.0.0-alpha-5": "4.0.0-alpha-5",
+        "beta": "4.0.0-beta.9",
+        "next": "4.0.0-rc.1",
+        "latest": "7.2.3"
+      },
+      "engines": {
+        "node": ">=20.9.0"
+      },
+      "peerDependencies": {
+        "toml": "^3.0.0 || ^4.0.0 || ^5.0.0",
+        "json5": "^2.2.3",
+        "js-yaml": "^4.0.0 || ^5.0.0",
+        "webpack": "^5.101.0",
+        "webpack-dev-server": "^5.0.0 || ^6.0.0",
+        "webpack-bundle-analyzer": "^4.0.0 || ^5.0.0"
+      },
+      "peerDependenciesMeta": {
+        "toml": {
+          "optional": true
+        },
+        "json5": {
+          "optional": true
+        },
+        "js-yaml": {
+          "optional": true
+        },
+        "webpack-dev-server": {
+          "optional": true
+        },
+        "webpack-bundle-analyzer": {
+          "optional": true
+        }
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack/webpack-cli.git",
+        "type": "git"
+      },
+      "time": "2026-08-28T10:59:09.124Z",
+      "latestInPreviousMajor": {
+        "version": "7.2.3",
+        "engines": {
+          "node": ">=20.9.0"
+        },
+        "peerDependencies": {
+          "toml": "^3.0.0 || ^4.0.0 || ^5.0.0",
+          "json5": "^2.2.3",
+          "js-yaml": "^4.0.0 || ^5.0.0",
+          "webpack": "^5.101.0",
+          "webpack-dev-server": "^5.0.0 || ^6.0.0",
+          "webpack-bundle-analyzer": "^4.0.0 || ^5.0.0"
+        },
+        "dependencies": {
+          "envinfo": "^7.21.0",
+          "rechoir": "^0.8.0",
+          "commander": "^14.0.3",
+          "interpret": "^3.1.1",
+          "cross-spawn": "^7.0.6",
+          "import-local": "^3.2.0",
+          "webpack-merge": "^6.0.1",
+          "@discoveryjs/json-ext": "^1.1.0"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "webpack-merge",
+      "previous": "^6.0.1",
+      "latest": "6.0.1",
+      "tags": {
+        "beta1": "1.0.0-beta1",
+        "beta": "5.0.0-beta-1",
+        "latest": "6.0.1"
+      },
+      "engines": {
+        "node": ">=18.0.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/survivejs/webpack-merge.git",
+        "type": "git"
+      },
+      "time": "2024-07-02T07:39:22.644Z",
+      "latestInPreviousMajor": {
+        "version": "6.0.1",
+        "engines": {
+          "node": ">=18.0.0"
+        },
+        "dependencies": {
+          "flat": "^5.0.2",
+          "wildcard": "^2.0.1",
+          "clone-deep": "^4.0.1"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "webpack-remove-empty-scripts",
+      "previous": "^1.1.1",
+      "latest": "1.1.1",
+      "tags": {
+        "beta": "1.0.0-beta.2",
+        "latest": "1.1.1"
+      },
+      "engines": {
+        "node": ">=12.14"
+      },
+      "peerDependencies": {
+        "webpack": ">=5.32.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/webdiscus/webpack-remove-empty-scripts.git",
+        "type": "git"
+      },
+      "time": "2025-05-26T07:50:52.613Z",
+      "latestInPreviousMajor": {
+        "version": "1.1.1",
+        "engines": {
+          "node": ">=12.14"
+        },
+        "peerDependencies": {
+          "webpack": ">=5.32.0"
+        },
+        "dependencies": {
+          "ansis": "4.0.0-node10"
+        }
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "yaml",
+      "previous": "^2.8.1",
+      "latest": "2.9.1",
+      "tags": {
+        "next": "3.0.0-2",
+        "latest": "2.9.1"
+      },
+      "engines": {
+        "node": ">= 14.6"
+      },
+      "repository": {
+        "url": "git+https://github.com/eemeli/yaml.git",
+        "type": "git"
+      },
+      "time": "2026-09-11T20:30:10.905Z",
+      "latestInPreviousMajor": {
+        "version": "2.9.1",
+        "engines": {
+          "node": ">= 14.6"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@commitlint/cli",
+      "previous": "^20.1.0",
+      "latest": "21.2.4",
+      "tags": {
+        "latest": "21.2.4"
+      },
+      "engines": {
+        "node": ">=22.12.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/conventional-changelog/commitlint.git",
+        "type": "git",
+        "directory": "@commitlint/cli"
+      },
+      "time": "2026-10-18T12:52:04.979Z",
+      "latestInPreviousMajor": {
+        "version": "20.5.3",
+        "engines": {
+          "node": ">=v18"
+        },
+        "dependencies": {
+          "yargs": "^17.0.0",
+          "tinyexec": "^1.0.0",
+          "@commitlint/lint": "^20.5.3",
+          "@commitlint/load": "^20.5.3",
+          "@commitlint/read": "^20.5.0",
+          "@commitlint/types": "^20.5.0",
+          "@commitlint/format": "^20.5.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@commitlint/config-conventional",
+      "previous": "^20.0.0",
+      "latest": "21.2.4",
+      "tags": {
+        "release-v18": "18.6.3",
+        "latest": "21.2.4"
+      },
+      "engines": {
+        "node": ">=22.12.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/conventional-changelog/commitlint.git",
+        "type": "git",
+        "directory": "@commitlint/config-conventional"
+      },
+      "time": "2026-10-18T12:51:42.239Z",
+      "latestInPreviousMajor": {
+        "version": "20.5.3",
+        "engines": {
+          "node": ">=v18"
+        },
+        "dependencies": {
+          "@commitlint/types": "^20.5.0",
+          "conventional-changelog-conventionalcommits": "^9.2.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@semantic-release/changelog",
+      "previous": "^6.0.2",
+      "latest": "7.0.0",
+      "tags": {
+        "next": "5.0.0",
+        "beta": "7.0.0-beta.1",
+        "latest": "7.0.0"
+      },
+      "engines": {
+        "node": "^22.22.2 || >=24.15"
+      },
+      "peerDependencies": {
+        "semantic-release": ">=20.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/semantic-release/changelog.git",
+        "type": "git"
+      },
+      "time": "2026-07-21T08:38:00.232Z",
+      "latestInPreviousMajor": {
+        "version": "6.0.3",
+        "engines": {
+          "node": ">=14.17"
+        },
+        "peerDependencies": {
+          "semantic-release": ">=18.0.0"
+        },
+        "dependencies": {
+          "lodash": "^4.17.4",
+          "fs-extra": "^11.0.0",
+          "aggregate-error": "^3.0.0",
+          "@semantic-release/error": "^3.0.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@semantic-release/commit-analyzer",
+      "previous": "^13.0.1",
+      "latest": "13.0.1",
+      "tags": {
+        "next": "6.3.3",
+        "latest": "13.0.1",
+        "beta": "14.0.0-beta.4"
+      },
+      "engines": {
+        "node": ">=20.8.1"
+      },
+      "peerDependencies": {
+        "semantic-release": ">=20.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/semantic-release/commit-analyzer.git",
+        "type": "git"
+      },
+      "time": "2025-01-03T04:09:19.945Z",
+      "latestInPreviousMajor": {
+        "version": "13.0.1",
+        "engines": {
+          "node": ">=20.8.1"
+        },
+        "peerDependencies": {
+          "semantic-release": ">=20.1.0"
+        },
+        "dependencies": {
+          "debug": "^4.0.0",
+          "lodash-es": "^4.17.21",
+          "micromatch": "^4.0.2",
+          "import-from-esm": "^2.0.0",
+          "conventional-commits-filter": "^5.0.0",
+          "conventional-commits-parser": "^6.0.0",
+          "conventional-changelog-writer": "^8.0.0",
+          "conventional-changelog-angular": "^8.0.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@semantic-release/git",
+      "previous": "^10.0.1",
+      "latest": "11.0.1",
+      "tags": {
+        "next": "7.0.18",
+        "beta": "11.0.0-beta.2",
+        "latest": "11.0.1"
+      },
+      "engines": {
+        "node": "^22.22.2 || >=24.15"
+      },
+      "peerDependencies": {
+        "semantic-release": ">=20.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/semantic-release/git.git",
+        "type": "git"
+      },
+      "time": "2026-07-24T03:42:05.506Z",
+      "latestInPreviousMajor": {
+        "version": "10.0.1",
+        "engines": {
+          "node": ">=14.17"
+        },
+        "peerDependencies": {
+          "semantic-release": ">=18.0.0"
+        },
+        "dependencies": {
+          "debug": "^4.0.0",
+          "execa": "^5.0.0",
+          "lodash": "^4.17.4",
+          "dir-glob": "^3.0.0",
+          "p-reduce": "^2.0.0",
+          "micromatch": "^4.0.0",
+          "aggregate-error": "^3.0.0",
+          "@semantic-release/error": "^3.0.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@semantic-release/github",
+      "previous": "^12.0.6",
+      "latest": "12.0.10",
+      "tags": {
+        "next": "5.5.8",
+        "beta": "12.0.0-beta.4",
+        "latest": "12.0.10"
+      },
+      "engines": {
+        "node": "^22.14.0 || >= 24.10.0"
+      },
+      "peerDependencies": {
+        "semantic-release": ">=24.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/semantic-release/github.git",
+        "type": "git"
+      },
+      "time": "2026-09-21T18:44:46.914Z",
+      "latestInPreviousMajor": {
+        "version": "12.0.10",
+        "engines": {
+          "node": "^22.14.0 || >= 24.10.0"
+        },
+        "peerDependencies": {
+          "semantic-release": ">=24.1.0"
+        },
+        "dependencies": {
+          "mime": "^4.0.0",
+          "debug": "^4.3.4",
+          "undici": "^7.0.0",
+          "dir-glob": "^3.0.1",
+          "p-filter": "^4.0.0",
+          "url-join": "^5.0.0",
+          "lodash-es": "^4.17.21",
+          "tinyglobby": "^0.2.14",
+          "issue-parser": "^7.0.0",
+          "@octokit/core": "^7.0.0",
+          "aggregate-error": "^5.0.0",
+          "http-proxy-agent": "^9.0.0",
+          "https-proxy-agent": "^9.0.0",
+          "@octokit/plugin-retry": "^8.0.0",
+          "@semantic-release/error": "^4.0.0",
+          "@octokit/plugin-throttling": "^11.0.0",
+          "@octokit/plugin-paginate-rest": "^15.0.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "@semantic-release/release-notes-generator",
+      "previous": "^14.1.0",
+      "latest": "14.1.1",
+      "tags": {
+        "next": "9.0.0",
+        "latest": "14.1.1",
+        "beta": "15.0.0-beta.3"
+      },
+      "engines": {
+        "node": ">=20.8.1"
+      },
+      "peerDependencies": {
+        "semantic-release": ">=20.1.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/semantic-release/release-notes-generator.git",
+        "type": "git"
+      },
+      "time": "2026-05-08T20:45:47.222Z",
+      "latestInPreviousMajor": {
+        "version": "14.1.1",
+        "engines": {
+          "node": ">=20.8.1"
+        },
+        "peerDependencies": {
+          "semantic-release": ">=20.1.0"
+        },
+        "dependencies": {
+          "debug": "^4.0.0",
+          "lodash-es": "^4.17.21",
+          "import-from-esm": "^2.0.0",
+          "read-package-up": "^11.0.0",
+          "conventional-commits-filter": "^5.0.0",
+          "conventional-commits-parser": "^6.0.0",
+          "conventional-changelog-writer": "^8.0.0",
+          "conventional-changelog-angular": "^8.0.0"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "all-contributors-cli",
+      "previous": "^6.26.1",
+      "latest": "7.0.0",
+      "tags": {
+        "beta": "2.0.0-beta4",
+        "latest": "7.0.0",
+        "next": "6.27.0-rc.1"
+      },
+      "engines": {
+        "node": ">=22.22.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/all-contributors/cli.git",
+        "type": "git"
+      },
+      "time": "2026-10-27T01:33:33.434Z",
+      "latestInPreviousMajor": {
+        "version": "6.26.1",
+        "engines": {
+          "node": ">=4"
+        },
+        "dependencies": {
+          "pify": "^5.0.0",
+          "async": "^3.1.0",
+          "chalk": "^4.0.0",
+          "yargs": "^15.0.1",
+          "lodash": "^4.11.2",
+          "inquirer": "^7.3.3",
+          "prettier": "^2",
+          "didyoumean": "^1.2.1",
+          "json-fixer": "^1.6.8",
+          "node-fetch": "^2.6.0",
+          "@babel/runtime": "^7.7.6"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "husky",
+      "previous": "^9.1.7",
+      "latest": "9.1.7",
+      "tags": {
+        "latest": "9.1.7"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "repository": {
+        "url": "git+https://github.com/typicode/husky.git",
+        "type": "git"
+      },
+      "time": "2024-11-18T15:28:26.026Z",
+      "latestInPreviousMajor": {
+        "version": "9.1.7",
+        "engines": {
+          "node": ">=18"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "lint-staged",
+      "previous": "^16.2.6",
+      "latest": "17.6.0",
+      "tags": {
+        "beta": "11.3.0-beta.2",
+        "next": "13.1.4",
+        "latest": "17.6.0"
+      },
+      "engines": {
+        "node": ">=22.22.1"
+      },
+      "repository": {
+        "url": "git+https://github.com/lint-staged/lint-staged.git",
+        "type": "git"
+      },
+      "time": "2026-09-26T06:01:39.503Z",
+      "latestInPreviousMajor": {
+        "version": "16.4.0",
+        "engines": {
+          "node": ">=20.17"
+        },
+        "dependencies": {
+          "yaml": "^2.8.2",
+          "listr2": "^9.0.5",
+          "tinyexec": "^1.0.4",
+          "commander": "^14.0.3",
+          "picomatch": "^4.0.3",
+          "string-argv": "^0.3.2"
+        }
+      }
+    },
+    {
+      "section": "devDependencies",
+      "name": "semantic-release",
+      "previous": "^25.0.3",
+      "latest": "25.0.9",
+      "tags": {
+        "alpaca": "3.4.1",
+        "badger": "4.3.5",
+        "next": "25.0.5",
+        "latest": "25.0.9",
+        "alpha": "25.1.0-alpha.1",
+        "beta": "26.0.0-beta.5"
+      },
+      "engines": {
+        "node": "^22.14.0 || >= 24.10.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/semantic-release/semantic-release.git",
+        "type": "git"
+      },
+      "time": "2026-08-05T04:43:52.217Z",
+      "latestInPreviousMajor": {
+        "version": "25.0.9",
+        "engines": {
+          "node": "^22.14.0 || >= 24.10.0"
+        },
+        "dependencies": {
+          "debug": "^4.0.0",
+          "execa": "^9.0.0",
+          "yargs": "^18.0.0",
+          "env-ci": "^11.0.0",
+          "marked": "^15.0.0",
+          "semver": "^7.3.2",
+          "figures": "^6.0.0",
+          "signale": "^1.2.1",
+          "hook-std": "^4.0.0",
+          "p-reduce": "^3.0.0",
+          "lodash-es": "^4.17.21",
+          "get-stream": "^6.0.0",
+          "micromatch": "^4.0.2",
+          "cosmiconfig": "^9.0.0",
+          "resolve-from": "^5.0.0",
+          "find-versions": "^6.0.0",
+          "p-each-series": "^3.0.0",
+          "git-log-parser": "^1.2.0",
+          "aggregate-error": "^5.0.0",
+          "hosted-git-info": "^9.0.0",
+          "import-from-esm": "^2.0.0",
+          "marked-terminal": "^7.3.0",
+          "read-package-up": "^12.0.0",
+          "@semantic-release/npm": "^13.1.1",
+          "@semantic-release/error": "^4.0.0",
+          "@semantic-release/github": "^12.0.0",
+          "@semantic-release/commit-analyzer": "^13.0.1",
+          "@semantic-release/release-notes-generator": "^14.1.0"
+        }
+      }
+    }
+  ],
+  "addedPackages": [
+    {
+      "section": "dependencies",
+      "name": "@napi-rs/image",
+      "latest": "1.16.0",
+      "engines": {
+        "node": ">= 10"
+      },
+      "repository": {
+        "url": "git+ssh://git@github.com/Brooooooklyn/Image.git",
+        "type": "git"
+      },
+      "time": "2026-10-27T06:08:29.561Z"
+    },
+    {
+      "section": "dependencies",
+      "name": "babel-jest",
+      "latest": "30.5.2",
+      "engines": {
+        "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+      },
+      "peerDependencies": {
+        "@babel/core": "^7.11.0 || ^8.0.0-0"
+      },
+      "repository": {
+        "url": "git+https://github.com/jestjs/jest.git",
+        "type": "git",
+        "directory": "packages/babel-jest"
+      },
+      "time": "2026-09-18T13:56:28.752Z",
+      "dependencies": {
+        "chalk": "^4.1.2",
+        "slash": "^3.0.0",
+        "graceful-fs": "^4.2.11",
+        "@jest/transform": "30.5.2",
+        "babel-preset-jest": "30.5.0",
+        "@types/babel__core": "^7.20.5",
+        "babel-plugin-istanbul": "^8.0.0"
+      }
+    },
+    {
+      "section": "dependencies",
+      "name": "style-loader",
+      "latest": "4.0.0",
+      "engines": {
+        "node": ">= 18.12.0"
+      },
+      "peerDependencies": {
+        "webpack": "^5.27.0"
+      },
+      "repository": {
+        "url": "git+https://github.com/webpack-contrib/style-loader.git",
+        "type": "git"
+      },
+      "time": "2024-04-08T17:04:35.634Z"
+    },
+    {
+      "section": "dependencies",
+      "name": "process",
+      "latest": "0.11.10",
+      "engines": {
+        "node": ">= 0.6.0"
+      },
+      "repository": {
+        "url": "git://github.com/shtylman/node-process.git",
+        "type": "git"
+      },
+      "time": "2017-04-26T12:34:27.448Z"
+    },
+    {
+      "section": "dependencies",
+      "name": "axe-core",
+      "latest": "4.14.0",
+      "engines": {
+        "node": ">=4"
+      },
+      "repository": {
+        "url": "https://github.com/dequelabs/axe-core.git",
+        "type": "git"
+      },
+      "time": "2026-10-05T17:43:36.099Z"
+    },
+    {
+      "section": "dependencies",
+      "name": "twig",
+      "latest": "3.0.0",
+      "engines": {
+        "node": ">=22"
+      },
+      "repository": {
+        "type": "git",
+        "url": "git://github.com/twigjs/twig.js.git"
+      },
+      "time": "2026-03-26T19:43:50.935Z",
+      "dependencies": {
+        "@babel/runtime": "^7.8.4",
+        "locutus": "^3.0.9",
+        "minimatch": "^10",
+        "walk": "2.3.x"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "tarball": "/private/tmp/emulsify-3.5.1-evidence/emulsify-core-3.5.1.tgz",
+  "sha512": "7ef7b8ab6128314d5aff54fd7fcc59fb77c8d26a5869112987541da4a751fc65c6f0cb3262491ccf710f408cf104f3cafa28bddd53ee95cfa0c32fcd22b03cce",
+  "checkedRuntimeFiles": 34,
+  "mismatches": [],
+  "explanation": "Runtime payload equals current source; validation scripts and documentation continue to be finalized outside the tested artifact.",
+  "missingPublishedPaths": []
+}

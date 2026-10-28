@@ -1,0 +1,57 @@
+name: Publish 3.x maintenance
+on:
+  push:
+    branches: [3.x]
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+jobs:
+  validate-maintenance:
+    if: github.ref_name == '3.x'
+    uses: ./.github/workflows/maintenance.yml
+  release:
+    name: Attempt Semantic Release
+    needs: validate-maintenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+      - name: Install
+        run: npm ci
+      - name: Verify maintenance version and channel
+        if: github.ref_name == '3.x'
+        run: node scripts/verify-maintenance-release.cjs
+      - name: Confirm the validated maintenance commit is current
+        env:
+          VALIDATED_SHA: ${{ github.sha }}
+        run: |
+          git fetch --no-tags origin 3.x
+          test "$(git rev-parse refs/remotes/origin/3.x)" = "$VALIDATED_SHA"
+      - name: Verify actual semantic-release version and authentication
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm run semantic-release -- --dry-run
+      - name: Reconfirm the maintenance branch head
+        env:
+          VALIDATED_SHA: ${{ github.sha }}
+        run: |
+          git fetch --no-tags origin 3.x
+          test "$(git rev-parse refs/remotes/origin/3.x)" = "$VALIDATED_SHA"
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm run semantic-release

@@ -1,0 +1,54 @@
+name: 3.x maintenance validation
+on:
+  pull_request:
+    branches: [3.x]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+      - name: Install with lifecycle scripts
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test -- --runInBand
+      - name: Verify version and publishing channel without publishing
+        run: node scripts/verify-maintenance-release.cjs
+      - name: Verify lossless PNG and progressive JPEG optimization
+        run: node scripts/verify-image-optimizer.mjs
+      - name: Reproduce the old permission failure and verify fixed installers
+        run: node scripts/verify-resolver-installer.cjs
+      - name: Inspect packed artifact and verify fresh and upgraded consumers
+        run: |
+          npm pack --json > "$RUNNER_TEMP/core-pack.json"
+          tarball="$(node -p "JSON.parse(require('node:fs').readFileSync(process.env.RUNNER_TEMP + '/core-pack.json', 'utf8'))[0].filename")"
+          node scripts/verify-maintenance-consumer.cjs "$PWD/$tarball" "$RUNNER_TEMP/emulsify-consumer"
+      - name: Production Webpack and static Storybook builds from installed artifact
+        run: node scripts/verify-maintenance-builds.cjs "$RUNNER_TEMP/emulsify-consumer/fresh"
+      - name: Retain consumer installation and build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintenance-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/core-pack.json
+            ${{ runner.temp }}/emulsify-consumer/**/*.log
+            ${{ runner.temp }}/emulsify-consumer/evidence.json
+            ${{ runner.temp }}/emulsify-consumer/upgrade/package-lock-3.5.0.json

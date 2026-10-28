@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'path';
 import { createRequire } from 'module';
-import globImporter from 'node-sass-glob-importer';
+import globImporter from '../config/webpack/sass-glob-importer.js';
 import _StyleLintPlugin from 'stylelint-webpack-plugin';
 import webpack from 'webpack';
 import resolves from '../config/webpack/resolves.js';
@@ -195,6 +195,7 @@ export default async function ({ config }) {
         {
           loader: 'sass-loader',
           options: {
+            api: 'legacy',
             sourceMap: true,
             sassOptions: {
               importer: globImporter(),

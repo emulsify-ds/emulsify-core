@@ -1,5 +1,11 @@
 import 'regenerator-runtime/runtime';
 
+jest.mock(
+  '../../../config/emulsify-core/a11y.config.js',
+  () => require('../config/a11y.config.js'),
+  { virtual: true },
+);
+
 const mockExit = jest
   .spyOn(global.process, 'exit')
   .mockImplementation(() => {});

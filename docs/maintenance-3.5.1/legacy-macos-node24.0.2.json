@@ -1,0 +1,28 @@
+{
+  "node": "v24.0.2",
+  "status": 0,
+  "sourceFiles": [
+    {
+      "file": "components/button/button.js",
+      "exists": true
+    },
+    {
+      "file": "components/button/button.scss",
+      "exists": true
+    },
+    {
+      "file": "components/button/button.twig",
+      "exists": true
+    }
+  ],
+  "outputs": [
+    {
+      "file": "dist/components/button/button.js",
+      "exists": true
+    },
+    {
+      "file": "dist/components/button/button.css",
+      "exists": true
+    }
+  ]
+}

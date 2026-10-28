@@ -1,0 +1,590 @@
+[
+  {
+    "section": "dependencies",
+    "name": "@babel/core",
+    "previous": "^7.28.5",
+    "selected": "^7.29.7",
+    "latest": "8.0.9"
+  },
+  {
+    "section": "dependencies",
+    "name": "@babel/preset-env",
+    "previous": "^7.28.5",
+    "selected": "^7.29.7",
+    "latest": "8.0.7"
+  },
+  {
+    "section": "dependencies",
+    "name": "@emulsify/cli",
+    "previous": "^1.11.4",
+    "selected": "^1.12.2",
+    "latest": "2.4.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "@eslint/js",
+    "previous": "^10.0.1",
+    "selected": "^10.0.1",
+    "latest": "10.0.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "@storybook/addon-a11y",
+    "previous": "^9.1.20",
+    "selected": "^9.1.21",
+    "latest": "10.6.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "@storybook/addon-links",
+    "previous": "^9.1.20",
+    "selected": "^9.1.21",
+    "latest": "10.6.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "@storybook/addon-styling-webpack",
+    "previous": "^2.0.0",
+    "selected": "^2.0.0",
+    "latest": "3.0.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "@storybook/addon-themes",
+    "previous": "^9.1.20",
+    "selected": "^9.1.21",
+    "latest": "10.6.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "@storybook/builder-webpack5",
+    "previous": "^9.1.20",
+    "selected": "^9.1.21",
+    "latest": "10.6.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "@storybook/server-webpack5",
+    "previous": "^9.1.20",
+    "selected": "^9.1.21",
+    "latest": "10.6.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "add-attributes-twig-extension",
+    "previous": "^0.1.0",
+    "selected": "^0.1.0",
+    "latest": "0.1.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "autoprefixer",
+    "previous": "^10.4.21",
+    "selected": "^10.6.2",
+    "latest": "10.6.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "babel-loader",
+    "previous": "^10.0.0",
+    "selected": "^10.1.1",
+    "latest": "10.1.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "babel-preset-minify",
+    "previous": "^0.5.2",
+    "selected": "^0.5.2",
+    "latest": "0.5.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "bem-twig-extension",
+    "previous": "^0.1.1",
+    "selected": "^0.1.1",
+    "latest": "0.1.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "breakpoint-sass",
+    "previous": "^3.0.0",
+    "selected": "^3.0.0",
+    "latest": "3.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "clean-webpack-plugin",
+    "previous": "^4.0.0",
+    "selected": null,
+    "latest": "4.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "concurrently",
+    "previous": "^9.2.1",
+    "selected": "^10.0.6",
+    "latest": "10.0.6"
+  },
+  {
+    "section": "dependencies",
+    "name": "copy-webpack-plugin",
+    "previous": "^14.0.0",
+    "selected": "^14.0.0",
+    "latest": "14.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "css-loader",
+    "previous": "^7.1.1",
+    "selected": "^7.1.5",
+    "latest": "7.1.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "eslint",
+    "previous": "^10.1.0",
+    "selected": "^10.13.0",
+    "latest": "10.13.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "eslint-config-prettier",
+    "previous": "^10.1.8",
+    "selected": "^10.1.8",
+    "latest": "10.1.8"
+  },
+  {
+    "section": "dependencies",
+    "name": "eslint-plugin-jest",
+    "previous": "^29.15.1",
+    "selected": "^29.17.0",
+    "latest": "29.17.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "eslint-plugin-prettier",
+    "previous": "^5.5.4",
+    "selected": "^5.5.7",
+    "latest": "5.5.7"
+  },
+  {
+    "section": "dependencies",
+    "name": "eslint-plugin-security",
+    "previous": "^4.0.0",
+    "selected": "^4.2.0",
+    "latest": "4.2.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "file-loader",
+    "previous": "^6.2.0",
+    "selected": null,
+    "latest": "6.2.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "fs-extra",
+    "previous": "^11.3.2",
+    "selected": "^11.4.1",
+    "latest": "11.4.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "glob",
+    "previous": "^13.0.6",
+    "selected": "^14.0.3",
+    "latest": "14.0.3"
+  },
+  {
+    "section": "dependencies",
+    "name": "graceful-fs",
+    "previous": "^4.2.11",
+    "selected": "^4.2.11",
+    "latest": "4.2.11"
+  },
+  {
+    "section": "dependencies",
+    "name": "html-webpack-plugin",
+    "previous": "^5.6.4",
+    "selected": "^5.6.8",
+    "latest": "5.6.8"
+  },
+  {
+    "section": "dependencies",
+    "name": "image-minimizer-webpack-plugin",
+    "previous": "^5.0.0",
+    "selected": "^5.0.0",
+    "latest": "5.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "imagemin",
+    "previous": "^9.0.1",
+    "selected": null,
+    "latest": "9.0.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "imagemin-jpegtran",
+    "previous": "^8.0.0",
+    "selected": null,
+    "latest": "8.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "imagemin-optipng",
+    "previous": "^8.0.0",
+    "selected": null,
+    "latest": "8.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "jest",
+    "previous": "^30.2.0",
+    "selected": "^30.5.2",
+    "latest": "30.5.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "jest-environment-jsdom",
+    "previous": "^30.2.0",
+    "selected": "^30.5.2",
+    "latest": "30.5.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "js-yaml",
+    "previous": "^4.1.0",
+    "selected": "^4.3.2",
+    "latest": "5.5.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "js-yaml-loader",
+    "previous": "^1.2.2",
+    "selected": "^1.2.2",
+    "latest": "1.2.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "mini-css-extract-plugin",
+    "previous": "^2.9.4",
+    "selected": "^2.10.2",
+    "latest": "2.10.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "node-sass-glob-importer",
+    "previous": "^5.3.3",
+    "selected": null,
+    "latest": "5.3.3"
+  },
+  {
+    "section": "dependencies",
+    "name": "normalize.css",
+    "previous": "^8.0.1",
+    "selected": "^8.0.1",
+    "latest": "8.0.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "open-cli",
+    "previous": "^9.0.0",
+    "selected": "^9.0.0",
+    "latest": "9.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "pa11y",
+    "previous": "^9.0.1",
+    "selected": "^10.0.0",
+    "latest": "10.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "postcss",
+    "previous": "^8.5.6",
+    "selected": "^8.5.32",
+    "latest": "8.5.32"
+  },
+  {
+    "section": "dependencies",
+    "name": "postcss-loader",
+    "previous": "^8.2.0",
+    "selected": "^8.2.1",
+    "latest": "8.2.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "postcss-scss",
+    "previous": "^4.0.9",
+    "selected": "^4.0.9",
+    "latest": "4.0.9"
+  },
+  {
+    "section": "dependencies",
+    "name": "ramda",
+    "previous": "^0.32.0",
+    "selected": "^0.32.0",
+    "latest": "0.32.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "regenerator-runtime",
+    "previous": "^0.14.1",
+    "selected": "^0.14.1",
+    "latest": "0.14.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "sass",
+    "previous": "^1.93.2",
+    "selected": "^1.106.1",
+    "latest": "1.106.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "sass-loader",
+    "previous": "^16.0.6",
+    "selected": "^16.0.8",
+    "latest": "17.1.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "storybook",
+    "previous": "^9.1.20",
+    "selected": "^9.1.21",
+    "latest": "10.6.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "style-dictionary",
+    "previous": "^5.1.1",
+    "selected": "^5.7.1",
+    "latest": "5.7.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "stylelint",
+    "previous": "^17.7.0",
+    "selected": "^17.16.0",
+    "latest": "17.16.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "stylelint-config-standard-scss",
+    "previous": "^17.0.0",
+    "selected": "^17.0.0",
+    "latest": "17.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "stylelint-prettier",
+    "previous": "^5.0.3",
+    "selected": "^5.0.3",
+    "latest": "5.0.3"
+  },
+  {
+    "section": "dependencies",
+    "name": "stylelint-webpack-plugin",
+    "previous": "^5.0.1",
+    "selected": "^5.1.0",
+    "latest": "5.1.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "svg-spritemap-webpack-plugin",
+    "previous": "^5.0.3",
+    "selected": "^5.1.5",
+    "latest": "5.1.5"
+  },
+  {
+    "section": "dependencies",
+    "name": "terser-webpack-plugin",
+    "previous": "^5.3.9",
+    "selected": "^5.6.1",
+    "latest": "5.6.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "token-transformer",
+    "previous": "^0.0.33",
+    "selected": "^0.0.33",
+    "latest": "0.0.33"
+  },
+  {
+    "section": "dependencies",
+    "name": "twig-drupal-filters",
+    "previous": "^3.2.0",
+    "selected": "^3.2.0",
+    "latest": "3.2.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "twig-testing-library",
+    "previous": "^1.2.0",
+    "selected": "^1.2.0",
+    "latest": "1.2.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "twigjs-loader",
+    "previous": "^1.0.3",
+    "selected": "^1.0.3",
+    "latest": "1.0.3"
+  },
+  {
+    "section": "dependencies",
+    "name": "webpack",
+    "previous": "^5.102.1",
+    "selected": "^5.112.2",
+    "latest": "5.112.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "webpack-cli",
+    "previous": "^7.0.2",
+    "selected": "^7.2.3",
+    "latest": "7.2.3"
+  },
+  {
+    "section": "dependencies",
+    "name": "webpack-merge",
+    "previous": "^6.0.1",
+    "selected": "^6.0.1",
+    "latest": "6.0.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "webpack-remove-empty-scripts",
+    "previous": "^1.1.1",
+    "selected": "^1.1.1",
+    "latest": "1.1.1"
+  },
+  {
+    "section": "dependencies",
+    "name": "yaml",
+    "previous": "^2.8.1",
+    "selected": "^2.9.1",
+    "latest": "2.9.1"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@commitlint/cli",
+    "previous": "^20.1.0",
+    "selected": "^21.2.4",
+    "latest": "21.2.4"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@commitlint/config-conventional",
+    "previous": "^20.0.0",
+    "selected": "^21.2.4",
+    "latest": "21.2.4"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@semantic-release/changelog",
+    "previous": "^6.0.2",
+    "selected": null,
+    "latest": "7.0.0"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@semantic-release/commit-analyzer",
+    "previous": "^13.0.1",
+    "selected": "^13.0.1",
+    "latest": "13.0.1"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@semantic-release/git",
+    "previous": "^10.0.1",
+    "selected": null,
+    "latest": "11.0.1"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@semantic-release/github",
+    "previous": "^12.0.6",
+    "selected": "^12.0.10",
+    "latest": "12.0.10"
+  },
+  {
+    "section": "devDependencies",
+    "name": "@semantic-release/release-notes-generator",
+    "previous": "^14.1.0",
+    "selected": "^14.1.1",
+    "latest": "14.1.1"
+  },
+  {
+    "section": "devDependencies",
+    "name": "all-contributors-cli",
+    "previous": "^6.26.1",
+    "selected": "^7.0.0",
+    "latest": "7.0.0"
+  },
+  {
+    "section": "devDependencies",
+    "name": "husky",
+    "previous": "^9.1.7",
+    "selected": "^9.1.7",
+    "latest": "9.1.7"
+  },
+  {
+    "section": "devDependencies",
+    "name": "lint-staged",
+    "previous": "^16.2.6",
+    "selected": "^17.6.0",
+    "latest": "17.6.0"
+  },
+  {
+    "section": "devDependencies",
+    "name": "semantic-release",
+    "previous": "^25.0.3",
+    "selected": "^25.0.9",
+    "latest": "25.0.9"
+  },
+  {
+    "section": "dependencies",
+    "name": "@napi-rs/image",
+    "previous": null,
+    "selected": "^1.16.0",
+    "latest": "1.16.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "babel-jest",
+    "previous": null,
+    "selected": "^30.5.2",
+    "latest": "30.5.2"
+  },
+  {
+    "section": "dependencies",
+    "name": "style-loader",
+    "previous": null,
+    "selected": "^4.0.0",
+    "latest": "4.0.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "process",
+    "previous": null,
+    "selected": "^0.11.10",
+    "latest": "0.11.10"
+  },
+  {
+    "section": "dependencies",
+    "name": "axe-core",
+    "previous": null,
+    "selected": "^4.14.0",
+    "latest": "4.14.0"
+  },
+  {
+    "section": "dependencies",
+    "name": "twig",
+    "previous": null,
+    "selected": "^1.17.1",
+    "latest": "3.0.0"
+  }
+]
