@@ -1,0 +1,141 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v24.22.1",
+  "tarball": "/private/tmp/emulsify-3.5.1-evidence/emulsify-core-3.5.1.tgz",
+  "fixture": "/private/tmp/emulsify-3.5.1-evidence/consumers-macos-final",
+  "historical": {
+    "core": "3.5.0",
+    "jest": "30.3.0",
+    "resolver": "1.11.1",
+    "before": "2026-04-13T00:00:00.000Z"
+  },
+  "freshGraph": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.1",
+      "path": "node_modules/@emulsify/core/package.json"
+    },
+    {
+      "name": "jest",
+      "version": "30.5.2",
+      "path": "node_modules/jest/package.json"
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.5.2",
+      "path": "node_modules/@jest/core/package.json"
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.5.1",
+      "path": "node_modules/jest-resolve/package.json"
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.12.2",
+      "path": "node_modules/unrs-resolver/package.json",
+      "postinstall": "node postinstall.js"
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.7",
+      "path": "node_modules/napi-postinstall/package.json"
+    }
+  ],
+  "upgradeGraph": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.1",
+      "path": "node_modules/@emulsify/core/package.json"
+    },
+    {
+      "name": "jest",
+      "version": "30.5.2",
+      "path": "node_modules/jest/package.json"
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.5.2",
+      "path": "node_modules/@jest/core/package.json"
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.5.1",
+      "path": "node_modules/jest-resolve/package.json"
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.12.2",
+      "path": "node_modules/unrs-resolver/package.json",
+      "postinstall": "node postinstall.js"
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.7",
+      "path": "node_modules/napi-postinstall/package.json"
+    }
+  ],
+  "ciGraph": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.1",
+      "path": "node_modules/@emulsify/core/package.json"
+    },
+    {
+      "name": "jest",
+      "version": "30.5.2",
+      "path": "node_modules/jest/package.json"
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.5.2",
+      "path": "node_modules/@jest/core/package.json"
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.5.1",
+      "path": "node_modules/jest-resolve/package.json"
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.12.2",
+      "path": "node_modules/unrs-resolver/package.json",
+      "postinstall": "node postinstall.js"
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.7",
+      "path": "node_modules/napi-postinstall/package.json"
+    }
+  ],
+  "tarballSha512": "7ef7b8ab6128314d5aff54fd7fcc59fb77c8d26a5869112987541da4a751fc65c6f0cb3262491ccf710f408cf104f3cafa28bddd53ee95cfa0c32fcd22b03cce",
+  "productionWebpack": "passed",
+  "staticStorybook": "passed",
+  "audit": {
+    "fresh": {
+      "info": 0,
+      "low": 8,
+      "moderate": 9,
+      "high": 12,
+      "critical": 3,
+      "total": 32
+    },
+    "upgrade": {
+      "info": 0,
+      "low": 9,
+      "moderate": 10,
+      "high": 16,
+      "critical": 3,
+      "total": 38
+    }
+  },
+  "warnings": [
+    "Deprecated transitive whatwg-encoding3.1.1, token-transformer0.0.33 and glob10.5.0 remain reported in install.log.",
+    "Optional fsevents2.3.3 compilation fails locally and npm omits it; owner Storybook9 builder -> fork-ts-checker-webpack-plugin8 -> chokidar3.6.0. Install overall exits0.",
+    "npm allowScripts advisory warnings remain visible; install/postinstall lifecycle executions completed.",
+    "Webpack reports copied asset size above244KiB.",
+    "Storybook reports Node DEP0190 and existing Sass legacy-JS-API/@import deprecations."
+  ],
+  "logDirectory": "/private/tmp/emulsify-3.5.1-evidence/consumers-macos-final"
+}

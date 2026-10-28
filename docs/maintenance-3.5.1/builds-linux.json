@@ -1,0 +1,7 @@
+{
+  "platform": "linux",
+  "node": "v24.22.1",
+  "consumer": "/evidence/consumers-linux/fresh",
+  "productionWebpack": "passed",
+  "staticStorybook": "passed"
+}

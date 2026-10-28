@@ -1,0 +1,16 @@
+[
+  {
+    "filename": "images/example.png",
+    "format": "png",
+    "inputBytes": 395,
+    "outputBytes": 109,
+    "pixelsPreserved": true
+  },
+  {
+    "filename": "images/example.jpg",
+    "format": "jpeg",
+    "inputBytes": 1828,
+    "outputBytes": 1331,
+    "pixelsPreserved": true
+  }
+]

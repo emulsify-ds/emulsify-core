@@ -1,0 +1,31 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v24.22.1",
+  "fixture": "/var/folders/8f/f4sx8v2s3xn3h267g01b95n40000gn/T/emulsify-resolver-permissions-tQvz4c",
+  "helper": "napi-postinstall@0.3.4",
+  "helperExecutable": false,
+  "results": [
+    {
+      "version": "1.11.1",
+      "postinstall": "napi-postinstall unrs-resolver 1.11.1 check",
+      "status": 126,
+      "permissionDenied": true,
+      "integrity": "sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg=="
+    },
+    {
+      "version": "1.12.1",
+      "postinstall": "node postinstall.js",
+      "status": 0,
+      "permissionDenied": false,
+      "integrity": "sha512-LmOTmcBbFqxu1rzubnqHT6EZeqDYpenlGYwyFhHj7oc1HdyZE+0cLQ+s9SDSK+KKQQKuoJhUbzHQ89Ubwg2Oxg=="
+    },
+    {
+      "version": "1.12.2",
+      "postinstall": "node postinstall.js",
+      "status": 0,
+      "permissionDenied": false,
+      "integrity": "sha512-dmlRxBJJayXjqTwC+JtF1HhJmgf3ftQ3YejFcZrf4+KKtJv0qDsK1pjqaaVjG7wJ5NJ6UVP1OqRMQ71Z4C3rxQ=="
+    }
+  ]
+}

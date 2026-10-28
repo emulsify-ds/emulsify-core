@@ -1,7 +1,10 @@
 export default (api) => {
-  api.cache(true);
+  const isTest = api.env('test');
 
   const presets = [
+    ...(isTest
+      ? [['@babel/preset-env', { targets: { node: 'current' } }]]
+      : []),
     [
       'minify',
       {

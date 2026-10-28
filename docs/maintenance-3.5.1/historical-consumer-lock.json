@@ -1,0 +1,36 @@
+{
+  "method": "npm install @emulsify/core@3.5.0 --package-lock-only --before=2026-04-13T00:00:00.000Z",
+  "fixture": "/private/tmp/emulsify-historical-lock-probe",
+  "chain": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.0",
+      "integrity": "sha512-yynjmJSg3bpde2QlGYVZvQc2/DTKHZlhuys80NSRkCVb/pWyTS7LuhhRNMt3ha2Dbx0s6yhCdwJOqprJnrNA1A=="
+    },
+    {
+      "name": "jest",
+      "version": "30.3.0",
+      "integrity": "sha512-AkXIIFcaazymvey2i/+F94XRnM6TsVLZDhBMLsd1Sf/W0wzsvvpjeyUrCZD6HGG4SDYPgDJDBKeiJTBb10WzMg=="
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.3.0",
+      "integrity": "sha512-U5mVPsBxLSO6xYbf+tgkymLx+iAhvZX43/xI1+ej2ZOPnPdkdO1CzDmFKh2mZBn2s4XZixszHeQnzp1gm/DIxw=="
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.3.0",
+      "integrity": "sha512-NRtTAHQlpd15F9rUR36jqwelbrDV/dY4vzNte3S2kxCKUJRYNd5/6nTSbYiak1VX5g8IoFF23Uj5TURkUW8O5g=="
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.11.1",
+      "integrity": "sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg=="
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.4",
+      "integrity": "sha512-PHI5f1O0EP5xJ9gQmFGMS6IZcrVvTjpXjz7Na41gTE7eE2hK11lg04CECCYEEjdc17EV4DO+fkGEtt7TpTaTiQ=="
+    }
+  ]
+}

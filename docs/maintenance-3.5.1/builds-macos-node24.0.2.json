@@ -1,0 +1,7 @@
+{
+  "platform": "darwin",
+  "node": "v24.0.2",
+  "consumer": "/private/tmp/emulsify-3.5.1-evidence/consumers-node24-min/fresh",
+  "productionWebpack": "passed",
+  "staticStorybook": "passed"
+}

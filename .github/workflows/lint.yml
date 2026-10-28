@@ -1,9 +1,9 @@
 name: Lint
 on:
   push:
-    branches: [develop, main]
+    branches: [develop, main, 3.x]
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, 3.x]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,7 +15,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: '24'
       - name: Install
         run: npm install
       - name: Lint

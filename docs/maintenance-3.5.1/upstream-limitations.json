@@ -1,0 +1,473 @@
+[
+  {
+    "url": "https://registry.npmjs.org/%40napi-rs%2Fimage/1.16.0",
+    "name": "@napi-rs/image",
+    "version": "1.16.0",
+    "engines": {
+      "node": ">= 10"
+    },
+    "repository": {
+      "url": "git+ssh://git@github.com/Brooooooklyn/Image.git",
+      "type": "git"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/babel-plugin-istanbul/8.0.0",
+    "name": "babel-plugin-istanbul",
+    "version": "8.0.0",
+    "engines": {
+      "node": ">=18"
+    },
+    "dependencies": {
+      "test-exclude": "^7.0.1",
+      "@istanbuljs/schema": "^0.1.3",
+      "istanbul-lib-instrument": "^6.0.2",
+      "@babel/helper-plugin-utils": "^7.0.0",
+      "@istanbuljs/load-nyc-config": "^1.0.0"
+    },
+    "repository": {
+      "url": "git+https://github.com/istanbuljs/babel-plugin-istanbul.git",
+      "type": "git"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/test-exclude/7.0.2",
+    "name": "test-exclude",
+    "version": "7.0.2",
+    "engines": {
+      "node": ">=18"
+    },
+    "dependencies": {
+      "glob": "^10.4.1",
+      "minimatch": "^10.2.2",
+      "@istanbuljs/schema": "^0.1.2"
+    },
+    "repository": {
+      "url": "git+https://github.com/istanbuljs/test-exclude.git",
+      "type": "git"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/test-exclude/8.0.0",
+    "name": "test-exclude",
+    "version": "8.0.0",
+    "engines": {
+      "node": "20 || >=22"
+    },
+    "dependencies": {
+      "glob": "^13.0.6",
+      "minimatch": "^10.2.2",
+      "@istanbuljs/schema": "^0.1.2"
+    },
+    "repository": {
+      "url": "git+https://github.com/istanbuljs/test-exclude.git",
+      "type": "git"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/jest-environment-jsdom/30.5.2",
+    "name": "jest-environment-jsdom",
+    "version": "30.5.2",
+    "engines": {
+      "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+    },
+    "dependencies": {
+      "jsdom": "^26.1.0",
+      "@types/jsdom": "^21.1.7",
+      "@jest/environment": "30.5.2",
+      "@jest/environment-jsdom-abstract": "30.5.2"
+    },
+    "repository": {
+      "url": "git+https://github.com/jestjs/jest.git",
+      "type": "git",
+      "directory": "packages/jest-environment-jsdom"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/jsdom/26.1.0",
+    "name": "jsdom",
+    "version": "26.1.0",
+    "engines": {
+      "node": ">=18"
+    },
+    "dependencies": {
+      "ws": "^8.18.0",
+      "saxes": "^6.0.0",
+      "nwsapi": "^2.2.16",
+      "parse5": "^7.2.1",
+      "cssstyle": "^4.2.1",
+      "data-urls": "^5.0.0",
+      "decimal.js": "^10.5.0",
+      "whatwg-url": "^14.1.1",
+      "rrweb-cssom": "^0.8.0",
+      "symbol-tree": "^3.2.4",
+      "tough-cookie": "^5.1.1",
+      "whatwg-encoding": "^3.1.1",
+      "whatwg-mimetype": "^4.0.0",
+      "http-proxy-agent": "^7.0.2",
+      "https-proxy-agent": "^7.0.6",
+      "w3c-xmlserializer": "^5.0.0",
+      "webidl-conversions": "^7.0.0",
+      "xml-name-validator": "^5.0.0",
+      "html-encoding-sniffer": "^4.0.0",
+      "is-potential-custom-element-name": "^1.0.1"
+    },
+    "repository": {
+      "url": "git+https://github.com/jsdom/jsdom.git",
+      "type": "git"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/whatwg-encoding/3.1.1",
+    "name": "whatwg-encoding",
+    "version": "3.1.1",
+    "engines": {
+      "node": ">=18"
+    },
+    "dependencies": {
+      "iconv-lite": "0.6.3"
+    },
+    "deprecated": "Use @exodus/bytes instead for a more spec-conformant and faster implementation",
+    "repository": {
+      "url": "git+https://github.com/jsdom/whatwg-encoding.git",
+      "type": "git"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/token-transformer/0.0.33",
+    "name": "token-transformer",
+    "version": "0.0.33",
+    "dependencies": {
+      "yargs": "^17.6.2"
+    },
+    "deprecated": "Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.",
+    "repository": {
+      "url": "git+https://github.com/tokens-studio/figma-plugin.git",
+      "type": "git",
+      "directory": "token-transformer"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/%40emulsify%2Fcli/1.12.2",
+    "name": "@emulsify/cli",
+    "version": "1.12.2",
+    "engines": {
+      "node": ">=20"
+    },
+    "dependencies": {
+      "ajv": "^7.2.4",
+      "chalk": "^4.1.0",
+      "ramda": "^0.27.1",
+      "consola": "^2.15.3",
+      "fs-extra": "^11.2.0",
+      "progress": "^2.0.3",
+      "commander": "^12.0.0",
+      "simple-git": "^3.24.0",
+      "ajv-formats": "^2.1.1",
+      "@types/progress": "^2.0.5"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/%40emulsify%2Fcli/2.4.1",
+    "name": "@emulsify/cli",
+    "version": "2.4.1",
+    "engines": {
+      "node": ">=24"
+    },
+    "dependencies": {
+      "ajv": "^8.20.0",
+      "boxen": "^8.0.1",
+      "consola": "^3.4.2",
+      "fs-extra": "^11.4.0",
+      "progress": "^2.0.3",
+      "colorette": "^2.0.20",
+      "commander": "^15.0.0",
+      "simple-git": "^3.36.0",
+      "ajv-formats": "^3.0.1",
+      "@inquirer/prompts": "^8.7.0"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/simple-git/3.36.0",
+    "name": "simple-git",
+    "version": "3.36.0",
+    "dependencies": {
+      "debug": "^4.4.0",
+      "@kwsites/file-exists": "^1.1.1",
+      "@simple-git/argv-parser": "^1.1.0",
+      "@kwsites/promise-deferred": "^1.1.1",
+      "@simple-git/args-pathspec": "^1.0.3"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/simple-git/4.0.2",
+    "name": "simple-git",
+    "version": "4.0.2",
+    "dependencies": {
+      "debug": "^4.4.0",
+      "@kwsites/file-exists": "^1.1.1",
+      "@simple-git/argv-parser": "2.0.1",
+      "@kwsites/promise-deferred": "^1.1.1",
+      "@simple-git/args-pathspec": "1.0.4"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/twig/1.17.1",
+    "name": "twig",
+    "version": "1.17.1",
+    "engines": {
+      "node": ">=10"
+    },
+    "dependencies": {
+      "walk": "2.3.x",
+      "locutus": "^2.0.11",
+      "minimatch": "3.0.x",
+      "@babel/runtime": "^7.8.4"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/twig/3.0.0",
+    "name": "twig",
+    "version": "3.0.0",
+    "engines": {
+      "node": ">=22"
+    },
+    "dependencies": {
+      "walk": "2.3.x",
+      "locutus": "^3.0.9",
+      "minimatch": "^10",
+      "@babel/runtime": "^7.8.4"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/storybook/9.1.21",
+    "name": "storybook",
+    "version": "9.1.21",
+    "dependencies": {
+      "ws": "^8.18.0",
+      "recast": "^0.23.5",
+      "semver": "^7.6.2",
+      "esbuild": "^0.18.0 || ^0.19.0 || ^0.20.0 || ^0.21.0 || ^0.22.0 || ^0.23.0 || ^0.24.0 || ^0.25.0",
+      "better-opn": "^3.0.2",
+      "@vitest/spy": "3.2.4",
+      "@vitest/expect": "3.2.4",
+      "@vitest/mocker": "3.2.4",
+      "esbuild-register": "^3.5.0",
+      "@storybook/global": "^5.0.0",
+      "@testing-library/jest-dom": "^6.6.3",
+      "@testing-library/user-event": "^14.6.1"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/%40storybook%2Fbuilder-webpack5/9.1.21",
+    "name": "@storybook/builder-webpack5",
+    "version": "9.1.21",
+    "dependencies": {
+      "webpack": "5",
+      "ts-dedent": "^2.0.0",
+      "css-loader": "^6.7.1",
+      "magic-string": "^0.30.5",
+      "style-loader": "^3.3.1",
+      "es-module-lexer": "^1.5.0",
+      "cjs-module-lexer": "^1.2.3",
+      "html-webpack-plugin": "^5.5.0",
+      "terser-webpack-plugin": "^5.3.1",
+      "webpack-dev-middleware": "^6.1.2",
+      "webpack-hot-middleware": "^2.25.1",
+      "@storybook/core-webpack": "9.1.21",
+      "webpack-virtual-modules": "^0.6.0",
+      "fork-ts-checker-webpack-plugin": "^8.0.0",
+      "case-sensitive-paths-webpack-plugin": "^2.4.0"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/%40storybook%2Fbuilder-webpack5/10.6.5",
+    "name": "@storybook/builder-webpack5",
+    "version": "10.6.5",
+    "dependencies": {
+      "semver": "^7.7.3",
+      "webpack": "5",
+      "ts-dedent": "^2.0.0",
+      "css-loader": "^7.1.2",
+      "magic-string": "^1.1.0",
+      "style-loader": "^4.0.0",
+      "es-module-lexer": "^1.5.0",
+      "cjs-module-lexer": "^1.2.3",
+      "html-webpack-plugin": "^5.5.0",
+      "terser-webpack-plugin": "^5.3.17",
+      "webpack-dev-middleware": "^6.1.2",
+      "webpack-hot-middleware": "^2.25.1",
+      "@storybook/core-webpack": "10.6.5",
+      "webpack-virtual-modules": "^0.6.0",
+      "fork-ts-checker-webpack-plugin": "^9.1.0",
+      "case-sensitive-paths-webpack-plugin": "^2.4.0"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/%40semantic-release%2Fnpm/13.2.0",
+    "name": "@semantic-release/npm",
+    "version": "13.2.0",
+    "engines": {
+      "node": "^22.14.0 || >= 24.10.0"
+    },
+    "dependencies": {
+      "rc": "^1.2.8",
+      "npm": "^11.6.2",
+      "execa": "^9.0.0",
+      "tempy": "^3.0.0",
+      "env-ci": "^11.2.0",
+      "semver": "^7.1.2",
+      "fs-extra": "^11.0.0",
+      "read-pkg": "^10.0.0",
+      "lodash-es": "^4.17.21",
+      "nerf-dart": "^1.0.0",
+      "@actions/core": "^3.0.0",
+      "normalize-url": "^9.0.0",
+      "aggregate-error": "^5.0.0",
+      "registry-auth-token": "^5.0.0",
+      "@semantic-release/error": "^4.0.0"
+    }
+  },
+  {
+    "url": "https://registry.npmjs.org/npm/11.21.1",
+    "name": "npm",
+    "version": "11.21.1",
+    "engines": {
+      "node": "^20.17.0 || >=22.9.0"
+    },
+    "dependencies": {
+      "ms": "^2.1.2",
+      "ini": "^6.0.0",
+      "tar": "^7.5.22",
+      "glob": "^13.0.6",
+      "nopt": "^9.0.0",
+      "read": "^5.0.1",
+      "ssri": "^13.0.1",
+      "archy": "~1.0.0",
+      "chalk": "^5.6.2",
+      "p-map": "^7.0.4",
+      "which": "^6.0.1",
+      "abbrev": "^4.0.0",
+      "pacote": "^21.5.1",
+      "semver": "^7.8.5",
+      "cacache": "^20.0.4",
+      "ci-info": "^4.4.0",
+      "is-cidr": "^6.0.4",
+      "minipass": "^7.1.3",
+      "node-gyp": "^12.4.0",
+      "proc-log": "^6.1.0",
+      "libnpmorg": "^8.0.1",
+      "minimatch": "^10.2.5",
+      "treeverse": "^3.0.0",
+      "@npmcli/fs": "^5.0.0",
+      "libnpmdiff": "^8.1.14",
+      "libnpmexec": "^10.3.4",
+      "libnpmfund": "^7.0.28",
+      "libnpmpack": "^9.1.15",
+      "libnpmteam": "^8.0.2",
+      "text-table": "~0.2.0",
+      "fs-minipass": "^3.0.3",
+      "graceful-fs": "^4.2.11",
+      "npm-profile": "^12.0.2",
+      "libnpmaccess": "^10.0.3",
+      "libnpmsearch": "^9.0.1",
+      "@sigstore/tuf": "^4.0.2",
+      "libnpmpublish": "^11.2.1",
+      "libnpmversion": "^8.0.4",
+      "@npmcli/config": "^10.14.0",
+      "@npmcli/redact": "^4.0.0",
+      "supports-color": "^10.2.2",
+      "hosted-git-info": "^9.0.3",
+      "npm-package-arg": "^13.0.2",
+      "qrcode-terminal": "^0.12.0",
+      "@npmcli/arborist": "^9.9.3",
+      "npm-audit-report": "^7.0.0",
+      "init-package-json": "^8.2.5",
+      "make-fetch-happen": "^15.0.6",
+      "minipass-pipeline": "^1.2.4",
+      "npm-pick-manifest": "^11.0.3",
+      "npm-user-validate": "^4.0.0",
+      "@npmcli/run-script": "^10.0.4",
+      "npm-install-checks": "^8.0.0",
+      "npm-registry-fetch": "^19.1.1",
+      "tiny-relative-date": "^2.0.2",
+      "fastest-levenshtein": "^1.0.16",
+      "parse-conflict-json": "^5.0.1",
+      "@npmcli/package-json": "^7.0.5",
+      "@npmcli/promise-spawn": "^9.0.1",
+      "spdx-expression-parse": "^4.0.0",
+      "@npmcli/map-workspaces": "^5.0.3",
+      "validate-npm-package-name": "^7.0.2",
+      "@npmcli/metavuln-calculator": "^9.0.3",
+      "@isaacs/string-locale-compare": "^1.1.0",
+      "json-parse-even-better-errors": "^5.0.0"
+    },
+    "bundleDependencies": [
+      "@isaacs/string-locale-compare",
+      "@npmcli/arborist",
+      "@npmcli/config",
+      "@npmcli/fs",
+      "@npmcli/map-workspaces",
+      "@npmcli/metavuln-calculator",
+      "@npmcli/package-json",
+      "@npmcli/promise-spawn",
+      "@npmcli/redact",
+      "@npmcli/run-script",
+      "@sigstore/tuf",
+      "abbrev",
+      "archy",
+      "cacache",
+      "chalk",
+      "ci-info",
+      "fastest-levenshtein",
+      "fs-minipass",
+      "glob",
+      "graceful-fs",
+      "hosted-git-info",
+      "ini",
+      "init-package-json",
+      "is-cidr",
+      "json-parse-even-better-errors",
+      "libnpmaccess",
+      "libnpmdiff",
+      "libnpmexec",
+      "libnpmfund",
+      "libnpmorg",
+      "libnpmpack",
+      "libnpmpublish",
+      "libnpmsearch",
+      "libnpmteam",
+      "libnpmversion",
+      "make-fetch-happen",
+      "minimatch",
+      "minipass",
+      "minipass-pipeline",
+      "ms",
+      "node-gyp",
+      "nopt",
+      "npm-audit-report",
+      "npm-install-checks",
+      "npm-package-arg",
+      "npm-pick-manifest",
+      "npm-profile",
+      "npm-registry-fetch",
+      "npm-user-validate",
+      "p-map",
+      "pacote",
+      "parse-conflict-json",
+      "proc-log",
+      "qrcode-terminal",
+      "read",
+      "semver",
+      "spdx-expression-parse",
+      "ssri",
+      "supports-color",
+      "tar",
+      "text-table",
+      "tiny-relative-date",
+      "treeverse",
+      "validate-npm-package-name",
+      "which"
+    ]
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "platform": "darwin",
+  "node": "v24.22.1",
+  "oldPackage": "node-sass-glob-importer@5.3.3",
+  "oldPackageIntegrity": "sha512-888UlmX8fiGMCQ+8/w6e3VjPlmuIPBQfbupAGnG0kfQbpto9OtofULN1xCmlvKD5e38Sz+PpETXqgogheqAMqQ==",
+  "method": "Inspected official npm tarballs and compiled identical Sass fixtures with the old package and Core replacement; no third-party implementation copied into Core.",
+  "sideBySide": {
+    "includePaths": { "old": ".a{color:red}.b{color:blue}", "replacement": ".a{color:red}.b{color:blue}" },
+    "directoryIndexes": { "old": ".button{color:red}", "replacement": ".button{color:red}" },
+    "literalCssImport": { "old": "@import\"styles/*.css\"", "replacement": "@import\"styles/*.css\"" }
+  },
+  "regressionCommand": "node node_modules/jest/bin/jest.js --config config/jest.config.js --runInBand scripts/sass-glob-importer.test.js",
+  "regressionResult": { "suitesPassed": 1, "testsPassed": 5 },
+  "coverage": [
+    "relative partials and nested globs",
+    "matches across every includePath with duplicate removal",
+    "directory index and CSS imports from extensionless globs",
+    "missing directories and plain imports delegated to Sass",
+    "brace-only glob expansion"
+  ],
+  "deprecations": "Legacy Sass JS API and @import warnings remain visible. Migrating consumers to a modern Sass module contract is outside the 3.5.1 patch."
+}

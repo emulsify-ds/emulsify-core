@@ -1,0 +1,13 @@
+{
+  "sourceTag": "v3.5.0",
+  "sourceCommit": "a95419c9effd537f5b274f4f92acf8ca3644486f",
+  "publishedVersion": "3.5.0",
+  "sourceVersion": "3.4.1",
+  "matchedFiles": 53,
+  "mismatches": [
+    {
+      "file": "release.config.cjs",
+      "reason": "content differs"
+    }
+  ]
+}

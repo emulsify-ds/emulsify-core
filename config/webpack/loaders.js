@@ -17,7 +17,7 @@
 
 import { createRequire } from 'module';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import globImporter from 'node-sass-glob-importer';
+import globImporter from './sass-glob-importer.js';
 import fs from 'fs-extra';
 import path from 'path';
 
@@ -163,5 +163,6 @@ export default {
   CSSLoader,
   ImageLoader,
   SVGLoader,
+  SVGSpriteLoader: SVGLoader,
   TwigLoader,
 };

@@ -1,6 +1,5 @@
 import { resolve, dirname, relative } from 'path';
 import webpack from 'webpack';
-import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import RemoveEmptyScriptsPlugin from 'webpack-remove-empty-scripts';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import SVGSpritemapPlugin from 'svg-spritemap-webpack-plugin';
@@ -225,17 +224,21 @@ const CopyGlobalAssetsPlugin = isSrcExists
  * CleanWebpackPlugin configuration.
  * Wipes out compiled CSS/JS in `distPath` before a build; keeps images.
  */
-const CleanPlugin = new CleanWebpackPlugin({
-  protectWebpackAssets: false,
-  cleanOnceBeforeBuildPatterns: [
-    `${distPath}/**/*.css`,
-    `${distPath}/**/*.js`,
-    `!${distPath}/**/*.png`,
-    `!${distPath}/**/*.jpg`,
-    `!${distPath}/**/*.gif`,
-    `!${distPath}/**/*.svg`,
-  ],
-});
+const CleanPlugin = {
+  apply(compiler) {
+    // Webpack's cleaner protects current compilation assets. Keep the existing
+    // exported plugin key and limit cleanup to the same compiled JS/CSS root.
+    compiler.options.output.clean ??= {
+      keep: (asset) => {
+        const file = relative(
+          distPath,
+          resolve(compiler.options.output.path, asset),
+        );
+        return file.startsWith('..') || !/\.(css|js)$/.test(file);
+      },
+    };
+  },
+};
 
 /** Removes empty JS files generated for style-only entries. */
 const RemoveEmptyJS = new RemoveEmptyScriptsPlugin();

@@ -1,0 +1,30 @@
+{
+  "kind": "static package-lock engine validation; does not claim execution on Node 24.0",
+  "supportedConsumerNode": ">=24",
+  "checkedVersion": "24.0.0",
+  "productionPackagesWithEngines": 797,
+  "productionEngineConflicts": [],
+  "developmentEngineConflicts": [
+    {
+      "location": "node_modules/@semantic-release/github",
+      "version": "12.0.10",
+      "developmentOnly": true,
+      "node": "^22.14.0 || >= 24.10.0",
+      "accepts24_0_0": false
+    },
+    {
+      "location": "node_modules/@semantic-release/npm",
+      "version": "13.2.0",
+      "developmentOnly": true,
+      "node": "^22.14.0 || >= 24.10.0",
+      "accepts24_0_0": false
+    },
+    {
+      "location": "node_modules/semantic-release",
+      "version": "25.0.9",
+      "developmentOnly": true,
+      "node": "^22.14.0 || >= 24.10.0",
+      "accepts24_0_0": false
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v24.0.2",
+  "tarball": "/private/tmp/emulsify-3.5.1-evidence/emulsify-core-3.5.1.tgz",
+  "fixture": "/private/tmp/emulsify-3.5.1-evidence/consumers-node24-min",
+  "historical": {
+    "core": "3.5.0",
+    "jest": "30.3.0",
+    "resolver": "1.11.1",
+    "before": "2026-04-13T00:00:00.000Z"
+  },
+  "freshGraph": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.1",
+      "path": "node_modules/@emulsify/core/package.json"
+    },
+    {
+      "name": "jest",
+      "version": "30.5.2",
+      "path": "node_modules/jest/package.json"
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.5.2",
+      "path": "node_modules/@jest/core/package.json"
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.5.1",
+      "path": "node_modules/jest-resolve/package.json"
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.12.2",
+      "path": "node_modules/unrs-resolver/package.json",
+      "postinstall": "node postinstall.js"
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.7",
+      "path": "node_modules/napi-postinstall/package.json"
+    }
+  ],
+  "upgradeGraph": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.1",
+      "path": "node_modules/@emulsify/core/package.json"
+    },
+    {
+      "name": "jest",
+      "version": "30.5.2",
+      "path": "node_modules/jest/package.json"
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.5.2",
+      "path": "node_modules/@jest/core/package.json"
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.5.1",
+      "path": "node_modules/jest-resolve/package.json"
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.12.2",
+      "path": "node_modules/unrs-resolver/package.json",
+      "postinstall": "node postinstall.js"
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.7",
+      "path": "node_modules/napi-postinstall/package.json"
+    }
+  ],
+  "ciGraph": [
+    {
+      "name": "@emulsify/core",
+      "version": "3.5.1",
+      "path": "node_modules/@emulsify/core/package.json"
+    },
+    {
+      "name": "jest",
+      "version": "30.5.2",
+      "path": "node_modules/jest/package.json"
+    },
+    {
+      "name": "@jest/core",
+      "version": "30.5.2",
+      "path": "node_modules/@jest/core/package.json"
+    },
+    {
+      "name": "jest-resolve",
+      "version": "30.5.1",
+      "path": "node_modules/jest-resolve/package.json"
+    },
+    {
+      "name": "unrs-resolver",
+      "version": "1.12.2",
+      "path": "node_modules/unrs-resolver/package.json",
+      "postinstall": "node postinstall.js"
+    },
+    {
+      "name": "napi-postinstall",
+      "version": "0.3.7",
+      "path": "node_modules/napi-postinstall/package.json"
+    }
+  ]
+}

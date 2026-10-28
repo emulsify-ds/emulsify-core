@@ -7,16 +7,16 @@ An open-source toolset for creating and implementing design systems.
 **Emulsify Core** provides a [Storybook](https://storybook.js.org/) component library and a [Webpack](https://webpack.js.org/) development environment. It is meant to make project setup and ongoing development easier by bundling all necessary configuration and providing it as an extendable package for your theme or standalone project.
 
 ## Installation and usage
-Installation and configuration is setup by the provided base theme project(s). As of this writing, Emulsify Drupal is the only base theme project [with this integration](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L36).
+Installation and configuration are managed by the theme project. This [Webpack-based Emulsify Drupal starter snapshot](https://github.com/emulsify-ds/emulsify-drupal/tree/7a26035005bae1a7a45ac56c95d44f15fc06f28c/whisk) provides a reference for the 3.x integration. Existing 3.x projects should follow the [maintenance upgrade instructions](docs/release-3.5.1.md#consumer-upgrade) and retain their configuration.
 
 ### Manual installation
-- `npm install @emulsify/core` within your repository or project theme.
-- Copy the provided `npm run` scripts from [Emulsify Drupal's package.json](https://github.com/emulsify-ds/emulsify-drupal/blob/main/whisk/package.json#L15)
-- Copy the contents of `whisk/config/emulsify-core/` from [Emulsify Drupal](https://github.com/emulsify-ds/emulsify-drupal/tree/main/whisk/config/emulsify-core) into your project so `config/` exists at the root of your repository or project theme. The files within `config/` allow you to extend or overwrite configuration provided by Emulsify Core.
+- `npm install @emulsify/core@^3.5.1` within your repository or project theme for the Webpack-based 3.x release line.
+- Use the snapshot's [Webpack and Storybook scripts](https://github.com/emulsify-ds/emulsify-drupal/blob/7a26035005bae1a7a45ac56c95d44f15fc06f28c/whisk/package.json) and [override directory layout](https://github.com/emulsify-ds/emulsify-drupal/tree/7a26035005bae1a7a45ac56c95d44f15fc06f28c/whisk/config/emulsify-core) as references for project-root configuration. Its lint commands and commented Storybook examples predate the current APIs; use Core's bundled ESLint configuration and Storybook defaults.
+- Place project overrides under `config/emulsify-core/`. Babel and PostCSS overrides use `webpack/babel.config.cjs` and `webpack/postcss.config.cjs`; Storybook overrides use `storybook/main.js`, `storybook/preview.js`, and `storybook/theme.js`. Custom themes import `storybook/theming` with the retained Storybook 9 integration.
 
 ### Common Scripts
 
-Run `nvm use` prior to running any of the following commands to verify you are using Node 20.
+Run `nvm use` prior to running any of the following commands to verify you are using Node 24 or newer.
 (Each is prefixed with `npm run `)
 
 **develop**
@@ -41,6 +41,9 @@ Builds a static output of the storybook instance.
 ### Quick Links
 
 - [Emulsify Homepage](https://www.emulsify.info/)
+- [3.5.1 maintenance release and upgrade instructions](docs/release-3.5.1.md)
+- [Dependency versions and compatibility decisions](docs/dependency-review-3.5.1.md)
+- [Maintenance validation evidence](docs/maintenance-3.5.1/README.md)
 
 ## Demo
 

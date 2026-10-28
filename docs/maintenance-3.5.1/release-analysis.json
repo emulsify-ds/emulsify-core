@@ -1,0 +1,10 @@
+{
+  "baseline": "v3.5.0",
+  "prospectiveCommit": "fix(deps): refresh 3.x dependencies and repair resolver installation",
+  "analyzedCommitCount": 1,
+  "type": "patch",
+  "version": "3.5.1",
+  "branch": "3.x",
+  "channel": "legacy-3",
+  "publishingInvoked": false
+}
