@@ -25,6 +25,13 @@ module.exports = {
       },
     ],
     ['@semantic-release/npm', { npmPublish: true }],
-    '@semantic-release/github',
+    [
+      '@semantic-release/github',
+      {
+        successCommentCondition: false,
+        failCommentCondition: false,
+        releasedLabels: false,
+      },
+    ],
   ],
 };
