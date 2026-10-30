@@ -23,6 +23,25 @@ count as reportable findings, and failed checks do not count as clean scans.
 Reportable findings or execution failures produce a nonzero exit status. The
 runner finishes its checks before closing the temporary Storybook server.
 
+## Linux Browser Dependencies
+
+Pa11y 10 uses Puppeteer's Chrome browser. Linux hosts and containers also need
+Chrome's system libraries, including NSS, GTK, GBM, X11 and audio libraries.
+Downloading the browser through npm does not install those operating-system
+packages. On Debian/Ubuntu, run Puppeteer's installer as root in the container
+or image build:
+
+```sh
+npx puppeteer browsers install chrome --install-deps
+```
+
+For other distributions and missing-library diagnostics, follow
+[Puppeteer's Linux troubleshooting guide](https://pptr.dev/troubleshooting#chrome-doesnt-launch-on-linux).
+Use the container's package manager or image configuration to keep those
+libraries installed; consumer npm overrides do not provide them.
+
+## Enabling WCAG 2.2 Rules
+
 The preset supplies `pa11y.rules: ['target-size']`. Core merges those Pa11y
 options with its shared defaults, preserving the existing actions, axe
 runner, report filters, and story discovery configuration. If a project
@@ -48,11 +67,11 @@ rule IDs alongside `...wcag22.pa11y.rules`. Projects that override
 
 ## Scope and Limitations
 
-Pa11y 9's [axe runner](https://github.com/pa11y/pa11y/blob/9.1.1/lib/runners/axe.js)
+Pa11y 10's [axe runner](https://github.com/pa11y/pa11y/blob/10.0.0/lib/runners/axe.js)
 selects WCAG 2.0 and 2.1 tags by default. It enables additional rule IDs through
 its `rules` option. The preset adds the rules supported under axe's `wcag22a`
-and `wcag22aa` tags. In the reviewed locked tree, Pa11y resolves axe-core
-4.11.4 separately from Core's root axe-core 4.13.0. Both versions expose only
+and `wcag22aa` tags. In the reviewed locked tree, Pa11y and Core resolve axe-core
+4.13.0. Both runtimes expose only
 `target-size` for those tags; the [Core root version's supported list](https://github.com/dequelabs/axe-core/blob/v4.13.0/doc/rule-descriptions.md#wcag-22-level-a--aa-rules)
 records that scope. Tests check both resolved runtimes. The list is explicit
 so a dependency update cannot silently add new rules to the preset.
