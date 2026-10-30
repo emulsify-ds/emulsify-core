@@ -11,7 +11,6 @@ import { auditDrupalAssumptions } from './checks/drupal-assumptions.js';
 import { auditFilesOutsideRoots } from './checks/files-outside-roots.js';
 import { auditGeneratedPackageScripts } from './checks/generated-package-scripts.js';
 import { auditLegacyTwigStories } from './checks/legacy-twig-stories.js';
-import { auditPackageOverrides } from './checks/package-overrides.js';
 import { auditProjectConfig } from './checks/project-config.js';
 import { auditStoryDiscovery } from './checks/story-discovery.js';
 import { auditTwigReferences } from './checks/twig-references.js';
@@ -32,7 +31,6 @@ export const DEFAULT_TWIG_THRESHOLD = 250;
 
 export const auditChecks = [
   auditProjectConfig,
-  auditPackageOverrides,
   auditGeneratedPackageScripts,
   auditStoryDiscovery,
   auditLegacyTwigStories,

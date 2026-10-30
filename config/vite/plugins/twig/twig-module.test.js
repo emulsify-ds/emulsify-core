@@ -470,13 +470,16 @@ describe('Twig module plugin', () => {
     expect(transformed.code).not.toContain('globalThis');
   });
 
-  it('compiles and renders configured Drupal-compatible Twig filters', async () => {
+  it('compiles and renders configured Drupal filters and links', async () => {
     projectDir = makeTempProject();
     const cardFile = join(projectDir, 'src/components/card/card.twig');
     fs.mkdirSync(join(projectDir, 'src/components/card'), {
       recursive: true,
     });
-    fs.writeFileSync(cardFile, '<article>{{ title|clean_id }}</article>');
+    fs.writeFileSync(
+      cardFile,
+      '<article>{{ title|clean_id }}{{ link(title, url, attributes) }}</article>',
+    );
 
     const twigPlugin = makeTwigModulePlugin(
       makeEnv(projectDir, {
@@ -494,11 +497,21 @@ describe('Twig module plugin', () => {
     };
     const output = renderGeneratedTwigModule(
       transformed.code,
-      { title: 'Hello World!' },
+      {
+        title: 'Hello World!',
+        url: '/read-more',
+        attributes: {
+          class: ['button', 'button--primary'],
+          hidden: false,
+          _keys: ['class', 'hidden'],
+        },
+      },
       runtimeTwig,
     );
 
-    expect(output).toBe('<article>hello-world</article>');
+    expect(output).toBe(
+      '<article>hello-world<a href="/read-more" class="button button--primary">Hello World!</a></article>',
+    );
   });
 
   it('renders updated context through the same generated module instance', async () => {

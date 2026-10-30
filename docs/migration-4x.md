@@ -141,8 +141,8 @@ themes. At minimum:
   relevant migration docs to stderr after running without contaminating JSON
   stdout.
 - Update `@emulsify/core` to a Core 4-compatible version.
-- Keep the root-level npm `overrides` listed in
-  [Install Warning Controls](#install-warning-controls).
+- Update to Core 4.5.1 or newer before removing the former root-level npm
+  overrides; see [Install Warning Controls](#install-warning-controls).
 
 ```json
 {
@@ -208,27 +208,14 @@ Existing scripts without the flags keep working; they are just noisier.
 
 ## Install Warning Controls
 
-npm applies `overrides` only from the root package being installed. Overrides
-inside `@emulsify/core` help this repository, but they do not automatically
-apply when Core is installed as a dependency in a generated Drupal theme.
+Core 4.5.1 resolves its tooling dependencies without consumer npm overrides.
+Update Core, then remove the former `glob`, `locutus`, and `minimatch@3.0.x`
+overrides from the theme and regenerate its lockfile with `npm install`.
 
-Generated or consuming themes should include these root-level overrides to pick
-up compatible transitive dependency patches used by Core's tooling:
-
-```json
-{
-  "overrides": {
-    "glob": "^13.0.6",
-    "locutus": "^3.0.36",
-    "minimatch@3.0.x": "^3.1.5"
-  }
-}
-```
-
-These overrides are intentionally narrow. They do not replace the older Twig
-integration packages; they only pin compatible transitive packages that reduce
-known install warnings and audit noise while the Twig integration remains on the
-current feature set.
+The Drupal filter adapter now uses `@forumone/twig-drupal-filters` with Core's
+Twig 3 runtime instead of installing a separate legacy Twig runtime. Core also
+requires the fixed CLI dependency, Pa11y 10, and a coherent Storybook 10.6.4 set.
+Keep any unrelated overrides that your own project still needs.
 
 ## Twig Runtime
 

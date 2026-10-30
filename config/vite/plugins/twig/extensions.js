@@ -62,7 +62,9 @@ function normalizeInstaller(moduleValue) {
  */
 export function installProjectTwigExtensions(twig, env = {}) {
   if (shouldRegisterDrupalTwigFilters(env)) {
-    const installer = normalizeInstaller(require('twig-drupal-filters'));
+    const installer = normalizeInstaller(
+      require('@forumone/twig-drupal-filters'),
+    );
     if (installer) {
       installer(twig);
     }
