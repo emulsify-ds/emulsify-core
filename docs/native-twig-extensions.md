@@ -27,7 +27,7 @@ These helpers are Storybook runtime helpers, not native Twig extension exports f
 ## Optional Drupal-Compatible Filters
 
 Emulsify Core can register the
-[`twig-drupal-filters`](https://github.com/kalamuna/twig-drupal-filters) package
+[`@forumone/twig-drupal-filters`](https://github.com/forumone/twig-drupal-filters) package
 for Storybook-rendered Twig. This is useful when templates use Drupal-style
 filters or functions and the project still runs Storybook outside Drupal.
 

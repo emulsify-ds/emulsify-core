@@ -9,6 +9,9 @@ import pluginSecurity from 'eslint-plugin-security';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default [
+  {
+    ignores: ['dist/**', '.out/**', '.coverage/**', 'components/**'],
+  },
   // Start with core and plugin recommendations before project overrides.
   js.configs.recommended,
 
