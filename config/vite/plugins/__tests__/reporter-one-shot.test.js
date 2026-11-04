@@ -19,39 +19,126 @@ const writeBundle = (plugin, ...args) => plugin.writeBundle.handler(...args);
 /**
  * Build a one-shot reporter harness with captured output.
  *
- * @param {{strictness?: string}} [options] - Plugin overrides.
+ * @param {{strictness?: string, detailed?: boolean, isStorybookBuild?: boolean}} [options] - Plugin overrides.
  * @returns {{plugin: object, lines: string[], collector: object}} Harness.
  */
-function createOneShotHarness({ strictness = STRICTNESS.off } = {}) {
+function createOneShotHarness({
+  strictness = STRICTNESS.off,
+  detailed = false,
+  isStorybookBuild = false,
+} = {}) {
   const lines = [];
   const collector = createDiagnosticsCollector();
 
   const plugin = developReporterPlugin({
-    env: { projectDir: '/project', platform: 'none' },
+    env: { projectDir: '/project', platform: 'none', isStorybookBuild },
     diagnostics: collector,
     write: (line) => lines.push(line),
     colorEnabled: false,
     unicodeEnabled: true,
     strictness,
+    detailed,
+    now: () => 0,
     version: '4.2.1',
   });
 
   plugin.configResolved({ build: { watch: null, outDir: 'dist/' } });
+  plugin.buildStart();
 
   return { plugin, lines, collector };
 }
 
 describe('one-shot reporting', () => {
-  it('prints nothing when the build had no diagnostics', () => {
-    // The invariant every release fixture and `npm run build` depends on: a
-    // clean project's output stays byte for byte what it was.
+  it('summarizes a clean standalone production build', () => {
     const { plugin, lines } = createOneShotHarness();
 
-    plugin.buildStart();
-    writeBundle(plugin);
+    plugin.buildEnd();
+    writeBundle(plugin, {}, { 'theme.js': { type: 'chunk', code: 'ready' } });
+    plugin.closeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('core 4.2.1');
+    expect(output).toContain('output');
+    expect(output).toContain('1 file · 5 B · largest theme.js 5 B');
+    expect(output).toContain('✓ built in 0ms');
+    expect(output).not.toContain('watching');
+  });
+
+  it('lists compiled files and sizes in detailed production output', () => {
+    const { plugin, lines } = createOneShotHarness({ detailed: true });
+
+    writeBundle(
+      plugin,
+      {},
+      {
+        'theme.js': { type: 'chunk', code: 'x'.repeat(1024) },
+        'theme.css': { type: 'asset', source: 'y'.repeat(512) },
+        'theme.js.map': { type: 'asset', source: 'map' },
+      },
+    );
+    plugin.closeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('── output files ');
+    expect(output).toContain('theme.js');
+    expect(output).toContain('theme.css');
+    expect(output).toContain('1.00 kB');
+    expect(output).toContain('0.50 kB');
+    expect(output).not.toContain('theme.js.map');
+  });
+
+  it.each(['buildEnd', 'renderError'])(
+    'reports a failed production build once from %s',
+    (hook) => {
+      const { plugin, lines } = createOneShotHarness();
+
+      plugin[hook](new Error('Production build fixture failed'));
+
+      expect(lines.join('\n')).toContain('✗ build failed after 0ms');
+      plugin.closeBundle();
+      plugin.closeBundle();
+
+      const output = lines.join('\n');
+      expect(
+        lines.filter((line) => line.includes('build failed after')),
+      ).toHaveLength(1);
+      expect(output).toContain('Production build fixture failed');
+      expect(output).not.toContain('✓ built in');
+    },
+  );
+
+  it('keeps a clean static Storybook build compact', () => {
+    const { plugin, lines } = createOneShotHarness({ isStorybookBuild: true });
+
+    plugin.buildEnd();
+    writeBundle(plugin, {}, { 'iframe.js': { type: 'chunk', code: 'ready' } });
     plugin.closeBundle();
 
     expect(lines).toEqual([]);
+  });
+
+  it('keeps static Storybook asset diagnostics without a theme banner', () => {
+    const { plugin, lines, collector } = createOneShotHarness({
+      isStorybookBuild: true,
+    });
+
+    collector.recordAssetRebase({
+      url: 'assets/x.svg',
+      rewritten: '/assets/x.svg',
+    });
+    writeBundle(plugin);
+    plugin.closeBundle();
+    plugin.closeBundle();
+
+    const output = lines.join('\n');
+    expect(output).toContain('1 css asset url rebased');
+    expect(output).toContain('assets/x.svg -> /assets/x.svg');
+    expect(output).not.toContain('core 4.2.1');
+    expect(output).not.toContain('platform');
+    expect(output).not.toContain('built in');
+    expect(
+      lines.filter((line) => line.includes('rebased to /assets/')),
+    ).toHaveLength(1);
   });
 
   it('reports repaired URLs with the command that makes them permanent', () => {
@@ -192,7 +279,11 @@ describe('one-shot reporting', () => {
     const lines = [];
     const collector = createDiagnosticsCollector();
     const plugin = developReporterPlugin({
-      env: { projectDir: '/project', srcDir: '/project/src' },
+      env: {
+        projectDir: '/project',
+        srcDir: '/project/src',
+        isStorybookBuild: true,
+      },
       diagnostics: collector,
       write: (line) => lines.push(line),
       colorEnabled: false,
@@ -207,6 +298,7 @@ describe('one-shot reporting', () => {
       mode: 'production',
       build: { watch: null, outDir: 'storybook-static/' },
     });
+    plugin.buildStart();
     collector.recordDeprecation({
       id: 'slash-div',
       file: '/project/src/components/base/_spacing.scss',
@@ -220,13 +312,19 @@ describe('one-shot reporting', () => {
     expect(output).toContain('src/components/base/_spacing.scss');
     expect(output).toContain('slash-div');
     expect(output).toMatch(/npx sass-migrator division 'src\/\*\*\/\*\.scss'/);
+    expect(output).not.toContain('core ');
+    expect(output).not.toContain('built in');
   });
 
   it('reports a locationless Sass total without an empty file table', () => {
     const lines = [];
     const collector = createDiagnosticsCollector();
     const plugin = developReporterPlugin({
-      env: { projectDir: '/project', srcDir: '/project/src' },
+      env: {
+        projectDir: '/project',
+        srcDir: '/project/src',
+        isStorybookBuild: true,
+      },
       diagnostics: collector,
       write: (line) => lines.push(line),
       colorEnabled: false,
@@ -239,6 +337,7 @@ describe('one-shot reporting', () => {
       mode: 'production',
       build: { watch: null, outDir: 'storybook-static/' },
     });
+    plugin.buildStart();
     collector.recordDeprecation({ id: 'legacy-js-api' });
 
     plugin.closeBundle();
@@ -248,6 +347,7 @@ describe('one-shot reporting', () => {
     expect(output).not.toContain('0 files');
     expect(output).not.toMatch(/lines\s+count\s+deprecation\s+fix/);
     expect(output).not.toContain('render() → compile()');
+    expect(output).not.toContain('core ');
   });
 });
 
@@ -335,7 +435,7 @@ describe('strict asset mode', () => {
   it('fails the build when an asset URL cannot be resolved', () => {
     // Thrown rather than set on process.exitCode: `storybook build` ends with
     // process.exit(0) in a commander postAction hook, which discards it.
-    const { plugin, collector } = createOneShotHarness({
+    const { plugin, collector, lines } = createOneShotHarness({
       strictness: STRICTNESS.unresolved,
     });
 
@@ -347,6 +447,8 @@ describe('strict asset mode', () => {
     expect(() => plugin.closeBundle()).toThrow(
       /CSS asset URL did not resolve:[\s\S]*\.\/missing\.svg \(imported by src\/components\/card\/card\.scss\)/,
     );
+    expect(lines.join('\n')).toContain('✗ build failed after 0ms');
+    expect(lines.join('\n')).not.toContain('✓ built in');
   });
 
   it('names repaired URLs without claiming they failed to resolve', () => {
