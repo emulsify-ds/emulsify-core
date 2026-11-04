@@ -118,16 +118,35 @@ describe('develop reporter plugin gating', () => {
     });
   });
 
-  it('stays completely silent for one-shot builds', () => {
+  it('prints the banner and a completed one-shot summary exactly once', () => {
     const { plugin, lines } = createHarness();
 
     plugin.configResolved(resolvedConfig({ watch: null }));
+    expect(lines.join('\n')).toContain('core 4.2.1');
     plugin.buildStart();
     plugin.buildEnd();
-    writeBundle(plugin);
+    writeBundle(
+      plugin,
+      {},
+      {
+        'card.js': { type: 'chunk', code: 'x'.repeat(10) },
+        'card.css': { type: 'asset', source: 'y'.repeat(5) },
+      },
+    );
+
+    expect(lines.join('\n')).not.toContain('built in');
+    plugin.closeBundle();
     plugin.closeBundle();
 
-    expect(lines).toEqual([]);
+    const output = lines.join('\n');
+    expect(lines.filter((line) => line.includes('core 4.2.1'))).toHaveLength(1);
+    expect(lines.filter((line) => line.includes('built in'))).toHaveLength(1);
+    expect(output).toContain('platform');
+    expect(output).toContain('Drupal');
+    expect(output).toContain('src/components/');
+    expect(output).toContain('28 entries');
+    expect(output).toContain('2 files · 15 B · largest card.js 10 B');
+    expect(output).not.toContain('watching');
   });
 
   it('prints the wordmark banner once when a watch build resolves', () => {

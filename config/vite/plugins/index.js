@@ -41,9 +41,10 @@ import { yamlModulePlugin } from './yaml-module.js';
  *   srcExists: boolean,
  *   structureOverrides?: boolean,
  *   developmentBuild?: boolean,
+ *   isStorybookBuild?: boolean,
  *   diagnostics?: object
  * }} env - Project environment. When `diagnostics` is present the reporter is
- *   appended for watch summaries and actionable one-shot diagnostics.
+ *   appended for theme build summaries and compact Storybook diagnostics.
  * @returns {import('vite').PluginOption[]} Emulsify Vite plugins.
  */
 export function makePlugins(env) {
@@ -184,8 +185,7 @@ export function makePlugins(env) {
       diagnostics: env.diagnostics,
     }),
 
-    // Summarize `npm run develop`, and report actionable diagnostics collected
-    // during one-shot Vite or Storybook builds.
+    // Summarize theme builds in both modes; keep Storybook diagnostics compact.
     ...(env.diagnostics
       ? [
           developReporterPlugin({

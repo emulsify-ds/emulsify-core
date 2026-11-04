@@ -70,9 +70,9 @@ rule IDs alongside `...wcag22.pa11y.rules`. Projects that override
 Pa11y 10's [axe runner](https://github.com/pa11y/pa11y/blob/10.0.0/lib/runners/axe.js)
 selects WCAG 2.0 and 2.1 tags by default. It enables additional rule IDs through
 its `rules` option. The preset adds the rules supported under axe's `wcag22a`
-and `wcag22aa` tags. In the reviewed locked tree, Pa11y and Core resolve axe-core
-4.13.0. Both runtimes expose only
-`target-size` for those tags; the [Core root version's supported list](https://github.com/dequelabs/axe-core/blob/v4.13.0/doc/rule-descriptions.md#wcag-22-level-a--aa-rules)
+and `wcag22aa` tags. In the reviewed locked tree, Pa11y resolves axe-core 4.13.0
+and Core resolves 4.14.0. Both runtimes expose only
+`target-size` for those tags; the [Core root version's supported list](https://github.com/dequelabs/axe-core/blob/v4.14.0/doc/rule-descriptions.md#wcag-22-level-a--aa-rules)
 records that scope. Tests check both resolved runtimes. The list is explicit
 so a dependency update cannot silently add new rules to the preset.
 

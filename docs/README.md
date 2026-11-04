@@ -16,8 +16,9 @@ questions, evidence, and next actions; its options are not support commitments.
 | [Asset References](asset-references.md)                  | Referencing fonts, SVGs, images, and other files from project root or configured asset roots in Sass, CSS, and Twig.           |
 | [Platform Adapters](platform-adapters.md)                | Understanding `none`, `wordpress`, `drupal`, platform resolution order, and Drupal SDC behavior.                               |
 | [Extension Points](extension-points.md)                  | Adding Vite plugins, Tailwind CSS, Storybook preview overrides, and other framework tooling.                                   |
-| [Develop Reporter](develop-reporter.md)                  | Reading `npm run develop` output: project facts, input roots, problem blocks, Storybook URLs, and verbosity controls.          |
+| [Develop Reporter](develop-reporter.md)                  | Reading `npm run develop` and `npm run build` output, project facts, compiled-file summaries, and verbosity controls.          |
 | [Dependency Contract](dependency-contract.md)            | Understanding why generated themes rely on Core runtime dependencies and npm hoisting.                                         |
+| [4.5.2 Dependency Review](dependency-review-4.5.2.md)    | Reviewing stable dependency updates, compatible major upgrades, and remaining upstream constraints.                            |
 | [Performance](performance.md)                            | Understanding sourcemaps, eager Twig imports, Tailwind scanning, copied files, and fixture validation.                         |
 | [Native Twig Extensions](native-twig-extensions.md)      | Using `bem()`, `add_attributes()`, Storybook `include()`/`source()`, and `switch/case/default/endswitch` in Twig.js.           |
 | [Component Inspector](component-inspector.md)            | Listing recognized Twig component templates, exact references, shorthand collisions, and expected output paths.                |
@@ -30,3 +31,4 @@ questions, evidence, and next actions; its options are not support commitments.
 | [4.4.0 Release Notes](releases/4.4.0.md)                 | Reviewing asset resolution, safer audit fixes, incremental output, reporter changes, and release evidence.                     |
 | [4.5.0 Release Notes](releases/4.5.0.md)                 | Reviewing the optional WCAG preset, completed accessibility reports, corrected Twig audits, and measured resolver improvement. |
 | [4.5.0 Release Assessment](releases/4.5.0-assessment.md) | Checking the exact release boundary, automated evidence, sibling starter availability, and outstanding human decisions.        |
+| [4.5.2 Release Notes](releases/4.5.2.md)                 | Reviewing the production-build banner and compiled-file summary correction.                                                    |

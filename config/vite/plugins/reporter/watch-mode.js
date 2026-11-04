@@ -1,11 +1,9 @@
 /**
  * @file Watch-invocation detection for the Emulsify develop reporter.
  *
- * The reporter and its quiet Sass logger should only take over output for the
- * long-running watcher that `npm run develop` starts. Every other command that
- * loads this Vite config — `npm run build`, `storybook build`, `storybook dev`,
- * and the release fixture verifications — must keep its current output exactly
- * as it is today.
+ * The long-running watcher that `npm run develop` starts uses quiet logging,
+ * readable output and source maps. One-shot theme builds share the banner and
+ * summary while retaining Vite's production logging and compilation settings.
  *
  * Vite resolves `command: 'build'` for both `vite build` and
  * `vite build --watch`, so the resolved config cannot distinguish them at the

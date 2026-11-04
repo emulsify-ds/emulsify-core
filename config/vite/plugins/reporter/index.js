@@ -1,5 +1,5 @@
 /**
- * @file Develop reporter plugin for Emulsify.
+ * @file Build and develop reporter plugin for Emulsify.
  *
  * Replaces the interleaved Vite/Sass output of `npm run develop` with a short
  * banner, one summary per build cycle, and a single line per rebuild.
@@ -16,9 +16,8 @@
  *  - `apply: 'build'` excludes Storybook's dev server, which resolves with
  *    `command: 'serve'`. This mirrors the existing guard on the component
  *    mirror plugin.
- *  - A `config.build.watch` check selects the full develop summary. One-shot
- *    production builds remain silent unless the collector has an asset problem
- *    or a Sass tally that would otherwise be hidden.
+ *  - The shared config marks static Storybook builds so they retain compact
+ *    diagnostics. Theme builds get the banner and summary in both modes.
  *
  * Storybook dev stays out of the reporter path and keeps its own ready box;
  * standalone Storybook builds receive the compact diagnostics they need.
@@ -234,7 +233,7 @@ const mergeCopiedOutputChanges = (changed, removed, copyChanges) => {
  * Create the Emulsify develop reporter plugin.
  *
  * @param {{
- *   env: {projectDir?: string, platform?: string},
+ *   env: {projectDir?: string, platform?: string, isStorybookBuild?: boolean},
  *   diagnostics: ReturnType<import('./diagnostics.js').createDiagnosticsCollector>,
  *   write?: (line: string) => void,
  *   now?: () => number,
@@ -274,6 +273,7 @@ export function developReporterPlugin({
     strictness === undefined ? resolveAssetStrictness() : strictness;
 
   let watching = false;
+  let fullReport = false;
   let oneShot = false;
   let oneShotPrinted = false;
   let oneShotAssetRows = [];
@@ -347,12 +347,14 @@ export function developReporterPlugin({
    * @returns {void}
    */
   const reportCycle = () => {
-    if (!watching || cyclePrinted) return;
+    if (!fullReport || cyclePrinted) return;
     cyclePrinted = true;
 
     const snapshot = diagnostics.snapshot();
     const durationMs = now() - cycleStart;
-    const failed = hasCycleFailure(snapshot);
+    const failed =
+      hasCycleFailure(snapshot) ||
+      (oneShot && countStrictAssetFailures(snapshot, strictLevel) > 0);
 
     // Enriching costs a filesystem read per stylesheet, so it only runs when
     // the cycle actually produced something to attribute. A resolver is built
@@ -370,6 +372,7 @@ export function developReporterPlugin({
     const assetRows = resolver
       ? buildAssetRows(snapshot.unresolvedAssets, resolver)
       : [];
+    if (oneShot) oneShotAssetRows = assetRows;
 
     const importRows = resolver
       ? buildImportRows(snapshot.importErrors, resolver, env.projectDir)
@@ -419,8 +422,8 @@ export function developReporterPlugin({
     } else {
       firstCycleComplete = true;
 
-      emit(
-        renderSummary({
+      emit([
+        ...renderSummary({
           snapshot,
           durationMs,
           outDir,
@@ -433,13 +436,20 @@ export function developReporterPlugin({
           platform: env.platform,
           inputRows,
           watchLabel,
+          watching,
+          failed,
           write: writeTally,
           inputFiles,
           outputFiles,
           unicode,
           styler,
         }),
-      );
+        // The shared summary already includes unresolved URLs. Preserve the
+        // one-shot repair and ambiguity details without reporting them twice.
+        ...(oneShot
+          ? renderAssetSummary({ rebases: snapshot.assetRebases, styler })
+          : []),
+      ]);
     }
 
     previousCycleFailed = failed;
@@ -449,15 +459,14 @@ export function developReporterPlugin({
   /**
    * Report collected diagnostics after a one-shot build.
    *
-   * Watch builds get the full per-cycle summary; a one-shot `vite build` or
-   * `storybook build` gets this and nothing else, and only when there is
-   * something to say. It covers both captured asset diagnostics and Sass
-   * deprecations swallowed by Storybook's quiet logger.
+   * Static Storybook builds keep compact diagnostics rather than a theme
+   * banner and project summary. This also reports Sass deprecations swallowed
+   * by Storybook's quiet logger.
    *
    * @returns {void}
    */
   const reportOneShot = () => {
-    if (!oneShot || oneShotPrinted) return;
+    if (!oneShot || fullReport || oneShotPrinted) return;
     oneShotPrinted = true;
 
     const snapshot = diagnostics.snapshot();
@@ -507,10 +516,9 @@ export function developReporterPlugin({
 
     configResolved(config) {
       watching = Boolean(config.build?.watch);
-      // Everything below is watch-only setup. A one-shot build stays silent
-      // unless it has an asset problem or a collected Sass tally to report.
       oneShot = !watching;
-      if (!watching) return;
+      fullReport = !env.isStorybookBuild;
+      if (!fullReport) return;
 
       outDir = config.build?.outDir || 'dist';
       outputRows = buildOutputSummaryRows({
@@ -555,7 +563,7 @@ export function developReporterPlugin({
     },
 
     buildStart() {
-      if (!watching) return;
+      if (!fullReport) return;
       diagnostics.reset();
       cycleStart = now();
       cyclePrinted = false;
@@ -587,7 +595,7 @@ export function developReporterPlugin({
     },
 
     buildEnd(error) {
-      if (!watching || !error) return;
+      if (!fullReport || !error) return;
       captureFailure(error);
       // A failed cycle never reaches writeBundle, so report from here instead.
       reportCycle();
@@ -598,7 +606,7 @@ export function developReporterPlugin({
     // broken build produced no summary at all. It also stops a later
     // `closeBundle` from reporting success over a build that failed.
     renderError(error) {
-      if (!watching || !error) return;
+      if (!fullReport || !error) return;
       captureFailure(error);
       reportCycle();
     },
@@ -615,7 +623,7 @@ export function developReporterPlugin({
       order: 'post',
       sequential: true,
       handler(_options, bundle) {
-        if (watching) {
+        if (fullReport) {
           writeTally = summarizeBundle(bundle);
           outputRows = buildOutputSummaryRows({
             bundle,
@@ -688,7 +696,8 @@ export function developReporterPlugin({
           ));
         }
 
-        reportCycle();
+        // One-shot builds report after Vite's production asset table.
+        if (watching) reportCycle();
       },
     },
 

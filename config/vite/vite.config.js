@@ -64,23 +64,21 @@ async function createViteConfig({ command, isStorybookBuild = false } = {}) {
   const env = resolveEnvironment();
   const sourceFileIndex = createSourceFileIndex(env.projectStructure);
 
-  // The full develop summary runs only for `vite build --watch`, the watcher
-  // `npm run develop` starts. One-shot builds keep their normal output and add
-  // a compact diagnostic block only when the collector has something to say.
+  // Watch mode controls compilation settings and quiet logging. Theme builds
+  // share the banner and summary in both modes; static Storybook builds keep
+  // compact diagnostics.
   const watching = isWatchInvocation();
 
-  // The collector itself is a handful of Maps, and one-shot builds need one
-  // too: an unresolved CSS asset URL used to print a single raw Vite line and
-  // exit 0, so a broken asset path shipped through CI unnoticed. The reporter
-  // plugin decides whether to speak, and for a one-shot build it stays silent
-  // unless there is an asset problem or a collected Sass deprecation tally —
-  // a clean project's output is unchanged.
+  // The collector is shared by the build summary and strict asset checks.
+  // Storybook's static build receives the same diagnostics without a second
+  // theme banner or project summary.
   const diagnostics = createDiagnosticsCollector();
   const envWithSourceFileIndex = {
     ...env,
     sourceFileIndex,
     diagnostics,
     developmentBuild: watching,
+    isStorybookBuild,
   };
 
   // `vite build` and `vite build --watch` both resolve `command: 'build'`.

@@ -1246,11 +1246,10 @@ function renderSizeTable(rows, styler) {
 }
 
 /**
- * Render the standalone CSS asset block a one-shot build prints.
+ * Render the compact CSS asset block a static Storybook build prints.
  *
- * One-shot builds are silent unless something is wrong, so this omits the
- * banner and project facts. The caller may compose it with a collected Sass
- * deprecation tally; a clean project keeps its output byte for byte.
+ * This omits the theme banner and project facts. The caller may compose it
+ * with a collected Sass deprecation tally.
  *
  * @param {{assetRows?: Array<object>, rebases?: Array<object>, styler: Function}} options - Render inputs.
  * @returns {string[]} Report lines.
@@ -1327,6 +1326,8 @@ export function renderAssetSummary({ assetRows = [], rebases = [], styler }) {
  *   platform?: string,
  *   inputRows?: Array<{name: string, path: string, count: number, overflow?: boolean}>,
  *   watchLabel?: string,
+ *   watching?: boolean,
+ *   failed?: boolean,
  *   write?: {fileCount: number, totalBytes: number, largest?: {fileName: string, bytes: number}},
  *   inputFiles?: Array<{path: string, bytes?: number}>,
  *   outputFiles?: Array<{fileName: string, bytes: number, gzipBytes?: number}>,
@@ -1348,13 +1349,14 @@ export function renderSummary({
   platform,
   inputRows = [],
   watchLabel,
+  watching = true,
+  failed = hasCycleFailure(snapshot),
   write,
   inputFiles = [],
   outputFiles = [],
   unicode = true,
   styler,
 }) {
-  const failed = hasCycleFailure(snapshot);
   const symbol = failed
     ? styler('red', SYMBOLS.error)
     : styler('green', SYMBOLS.ok);
@@ -1365,7 +1367,7 @@ export function renderSummary({
   // `dist/` is written, not watched. Falling back to the input rows keeps the
   // label honest for any caller that renders a summary without the resolved
   // source roots to hand.
-  const watching =
+  const watchedSources =
     watchLabel ||
     sharedRootPath(
       inputRows.filter((entry) => !entry.overflow).map((entry) => entry.path),
@@ -1391,7 +1393,7 @@ export function renderSummary({
     '',
     renderDivider('build', unicode, styler),
     '',
-    `${INDENT}${symbol} ${headline}${styler('gray', `${SEPARATOR}watching ${watching}`)}`,
+    `${INDENT}${symbol} ${headline}${watching ? styler('gray', `${SEPARATOR}watching ${watchedSources}`) : ''}`,
     ...renderProblems(
       snapshot,
       projectDir,

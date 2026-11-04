@@ -4,22 +4,26 @@
 under `concurrently`. The develop reporter is what makes that read as one tool
 instead of three.
 
-The full session report is active only for `vite build --watch`. One-shot builds
-keep their normal output and add a compact block only for actionable asset
-diagnostics or, in a standalone `storybook build`, Sass deprecations that its
-quiet logger collected. Clean builds and release fixture verification remain
-unchanged, so nothing a platform ships is affected by the presentation here.
+Standalone `vite build` commands, including consumer `npm run build` scripts
+that use Core's Vite configuration, print the same branded banner and project,
+input, output, and build summary as `vite build --watch`. Production builds also
+keep Vite's normal per-file output table. A one-shot build reports its completion
+without the watch-session suffix.
+
+Standalone `storybook build` uses compact asset diagnostics and collected Sass
+deprecations. The full branded report belongs to the separate Vite build, so a
+combined build command prints one Emulsify banner.
 
 ## What It Prints
 
-A watch session opens with the wordmark and the Core version:
+A Vite build opens with the wordmark and the installed Core version:
 
 ```text
   █▀▀ █▀▄▀█ █ █ █   █▀▀ █ █▀▀ █ █
   █▀▀ █ ▀ █ █ █ █   ▀▀█ █ █▀▀ ▀▄▀
   ▀▀▀ ▀   ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀    ▀
 
-  core 4.4.0
+  core 4.5.2
 ```
 
 Then, once the first build finishes, the project facts and the build result, each
@@ -93,6 +97,9 @@ largest file in each destination is the cheapest way to notice a stylesheet or
 component bundle that has begun pulling in something it should not.
 
 ### Reading The Build Line
+
+A one-shot build finishes with `✓ built in 2.55s`. Watch builds add the source
+directory being watched, as shown above.
 
 `watching src/` names what the watcher is actually watching, which is the source
 tree — `dist/` is written, not watched. The label is the deepest directory every
@@ -279,8 +286,10 @@ npm run develop --verbose
 EMULSIFY_VERBOSE=2 npm run develop
 ```
 
-The reporter still owns the output — nothing is handed back to Rolldown — but it
-prints considerably more of what it knows.
+For watch builds, the reporter owns the output and prints more of what it knows.
+The same detailed mode is available for standalone production builds through
+`EMULSIFY_VERBOSE=2 npm run build` or `npm run build --verbose`. Production builds
+also include Vite's normal per-file output table.
 
 ### What Changes
 
